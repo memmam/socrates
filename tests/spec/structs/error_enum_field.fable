@@ -1,0 +1,7 @@
+// Field access on an enum value is a compile error (enums have no fields;
+// use `match`).
+//? error: E0416
+//? error: `Shape` is an enum; it has no fields
+enum Shape { Circle(Float), Empty }
+let s = Shape.Circle(1.0);
+println(s.radius);

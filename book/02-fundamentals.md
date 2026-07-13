@@ -1,8 +1,8 @@
 # Fundamentals
 
 This chapter covers the bones of Fable: values, bindings, operators, strings,
-and control flow. Everything here is runnable — save any snippet to a file and
-run it with `fable run file.fable` (or just `fable file.fable`).
+and control flow. Everything here is runnable — save any snippet to a file
+and run it with `fable run file.fable` (or just `fable file.fable`).
 
 ## Values and types
 
@@ -17,28 +17,18 @@ let ready = true;       // Bool
 let name = "Aesop";     // String
 let nothing = ();       // Unit
 
-println(answer);
-println(ratio);
-println(ready);
-println(name);
-println(nothing);
+println("{answer} {ratio} {ready} {name} {nothing}");
 ```
 
 ```text
-42
-2.5
-true
-Aesop
-()
+42 2.5 true Aesop ()
 ```
 
-You can annotate a binding when you want to be explicit or pin down an
-ambiguous type: `let x: Int = 5;`. The annotation is checked against the
-initializer.
-
-A few notes on literals: integer literals may use underscores (`1_000_000`),
-hex (`0x2A`), or binary (`0b1010`). Float literals need a digit on both sides
-of the dot — `0.5` and `1.0` are valid, `.5` and `1.` are not.
+You can annotate when you want to be explicit — `let x: Int = 5;` — and the
+annotation is checked against the initializer. Integer literals may use
+underscores (`1_000_000`), hex (`0x2A`), or binary (`0b1010`). Float literals
+need a digit on both sides of the dot: `0.5` and `1.0` are valid, `.5` and
+`1.` are not.
 
 ## No implicit conversions
 
@@ -67,9 +57,7 @@ values):
 let n = 3;
 let x = n.to_float() + 2.0;
 println(x);
-
-let f = 2.9;
-println(f.to_int());
+println(2.9.to_int());
 println((-2.9).to_int());
 ```
 
@@ -79,8 +67,8 @@ println((-2.9).to_int());
 -2
 ```
 
-Note that `Float` values always display with a decimal point or exponent
-(`5.0`, not `5`), so you can tell the types apart in output.
+A `Float` always displays with a decimal point or exponent (`5.0`, not `5`),
+so you can tell the types apart in output.
 
 ## `let` and `let mut`
 
@@ -119,8 +107,8 @@ error[E0307]: cannot assign to immutable binding `limit`
 ## Shadowing
 
 A new `let` with an old name is not assignment — it creates a fresh binding
-that *shadows* the previous one. The new binding may even have a different
-type, which makes shadowing handy for step-by-step transformations:
+that *shadows* the previous one, possibly with a different type. This makes
+shadowing handy for step-by-step transformations:
 
 ```fable
 let input = "42";
@@ -160,9 +148,9 @@ println(y);
 
 ## Operators and precedence
 
-The operators are the usual suspects, with the usual precedence — `*`, `/`,
-`%` bind tighter than `+` and `-`, which bind tighter than comparisons, which
-bind tighter than `&&`, which binds tighter than `||`:
+The operators are the usual suspects with the usual precedence: `*`, `/`, `%`
+bind tighter than `+` and `-`, which bind tighter than comparisons, which
+bind tighter than `&&` (short-circuit), which binds tighter than `||`:
 
 ```fable
 println(1 + 2 * 3);
@@ -184,94 +172,41 @@ true
 true
 ```
 
-Integer division truncates toward zero, as `-7 / 2` shows. `&&` and `||`
-short-circuit. Equality (`==`, `!=`) is structural and requires both sides to
-have the same type.
+Integer division truncates toward zero, as `-7 / 2` shows. Equality (`==`,
+`!=`) is structural and requires both sides to have the same type.
+Comparisons do not chain: `1 < 2 < 3` is a parse error (`error[E0200]:
+comparison operators cannot be chained; use parentheses`) — write
+`1 < 2 && 2 < 3`.
 
-Comparison operators do not chain. `1 < 2 < 3` is a parse error, not a
-type puzzle:
+`+` also concatenates strings (`"fab" + "le"` is `"fable"`), and the
+ordering operators compare strings lexicographically (`"apple" < "banana"`
+is `true`).
 
-```fable
-println(1 < 2 < 3);
-```
-
-```text
-error[E0200]: comparison operators cannot be chained; use parentheses
-  --> demo.fable:1:15
-   |
-1 | println(1 < 2 < 3);
-   |               ^
-```
-
-(The parser reports one follow-on error as it recovers; the first message is
-the one that matters.)
-
-`+` also concatenates strings, and `<`/`<=`/`>`/`>=` compare strings
-lexicographically:
-
-```fable
-println("fab" + "le");
-println("apple" < "banana");
-println(1_000_000);
-println(0x2A);
-println(0b1010);
-println(1.0 / 0.0);
-println(10.0 / 4.0);
-```
-
-```text
-fable
-true
-1000000
-42
-10
-inf
-2.5
-```
-
-Float division by zero follows IEEE-754 (`inf`, `nan`). *Integer* division or
-modulo by zero panics — a runtime error that aborts the program with a stack
-trace and exit code 70:
-
-```fable
-let d = 0;
-println(1 / d);
-```
-
-```text
-panic: division by zero
-  at <script> (demo.fable:2:11)
-```
-
-Integer arithmetic that overflows 64 bits also panics (`panic: integer
-overflow`) rather than silently wrapping.
+Float division by zero follows IEEE-754: `1.0 / 0.0` is `inf`. Integer
+division or modulo by zero is a *panic* — a runtime error that aborts the
+program with a message, a stack trace, and exit code 70 (`panic: division by
+zero`). Integer arithmetic that overflows 64 bits also panics (`panic:
+integer overflow`) rather than silently wrapping.
 
 ## Strings: escapes and interpolation
 
-Any expression can be spliced into a string with `{ }`:
+Any expression can be spliced into a string with `{ }`. A literal `{` is
+written `\{`; a `}` outside an interpolation is just a character. The other
+escapes are `\n`, `\t`, `\r`, `\\`, `\"`, `\0`, and `\u{...}` for a Unicode
+scalar value:
 
 ```fable
 let a = 6;
 let b = 7;
 println("{a} * {b} = {a * b}");
 println("literal braces: \{a}");
-```
-
-```text
-6 * 7 = 42
-literal braces: {a}
-```
-
-A literal `{` is written `\{`; a `}` outside an interpolation is just a
-character. The other escapes are `\n`, `\t`, `\r`, `\\`, `\"`, `\0`, and
-`\u{...}` for a Unicode scalar value:
-
-```fable
 println("tab:\tthen a \"quoted\" word");
 println("caf\u{E9} costs \u{20AC}3");
 ```
 
 ```text
+6 * 7 = 42
+literal braces: {a}
 tab:	then a "quoted" word
 café costs €3
 ```
@@ -302,10 +237,6 @@ Taste is another matter — deep nesting is legal, not encouraged.
 /* Block comments /* nest properly */ so you can
    comment out code that already contains comments. */
 println("still here");
-```
-
-```text
-still here
 ```
 
 ## Blocks are expressions
@@ -360,7 +291,7 @@ error[E0316]: `if` without `else` must have type `Unit`, found `Int`
    |                 ^^^^^ help: add an `else` branch or a `;`
 ```
 
-Conditions are `Bool`, full stop — there is no truthiness. `if n { ... }`
+Conditions are `Bool`, full stop — there is no truthiness, and `if n { ... }`
 with an `Int` is a type error.
 
 ## Loops: `while`, `for`, and ranges
@@ -400,20 +331,9 @@ lap 2
 lap 3
 ```
 
-`for` also iterates over a `List[T]` (yielding each element) and over a
-`String`, yielding one-character strings by Unicode scalar — so accented
-characters come out whole:
-
-```fable
-for c in "héllo" {
-    print("[{c}]");
-}
-println("");
-```
-
-```text
-[h][é][l][l][o]
-```
+`for` also iterates over a `List[T]`, and over a `String` by Unicode scalar —
+each step yields a one-character string, so `for c in "héllo"` sees five
+characters (`h`, `é`, `l`, `l`, `o`), not six bytes.
 
 `break` exits the innermost loop; `continue` skips to its next iteration:
 
@@ -431,10 +351,10 @@ println(total);
 16
 ```
 
-(That is 1 + 3 + 5 + 7.) Loops are expressions of type `Unit`, so you can't
-extract a value from `break` — use a `mut` variable, as above. Ranges are
-also first-class values with methods like `.map` and `.to_list`; the standard
-library chapter covers them.
+(That is 1 + 3 + 5 + 7.) Loops are expressions of type `Unit`, and `break`
+takes no value — to compute something in a loop, assign to a `mut` variable,
+as above. Ranges are also first-class values with methods like `.map` and
+`.to_list`; the collections chapter covers them.
 
 ## Statements, expressions, and semicolons
 
@@ -487,8 +407,8 @@ is just the idiomatic way to produce the final value.
 A Fable program is a single file executed top to bottom. `fn`, `struct`, and
 `enum` declarations are *hoisted* — visible everywhere, in any order, so
 mutually recursive functions just work. But top-level `let` bindings and
-statements run in order, and top-level code may only refer to globals declared
-above it:
+statements run in order, and top-level code may only refer to globals
+declared above it:
 
 ```fable
 println(greeting);
@@ -504,25 +424,11 @@ error[E0412]: `greeting` is used before its `let` declaration
   note: top-level code runs in order; move the `let` above this line
 ```
 
-Function *bodies* are the exception: since functions are hoisted, their bodies
-may mention any global, even one declared further down the file. This is fine
-as long as the function isn't *called* until the global's `let` has run:
-
-```fable
-fn shout() -> String {
-    greeting.to_upper()
-}
-
-let greeting = "hello";
-println(shout());
-```
-
-```text
-HELLO
-```
-
-Call it too early, though, and the compiler can't save you — the global's
-initializer simply hasn't run yet, and you get a panic at runtime:
+Function *bodies* are the exception: since functions are hoisted, their
+bodies may mention any global, even one declared further down the file. This
+is fine as long as the function isn't *called* until the global's `let` has
+run. Call it too early, though, and the compiler can't save you — the
+global's initializer simply hasn't run yet, and you get a panic at runtime:
 
 ```fable
 fn shout() -> String {
@@ -539,38 +445,16 @@ panic: global `greeting` used before initialization
   at <script> (demo.fable:5:9)
 ```
 
-This is the one place where Fable's static checking hands off to a runtime
-check, so keep your `let`s near the top of the file, above the first
-top-level call that needs them.
-
-Globals follow the same mutability rules as locals — a function may assign to
-a `let mut` global:
-
-```fable
-let mut hits = 0;
-
-fn record() {
-    hits += 1;
-}
-
-record();
-record();
-record();
-println("hits = {hits}");
-```
-
-```text
-hits = 3
-```
-
-(`record` omits `-> ...`, so its return type defaults to `Unit`.) Mutable
-globals are as easy to overuse in Fable as anywhere else; prefer parameters
-and return values where you can.
+Swap the last two lines — `let greeting` above `println(shout())` — and the
+program prints `HELLO`. This is the one place where Fable's static checking
+hands off to a runtime check, so keep your `let`s near the top of the file,
+above the first top-level call that needs them. Globals follow the same mutability rules as
+locals — a function may assign to a global declared `let mut` — but prefer
+parameters and return values where you can.
 
 ## Where we are
 
 You can now read and write straight-line Fable: typed values with no silent
-conversions, immutable-by-default bindings, expression-based control flow, and
-a strict top-to-bottom execution model. The next chapters build on this with
-functions and closures, then the compound types — lists, maps, tuples, structs,
-and enums with pattern matching.
+conversions, immutable-by-default bindings, expression-based control flow,
+and a strict top-to-bottom execution model. Next up: functions and closures,
+then modeling data with structs, enums, and pattern matching.

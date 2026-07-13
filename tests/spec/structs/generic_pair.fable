@@ -1,0 +1,26 @@
+// SPEC 2.3 / 2.5: generic structs; type arguments are inferred from use
+// (no turbofish). One definition serves all instantiations.
+struct Pair[A, B] { first: A, second: B }
+
+let q = Pair { first: 1, second: "one" };      // Pair[Int, String] inferred
+println(q);                    //? expect: Pair { first: 1, second: "one" }
+println(q.first + 1);          //? expect: 2
+println(q.second.to_upper());  //? expect: ONE
+
+let r: Pair[Int, String] = Pair { first: 2, second: "two" };  // annotation checked
+println(r.second);             //? expect: two
+
+// Nested instantiation: Pair[Pair[Bool, Float], List[Int]].
+let nested = Pair { first: Pair { first: true, second: 2.5 }, second: [1, 2] };
+println(nested);               //? expect: Pair { first: Pair { first: true, second: 2.5 }, second: [1, 2] }
+
+// A type argument may be pinned down by a later use of the field.
+let lazy = Pair { first: 0, second: [] };
+lazy.second.push("s");
+println(lazy);                 //? expect: Pair { first: 0, second: ["s"] }
+
+fn swap[A, B](p: Pair[A, B]) -> Pair[B, A] {
+    Pair { first: p.second, second: p.first }
+}
+println(swap(q));              //? expect: Pair { first: "one", second: 1 }
+println(swap(swap(q)) == q);   //? expect: true

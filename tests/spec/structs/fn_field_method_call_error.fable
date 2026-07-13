@@ -1,0 +1,8 @@
+// SPEC 8.8: only builtin types have methods; `s.f(x)` on a struct is a method
+// call, and structs have no methods — even when `f` is a field of function
+// type. The call must be written `(s.f)(x)`.
+//? error: no method `apply` on a value of type `Op`
+struct Op { name: String, apply: fn(Int, Int) -> Int }
+fn add(a: Int, b: Int) -> Int { a + b }
+let plus = Op { name: "plus", apply: add };
+println(plus.apply(2, 3));

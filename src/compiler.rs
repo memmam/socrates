@@ -504,9 +504,8 @@ impl<'a> Compiler<'a> {
                     }
                 }
                 self.emit(Op::Return, stmt.span);
-                // Static depth: Return consumed the value.
-                let d = self.depth();
-                self.set_depth(d - 1);
+                // (Op::Return's stack effect already accounts for the
+                // consumed value; no extra depth adjustment.)
             }
             StmtKind::Break => {
                 let Some(lp) = self.ctx().loops.last() else { return };

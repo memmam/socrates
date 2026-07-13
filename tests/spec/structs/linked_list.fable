@@ -1,0 +1,36 @@
+// Recursive struct via an Option field (SPEC 2.3, 2.4): a singly linked list.
+struct Node { value: Int, next: Option[Node] }
+
+let tail = Node { value: 3, next: None };
+let mid = Node { value: 2, next: Some(tail) };
+let head = Node { value: 1, next: Some(mid) };
+println(head);   //? expect: Node { value: 1, next: Some(Node { value: 2, next: Some(Node { value: 3, next: None }) }) }
+
+fn sum(n: Node) -> Int {
+    match n.next {
+        Some(rest) -> n.value + sum(rest),
+        None -> n.value,
+    }
+}
+fn length(n: Node) -> Int {
+    match n.next {
+        Some(rest) -> 1 + length(rest),
+        None -> 1,
+    }
+}
+println(sum(head));            //? expect: 6
+println(length(head));         //? expect: 3
+
+fn push_front(list: Option[Node], v: Int) -> Node {
+    Node { value: v, next: list }
+}
+let built = push_front(Some(push_front(Some(push_front(None, 30)), 20)), 10);
+println(sum(built));           //? expect: 60
+println(built.value);          //? expect: 10
+println(built.next.unwrap().value);                //? expect: 20
+println(built.next.unwrap().next.unwrap().value);  //? expect: 30
+
+// Nodes are references: extending the shared tail is seen from the head.
+tail.next = Some(Node { value: 4, next: None });
+println(sum(head));            //? expect: 10
+println(length(head));         //? expect: 4

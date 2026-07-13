@@ -1,0 +1,24 @@
+// SPEC § 3.4: full lambda form with explicit parameter types, an explicit
+// return type, and a block body.
+let f = |x: Int| -> Int { x + 1 };
+println(f(41));      //? expect: 42
+
+let g = |x: Int| -> String {
+    let doubled = x * 2;
+    "twice {x} is {doubled}"
+};
+println(g(21));      //? expect: twice 21 is 42
+
+// Zero-parameter lambda with declared return type.
+let zero = || -> Int { 0 };
+println(zero());     //? expect: 0
+
+// `return` statements checked against the declared return type.
+let sign = |x: Int| -> String {
+    if x < 0 { return "neg"; }
+    if x == 0 { return "zero"; }
+    "pos"
+};
+println(sign(-5));   //? expect: neg
+println(sign(0));    //? expect: zero
+println(sign(5));    //? expect: pos

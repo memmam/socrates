@@ -1,0 +1,24 @@
+// SPEC § 3.3: `return` exits the *enclosing function* — inside a lambda that
+// is the lambda itself, not the named function around it.
+fn f() -> Int {
+    let g = |x: Int| -> Int {
+        if x > 0 { return 1; }
+        0
+    };
+    let a = g(5);
+    let b = g(-5);
+    a + b + 100
+}
+println(f());          //? expect: 101
+
+// `return;` in a Unit lambda passed to `each` skips only that element;
+// the loop in `each` and the outer function keep going.
+fn sum_skipping_two() -> Int {
+    let mut total = 0;
+    [1, 2, 3].each(|x| {
+        if x == 2 { return; }
+        total += x;
+    });
+    total
+}
+println(sum_skipping_two());  //? expect: 4

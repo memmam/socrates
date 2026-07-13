@@ -1,0 +1,24 @@
+// Structs stored as map values (SPEC 2.2, 8.4): indexing, mutation through the
+// map (reference semantics), get() -> Option, and display with insertion order.
+struct Score { wins: Int, losses: Int }
+
+let m = {"ann": Score { wins: 3, losses: 1 }, "bob": Score { wins: 0, losses: 4 }};
+println(m["ann"].wins);        //? expect: 3
+
+m["ann"].wins = 5;             // mutate the struct held in the map
+println(m["ann"]);             //? expect: Score { wins: 5, losses: 1 }
+println(m);                    //? expect: {"ann": Score { wins: 5, losses: 1 }, "bob": Score { wins: 0, losses: 4 }}
+
+println(m.get("bob").unwrap().losses);   //? expect: 4
+println(m.get("zed").is_none());         //? expect: true
+
+m["cyd"] = Score { wins: 1, losses: 1 }; // insert a new struct value
+println(m.len());              //? expect: 3
+
+// The map hands back a reference: mutating it is visible inside the map.
+let borrowed = m["cyd"];
+borrowed.wins = 9;
+println(m["cyd"].wins);        //? expect: 9
+
+// Structural equality applies to map values.
+println(m["cyd"] == Score { wins: 9, losses: 1 });   //? expect: true

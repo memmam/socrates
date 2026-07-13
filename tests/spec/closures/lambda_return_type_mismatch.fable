@@ -1,0 +1,4 @@
+//? error: E0301
+//? error: type mismatch
+// The block body must produce the declared return type.
+let f = |x: Int| -> Int { "nope" };

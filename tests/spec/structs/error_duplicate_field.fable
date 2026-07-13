@@ -1,0 +1,5 @@
+// A field written twice in a struct literal is a compile error.
+//? error: E0426
+//? error: field `x` written twice
+struct Point { x: Float, y: Float }
+let p = Point { x: 1.0, y: 2.0, x: 3.0 };

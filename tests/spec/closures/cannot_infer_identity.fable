@@ -1,0 +1,5 @@
+//? error: E0302
+//? error: cannot infer the type of this lambda parameter
+// SPEC § 2.6: `|x| x` with no context leaves the parameter type unknown after
+// checking, which is a compile error.
+let f = |x| x;
