@@ -265,11 +265,11 @@ fn area(s: Shape) -> Float {
 ```
 
 ```text
-error[E0501]: non-exhaustive match
+error[E0501]: non-exhaustive match: the value `Shape.Rect(_, _)` is not covered
   --> demo.fable:4:11
    |
 4 |     match s {
-   |           ^ the value `Shape.Rect(_, _)` is not covered
+   |           ^ `Shape.Rect(_, _)` is not covered
   note: add an arm for it, or a catch-all `_ ->` arm
 ```
 
@@ -288,11 +288,11 @@ fn sign(n: Int) -> String {
 ```
 
 ```text
-error[E0501]: non-exhaustive match
+error[E0501]: non-exhaustive match: the value `-1` is not covered
   --> demo.fable:2:11
    |
 2 |     match n {
-   |           ^ the value `-1` is not covered
+   |           ^ `-1` is not covered
   note: add an arm for it, or a catch-all `_ ->` arm
 ```
 

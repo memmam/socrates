@@ -1,10 +1,9 @@
 # Under the Hood
 
-You don't need this chapter to write Fable. But if you've ever wondered what
-happens between saving a `.fable` file and seeing output — or why a captured
+You don't need this chapter to write Fable. But if you've wondered what
+happens between saving a `.fable` file and seeing output — why a captured
 variable outlives its scope, or when the garbage collector actually runs —
-this is the tour. Everything here was produced by running the real tools;
-nothing is a mock-up.
+this is the tour. Everything here was produced by running the real tools.
 
 Fable compiles to bytecode and runs it on a stack-based virtual machine —
 about 13,000 lines of dependency-free Rust in `src/`. This chapter describes
@@ -56,9 +55,9 @@ flat list of tagged tokens with line:column positions:
 2:1	Eof
 ```
 
-`fable ast pipe.fable` prints the parse tree — verbose, but it shows that
-every node carries a source span, which is how errors and stack traces point
-at exact positions later. The interesting dump comes after compilation.
+`fable ast pipe.fable` prints the parse tree — verbose, but it shows every
+node carrying a source span, which is how errors and stack traces point at
+exact positions later.
 
 ## Reading bytecode with `fable dis`
 
@@ -126,13 +125,8 @@ println(tick());
 println(tick());
 ```
 
-```text
-1
-2
-3
-```
-
-The disassembly of the two interesting protos (`<script>` omitted):
+It prints `1`, `2`, `3`, as in chapter 3. Here are the two interesting
+protos (`<script>` omitted):
 
 ```text
 fn make_counter (proto 0, arity 0, 0 upvalues, max locals 2)
@@ -151,20 +145,20 @@ fn <lambda> (proto 1, arity 0, 1 upvalues, max locals 2)
 ```
 
 The lambda never touches a local named `n`. It reads and writes **upvalue
-0** — a heap cell created when `closure 1` ran. The mechanism (borrowed from
-Lua) works like this:
+0** — a heap cell created when `closure 1` ran. The mechanism is borrowed
+from Lua:
 
-- When a closure captures a local, the VM allocates one *upvalue cell* that
-  initially just points at the local's stack slot ("open"). The closure
-  stores a handle to the cell, not a copy of the value.
-- Two closures capturing the same variable get the *same cell* — that is
-  the whole mechanism behind the shared `bump`/`report` counter you saw in
-  chapter 3. One variable, one cell, however many closures.
-- When the variable's scope exits, the value is moved off the stack into the
-  cell ("closed"). That's the `end_block 1` in `make_counter`: it removes
-  `n`'s slot from under the return value and closes any upvalues pointing
-  into it. From then on the counter lives on the heap, owned by whoever
-  still holds the closure.
+- When a closure captures a local, the VM allocates one *upvalue cell*
+  pointing at the local's stack slot ("open"). The closure stores a handle
+  to the cell, not a copy of the value.
+- Two closures over the same variable get the *same cell* — that's the whole
+  mechanism behind the shared `bump`/`report` counter in chapter 3. One
+  variable, one cell, however many closures.
+- When the scope exits, the value moves off the stack into the cell
+  ("closed"). That's the `end_block 1` in `make_counter`: it removes `n`'s
+  slot from under the return value and closes upvalues pointing into it.
+  From then on the counter lives on the heap, owned by whoever still holds
+  the closure.
 
 ## How `match` compiles
 
@@ -244,25 +238,24 @@ Reading it as the compiler thinks about it:
 
 ## The garbage collector
 
-Fable values themselves are small: an `Int`, `Float`, or `Bool` is a 16-byte
-tagged value that lives directly on the VM stack and is never garbage.
-Everything compound — strings, lists, maps, tuples, structs, enum values,
-closures, upvalue cells — is an object on a heap, referenced by handle.
+An `Int`, `Float`, or `Bool` is a 16-byte tagged value that lives directly
+on the VM stack — never garbage. Everything compound (strings, lists, maps,
+tuples, structs, enum values, closures, upvalue cells) is a heap object
+referenced by handle.
 
-The collector is a classic **mark-and-sweep**: starting from the roots (the
-value stack, globals, call frames, open upvalue cells, constants, and a
-small set of explicitly registered temporaries), mark everything reachable,
-then free everything unmarked. The first collection triggers when 256
-objects are live; after each collection the threshold is set to twice the
-surviving count (with 256 as the floor).
+The collector is a classic **mark-and-sweep**: starting from the roots — the
+value stack, globals, call frames, open upvalue cells, constants, and a few
+explicitly registered temporaries — mark everything reachable, then free the
+rest. The first collection triggers at 256 live objects; each collection
+then sets the threshold to twice the survivor count (floor 256).
 
 The design question for any GC is *when is it safe to collect?* Fable's
-answer is a **checkpoint discipline**: allocating never collects. Instead,
-the VM offers the collector an opportunity only at checkpoints — points
-chosen so that every live object is reachable from a root, e.g. before an
-instruction pops its operands, or while a builtin's arguments are still on
-the stack. Between checkpoints, code can allocate freely without fear of
-having a half-constructed object swept away.
+answer is a **checkpoint discipline**: allocating never collects. The VM
+offers the collector an opportunity only at checkpoints — points where every
+live object is reachable from a root (before an instruction pops its
+operands, while a builtin's arguments are still on the stack). Between
+checkpoints, code allocates freely; a half-built object can never be swept
+out from under it.
 
 You can watch it work. `FABLE_GC_LOG=1` logs every collection to stderr:
 
@@ -286,15 +279,15 @@ $ FABLE_GC_LOG=1 fable gc.fable
 ```
 
 Each pass of the loop allocates one throwaway list; roughly every 250
-iterations the heap hits its threshold and a collection reclaims almost
-everything. The live count creeps up (4, 5, 6) as `survivors` accumulates
-lists that the collector correctly refuses to touch.
+iterations the heap hits its threshold and reclaims almost everything. The
+live count creeps up (4, 5, 6) as `survivors` accumulates lists the
+collector correctly refuses to touch.
 
 `FABLE_GC_STRESS=1` turns *every* checkpoint into a collection — the
-harshest possible schedule. If any code path forgot to root a live object,
-stress mode makes it disappear at the worst moment, so this is how the
-rooting discipline itself is tested (the entire test suite passes under it).
-On a tiny program you can see collections firing with nothing to reclaim:
+harshest schedule possible. If any code path forgot to root a live object,
+stress mode makes it vanish at the worst moment; that's how the rooting
+discipline is tested, and the whole test suite passes under it. On a tiny
+program you can watch collections fire with nothing to reclaim:
 
 ```fable
 let words = ["once", "upon", "a", "time"];
@@ -338,9 +331,8 @@ panic: list index out of bounds: index 2, length 2
 ```
 
 Note the middle frame: the panic happened inside a string interpolation, and
-the trace points at the exact column of the `third(xs)` call inside the
-string. Builtins don't appear as frames of their own — if a lambda you
-passed to `map` panics, you see the lambda and then the call site:
+the trace points at the exact column of the `third(xs)` call. Builtins add
+no frames of their own — a lambda passed to `map` panics like this:
 
 ```fable
 let inverses = [4, 2, 0].map(|n| 100 / n);
@@ -353,17 +345,17 @@ panic: division by zero
   at <script> (divide.fable:1:16)
 ```
 
-Deep recursion is also a panic (`panic: stack overflow`) rather than a
-crash; long traces are truncated after 64 frames. Fable does not do
-tail-call optimization in v0.1, so a loop is the right tool where you'd
-reach for deep recursion elsewhere.
+Deep recursion panics too (`panic: stack overflow`) rather than crashing;
+long traces are truncated after 64 frames. Fable has no tail-call
+optimization in v0.1 — reach for a loop instead.
 
 ## Performance
 
-Fable is a bytecode interpreter without a JIT. That puts a ceiling on raw
-speed, and it's better to know where the ceiling is than to guess. The repo
-ships a micro-benchmark suite; run it with a **release** build (a debug
-build is four to seven times slower and will mislead you):
+Fable is a bytecode interpreter without a JIT; it's better to know where
+that ceiling is than to guess. The repo ships a micro-benchmark suite; run
+it with a **release** build (a debug build is four to seven times slower and
+will mislead you). One run on the author's machine — expect jitter between
+runs and different absolute numbers on your hardware:
 
 ```text
 $ cargo build --release
@@ -377,26 +369,21 @@ closure churn 200k          130.34 ms   (result 100000)
 sort 30k                      5.73 ms   (result 30000)
 ```
 
-(One run on the author's machine; expect a few percent of jitter between
-runs, and different absolute numbers on your hardware.)
-
 Some context for those numbers:
 
-- `fib(25)` makes about 243,000 function calls, so calls cost well under a
-  tenth of a microsecond each — recursion is not something to fear.
+- `fib(25)` makes about 243,000 function calls, so a call costs well under
+  a tenth of a microsecond — recursion is nothing to fear.
 - A million `for`-loop iterations accumulating a sum run in ~34 ms. Plain
   `Int` and `Float` arithmetic never allocates.
 - The slowest line is honest about the costliest habit: `closure churn`
-  allocates a fresh closure and upvalue cell on the heap 200,000 times, and
-  pays for the allocations *and* the garbage collections they trigger.
-  Hoisting a closure out of a hot loop is the single easiest optimization
-  in Fable.
+  heap-allocates a fresh closure and upvalue cell 200,000 times and pays
+  for the garbage collections they trigger. Hoisting a closure out of a hot
+  loop is the easiest optimization in Fable.
 
 For calibration rather than bragging: this is the performance class of
-non-JIT scripting language interpreters, a couple of orders of magnitude
-from optimized native code. It's enough to render the ray-traced scene in
-`examples/raytracer.fable` in about a second — and not enough for anything
-that would melt a laptop in Python either.
+non-JIT scripting-language interpreters — a couple of orders of magnitude
+from optimized native code, and enough to render the ray-traced scene in
+`examples/raytracer.fable` in about a second.
 
 ## Where the code lives
 
