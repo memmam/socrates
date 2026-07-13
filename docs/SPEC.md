@@ -318,8 +318,10 @@ Method calls are type-directed (resolved at compile time from the receiver's typ
 
 ### 8.1 Display conversion — `str(x)` / interpolation
 
-- `Int` → `42`; `Float` → shortest round-trip repr, but always with a decimal point or
-  exponent (`3.0`, `0.1`, `1e300`); `inf`/`-inf`/`nan` as those words.
+- `Int` → `42`; `Float` → shortest round-trip digits, in positional notation with a
+  decimal point (`3.0`, `0.1`) for magnitudes in `[1e-4, 1e16)` and for zero, and in
+  exponent notation outside that range (`1e300`, `2.5e-7`); `inf`/`-inf`/`nan` as
+  those words.
 - `Bool` → `true`/`false`; `String` → itself (unquoted); `Unit` → `()`.
 - `List` → `[1, 2, 3]`; `Map` → `{k: v, ...}` with **insertion-order** iteration;
   tuple → `(1, "two")`. **Strings nested inside containers are quoted**

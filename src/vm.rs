@@ -590,12 +590,23 @@ impl Vm {
                 Op::Lt | Op::Le | Op::Gt | Op::Ge => {
                     let b = self.pop();
                     let a = self.pop();
-                    let ord = self.compare(a, b)?;
-                    let r = match op {
-                        Op::Lt => ord.is_lt(),
-                        Op::Le => ord.is_le(),
-                        Op::Gt => ord.is_gt(),
-                        _ => ord.is_ge(),
+                    // Floats get direct IEEE-754 comparisons (every ordered
+                    // comparison involving NaN is false).
+                    let r = if let (Value::Float(x), Value::Float(y)) = (a, b) {
+                        match op {
+                            Op::Lt => x < y,
+                            Op::Le => x <= y,
+                            Op::Gt => x > y,
+                            _ => x >= y,
+                        }
+                    } else {
+                        let ord = self.compare(a, b)?;
+                        match op {
+                            Op::Lt => ord.is_lt(),
+                            Op::Le => ord.is_le(),
+                            Op::Gt => ord.is_gt(),
+                            _ => ord.is_ge(),
+                        }
                     };
                     self.stack.push(Value::Bool(r));
                 }
@@ -1389,7 +1400,9 @@ impl Vm {
     }
 }
 
-/// Float display: shortest round-trip, always with a decimal point or exponent.
+/// Float display: shortest round-trip digits; positional notation (`123.5`,
+/// always with a decimal point) for magnitudes in `[1e-4, 1e16)` and for
+/// zero, exponent notation (`1e300`, `2.5e-7`) outside that range.
 pub fn fmt_float(f: f64) -> String {
     if f.is_nan() {
         return "nan".into();
@@ -1397,10 +1410,13 @@ pub fn fmt_float(f: f64) -> String {
     if f.is_infinite() {
         return if f > 0.0 { "inf".into() } else { "-inf".into() };
     }
-    let s = format!("{f}");
-    if s.contains('.') || s.contains('e') || s.contains('E') {
-        s
-    } else {
-        format!("{s}.0")
+    let mag = f.abs();
+    if f != 0.0 && !(1e-4..1e16).contains(&mag) {
+        return format!("{f:e}");
     }
+    let mut positional = format!("{f}");
+    if !positional.contains('.') {
+        positional.push_str(".0");
+    }
+    positional
 }
