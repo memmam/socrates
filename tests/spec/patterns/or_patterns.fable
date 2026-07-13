@@ -1,0 +1,47 @@
+// Or-patterns: every alternative must bind the same names with the same
+// types; a guard applies to the whole or-pattern.
+enum Dir { North, South, East, West }
+fn axis(d: Dir) -> String {
+    match d {
+        Dir.North | Dir.South -> "vertical",
+        Dir.East | Dir.West -> "horizontal",
+    }
+}
+println(axis(Dir.North));  //? expect: vertical
+println(axis(Dir.South));  //? expect: vertical
+println(axis(Dir.East));   //? expect: horizontal
+println(axis(Dir.West));   //? expect: horizontal
+
+// Alternatives binding the same name with the same type.
+enum E { A(Int), B(Int), C }
+fn value(e: E) -> Int {
+    match e {
+        E.A(n) | E.B(n) -> n * 10,
+        E.C -> -1,
+    }
+}
+println(value(E.A(2)));  //? expect: 20
+println(value(E.B(3)));  //? expect: 30
+println(value(E.C));     //? expect: -1
+
+// The guard applies to the whole or-pattern.
+fn bucket(e: E) -> String {
+    match e {
+        E.A(n) | E.B(n) if n > 5 -> "big {n}",
+        E.A(n) | E.B(n) -> "small {n}",
+        E.C -> "none",
+    }
+}
+println(bucket(E.A(9)));  //? expect: big 9
+println(bucket(E.B(2)));  //? expect: small 2
+println(bucket(E.C));     //? expect: none
+
+// Literal or-patterns.
+fn small(n: Int) -> Bool {
+    match n {
+        0 | 1 | 2 -> true,
+        _ -> false,
+    }
+}
+println(small(2));  //? expect: true
+println(small(3));  //? expect: false

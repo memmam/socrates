@@ -6,6 +6,8 @@ println((|s: String| s.to_upper())("shout")); //? expect: SHOUT
 // IIFE with an explicit return type and a block body.
 let n = (|| -> Int { let a = 4; return a + 5; })();
 println(n);                                //? expect: 9
+// `return` as the first statement of a zero-parameter lambda.
+println((|| -> Int { return 100; })());    //? expect: 100
 
 // An IIFE is an expression like any other — even inside interpolation.
 println("{(|x: Int| x * x)(6)}");          //? expect: 36

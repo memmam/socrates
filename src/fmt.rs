@@ -383,7 +383,15 @@ impl Formatter {
                 self.out.push_str(&field.name);
             }
             ExprKind::Call { callee, args } => {
-                self.expr(callee, 9);
+                // `(s.field)(args)` must keep its parens: without them the
+                // source re-parses as a method call `s.field(args)`.
+                if matches!(callee.kind, ExprKind::Field { .. }) {
+                    self.out.push('(');
+                    self.expr_inner(callee);
+                    self.out.push(')');
+                } else {
+                    self.expr(callee, 9);
+                }
                 self.call_args(args);
             }
             ExprKind::MethodCall { recv, method, args } => {

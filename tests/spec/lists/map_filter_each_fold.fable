@@ -1,0 +1,40 @@
+// SPEC 8.2: map / filter / each / fold.
+let xs = [1, 2, 3, 4];
+println(xs.map(|x| x * x));                 //? expect: [1, 4, 9, 16]
+// map may change the element type.
+println(xs.map(|x| str(x) + "!"));          //? expect: ["1!", "2!", "3!", "4!"]
+println(xs.map(|x| x % 2 == 0));            //? expect: [false, true, false, true]
+// map returns a new list; the receiver is untouched.
+println(xs);                                //? expect: [1, 2, 3, 4]
+
+println(xs.filter(|x| x % 2 == 0));         //? expect: [2, 4]
+println(xs.filter(|x| x > 99));             //? expect: []
+println(xs.filter(|x| true));               //? expect: [1, 2, 3, 4]
+println(xs);                                //? expect: [1, 2, 3, 4]
+
+// each runs the callback for every element, in order, for side effects.
+let mut sum = 0;
+let seen: List[Int] = [];
+xs.each(|x| {
+    sum += x;
+    seen.push(x);
+});
+println(sum);                               //? expect: 10
+println(seen);                              //? expect: [1, 2, 3, 4]
+
+// fold threads an accumulator left-to-right.
+println(xs.fold(0, |a, x| a + x));          //? expect: 10
+println(xs.fold(1, |a, x| a * x));          //? expect: 24
+// Left-to-right order is observable with a non-commutative fold.
+println(xs.fold("", |a, x| a + str(x)));    //? expect: 1234
+// fold's accumulator type is independent of the element type.
+println(["a", "bb"].fold(0, |n, s| n + s.len())); //? expect: 3
+
+// Empty-list behavior: map/filter give [], fold gives the seed, each does nothing.
+let e: List[Int] = [];
+println(e.map(|x| x + 1));                  //? expect: []
+println(e.filter(|x| true));                //? expect: []
+println(e.fold(7, |a, x| a + x));           //? expect: 7
+let mut ran = false;
+e.each(|x| { ran = true; });
+println(ran);                               //? expect: false

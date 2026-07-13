@@ -1,0 +1,11 @@
+//? error: E0501
+//? error: non-exhaustive match
+// Int literal patterns never make a match exhaustive by themselves;
+// a `_` or binding arm is required.
+fn i(n: Int) -> Int {
+    match n {
+        0 -> 0,
+        1 -> 1,
+    }
+}
+println(i(0));

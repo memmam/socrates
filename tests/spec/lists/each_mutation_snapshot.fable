@@ -1,0 +1,32 @@
+// Mutating the receiver inside a method callback must not crash, and each
+// iterates the elements present when iteration started: a push inside the
+// callback does not change the iteration count.
+let xs = [1, 2];
+let mut count = 0;
+xs.each(|x| {
+    xs.push(x + 10);
+    count += 1;
+});
+println(count);                             //? expect: 2
+// The pushes themselves do land in the list.
+println(xs);                                //? expect: [1, 2, 11, 12]
+
+// Same shape for map and filter: callbacks that mutate the receiver still
+// see exactly the original elements.
+let ys = [1, 2, 3];
+let doubled = ys.map(|y| {
+    ys.push(0);
+    y * 2
+});
+println(doubled);                           //? expect: [2, 4, 6]
+println(ys.len());                          //? expect: 6
+
+// Popping inside each does not disturb the visit sequence either.
+let zs = [10, 20, 30];
+let visited: List[Int] = [];
+zs.each(|z| {
+    zs.pop();
+    visited.push(z);
+});
+println(visited);                           //? expect: [10, 20, 30]
+println(zs);                                //? expect: []

@@ -1,0 +1,14 @@
+// SPEC 2.2: using a value containing a function as a map key panics at
+// runtime when it sneaks in through a generic (type-erased) path the checker
+// cannot see.
+//? panic: functions cannot be used as map keys
+fn put[K](k: K) -> Map[K, Int] {
+    let m: Map[K, Int] = {:};
+    m[k] = 1;
+    m
+}
+fn f(x: Int) -> Int { x }
+println(put("string key")["string key"]);   // fine: K = String
+let m = put(f);                             // K = fn(Int) -> Int: panics
+println("unreached");
+//? expect: 1

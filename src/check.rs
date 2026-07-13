@@ -1339,7 +1339,25 @@ impl Checker {
             }
             Native::ListSort => {
                 if let Type::List(t) = &resolved {
-                    self.require_comparable(t, recv.span, "sort the elements of");
+                    // Concrete non-sortable element types are compile errors;
+                    // generic element types are checked at runtime (generics
+                    // are erased, so a List[Int] through a generic fn sorts).
+                    match self.uni.shallow_resolve(t) {
+                        Type::Int | Type::Float | Type::Str | Type::Param(_) | Type::Var(_) => {}
+                        other => {
+                            self.diags.push(
+                                Diagnostic::error(
+                                    "E0322",
+                                    format!(
+                                        "cannot sort elements of type `{}`",
+                                        self.show(&other)
+                                    ),
+                                )
+                                .with_label(recv.span, "sort() needs Int, Float, or String elements")
+                                .with_note("use sort_by(|a, b| ...) with a custom comparator"),
+                            );
+                        }
+                    }
                 }
             }
             _ => {}
@@ -1985,12 +2003,12 @@ impl Checker {
             ) {
                 let shown = patterns::display_pattern(&witness[0], &self.defs);
                 self.diags.push(
-                    Diagnostic::error("E0501", "non-exhaustive match")
-                        .with_label(
-                            scrutinee.span,
-                            format!("the value `{shown}` is not covered"),
-                        )
-                        .with_note("add an arm for it, or a catch-all `_ ->` arm"),
+                    Diagnostic::error(
+                        "E0501",
+                        format!("non-exhaustive match: the value `{shown}` is not covered"),
+                    )
+                    .with_label(scrutinee.span, format!("`{shown}` is not covered"))
+                    .with_note("add an arm for it, or a catch-all `_ ->` arm"),
                 );
             }
         }

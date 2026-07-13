@@ -1,0 +1,29 @@
+// SPEC 3.5: m[k] = v inserts or overwrites. SPEC 5: index assignment does not
+// require the binding be `mut`. SPEC 2.2: maps have reference semantics.
+let m = {"a": 1};
+m["b"] = 2;                       // insert new key
+m["a"] = 100;                     // overwrite existing key
+println(m);                       //? expect: {"a": 100, "b": 2}
+println(m["b"]);                  //? expect: 2
+
+// Computed keys work through [].
+let k = "com" + "puted";
+m[k] = 7;
+println(m["computed"]);           //? expect: 7
+
+// Reference semantics: an alias sees mutation through the other name.
+let alias = m;
+alias["c"] = 3;
+println(m.len());                 //? expect: 4
+println(m["c"]);                  //? expect: 3
+
+// Compound assignment through index.
+m["a"] += 1;
+println(m["a"]);                  //? expect: 101
+
+// A map passed to a function is the same object (mutations are visible).
+fn bump(mm: Map[String, Int], key: String) {
+    mm[key] = mm[key] + 1000;
+}
+bump(m, "b");
+println(m["b"]);                  //? expect: 1002

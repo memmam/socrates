@@ -1,0 +1,12 @@
+//? error: E0501
+//? error: non-exhaustive match
+// Guarded arms are conservatively treated as possibly failing, so they do
+// not count toward exhaustiveness: covering `false` only under a guard
+// leaves the match non-exhaustive (witness `false`).
+fn h(b: Bool) -> Int {
+    match b {
+        true -> 1,
+        false if b -> 0,
+    }
+}
+println(h(true));

@@ -1,0 +1,35 @@
+// SPEC 2.2: map keys are compared/hashed structurally.
+
+// Tuple keys: a structurally equal tuple built elsewhere finds the entry.
+let grid = {(0, 0): "origin", (1, 2): "a", (3, 4): "b"};
+println(grid[(1, 2)]);            //? expect: a
+let p = (3, 4);
+println(grid[p]);                 //? expect: b
+println(grid.contains_key((0, 0)));   //? expect: true
+println(grid.contains_key((5, 6)));   //? expect: false
+println(grid.get((9, 9)));        //? expect: None
+
+// Equal-content string keys: a computed string equals the literal key.
+let sk = {"he" + "llo": 1};
+println(sk["hello"]);             //? expect: 1
+let hel = "hel";
+println(sk.get(hel + "lo"));      //? expect: Some(1)
+sk["hell" + "o"] = 2;             // overwrites, does not add
+println(sk.len());                //? expect: 1
+println(sk["hello"]);             //? expect: 2
+
+// Int keys, including zero and negatives.
+let ik = {0: "zero", -5: "neg", 1000000: "big"};
+println(ik[-5]);                  //? expect: neg
+println(ik[0]);                   //? expect: zero
+println(ik[500000 * 2]);          //? expect: big
+
+// Bool keys.
+let bk = {true: "yes", false: "no"};
+println(bk[1 == 1]);              //? expect: yes
+println(bk[false]);               //? expect: no
+
+// Tuple keys with mixed element types.
+let named = {("x", 1): 10, ("x", 2): 20};
+println(named[("x", 1 + 1)]);     //? expect: 20
+println(named);                   //? expect: {("x", 1): 10, ("x", 2): 20}

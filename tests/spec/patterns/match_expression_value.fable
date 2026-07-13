@@ -1,0 +1,34 @@
+// `match` is an expression: it yields a value and all arms unify to one type.
+let n = 7;
+let parity = match n % 2 {
+    0 -> "even",
+    _ -> "odd",
+};
+println(parity);  //? expect: odd
+
+// Arm bodies may be blocks; the block's value is the arm's value.
+let sized = match n {
+    x if x > 100 -> { "big" },
+    x -> {
+        let doubled = x * 2;
+        "double is {doubled}"
+    },
+};
+println(sized);  //? expect: double is 14
+
+// A match may be passed directly as a call argument.
+println(match n { 7 -> "lucky", _ -> "plain" });  //? expect: lucky
+
+// Matches nest: an arm body may itself be a match.
+fn compare(a: Int, b: Int) -> String {
+    match a < b {
+        true -> "less",
+        false -> match a == b {
+            true -> "equal",
+            false -> "greater",
+        },
+    }
+}
+println(compare(1, 2));  //? expect: less
+println(compare(2, 2));  //? expect: equal
+println(compare(3, 2));  //? expect: greater

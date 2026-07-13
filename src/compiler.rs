@@ -142,6 +142,10 @@ enum ConstKey {
 
 struct LocalSlot {
     local_id: u32,
+    /// Absolute stack slot (relative to the frame base). NOT the index into
+    /// `locals`: expression temporaries can sit between locals on the stack
+    /// (e.g. `1 + match x { .. }` declares the scrutinee slot above the `1`).
+    slot: u16,
     captured: bool,
 }
 
@@ -270,12 +274,13 @@ impl<'a> Compiler<'a> {
     // Locals / scopes / upvalues
     // ------------------------------------------------------------------
 
-    /// Register the value just pushed as a local.
+    /// Register the value just pushed (stack top) as a local.
     fn declare_local(&mut self, local_id: u32) -> u16 {
         let ctx = self.ctx();
-        debug_assert!(ctx.depth as usize > ctx.locals.len(), "declare without value");
-        ctx.locals.push(LocalSlot { local_id, captured: false });
-        (ctx.locals.len() - 1) as u16
+        debug_assert!(ctx.depth > 0, "declare without value");
+        let slot = ctx.depth - 1;
+        ctx.locals.push(LocalSlot { local_id, slot, captured: false });
+        slot
     }
 
     fn begin_scope(&mut self) {
@@ -309,8 +314,9 @@ impl<'a> Compiler<'a> {
         self.ctxs[ctx_i]
             .locals
             .iter()
-            .rposition(|l| l.local_id == local_id && local_id != ANON)
-            .map(|i| i as u16)
+            .rev()
+            .find(|l| l.local_id == local_id && local_id != ANON)
+            .map(|l| l.slot)
     }
 
     fn add_upvalue(&mut self, ctx_i: usize, desc: UpvalDesc) -> u16 {
@@ -328,7 +334,14 @@ impl<'a> Compiler<'a> {
         }
         let parent = ctx_i - 1;
         if let Some(slot) = self.find_local(parent, local_id) {
-            self.ctxs[parent].locals[slot as usize].captured = true;
+            if let Some(l) = self.ctxs[parent]
+                .locals
+                .iter_mut()
+                .rev()
+                .find(|l| l.local_id == local_id)
+            {
+                l.captured = true;
+            }
             return Some(self.add_upvalue(ctx_i, UpvalDesc { from_local: true, index: slot }));
         }
         if let Some(up) = self.resolve_upvalue(parent, local_id) {
@@ -373,13 +386,12 @@ impl<'a> Compiler<'a> {
         ctx.depth = f.params.len() as u16;
         ctx.max_depth = ctx.depth;
         self.ctxs.push(ctx);
-        for p in &f.params {
-            if let Some(Res::Local(id)) = self.res.get(&p.id) {
-                let id = *id;
-                self.ctx().locals.push(LocalSlot { local_id: id, captured: false });
-            } else {
-                self.ctx().locals.push(LocalSlot { local_id: ANON, captured: false });
-            }
+        for (i, p) in f.params.iter().enumerate() {
+            let id = match self.res.get(&p.id) {
+                Some(Res::Local(id)) => *id,
+                _ => ANON,
+            };
+            self.ctx().locals.push(LocalSlot { local_id: id, slot: i as u16, captured: false });
         }
         self.block_expr(&f.body);
         self.emit(Op::Return, f.body.span);
@@ -399,13 +411,12 @@ impl<'a> Compiler<'a> {
         ctx.depth = params.len() as u16;
         ctx.max_depth = ctx.depth;
         self.ctxs.push(ctx);
-        for p in params {
-            if let Some(Res::Local(id)) = self.res.get(&p.id) {
-                let id = *id;
-                self.ctx().locals.push(LocalSlot { local_id: id, captured: false });
-            } else {
-                self.ctx().locals.push(LocalSlot { local_id: ANON, captured: false });
-            }
+        for (i, p) in params.iter().enumerate() {
+            let id = match self.res.get(&p.id) {
+                Some(Res::Local(id)) => *id,
+                _ => ANON,
+            };
+            self.ctx().locals.push(LocalSlot { local_id: id, slot: i as u16, captured: false });
         }
         self.expr(body);
         self.emit(Op::Return, body.span);
@@ -456,8 +467,9 @@ impl<'a> Compiler<'a> {
                 self.expr(iter);
                 self.emit(Op::ForPrep, iter.span);
                 // The iterator + its state occupy two anonymous local slots.
-                self.ctx().locals.push(LocalSlot { local_id: ANON, captured: false });
-                self.ctx().locals.push(LocalSlot { local_id: ANON, captured: false });
+                let d = self.depth();
+                self.ctx().locals.push(LocalSlot { local_id: ANON, slot: d - 2, captured: false });
+                self.ctx().locals.push(LocalSlot { local_id: ANON, slot: d - 1, captured: false });
                 let locals_at_body = self.ctx().locals.len();
 
                 let next = self.here();

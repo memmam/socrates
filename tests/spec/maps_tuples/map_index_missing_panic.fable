@@ -1,0 +1,9 @@
+// SPEC 3.5 / 6: m[k] panics if the key is absent (use m.get(k) for Option).
+//? panic: key not found
+let m = {"a": 1, "b": 2};
+println(m["a"]);
+println(m.get("missing"));
+println(m["missing"]);
+println("unreached");
+//? expect: 1
+//? expect: None

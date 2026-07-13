@@ -1,0 +1,34 @@
+// Tuples as map values and map keys; entries() round-trips as List[(K, V)].
+let pts = {"a": (1, 2), "b": (3, 4)};
+println(pts["a"].1);              //? expect: 2
+println(pts["b"]);                //? expect: (3, 4)
+println(pts);                     //? expect: {"a": (1, 2), "b": (3, 4)}
+
+// Overwrite a tuple value (the map slot changes; tuples themselves never do).
+pts["a"] = (9, 9);
+println(pts["a"]);                //? expect: (9, 9)
+
+// Tuple keys mapping to tuple values.
+let edges = {(0, 1): ("zero", "one"), (1, 2): ("one", "two")};
+println(edges[(1, 2)].0);         //? expect: one
+println(edges.keys());            //? expect: [(0, 1), (1, 2)]
+println(edges.values());          //? expect: [("zero", "one"), ("one", "two")]
+
+// entries() of a tuple-keyed map: List of ((K), (V)) pairs, insertion order.
+let es = edges.entries();
+println(es[0]);                   //? expect: ((0, 1), ("zero", "one"))
+println(es[0].0.1);               //? expect: 1
+println(es[1].1.1);               //? expect: two
+
+// Destructure an entry with let.
+let (k, v) = es[1];
+println(k);                       //? expect: (1, 2)
+println(v.0);                     //? expect: one
+
+// insert with a tuple key returns the previous tuple value.
+println(edges.insert((0, 1), ("O", "I")));  //? expect: Some(("zero", "one"))
+println(edges[(0, 1)]);           //? expect: ("O", "I")
+
+// Map equality with tuple keys is order-insensitive.
+println({(1, 2): 3, (4, 5): 6} == {(4, 5): 6, (1, 2): 3});  //? expect: true
+println({(1, 2): 3} == {(2, 1): 3});                        //? expect: false

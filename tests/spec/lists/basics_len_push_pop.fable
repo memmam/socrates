@@ -1,0 +1,28 @@
+// SPEC 8.2: len / is_empty / push / pop; SPEC 2.2: lists have reference semantics.
+let xs = [1, 2, 3];
+println(xs.len());              //? expect: 3
+println(xs.is_empty());         //? expect: false
+
+let e: List[Int] = [];
+println(e.len());               //? expect: 0
+println(e.is_empty());          //? expect: true
+
+xs.push(4);
+println(xs);                    //? expect: [1, 2, 3, 4]
+println(xs.pop());              //? expect: Some(4)
+println(xs.pop());              //? expect: Some(3)
+println(xs);                    //? expect: [1, 2]
+println(e.pop());               //? expect: None
+
+// Reference semantics: an alias sees mutation through either name.
+let alias = xs;
+alias.push(7);
+println(xs);                    //? expect: [1, 2, 7]
+xs.push(8);
+println(alias);                 //? expect: [1, 2, 7, 8]
+println(xs == alias);           //? expect: true
+
+// A list passed to a function is the same object.
+fn add_ten(l: List[Int]) { l.push(10); }
+add_ten(xs);
+println(xs);                    //? expect: [1, 2, 7, 8, 10]

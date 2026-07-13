@@ -1,0 +1,10 @@
+//? error: E0501
+//? error: non-exhaustive match
+// Matching only None on an Option is non-exhaustive: Some(_) is uncovered.
+// (The rendered diagnostic reports the witness `Some(_)`.)
+fn g(o: Option[Int]) -> Int {
+    match o {
+        None -> 0,
+    }
+}
+println(g(None));

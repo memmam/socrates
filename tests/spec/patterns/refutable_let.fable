@@ -1,0 +1,8 @@
+//? error: E0503
+//? error: refutable pattern
+// `let` destructuring requires an irrefutable pattern: a variant pattern
+// or a literal inside a tuple pattern can fail to match.
+let o: Option[Int] = Some(3);
+let Some(x) = o;
+let (0, y) = (0, 2);
+println(x + y);

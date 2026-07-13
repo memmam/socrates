@@ -1,0 +1,6 @@
+// SPEC 8.2: insert panics out of bounds (past one-plus-the-last position).
+//? panic: insert index out of bounds
+let xs = [1, 2];
+xs.insert(2, 3);                // index == len is allowed: appends
+println(xs);                    //? expect: [1, 2, 3]
+xs.insert(5, 9);

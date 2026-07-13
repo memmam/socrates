@@ -1,0 +1,19 @@
+//? error: E0507
+//? error: E0509
+// Every `|` alternative must bind exactly the same names (E0507) with the
+// same types (E0509).
+enum E { A(Int), B(Int) }
+enum M { X(Int), Y(String) }
+
+fn f(e: E) -> Int {
+    match e {
+        E.A(n) | E.B(m) -> 0,
+    }
+}
+
+fn g(m: M) -> Int {
+    match m {
+        M.X(v) | M.Y(v) -> 0,
+    }
+}
+println(f(E.A(1)));

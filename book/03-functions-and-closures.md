@@ -31,47 +31,15 @@ Hello, Fable!
 
 Parameter annotations are not optional. Inference works everywhere else, but
 a named function's signature is its contract, and Fable insists you write it
-down:
-
-```fable
-fn double(x) -> Int {
-    x * 2
-}
-```
-
-```text
-error[E0200]: expected `:` (parameter types are required), found `)`
-  --> demo.fable:1:12
-   |
-1 | fn double(x) -> Int {
-   |            ^
-```
-
-(The parser reports a couple of follow-on errors as it recovers; the first
-one is the diagnosis.)
+down — `fn double(x) -> Int` is a parse error: ``error[E0200]: expected `:`
+(parameter types are required)``.
 
 ## The return type defaults to `Unit`
 
 Omit `-> Type` and the function returns `Unit` — fine for functions called
-only for their effects:
-
-```fable
-fn cheer(name: String) {
-    println("Go, {name}!");
-}
-
-let result = cheer("team");
-println(result == ());
-```
-
-```text
-Go, team!
-true
-```
-
-This default bites when you *meant* to return something. A body whose tail
-expression has a non-`Unit` type won't typecheck against the implicit `Unit`,
-and the compiler guesses both likely causes:
+only for their effects. The default bites when you *meant* to return
+something: a body whose tail expression has a non-`Unit` type won't typecheck
+against the implicit `Unit`, and the compiler guesses both likely causes:
 
 ```fable
 fn double(x: Int) {
@@ -113,46 +81,16 @@ odd
 even
 ```
 
-In a `Unit` function, a bare `return;` exits early:
-
-```fable
-fn warn(level: Int) {
-    if level < 3 {
-        return;
-    }
-    println("warning! level {level}");
-}
-
-warn(1);
-warn(9);
-```
-
-```text
-warning! level 9
-```
-
-`return` only makes sense inside a function — at the top level of a script it
-is a compile error: ``error[E0304]: `return` outside of a function``.
+In a `Unit` function, a bare `return;` exits early the same way. `return`
+only makes sense inside a function — at the top level of a script it is a
+compile error: ``error[E0304]: `return` outside of a function``.
 
 ## Hoisting and mutual recursion
 
 Function declarations are hoisted: a function is visible everywhere in the
-file, including above its declaration.
-
-```fable
-println(pick(3));
-
-fn pick(n: Int) -> String {
-    if n > 0 { "positive" } else { "not positive" }
-}
-```
-
-```text
-positive
-```
-
-So mutually recursive functions need no forward declarations — define them in
-whatever order reads best:
+file, including above its own declaration, so top-level code may call a
+function defined further down. It also means mutually recursive functions
+need no forward declarations — define them in whatever order reads best:
 
 ```fable
 fn is_even(n: Int) -> Bool {
@@ -213,7 +151,6 @@ println(add(2, 3));
 hello();
 println(clamp(-5));
 println(clamp(700));
-println(clamp(42));
 ```
 
 ```text
@@ -222,7 +159,6 @@ println(clamp(42));
 hello from a lambda
 0
 100
-42
 ```
 
 (`return` inside a lambda exits the lambda, not the enclosing function.)
@@ -248,17 +184,8 @@ println(apply(41));
 42
 ```
 
-The body alone can be enough — `x + 1` only works for one type without an
-annotation, so `|x| x + 1` infers `fn(Int) -> Int`:
-
-```fable
-let inc = |x| x + 1;
-println(inc(41));
-```
-
-```text
-42
-```
+The body alone can be enough, too: `x + 1` only works at one type, so
+`let inc = |x| x + 1;` infers `fn(Int) -> Int` with no context at all.
 
 ## Why `|x| x` fails to infer
 
@@ -280,25 +207,12 @@ error[E0302]: cannot infer the type of this lambda parameter
 
 The deeper reason: a lambda gets exactly **one** type. Fable's inference is
 local unification with no let-generalization — polymorphism comes only from
-explicit `[T]` parameter lists on named functions (next section). A later use
-*can* pin the lambda down (`let id = |x| x; println(id(5));` compiles, with
-`id: fn(Int) -> Int`), but then that is the lambda's only type:
-
-```fable
-let id = |x| x;
-println(id(5));
-println(id("five"));
-```
-
-```text
-error[E0301]: type mismatch
-  --> demo.fable:3:12
-   |
-3 | println(id("five"));
-   |            ^^^^^^ expected `Int`, found `String`
-```
-
-If you need identity at many types, write `fn identity[T](x: T) -> T { x }`.
+explicit `[T]` parameter lists on named functions (below). A later use *can*
+pin the lambda down: `let id = |x| x; println(id(5));` compiles, with `id:
+fn(Int) -> Int`. But then that is the lambda's only type — adding
+`println(id("five"));` afterwards is a type mismatch (``expected `Int`, found
+`String` ``). If you need identity at many types, write a generic function:
+`fn identity[T](x: T) -> T { x }`.
 
 ## Functions are values
 
@@ -328,16 +242,12 @@ Builtins are function values too. `println` itself has the generic type
 
 ```fable
 [10, 20, 30].each(println);
-"abc".chars().each(println);
 ```
 
 ```text
 10
 20
 30
-a
-b
-c
 ```
 
 ## Closures capture by reference
@@ -397,29 +307,10 @@ println(tock());
 1
 ```
 
-`tick` and `tock` count independently — separate calls, separate `n`s. And
-when two closures escape *together*, they keep sharing:
-
-```fable
-fn make_account(opening: Int) -> (fn(Int) -> Unit, fn() -> Int) {
-    let mut balance = opening;
-    let deposit = |amount: Int| { balance += amount; };
-    let check = || balance;
-    (deposit, check)
-}
-
-let (deposit, check) = make_account(100);
-deposit(25);
-deposit(25);
-println(check());
-```
-
-```text
-150
-```
-
-This is as close as v0.1 Fable gets to objects — there are no user-defined
-methods or traits — and for many uses it is plenty.
+`tick` and `tock` count independently — separate calls, separate `n`s. A
+closure with private mutable state is as close as v0.1 Fable gets to objects
+(there are no user-defined methods or traits), and for many uses it is
+plenty.
 
 ## Generic functions
 
@@ -431,13 +322,11 @@ fn identity[T](x: T) -> T { x }
 
 println(identity(5));
 println(identity("five"));
-println(identity([true, false]));
 ```
 
 ```text
 5
 five
-[true, false]
 ```
 
 Type parameters can appear anywhere in the signature, including inside
@@ -519,7 +408,6 @@ panic: stack overflow
   at countdown (demo.fable:2:28)
   at countdown (demo.fable:2:28)
   at countdown (demo.fable:2:28)
-  at countdown (demo.fable:2:28)
   ...
   at ... and 4032 more frames (:0:0)
 ```
@@ -536,8 +424,8 @@ use a loop and a `mut` variable instead.
 ## Where we are
 
 Functions round out the core language: declared at the top level with
-explicit signatures, hoisted for mutual recursion, and first-class
-everywhere else — lambdas that infer from context, closures that share and
-outlive their scopes, and generics that keep higher-order code typed without
-annotations at the call site. Next up: the compound types — lists, maps,
-tuples, structs — and the pattern matching that makes enums shine.
+explicit signatures, hoisted for mutual recursion, and first-class everywhere
+else — lambdas that infer from context, closures that share and outlive their
+scopes, and generics that keep higher-order code typed without call-site
+annotations. Next up: the compound types — lists, maps, tuples, structs — and
+the pattern matching that makes enums shine.

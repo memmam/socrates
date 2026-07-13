@@ -1,0 +1,5 @@
+// SPEC 8.2: remove(Int) panics out of bounds (index == len is already OOB).
+//? panic: remove index out of bounds
+let xs = [1, 2, 3];
+println(xs.remove(2));          //? expect: 3
+xs.remove(2);

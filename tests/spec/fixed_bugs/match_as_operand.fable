@@ -1,0 +1,22 @@
+// SPEC §3/§4: `match` is an expression, usable anywhere an expression is.
+// BUG: when a match expression is evaluated while another temporary sits on
+// the operand stack (right operand of a binary op, non-first call argument),
+// the compiled pattern tests read the wrong stack slot — they see the
+// temporary instead of the scrutinee. Literal arms then silently mismatch,
+// binding arms capture the wrong value, and fully-covered matches can fall
+// through entirely:
+//   - `1 + (match n { 5 -> 10, _ -> 20 })` with n = 5 prints 21 (not 11)
+//   - `1 + (match n { x -> x * 10 })` with n = 5 prints 11 (x binds 1!)
+//   - `add(1, match t { true -> 10, false -> 20 })` panics
+//     "internal: match fell through all arms (this is a compiler bug ...)"
+//   - with an enum scrutinee it panics "internal: bad enum value (VM bug)"
+let n = 5;
+println(1 + (match n { 5 -> 10, _ -> 20 }));  //? expect: 11
+println(1 + (match n { x -> x * 10 }));       //? expect: 51
+
+fn add(a: Int, b: Int) -> Int { a + b }
+let t = true;
+println(add(1, match t { true -> 10, false -> 20 }));  //? expect: 11
+
+let o: Option[Int] = Some(5);
+println(1 + (match o { Some(x) -> x, None -> 0 }));  //? expect: 6

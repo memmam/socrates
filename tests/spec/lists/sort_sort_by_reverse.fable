@@ -1,0 +1,35 @@
+// SPEC 8.2: sort / sort_by / reverse all return NEW lists; the receiver is unchanged.
+let xs = [5, 3, 8, 1];
+println(xs.sort());                         //? expect: [1, 3, 5, 8]
+println(xs);                                //? expect: [5, 3, 8, 1]
+println(xs.reverse());                      //? expect: [1, 8, 3, 5]
+println(xs);                                //? expect: [5, 3, 8, 1]
+
+// sort_by: comparator returns negative/zero/positive.
+println(xs.sort_by(|a, b| b - a));          //? expect: [8, 5, 3, 1]
+println(xs.sort_by(|a, b| a - b));          //? expect: [1, 3, 5, 8]
+println(xs);                                //? expect: [5, 3, 8, 1]
+
+// Floats and strings sort too.
+println([2.5, 0.5, 1.5].sort());            //? expect: [0.5, 1.5, 2.5]
+println(["pear", "fig", "banana"].sort());  //? expect: ["banana", "fig", "pear"]
+
+// sort_by over a non-comparable element type via a projection.
+let words = ["banana", "fig", "pear"];
+println(words.sort_by(|a, b| a.len() - b.len())); //? expect: ["fig", "pear", "banana"]
+
+// The result of sort is a fresh list: mutating it leaves the source alone.
+let sorted = xs.sort();
+sorted.push(100);
+println(xs);                                //? expect: [5, 3, 8, 1]
+println(sorted);                            //? expect: [1, 3, 5, 8, 100]
+
+// Edge cases: empty and single-element lists.
+let e: List[Int] = [];
+println(e.sort());                          //? expect: []
+println(e.reverse());                       //? expect: []
+println([9].sort());                        //? expect: [9]
+println([9].reverse());                     //? expect: [9]
+
+// Duplicates survive sorting.
+println([2, 1, 2, 1].sort());               //? expect: [1, 1, 2, 2]

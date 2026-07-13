@@ -1,0 +1,48 @@
+// SPEC 8.2: concat (new list), join (List[String] only), clone (shallow), clear.
+let a = [1, 2];
+let b = [3];
+let c = a.concat(b);
+println(c);                                 //? expect: [1, 2, 3]
+// concat builds a new list; neither input changes when the result mutates.
+c.push(4);
+println(a);                                 //? expect: [1, 2]
+println(b);                                 //? expect: [3]
+println(c);                                 //? expect: [1, 2, 3, 4]
+let e: List[Int] = [];
+println(a.concat(e));                       //? expect: [1, 2]
+println(e.concat(a));                       //? expect: [1, 2]
+
+// join concatenates List[String] with a separator.
+println(["a", "b", "c"].join("-"));         //? expect: a-b-c
+println(["solo"].join("-"));                //? expect: solo
+println(["x", "y"].join(""));               //? expect: xy
+println(["", ""].join("<>"));               //? expect: <>
+let es: List[String] = [];
+println(es.join("-") == "");                //? expect: true
+println(["a", "b"].join(", ").len());       //? expect: 4
+
+// clone is SHALLOW: the top level is independent...
+let orig = [[1], [2]];
+let copy = orig.clone();
+copy.push([3]);
+println(orig);                              //? expect: [[1], [2]]
+println(copy);                              //? expect: [[1], [2], [3]]
+// ...but the elements are shared references.
+copy[0].push(100);
+println(orig);                              //? expect: [[1, 100], [2]]
+println(orig == copy.slice(0, 2));          //? expect: true
+
+// A clone of a flat list is fully independent.
+let flat = [1, 2];
+let fc = flat.clone();
+fc.push(3);
+fc[0] = 9;
+println(flat);                              //? expect: [1, 2]
+
+// clear empties the list in place, observed through every alias.
+let alias = flat;
+flat.clear();
+println(flat);                              //? expect: []
+println(alias.is_empty());                  //? expect: true
+e.clear();
+println(e);                                 //? expect: []

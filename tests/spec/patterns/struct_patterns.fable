@@ -1,0 +1,33 @@
+// Struct patterns: literal field patterns, shorthand bindings, `..` rest,
+// and nested patterns in field position.
+struct Point { x: Float, y: Float }
+
+fn where_is(p: Point) -> String {
+    match p {
+        Point { x: 0.0, y: 0.0 } -> "origin",
+        Point { x: 0.0, y } -> "y-axis at {y}",
+        Point { x, .. } -> "x = {x}",
+    }
+}
+println(where_is(Point { x: 0.0, y: 0.0 }));  //? expect: origin
+println(where_is(Point { x: 0.0, y: 3.5 }));  //? expect: y-axis at 3.5
+println(where_is(Point { x: 2.0, y: 9.0 }));  //? expect: x = 2.0
+
+// A struct pattern binding every field is irrefutable: one arm is exhaustive.
+fn sum(p: Point) -> Float {
+    match p {
+        Point { x, y } -> x + y,
+    }
+}
+println(sum(Point { x: 1.5, y: 2.5 }));  //? expect: 4.0
+
+// Nested patterns in field position; `..` ignores the remaining fields.
+struct Wrap { inner: Option[Int], tag: String }
+fn peek(w: Wrap) -> String {
+    match w {
+        Wrap { inner: Some(n), tag } -> "{tag}:{n}",
+        Wrap { inner: None, .. } -> "no value",
+    }
+}
+println(peek(Wrap { inner: Some(7), tag: "id" }));  //? expect: id:7
+println(peek(Wrap { inner: None, tag: "id" }));     //? expect: no value
