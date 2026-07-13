@@ -1,0 +1,7 @@
+// Allocation churn: lists and strings that become garbage quickly.
+let mut keep = [];
+for i in 0..200 {
+    let junk = [i, i + 1, i + 2].map(|x| "s{x}");
+    if i % 50 == 0 { keep.push(junk.join(",")); }
+}
+println(keep);   //? expect: ["s0,s1,s2", "s50,s51,s52", "s100,s101,s102", "s150,s151,s152"]

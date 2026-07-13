@@ -1,0 +1,15 @@
+fn make_adder(n: Int) -> fn(Int) -> Int {
+    |x| x + n
+}
+let add5 = make_adder(5);
+let add10 = make_adder(10);
+println(add5(1));      //? expect: 6
+println(add10(1));     //? expect: 11
+println(add5(add10(0))); //? expect: 15
+
+let mut shared = 0;
+let inc = || { shared += 1; shared };
+let dec = || { shared -= 1; shared };
+inc(); inc(); inc();
+dec();
+println(shared);       //? expect: 2

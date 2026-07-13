@@ -1,0 +1,20 @@
+[package]
+name = "fable"
+version = "0.1.0"
+edition = "2021"
+description = "The Fable programming language: statically typed, garbage collected, implemented from scratch with zero dependencies"
+license = "MIT"
+
+[[bin]]
+name = "fable"
+path = "src/main.rs"
+
+[lib]
+name = "fable"
+path = "src/lib.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[dependencies]

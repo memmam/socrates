@@ -1,0 +1,483 @@
+# The Fable Language Specification
+
+**Version 0.1** — This document is the normative reference for the Fable programming
+language. The implementation (`src/`), the golden test suite (`tests/spec/`), and the
+book (`book/`) must all agree with this document.
+
+Fable is a statically-typed, expression-oriented, garbage-collected programming
+language with algebraic data types, pattern matching with exhaustiveness checking,
+first-class functions with closures, and generics. Programs are single files executed
+top-to-bottom as scripts; functions and types are hoisted so mutual recursion works.
+
+---
+
+## 1. Lexical structure
+
+### 1.1 Comments
+
+```fable
+// line comment
+/* block comment /* which nests */ still comment */
+```
+
+### 1.2 Identifiers and keywords
+
+Identifiers match `[A-Za-z_][A-Za-z0-9_]*`. By convention, types and enum variants are
+`UpperCamelCase`, values and functions are `snake_case` (not enforced).
+
+Keywords (reserved, cannot be identifiers):
+
+```
+let mut fn struct enum match if else while for in return break continue
+true false and or not
+```
+
+Note: `and`, `or`, `not` are reserved but the operators are spelled `&&`, `||`, `!`.
+
+### 1.3 Literals
+
+- **Int**: `0`, `42`, `1_000_000` (underscores allowed between digits), `0x2A` (hex),
+  `0b1010` (binary). 64-bit signed. Out-of-range literals are a compile error.
+- **Float**: `3.14`, `0.5`, `1e9`, `2.5e-3`. A float literal must have a digit before
+  the `.` (`.5` is invalid; `0.5` is required). `1.` is invalid; `1.0` is required.
+- **Bool**: `true`, `false`.
+- **String**: `"hello"`. Escapes: `\n \t \r \\ \" \0 \{`, and `\u{1F600}` for Unicode
+  scalar values. Strings are immutable UTF-8.
+- **String interpolation**: `"x = {x}, sum = {a + b}"` — any expression inside `{ }`.
+  The expression's value is converted with the same rules as `str()` (§ 8.1). A literal
+  `{` is written `\{`. `}` outside an interpolation is a plain character.
+- **Unit**: `()` — the unit value, of type `Unit`.
+
+### 1.4 Operators and punctuation
+
+```
++ - * / %  == != < <= > >=  && || !  =  -> =>  . , : ; ( ) [ ] { }  .. ..=  |  _
+```
+
+---
+
+## 2. Types
+
+### 2.1 Primitive types
+
+| Type     | Description                                     |
+|----------|-------------------------------------------------|
+| `Int`    | 64-bit signed integer. Arithmetic overflow **panics**. |
+| `Float`  | IEEE-754 double.                                |
+| `Bool`   | `true` / `false`.                               |
+| `String` | Immutable UTF-8 string.                         |
+| `Unit`   | The single value `()`.                          |
+
+There are **no implicit numeric conversions**. `1 + 2.0` is a type error; write
+`1.to_float() + 2.0` or `1.0 + 2.0`.
+
+### 2.2 Compound types
+
+- `List[T]` — growable array. **Reference semantics** (aliases see mutation).
+- `Map[K, V]` — hash map. Reference semantics. Keys are compared/hashed structurally;
+  using a value containing a function as a key panics at runtime.
+- `(T1, T2, ...)` — tuple, 2 or more elements. **Immutable, value semantics.**
+  Accessed by pattern matching or `.0`, `.1`, ... index syntax.
+- `fn(T1, T2) -> R` — function type.
+- `Range` — produced by `a..b` (half-open) and `a..=b` (inclusive), `a`, `b: Int`.
+  Iterable in `for`; also has methods (§ 8.7).
+
+### 2.3 Structs
+
+```fable
+struct Point { x: Float, y: Float }
+struct Pair[A, B] { first: A, second: B }
+
+let p = Point { x: 1.0, y: 2.0 }
+let q = Pair { first: 1, second: "one" }   // Pair[Int, String] inferred
+p.x                    // field access
+p.x = 3.0              // field assignment — struct instances are mutable heap objects
+```
+
+Structs are **nominal** and have **reference semantics**: `let a = p; a.x = 9.0`
+changes `p.x` too. Structs must be constructed with **all** fields present, in any
+order. `Point { x: 1.0 }` (missing field) and unknown fields are compile errors.
+
+### 2.4 Enums (algebraic data types)
+
+```fable
+enum Shape {
+    Circle(Float),
+    Rect(Float, Float),
+    Empty,
+}
+enum Option[T] { Some(T), None }        // built into the prelude
+enum Result[T, E] { Ok(T), Err(E) }     // built into the prelude
+```
+
+Variants are referenced as `Shape.Circle(1.0)`, `Shape.Empty`. The prelude variants
+`Some`, `None`, `Ok`, `Err` may be used **unqualified**; `Option.Some(x)` also works.
+Enum values are immutable. Nullary variants are written *without* parentheses:
+`Shape.Empty`, not `Shape.Empty()`.
+
+### 2.5 Generics
+
+Functions and types take explicit type parameters in square brackets:
+
+```fable
+fn identity[T](x: T) -> T { x }
+fn map[T, U](xs: List[T], f: fn(T) -> U) -> List[U] { ... }
+```
+
+Type arguments are always **inferred at call sites** (`identity(5)`); there is no
+turbofish syntax. Generics are type-erased at runtime (one compiled body serves all
+instantiations).
+
+### 2.6 Type inference rules
+
+- `let` bindings infer their type from the initializer; an optional annotation
+  `let x: Int = 5` is checked against it.
+- Named `fn` declarations **require** parameter type annotations. The return type
+  defaults to `Unit` if `->` is omitted.
+- Lambda parameters may omit annotations when the lambda appears where a function
+  type is expected (e.g. as an argument to `map`), or when unification can determine
+  them from the body (`|x| x + 1` infers `fn(Int) -> Int`); if a parameter's type is
+  still unknown after checking, it is a compile error.
+- Inference is local unification (no let-generalization for lambdas; polymorphism
+  comes only from explicit `[T]` parameter lists).
+- An unresolved type variable at the end of checking (e.g. `let x = [];` never used)
+  is a compile error: "cannot infer type".
+
+---
+
+## 3. Expressions
+
+Fable is expression-oriented. Blocks are expressions; the last expression in a block
+(without a trailing `;`) is the block's value. A statement-terminated block has type
+`Unit`.
+
+### 3.1 Operators (by precedence, loosest → tightest)
+
+| Level | Operators                | Assoc | Operand types |
+|-------|--------------------------|-------|---------------|
+| 1     | `\|\|`                   | left  | Bool (short-circuit) |
+| 2     | `&&`                     | left  | Bool (short-circuit) |
+| 3     | `==` `!=`                | none  | any type T = T (see § 3.2) |
+| 4     | `<` `<=` `>` `>=`        | none  | Int, Float, or String (both sides same) |
+| 5     | `..` `..=`               | none  | Int |
+| 6     | `+` `-`                  | left  | Int, Float; `+` also String ++ String |
+| 7     | `*` `/` `%`              | left  | Int, Float (`%` Int only) |
+| 8     | unary `-` `!`            | —     | Int/Float; Bool |
+| 9     | call `f(x)`, index `a[i]`, field `.x`, method `.m(x)`, tuple index `.0` | left | |
+
+Comparison operators are **non-associative**: `a < b < c` is a parse error.
+Integer division truncates toward zero; `/` or `%` by integer zero **panics**.
+Float division by zero yields `inf`/`nan` per IEEE-754.
+
+### 3.2 Equality
+
+`==`/`!=` are **structural** (deep) for all types. Both sides must have the same type.
+Comparing values that contain functions panics at runtime ("cannot compare functions").
+Float equality follows IEEE-754 (`nan != nan`).
+
+### 3.3 Control flow expressions
+
+```fable
+let grade = if score >= 90 { "A" } else if score >= 80 { "B" } else { "C" }
+```
+
+- `if` without `else` has type `Unit` (the branch must also be `Unit`).
+- `match` is an expression (§ 4).
+- `while cond { ... }` and `for x in iterable { ... }` are expressions of type `Unit`.
+  `for` iterates over a `List[T]` (yielding `T`), a `Range` (yielding `Int`), or a
+  `String` (yielding one-character `String`s, by Unicode scalar).
+- `break` and `continue` are only valid inside loops. `return expr` / `return`
+  exits the enclosing function (top-level `return` is a compile error).
+
+### 3.4 Lambdas
+
+```fable
+let double = |x: Int| x * 2
+let add = |a, b| a + b           // OK if the context determines the types
+nums.map(|n| n * n)
+let f = |x: Int| -> Int { x + 1 }   // full form with return type and block
+```
+
+Lambdas capture variables from enclosing scopes **by reference** (a captured
+`let mut` counter shared by two closures is one counter). Captures keep values alive
+past the defining scope (closure upvalues).
+
+### 3.5 Indexing
+
+- `xs[i]` on `List[T]`: panics if out of bounds (negative or ≥ len). `xs[i] = v` assigns.
+- `m[k]` on `Map[K, V]`: panics if the key is absent (use `m.get(k)` for `Option[V]`).
+  `m[k] = v` inserts or overwrites.
+- `s[i]` on `String` is **not allowed** (compile error) — use `s.chars()` or `s.slice()`.
+
+---
+
+## 4. Pattern matching
+
+```fable
+match shape {
+    Shape.Circle(r) if r > 100.0 -> "huge circle",
+    Shape.Circle(r) -> "circle of radius {r}",
+    Shape.Rect(w, h) -> "a {w} by {h} rectangle",
+    Shape.Empty -> "nothing",
+}
+```
+
+- Arms are `pattern [if guard] -> expression` separated by commas (trailing comma OK).
+  An arm body may be a block: `pattern -> { stmts }`.
+- All arms must have the same type; `match` is an expression.
+
+**Patterns:**
+
+| Pattern            | Example                          |
+|--------------------|----------------------------------|
+| Literal            | `0`, `"yes"`, `true`, `3.14`     |
+| Wildcard           | `_`                              |
+| Binding            | `x` (binds the value)            |
+| Tuple              | `(a, b, _)`                      |
+| Enum variant       | `Some(x)`, `Shape.Rect(w, h)`, `None` |
+| Struct             | `Point { x, y }`, `Point { x: 0.0, y }` |
+| Or-pattern         | `0 \| 1 \| 2` (all alternatives must bind the same names with the same types) |
+| Guard              | `n if n > 0`                     |
+
+- **Exhaustiveness** is checked (Maranget-style usefulness): a non-exhaustive `match`
+  is a **compile error** reporting an example of an uncovered pattern.
+- An arm that can never match (covered by earlier arms) is an **unreachable-arm
+  warning**, not an error. Guarded arms are conservatively treated as possibly failing.
+- Int/Float/String literal patterns never make a match exhaustive by themselves
+  (a `_`/binding arm is required); `Bool` is exhaustive with `true` and `false`.
+- Struct patterns may omit fields only with `..`: `Point { x, .. }`.
+
+`let` destructuring is supported for **irrefutable** patterns only:
+`let (a, b) = pair;` and `let Point { x, y } = p;` (a refutable pattern in `let`
+is a compile error).
+
+---
+
+## 5. Statements and programs
+
+A program is a sequence of items and statements executed top-to-bottom:
+
+```fable
+struct/enum declarations     // hoisted, order-independent
+fn declarations              // hoisted (mutual recursion OK)
+let / let mut bindings       // execute in order
+expression statements        // execute in order
+```
+
+- `let` bindings at top level are globals; inside blocks they are locals with lexical
+  scope and shadowing (`let x = 1; let x = x + 1;` is allowed).
+- Assignment `x = expr` requires `x` be declared `let mut` (locals **and** globals).
+  Assigning to a plain `let` is a compile error. Field/index assignments (`p.x = v`,
+  `xs[i] = v`, `m[k] = v`) do not require `mut` (the binding still points at the same
+  object).
+- Compound assignment: `x += e`, `-=`, `*=`, `/=`, `%=` (sugar; same rules as `=`).
+- Semicolons terminate statements. The final expression of a block may omit the
+  semicolon to become the block's value. `fn`, `struct`, `enum`, `if`, `match`,
+  `while`, `for` used as statements do not need a trailing semicolon.
+- Items (`fn`, `struct`, `enum`) may only appear at the top level (no nested named
+  functions — use lambdas).
+
+---
+
+## 6. Execution model and errors
+
+- **Panics** are runtime errors that abort the program with a message and a stack
+  trace: index out of bounds, missing map key via `[]`, integer overflow, integer
+  division/modulo by zero, `unwrap()` on `None`/`Err`, `panic("msg")`, failed
+  `assert`/`assert_eq`, comparing functions.
+  Exit code 70. Compile errors exit with code 65; success with 0.
+- The runtime uses a tracing mark-and-sweep garbage collector. Setting the environment
+  variable `FABLE_GC_STRESS=1` forces a collection before every allocation (testing);
+  `FABLE_GC_LOG=1` logs collections to stderr.
+
+---
+
+## 7. Builtin free functions (prelude)
+
+| Function | Type | Notes |
+|----------|------|-------|
+| `print(x)` | `[T] fn(T) -> Unit` | writes `str(x)`, no newline |
+| `println(x)` | `[T] fn(T) -> Unit` | writes `str(x)` + `\n` |
+| `str(x)` | `[T] fn(T) -> String` | display conversion (§ 8.1) |
+| `panic(msg)` | `fn(String) -> Unit` | aborts with the message (the call typechecks at any expected type) |
+| `assert(cond)` | `fn(Bool) -> Unit` | panics on `false` |
+| `assert_eq(a, b)` | `[T] fn(T, T) -> Unit` | panics on inequality, printing both |
+| `clock()` | `fn() -> Float` | monotonic seconds |
+| `input()` | `fn() -> Option[String]` | reads one line from stdin (no trailing `\n`); `None` at EOF |
+
+Namespaced (no import needed): `math.pi`, `math.e`, `math.sqrt(Float)`,
+`math.sin/cos/tan/atan/atan2/log/log2/exp` (Float), `math.pow(Float, Float)`,
+`math.floor/ceil/round(Float) -> Float`, `math.abs_int(Int) -> Int`,
+`math.abs(Float) -> Float`, `math.min/max(Int, Int) -> Int`,
+`math.min_float/max_float(Float, Float) -> Float`, `math.random() -> Float`
+(uniform [0, 1), xorshift PRNG), `math.seed(Int) -> Unit`.
+
+## 8. Builtin methods
+
+Method calls are type-directed (resolved at compile time from the receiver's type).
+
+### 8.1 Display conversion — `str(x)` / interpolation
+
+- `Int` → `42`; `Float` → shortest round-trip repr, but always with a decimal point or
+  exponent (`3.0`, `0.1`, `1e300`); `inf`/`-inf`/`nan` as those words.
+- `Bool` → `true`/`false`; `String` → itself (unquoted); `Unit` → `()`.
+- `List` → `[1, 2, 3]`; `Map` → `{k: v, ...}` with **insertion-order** iteration;
+  tuple → `(1, "two")`. **Strings nested inside containers are quoted**
+  (`["a", "b"]`), with escapes for `\n`, `\t`, `\"`, `\\`.
+- Struct → `Point { x: 1.0, y: 2.0 }` (declaration field order); enum →
+  `Circle(1.0)` / `None` (variant name without the enum name).
+- Functions → `<fn name>` / `<fn>` for lambdas.
+
+### 8.2 `List[T]` methods
+
+`len() -> Int`, `is_empty() -> Bool`, `push(T) -> Unit`, `pop() -> Option[T]`,
+`insert(Int, T) -> Unit`, `remove(Int) -> T` (panics OOB),
+`get(Int) -> Option[T]`, `first() -> Option[T]`, `last() -> Option[T]`,
+`contains(T) -> Bool`, `index_of(T) -> Option[Int]`,
+`reverse() -> List[T]` (returns new), `reversed` alias — **no**, only `reverse`,
+`sort() -> List[T]` (returns new sorted; element type must be Int/Float/String at
+runtime, else panic), `sort_by(fn(T, T) -> Int) -> List[T]` (comparator returns
+negative/zero/positive), `map[U](fn(T) -> U) -> List[U]`,
+`filter(fn(T) -> Bool) -> List[T]`, `each(fn(T) -> Unit) -> Unit`,
+`fold[A](A, fn(A, T) -> A) -> A`, `any(fn(T) -> Bool) -> Bool`,
+`all(fn(T) -> Bool) -> Bool`, `find(fn(T) -> Bool) -> Option[T]`,
+`flat_map[U](fn(T) -> List[U]) -> List[U]`, `zip[U](List[U]) -> List[(T, U)]`
+(length = shorter), `enumerate() -> List[(Int, T)]`,
+`slice(Int, Int) -> List[T]` (start inclusive, end exclusive, clamped, new list),
+`concat(List[T]) -> List[T]` (new list), `join(String) -> String`
+(only `List[String]`), `clone() -> List[T]` (shallow), `clear() -> Unit`.
+
+`contains`, `index_of` use structural equality. List literals: `[1, 2, 3]`, `[]`.
+
+### 8.3 `String` methods
+
+`len() -> Int` (count of Unicode scalars), `byte_len() -> Int`,
+`is_empty() -> Bool`, `chars() -> List[String]`,
+`split(String) -> List[String]` (empty separator → chars; adjacent separators
+produce empty strings, like Rust), `trim() -> String`, `to_upper() -> String`,
+`to_lower() -> String` (ASCII-only case mapping),
+`contains(String) -> Bool`, `starts_with(String) -> Bool`,
+`ends_with(String) -> Bool`, `replace(String, String) -> String`,
+`slice(Int, Int) -> String` (by chars, clamped),
+`char_at(Int) -> Option[String]`, `index_of(String) -> Option[Int]` (char index),
+`repeat(Int) -> String`, `pad_left(Int, String) -> String`,
+`pad_right(Int, String) -> String`, `parse_int() -> Option[Int]`
+(optional sign, decimal only, no surrounding spaces),
+`parse_float() -> Option[Float]`, `to_string() -> String` (identity).
+
+### 8.4 `Map[K, V]` methods
+
+`len() -> Int`, `is_empty() -> Bool`, `get(K) -> Option[V]`,
+`insert(K, V) -> Option[V]` (returns the previous value),
+`remove(K) -> Option[V]`, `contains_key(K) -> Bool`,
+`keys() -> List[K]`, `values() -> List[V]`, `entries() -> List[(K, V)]`,
+`clear() -> Unit`, `clone() -> Map[K, V]` (shallow).
+
+Iteration order is **insertion order** (deterministic). Map literals:
+`{"a": 1, "b": 2}`; the empty map literal is `{:}` (because `{}` is an empty block).
+
+### 8.5 Numeric methods
+
+`Int`: `to_float() -> Float`, `to_string() -> String`, `abs() -> Int`,
+`pow(Int) -> Int` (panics on negative exponent or overflow),
+`min(Int) -> Int`, `max(Int) -> Int`.
+`Float`: `to_int() -> Int` (truncates toward zero; panics on NaN or out of Int
+range), `to_string() -> String`, `abs()`, `floor()`, `ceil()`, `round()`,
+`sqrt()`, `is_nan() -> Bool`.
+
+### 8.6 `Option[T]` / `Result[T, E]` methods
+
+`Option[T]`: `is_some()`, `is_none()`, `unwrap() -> T` (panics on `None`),
+`unwrap_or(T) -> T`, `map[U](fn(T) -> U) -> Option[U]`,
+`and_then[U](fn(T) -> Option[U]) -> Option[U]`, `or(Option[T]) -> Option[T]`.
+`Result[T, E]`: `is_ok()`, `is_err()`, `unwrap() -> T` (panics on `Err`, showing the
+error), `unwrap_or(T) -> T`, `unwrap_err() -> E` (panics on `Ok`),
+`map[U](fn(T) -> U) -> Result[U, E]`, `map_err[F](fn(E) -> F) -> Result[T, F]`,
+`and_then[U](fn(T) -> Result[U, E]) -> Result[U, E]`.
+
+### 8.7 `Range` methods
+
+`to_list() -> List[Int]`, `contains(Int) -> Bool`, `len() -> Int`,
+`map[U](fn(Int) -> U) -> List[U]`, `filter(fn(Int) -> Bool) -> List[Int]`,
+`each(fn(Int) -> Unit) -> Unit`, `fold[A](A, fn(A, Int) -> A) -> A`,
+`rev() -> List[Int]`. Ranges are values: `let r = 1..10;`.
+
+### 8.8 Universal method
+
+`.to_string()` is **not** universal; use `str(x)`. Only the types listed above have
+methods; calling an unknown method is a compile error naming the receiver type.
+
+---
+
+## 9. Grammar (EBNF)
+
+```ebnf
+program     = { item | stmt } ;
+item        = fn_decl | struct_decl | enum_decl ;
+fn_decl     = "fn" IDENT [ generics ] "(" [ params ] ")" [ "->" type ] block ;
+generics    = "[" IDENT { "," IDENT } "]" ;
+params      = param { "," param } [ "," ] ;
+param       = IDENT ":" type ;
+struct_decl = "struct" IDENT [ generics ] "{" [ fields ] "}" ;
+fields      = field { "," field } [ "," ] ;
+field       = IDENT ":" type ;
+enum_decl   = "enum" IDENT [ generics ] "{" variant { "," variant } [ "," ] "}" ;
+variant     = IDENT [ "(" type { "," type } ")" ] ;
+
+stmt        = let_stmt | assign_or_expr_stmt | while_stmt | for_stmt
+            | return_stmt | break_stmt | continue_stmt ;
+let_stmt    = "let" [ "mut" ] let_pattern [ ":" type ] "=" expr ";" ;
+let_pattern = IDENT | tuple_pat | struct_pat ;
+assign_or_expr_stmt = expr [ assign_op expr ] ";"?   (* ";" required unless final in block *)
+assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "%=" ;
+while_stmt  = "while" expr block ;
+for_stmt    = "for" IDENT "in" expr block ;
+return_stmt = "return" [ expr ] ";" ;
+
+type        = "Int" | "Float" | "Bool" | "String" | "Unit"
+            | IDENT [ "[" type { "," type } "]" ]        (* named / generic *)
+            | "(" type "," type { "," type } ")"          (* tuple *)
+            | "fn" "(" [ type { "," type } ] ")" [ "->" type ]
+            | "List" "[" type "]" | "Map" "[" type "," type "]" | "Range" ;
+
+expr        = or_expr | if_expr | match_expr | block | lambda ;
+lambda      = "|" [ lambda_params ] "|" ( [ "->" type ] block | expr ) ;
+if_expr     = "if" expr block [ "else" ( if_expr | block ) ] ;
+match_expr  = "match" expr "{" arm { "," arm } [ "," ] "}" ;
+arm         = pattern [ "if" expr ] "->" expr ;
+pattern     = or_pat ;
+or_pat      = base_pat { "|" base_pat } ;
+base_pat    = literal | "_" | IDENT
+            | "(" pattern "," pattern { "," pattern } ")"
+            | path [ "(" pattern { "," pattern } ")" ]     (* enum variant *)
+            | IDENT "{" [ field_pats ] [ ".." ] "}" ;      (* struct *)
+```
+
+(Expression grammar follows the precedence table in § 3.1.)
+
+---
+
+## 10. Tooling behavior
+
+- `fable run file.fable` (or `fable file.fable`) — compile and run.
+- `fable check file.fable` — compile only; print diagnostics.
+- `fable dis file.fable` — print disassembled bytecode.
+- `fable fmt file.fable` — print the canonically formatted source
+  (`--write` to modify in place). Formatting is idempotent.
+- `fable repl` — interactive REPL; expressions print their value (in `str` form,
+  except `String` values print quoted) unless the value is `()`.
+- `fable tokens file.fable` / `fable ast file.fable` — debugging dumps.
+
+Diagnostics use the format:
+
+```
+error[E0301]: type mismatch
+  --> examples/foo.fable:3:9
+   |
+ 3 |     let x: Int = "hi";
+   |            ---   ^^^^ expected `Int`, found `String`
+   |            expected due to this annotation
+```
+
+Error code ranges: E01xx lexing, E02xx parsing, E03xx types, E04xx name resolution,
+E05xx pattern matching, E06xx other semantic errors. Warnings: W01xx.

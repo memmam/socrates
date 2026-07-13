@@ -1,0 +1,8 @@
+fn fact(n: Int) -> Int {
+    if n <= 1 { 1 } else { n * fact(n - 1) }
+}
+fn is_even(n: Int) -> Bool { if n == 0 { true } else { is_odd(n - 1) } }
+fn is_odd(n: Int) -> Bool { if n == 0 { false } else { is_even(n - 1) } }
+println(fact(10));        //? expect: 3628800
+println(is_even(100));    //? expect: true
+println(is_odd(7));       //? expect: true
