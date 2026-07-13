@@ -1,0 +1,9 @@
+// SPEC 2.6: a `let` annotation is checked against the initializer (E0301,
+// with a secondary label "expected due to this" on the annotation).
+// A named fn's body must match its declared return type.
+//? error: E0301
+//? error: type mismatch
+//? error: function `answer` should return `Int`, but its body has type `String`
+let x: Int = "hi";
+let ys: List[String] = [1, 2];
+fn answer() -> Int { "forty-two" }

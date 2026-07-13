@@ -1,0 +1,10 @@
+// SPEC 2.6: an unresolved type variable at the end of checking is a compile
+// error ("cannot infer"). `[]` alone, `|x| x` alone, and a bare `None` are
+// all genuinely ambiguous.
+//? error: E0302
+//? error: cannot infer the type of `empty`
+//? error: cannot infer the type of this lambda parameter
+//? error: cannot infer the type of `nothing`
+let empty = [];
+let id = |x| x;
+let nothing = None;

@@ -1,0 +1,10 @@
+// BUG (ICE): redefining the prelude enum `Option` is correctly reported as
+// E0403 "duplicate type name `Option`", but `define_type_bodies` still
+// overwrites the prelude Option's variant list with the user's variants.
+// Any later use of `None` (prelude variant index 1) then panics inside the
+// checker: "index out of bounds: the len is 1 but the index is 1" at
+// src/check.rs (check_var). Expected: the program fails to compile with
+// E0403 and exit code 65 — no ICE.
+//? error: E0403
+enum Option { Nope }
+let c = None;

@@ -1,0 +1,27 @@
+// E0414: no such variant (as a value, as a constructor call, and in a
+// pattern) — the diagnostic carries a note listing the real variants.
+// E0415: no such field (field access, and unknown field in a struct
+// literal) — with a "did you mean" note. E0417: tuple index out of bounds.
+//? error: E0414
+//? error: no variant `Square` on enum `Shape`
+//? error: no variant `Triangle` on enum `Shape`
+//? error: no variant `Pentagon` on enum `Shape`
+//? error: E0415
+//? error: no field `z` on struct `Point`
+//? error: no field `w` on struct `Point`
+//? error: E0417
+//? error: tuple index `2` out of bounds (this tuple has 2 elements)
+enum Shape { Circle(Float), Rect(Float, Float), Empty }
+struct Point { x: Float, y: Float }
+let a: Shape = Shape.Square;          // note: variants: Circle, Rect, Empty
+let b: Shape = Shape.Triangle(1.0);
+let s: Shape = Shape.Empty;
+let k: Int = match s {
+    Shape.Pentagon(x) -> 1,
+    _ -> 0,
+};
+let p = Point { x: 1.0, y: 2.0 };
+let c: Float = p.z;                   // note: did you mean `x`?
+let q = Point { x: 1.0, y: 2.0, w: 3.0 };
+let t = (1, "two");
+let e: Int = t.2;                     // valid indices are .0 and .1

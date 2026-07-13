@@ -1,0 +1,26 @@
+// SPEC 8.8: only the listed types have methods; calling an unknown method is
+// a compile error naming the receiver type. E0421: receiver type has no
+// methods at all (Bool, structs, tuples). E0422: method-bearing receiver,
+// but no method of that name.
+//? error: E0421
+//? error: no method `negate` on a value of type `Bool`
+//? error: no method `dist` on a value of type `Point`
+//? error: no method `sum` on a value of type `(Int, Int)`
+//? error: E0422
+//? error: no method `chars` on `Int` values
+//? error: no method `push` on `String` values
+//? error: no method `shuffle` on `List` values
+//? error: no method `flip` on `Map` values
+//? error: no method `flatten` on `Option` values
+//? error: no method `sum` on `Range` values
+struct Point { x: Float, y: Float }
+let p = Point { x: 1.0, y: 2.0 };
+let a: Int = true.negate();
+let b: Int = p.dist();
+let c: Int = (1, 2).sum();
+let d: Int = 1.chars();        // chars() exists on String, not Int
+let e: Int = "hi".push("x");   // push() exists on List, not String
+let f: Int = [1, 2].shuffle();
+let g: Int = {:}.flip();
+let h: Int = Some(1).flatten();
+let i: Int = (1..5).sum();

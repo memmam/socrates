@@ -1,0 +1,12 @@
+// SPEC 3.3: `for` iterates over a List, a Range, or a String — nothing else.
+// Int, Bool, Map, and tuples are not iterable (E0303).
+//? error: E0303
+//? error: cannot iterate over a value of type `Int`
+//? error: cannot iterate over a value of type `Bool`
+//? error: cannot iterate over a value of type `Map[String, Int]`
+//? error: cannot iterate over a value of type `(Int, Int)`
+for x in 5 { println(x); }
+for b in true { println(b); }
+let m = {"a": 1};
+for kv in m { println(kv); }
+for p in (1, 2) { println(p); }

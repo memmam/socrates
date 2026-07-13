@@ -1,0 +1,13 @@
+// BUG (ICE): a variant pattern with the wrong number of subpatterns should
+// be compile error E0505 ("variant `Some` has 1 field, but the pattern has
+// 2"), but the checker panics in patterns::usefulness ("index out of
+// bounds: the len is 0 but the index is 0" at src/patterns.rs:141) when the
+// exhaustiveness check runs on the malformed arm. The short direction
+// (`Shape.Rect(w)` for a 2-field variant) panics too, at patterns.rs:247.
+// Expected: compile error E0505, exit code 65 — no ICE.
+//? error: E0505
+let o: Option[Int] = Some(3);
+let r: Int = match o {
+    Some(x, y) -> x,
+    None -> 0,
+};

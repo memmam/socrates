@@ -1,0 +1,14 @@
+// SPEC 5: assignment requires the binding be declared `let mut` — for locals
+// AND globals. Compound assignment is sugar and follows the same rule.
+// The E0307 diagnostic carries a secondary label pointing at the declaration
+// ("declared without `mut` here").
+//? error: E0307
+//? error: cannot assign to immutable binding `total`
+//? error: cannot assign to immutable binding `label`
+let total = 10;
+total = 20;          // plain assignment to an immutable global
+total += 1;          // compound assignment to an immutable global
+fn rename() {
+    let label = "a";
+    label = "b";     // assignment to an immutable local
+}

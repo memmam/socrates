@@ -1,0 +1,23 @@
+// E04xx name resolution. E0400: undefined name (with a "did you mean" note
+// when a close binding exists). Block-scoped locals and `for` variables are
+// invisible after their block (also E0400). E0412: a top-level global used
+// above its `let` declaration.
+//? error: E0400
+//? error: undefined name `totl`
+//? error: undefined name `no_such_thing`
+//? error: undefined name `inner`
+//? error: undefined name `i`
+//? error: E0412
+//? error: `later` is used before its `let` declaration
+let total = 10;
+println(totl);            // note: did you mean `total`?
+println(no_such_thing);   // no close candidate
+if true {
+    let inner = 99;
+    println(inner);       // fine here
+}
+println(inner);           // block scoping: `inner` is gone after the block
+for i in 0..3 { println(i); }
+println(i);               // the loop variable is scoped to the loop
+println(later);           // E0412: top-level code runs in order
+let later = 1;

@@ -38,13 +38,15 @@ error (E0106) pointing at the symbolic spelling.
 
 ### 1.3 Literals
 
-- **Int**: `0`, `42`, `1_000_000` (underscores allowed between digits), `0x2A` (hex),
-  `0b1010` (binary). 64-bit signed. Out-of-range literals are a compile error.
-- **Float**: `3.14`, `0.5`, `1e9`, `2.5e-3`. A float literal must have a digit before
-  the `.` (`.5` is invalid; `0.5` is required). `1.` is invalid; `1.0` is required.
+- **Int**: `0`, `42`, `1_000_000` (underscores may appear anywhere after the first
+  digit), `0x2A`/`0X2A` (hex), `0b1010`/`0B1010` (binary). 64-bit signed.
+  Out-of-range literals are a compile error (E0105).
+- **Float**: `3.14`, `0.5`, `1e9`, `2.5e-3` (`e` or `E`). A float literal must have a
+  digit before the `.` (`.5` is invalid; `0.5` is required). `1.` is invalid; `1.0` is
+  required. A float literal whose value overflows evaluates to `inf`.
 - **Bool**: `true`, `false`.
-- **String**: `"hello"`. Escapes: `\n \t \r \\ \" \0 \{`, and `\u{1F600}` for Unicode
-  scalar values. Strings are immutable UTF-8.
+- **String**: `"hello"`. Escapes: `\n \t \r \\ \" \0 \{ \}`, and `\u{1F600}` for
+  Unicode scalar values. Strings are immutable UTF-8.
 - **String interpolation**: `"x = {x}, sum = {a + b}"` — any expression inside `{ }`.
   The expression's value is converted with the same rules as `str()` (§ 8.1). A literal
   `{` is written `\{`. `}` outside an interpolation is a plain character.
@@ -174,8 +176,11 @@ Float division by zero yields `inf`/`nan` per IEEE-754.
 ### 3.2 Equality
 
 `==`/`!=` are **structural** (deep) for all types. Both sides must have the same type.
-Comparing values that contain functions panics at runtime ("cannot compare functions").
-Float equality follows IEEE-754 (`nan != nan`).
+Fields/elements compare in order and stop at the first difference; if two function
+values are actually reached during the comparison, it panics at runtime ("cannot
+compare functions") — when both operands' types are concretely function-containing,
+the checker rejects the comparison statically (E0311). Float equality follows
+IEEE-754 (`nan != nan`).
 
 ### 3.3 Control flow expressions
 
@@ -185,9 +190,11 @@ let grade = if score >= 90 { "A" } else if score >= 80 { "B" } else { "C" }
 
 - `if` without `else` has type `Unit` (the branch must also be `Unit`).
 - `match` is an expression (§ 4).
-- `while cond { ... }` and `for x in iterable { ... }` are expressions of type `Unit`.
-  `for` iterates over a `List[T]` (yielding `T`), a `Range` (yielding `Int`), or a
-  `String` (yielding one-character `String`s, by Unicode scalar).
+- `while cond { ... }` and `for x in iterable { ... }` are statements (they cannot
+  appear where a value is required). `for` iterates over a `List[T]` (yielding `T`),
+  a `Range` (yielding `Int`), or a `String` (yielding one-character `String`s, by
+  Unicode scalar). The loop variable is a fresh immutable binding each iteration —
+  closures created in the body capture that iteration's value.
 - `break` and `continue` are only valid inside loops. `return expr` / `return`
   exits the enclosing function (top-level `return` is a compile error).
 

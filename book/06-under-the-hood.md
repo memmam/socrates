@@ -55,9 +55,9 @@ flat list of tagged tokens with line:column positions:
 2:1	Eof
 ```
 
-`fable ast pipe.fable` prints the parse tree — verbose, but it shows every
-node carrying a source span, which is how errors and stack traces point at
-exact positions later.
+`fable ast pipe.fable` prints the parse tree — verbose, but every node in it
+carries a source span, which is how errors and stack traces later point at
+exact positions.
 
 ## Reading bytecode with `fable dis`
 
@@ -125,8 +125,8 @@ println(tick());
 println(tick());
 ```
 
-It prints `1`, `2`, `3`, as in chapter 3. Here are the two interesting
-protos (`<script>` omitted):
+It prints `1`, `2`, `3`. Here are the two interesting protos (`<script>`
+omitted):
 
 ```text
 fn make_counter (proto 0, arity 0, 0 upvalues, max locals 2)
@@ -155,10 +155,9 @@ from Lua:
   mechanism behind the shared `bump`/`report` counter in chapter 3. One
   variable, one cell, however many closures.
 - When the scope exits, the value moves off the stack into the cell
-  ("closed"). That's the `end_block 1` in `make_counter`: it removes `n`'s
-  slot from under the return value and closes upvalues pointing into it.
-  From then on the counter lives on the heap, owned by whoever still holds
-  the closure.
+  ("closed"). That's `end_block 1` in `make_counter`: it removes `n`'s slot
+  from under the return value, closing upvalues that point into it — from
+  then on the counter lives on the heap, owned by whoever holds the closure.
 
 ## How `match` compiles
 
@@ -177,12 +176,8 @@ println(describe(Some(7)));
 println(describe(None));
 ```
 
-```text
-got 7
-nothing
-```
-
-The `describe` proto (constants and `<script>` omitted):
+This prints `got 7` and `nothing`. Here is the `describe` proto (constants
+and `<script>` omitted):
 
 ```text
 fn describe (proto 0, arity 1, 0 upvalues, max locals 5)
@@ -225,13 +220,12 @@ Reading it as the compiler thinks about it:
   testing happens.
 - Each arm **tests a copy**: `get_local 1` pushes the scrutinee again,
   `test_variant 0` asks "is this variant 0 (`Some`)?", and `jmp_false` bails
-  to the arm's **failure stub** if not. On success, `dup` /
-  `get_variant_field 0` peel the value apart and `set_local 2` stores the
-  payload into the pre-pushed slot.
+  to the arm's **failure stub** if not. On success, `dup`/`get_variant_field`
+  peel the value apart and `set_local 2` stores the payload in its slot.
 - The failure stub (instructions 15–17) knows *exactly* how many leftover
   temporaries the failed tests left behind (`pop_n 1`) and discards the
-  binding slots (`pop_scope 1`) before falling through to the next arm.
-  Guards compile as one more conditional jump to the same stub.
+  binding slots (`pop_scope 1`) before falling through to the next arm. A
+  guard is one more failure edge — a stub with zero temporaries to pop.
 - `match_fail` at instruction 26 aborts if execution falls off the last arm.
   The exhaustiveness checker proved it unreachable — it exists so that a
   compiler bug would fail loudly instead of corrupting the stack.
@@ -286,8 +280,8 @@ collector correctly refuses to touch.
 `FABLE_GC_STRESS=1` turns *every* checkpoint into a collection — the
 harshest schedule possible. If any code path forgot to root a live object,
 stress mode makes it vanish at the worst moment; that's how the rooting
-discipline is tested, and the whole test suite passes under it. On a tiny
-program you can watch collections fire with nothing to reclaim:
+discipline is tested (the whole test suite passes under it). On a tiny
+program:
 
 ```fable
 let words = ["once", "upon", "a", "time"];
@@ -360,13 +354,13 @@ runs and different absolute numbers on your hardware:
 ```text
 $ cargo build --release
 $ ./target/release/fable examples/benchmarks/bench.fable
-fib(25) recursive            14.11 ms   (result 75025)
-loop 1M adds                 34.43 ms   (result 499999500000)
-string building 20k           4.81 ms   (result 108889)
-list map/filter 100k         13.92 ms   (result 50000)
-map insert/get 50k           18.96 ms   (result 50000)
-closure churn 200k          130.34 ms   (result 100000)
-sort 30k                      5.73 ms   (result 30000)
+fib(25) recursive            13.61 ms   (result 75025)
+loop 1M adds                 34.46 ms   (result 499999500000)
+string building 20k           4.57 ms   (result 108889)
+list map/filter 100k         13.36 ms   (result 50000)
+map insert/get 50k           18.24 ms   (result 50000)
+closure churn 200k          131.98 ms   (result 100000)
+sort 30k                      5.76 ms   (result 30000)
 ```
 
 Some context for those numbers:
