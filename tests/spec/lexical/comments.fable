@@ -1,0 +1,11 @@
+// SPEC 1.1: line comments and nesting block comments.
+/* block comment /* nested /* deeply */ still nested */ still outer */
+println(1 /* mid-expression */ + 2);    //? expect: 3
+let x /* between tokens */ = /* everywhere */ 10;
+println(x);                             //? expect: 10
+println(6 /**/ + 7);                    //? expect: 13
+// Comment markers inside string literals are just characters:
+println("not // a comment");            //? expect: not // a comment
+println("not /* a comment */");         //? expect: not /* a comment */
+/* a block comment containing a " quote and a // line marker */
+println(/* before an argument */ 4);    //? expect: 4

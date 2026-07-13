@@ -1,0 +1,14 @@
+// SPEC 1.3: float literals, including exponent forms `1e9` and `2.5e-3`.
+// SPEC 8.1: Float displays always carry a decimal point or exponent.
+println(3.14);                      //? expect: 3.14
+println(0.5);                       //? expect: 0.5
+println(2.0);                       //? expect: 2.0
+println(2.5e-3);                    //? expect: 0.0025
+println(1.5e2);                     //? expect: 150.0
+println(12.25);                     //? expect: 12.25
+println(1e9);                       //? expect: 1000000000.0
+// Exponent forms denote exactly the same values as their expanded spellings.
+println(1e9 == 1000000000.0);       //? expect: true
+println(2.5e-3 == 0.0025);          //? expect: true
+println(1e0 == 1.0);                //? expect: true
+println(3.125e3 == 3125.0);         //? expect: true

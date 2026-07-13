@@ -1226,7 +1226,9 @@ impl Checker {
                 if name == "math" {
                     match Native::math_member(&method.name) {
                         Some(MathMember::Fn(n)) => {
-                            self.res.insert(e.id, Res::Method(n));
+                            // NativeFn (not Method): the receiver is a
+                            // namespace, so the compiler must not push it.
+                            self.res.insert(e.id, Res::NativeFn(n));
                             return self.check_native_call(n, &[], args, e.span, method.span);
                         }
                         Some(MathMember::Const(_)) => {

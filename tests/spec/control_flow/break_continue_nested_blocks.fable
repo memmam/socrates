@@ -1,0 +1,55 @@
+// break/continue from nested blocks inside a loop, with live locals
+// that must be cleaned up when the jump unwinds the block scopes.
+let mut i = 0;
+while i < 10 {
+    i += 1;
+    let a = i * 10;
+    {
+        let b = a + 1;
+        {
+            let c = b + 1;
+            if i == 3 {
+                continue;
+            }
+            if i == 5 {
+                break;
+            }
+            println(c);
+        }
+    }
+}
+//? expect: 12
+//? expect: 22
+//? expect: 42
+println("i={i}");        //? expect: i=5
+
+// same from a for loop, with a string local alive at the jump
+let mut out = "";
+for j in 1..=6 {
+    let doubled = j * 2;
+    {
+        let label = "v{doubled}";
+        if j % 2 == 0 {
+            continue;
+        }
+        if j == 5 {
+            break;
+        }
+        out = out + label + ";";
+    }
+}
+println(out);            //? expect: v2;v6;
+
+// break/continue inside match-arm blocks inside a loop
+let mut m = 0;
+while true {
+    m += 1;
+    match m {
+        2 -> { continue; },
+        4 -> { break; },
+        n -> println("m={n}"),
+    }
+}
+//? expect: m=1
+//? expect: m=3
+println("done m={m}");   //? expect: done m=4

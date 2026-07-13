@@ -1,0 +1,11 @@
+// SPEC 1.3: only \n \t \r \\ \" \0 \{ and \u{...} (a Unicode scalar value,
+// 1-6 hex digits) are valid escapes.
+//? error: E0107
+//? error: unknown escape sequence `\q`
+//? error: invalid escape `\u`; expected `\u{...}`
+//? error: invalid unicode escape
+let a = "bad \q escape";
+let b = "bad \u escape";
+let c = "empty \u{} escape";
+let d = "too big \u{110000} escape";
+let e = "surrogate \u{D800} escape";

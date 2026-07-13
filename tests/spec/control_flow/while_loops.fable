@@ -1,0 +1,33 @@
+// SPEC 3.3: while loops.
+// countdown
+let mut n = 5;
+while n > 0 {
+    print(n);
+    n -= 1;
+}
+println("");            //? expect: 54321
+
+// a false condition means the body never runs
+while false {
+    println("never");
+}
+println("skipped");     //? expect: skipped
+
+// the condition is re-evaluated each iteration and may short-circuit
+let xs = [3, 1, 4, 1, 5];
+let mut i = 0;
+let mut sum = 0;
+while i < xs.len() && sum < 8 {
+    sum += xs[i];
+    i += 1;
+}
+println("{i} {sum}");   //? expect: 3 8
+
+// Collatz steps for 6: 6 3 10 5 16 8 4 2 1
+let mut v = 6;
+let mut steps = 0;
+while v != 1 {
+    if v % 2 == 0 { v /= 2; } else { v = 3 * v + 1; }
+    steps += 1;
+}
+println(steps);         //? expect: 8

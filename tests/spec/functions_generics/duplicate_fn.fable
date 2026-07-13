@@ -1,0 +1,7 @@
+// Two top-level functions with the same name are a name-resolution error
+// (E0407) — even when their signatures differ.
+//? error: E0407
+//? error: duplicate function `f`
+fn f() -> Int { 1 }
+fn f(x: Int) -> String { "no" }
+println(f());

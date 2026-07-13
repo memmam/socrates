@@ -1,0 +1,21 @@
+// SPEC 2.1: no implicit numeric conversions — mixing Int and Float is an error.
+// SPEC 3.1: operand type rules for each operator level.
+// SPEC 3.2: comparing concrete function types is rejected statically.
+//? error: E0320
+//? error: E0319
+//? error: E0321
+//? error: E0322
+//? error: E0310
+//? error: E0301
+//? error: E0311
+//? error: cannot compare functions
+let a = 1 + 2.0;         // E0320: mixed Int/Float arithmetic
+let b = 2.0 - 1;         // E0320: mixed Float/Int arithmetic
+let c = 1 == 1.0;        // E0319: cannot compare Int with Float
+let d = 1.5 % 0.5;       // E0321: % is Int-only
+let e = true < false;    // E0322: Bool is not ordered
+let f = -true;           // E0310: unary - needs Int or Float
+let g = !5;              // E0301: unary ! needs Bool
+let h = |x: Int| x;
+let i = |x: Int| x;
+let j = h == i;          // E0311: cannot compare functions

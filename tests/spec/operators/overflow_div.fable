@@ -1,0 +1,6 @@
+// SPEC 2.1 / 6: MIN / -1 does not fit in a 64-bit signed Int, so it panics
+// as integer overflow (truncating division of any other pair is fine).
+//? panic: integer overflow
+let min = -9223372036854775807 - 1;
+println(min / -2);           //? expect: 4611686018427387904
+println(min / -1);

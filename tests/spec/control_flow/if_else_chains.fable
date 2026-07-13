@@ -1,0 +1,33 @@
+// SPEC 3.3: if / else-if chains are expressions.
+fn grade(score: Int) -> String {
+    if score >= 90 { "A" } else if score >= 80 { "B" } else if score >= 70 { "C" } else { "F" }
+}
+println(grade(95));    //? expect: A
+println(grade(80));    //? expect: B
+println(grade(79));    //? expect: C
+println(grade(-1));    //? expect: F
+
+// nested if expressions
+let x = if true { if false { 1 } else { 2 } } else { 3 };
+println(x);            //? expect: 2
+
+// branch blocks may contain statements; the last expression is the value
+let y = if x == 2 {
+    let t = x * 10;
+    t + 1
+} else {
+    0
+};
+println(y);            //? expect: 21
+
+// an if expression can be a call argument
+println(if y > 20 { "big" } else { "small" });    //? expect: big
+
+// only the taken branch is evaluated
+let mut effects = 0;
+let z = if false { effects += 1; 100 } else { effects += 10; 200 };
+println("{z} {effects}");     //? expect: 200 10
+
+// a chain used as a statement (all branches Unit)
+if x == 1 { println("one"); } else if x == 2 { println("two"); } else { println("many"); }
+//? expect: two

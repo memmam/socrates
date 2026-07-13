@@ -1,0 +1,6 @@
+// SPEC 8.1: Float displays as the shortest round-trip repr, "always with a
+// decimal point or exponent (3.0, 0.1, 1e300)" — the spec explicitly shows
+// 1e300 rendering in exponent form.
+// BUG: the implementation never uses exponent notation; it prints 1e300 as a
+// 301-digit decimal expansion ("1000...000.0").
+println(1e300);        //? expect: 1e300

@@ -1,0 +1,11 @@
+// A panic mid-loop aborts the program; output produced by earlier iterations
+// has already been written.
+//? panic: index out of bounds
+let xs = [10, 20, 30];
+for i in 0..5 {
+    println(xs[i]);
+}
+println("unreached");
+//? expect: 10
+//? expect: 20
+//? expect: 30

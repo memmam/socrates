@@ -1,0 +1,9 @@
+// SPEC 3.2: comparing values that contain functions panics at runtime
+// (here the static check cannot see it through a generic parameter).
+//? panic: cannot compare functions
+fn eq[T](a: T, b: T) -> Bool { a == b }
+println(eq(1, 2));           //? expect: false
+println(eq("a", "a"));       //? expect: true
+let f = |x: Int| x;
+let g = |x: Int| x;
+println(eq(f, g));

@@ -1,0 +1,9 @@
+// SPEC 1.2: `and`, `or`, `not` are reserved words (the operators are spelled
+// `&&`, `||`, `!`); using them is a lex error E0106.
+//? error: E0106
+//? error: `and` is a reserved word; the operator is spelled `&&`
+//? error: `or` is a reserved word; the operator is spelled `||`
+//? error: `not` is a reserved word; the operator is spelled `!`
+let a = true and false;
+let b = true or false;
+let c = not true;

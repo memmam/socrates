@@ -1,0 +1,21 @@
+// SPEC 3.3: `if` without `else` has type `Unit` (the branch must also be Unit).
+let flag = true;
+if flag {
+    println("taken");
+}
+//? expect: taken
+
+// as an expression it evaluates to `()`
+let u = if flag { println("side effect"); };
+//? expect: side effect
+println(u);        //? expect: ()
+
+// a false condition also yields `()`, and the branch never runs
+let v = if 1 > 2 { println("never"); };
+println(v);        //? expect: ()
+println(u == v);   //? expect: true
+
+// an else-if chain with no final else is fine when every branch is Unit
+let n = 5;
+if n == 1 { println("one"); } else if n == 5 { println("five"); }
+//? expect: five

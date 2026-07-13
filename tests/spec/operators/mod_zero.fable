@@ -1,0 +1,5 @@
+// SPEC 3.1 / 6: % by integer zero panics.
+//? panic: modulo by zero
+let x = 7;
+println(x % 3);              //? expect: 1
+println(x % 0);

@@ -1,0 +1,6 @@
+// SPEC 3.1: equality (level 3) and comparison (level 4) operators are
+// non-associative — chaining them is a parse error.
+//? error: E0200
+//? error: comparison operators cannot be chained
+let a = 1 < 2 < 3;
+let b = 1 == 2 != 3;

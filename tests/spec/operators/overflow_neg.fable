@@ -1,0 +1,5 @@
+// SPEC 2.1 / 6: unary negation of the minimum Int overflows and panics.
+//? panic: integer overflow
+let min = -9223372036854775807 - 1;
+println(-(min + 1));         //? expect: 9223372036854775807
+println(-min);

@@ -1,0 +1,24 @@
+// Functions are first-class values: pass them, store them, return them.
+fn double(x: Int) -> Int { x * 2 }
+fn inc(x: Int) -> Int { x + 1 }
+fn apply_twice(f: fn(Int) -> Int, x: Int) -> Int { f(f(x)) }
+fn compose(f: fn(Int) -> Int, g: fn(Int) -> Int) -> fn(Int) -> Int {
+    |x| f(g(x))
+}
+
+println(apply_twice(double, 3));   //? expect: 12
+println(apply_twice(inc, 10));     //? expect: 12
+
+// Stored in a variable and in a list, then called.
+let d = double;
+println(d(21));                    //? expect: 42
+let ops = [double, inc];
+println(ops[0](21));               //? expect: 42
+println(ops[1](41));               //? expect: 42
+
+// Returned from a function (a closure over the two fn parameters).
+let h = compose(double, inc);
+println(h(5));                     //? expect: 12
+
+// Display form of a named function value.
+println(str(double));              //? expect: <fn double>

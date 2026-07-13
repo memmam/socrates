@@ -1,0 +1,7 @@
+// SPEC 3.3: `if` without `else` must have type `Unit` — a non-Unit branch is E0316.
+//? error: E0316
+//? error: `if` without `else` must have type `Unit`
+let x = if true { 1 };
+if 1 == 1 {
+    "not unit"
+}

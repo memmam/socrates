@@ -1,0 +1,260 @@
+// A JSON parser and pretty-printer, written in Fable.
+// Demonstrates recursive enums, Result-based error handling, and a
+// hand-rolled recursive-descent parser over characters.
+//
+// Note the Fable idioms on display: literal `{` in strings is written `\{`
+// (a bare `{` opens string interpolation), and early exits from match arms
+// use block bodies: `pattern -> { return ...; }`.
+//
+//   fable run examples/json.fable
+
+enum Json {
+    JNull,
+    JBool(Bool),
+    JNum(Float),
+    JStr(String),
+    JArr(List[Json]),
+    JObj(List[(String, Json)]),
+}
+
+struct Parser {
+    chars: List[String],
+    pos: Int,
+}
+
+fn peek(p: Parser) -> Option[String] {
+    p.chars.get(p.pos)
+}
+
+fn advance(p: Parser) -> Option[String] {
+    let c = p.chars.get(p.pos);
+    p.pos += 1;
+    c
+}
+
+fn skip_ws(p: Parser) {
+    while true {
+        match peek(p) {
+            Some(c) -> {
+                if c == " " || c == "\n" || c == "\t" || c == "\r" {
+                    p.pos += 1;
+                } else {
+                    return;
+                }
+            }
+            None -> { return; }
+        }
+    }
+}
+
+fn expect(p: Parser, want: String) -> Result[Unit, String] {
+    match advance(p) {
+        Some(c) -> if c == want { Ok(()) } else { Err("expected '{want}', found '{c}' at {p.pos}") },
+        None -> Err("expected '{want}', found end of input"),
+    }
+}
+
+fn parse_value(p: Parser) -> Result[Json, String] {
+    skip_ws(p);
+    match peek(p) {
+        None -> Err("unexpected end of input"),
+        Some(c) -> {
+            if c == "\{" { parse_object(p) }
+            else if c == "[" { parse_array(p) }
+            else if c == "\"" { parse_string(p).map(|s| Json.JStr(s)) }
+            else if c == "t" || c == "f" { parse_bool(p) }
+            else if c == "n" { parse_null(p) }
+            else { parse_number(p) }
+        }
+    }
+}
+
+fn parse_literal(p: Parser, word: String, value: Json) -> Result[Json, String] {
+    for ch in word {
+        match advance(p) {
+            Some(c) -> if c != ch { return Err("invalid literal at {p.pos}"); },
+            None -> { return Err("unexpected end of input"); }
+        }
+    }
+    Ok(value)
+}
+
+fn parse_null(p: Parser) -> Result[Json, String] { parse_literal(p, "null", Json.JNull) }
+
+fn parse_bool(p: Parser) -> Result[Json, String] {
+    match peek(p) {
+        Some(c) -> if c == "t" {
+            parse_literal(p, "true", Json.JBool(true))
+        } else {
+            parse_literal(p, "false", Json.JBool(false))
+        },
+        None -> Err("unexpected end of input"),
+    }
+}
+
+fn parse_number(p: Parser) -> Result[Json, String] {
+    let start = p.pos;
+    let digits = "0123456789+-.eE";
+    let mut running = true;
+    while running {
+        match peek(p) {
+            Some(c) -> if digits.contains(c) { p.pos += 1; } else { running = false; },
+            None -> { running = false; }
+        }
+    }
+    let text = p.chars.slice(start, p.pos).join("");
+    match text.parse_float() {
+        Some(f) -> Ok(Json.JNum(f)),
+        None -> Err("invalid number '{text}' at {start}"),
+    }
+}
+
+fn parse_string(p: Parser) -> Result[String, String] {
+    match expect(p, "\"") {
+        Err(e) -> { return Err(e); }
+        Ok(u) -> u,
+    };
+    let mut out = "";
+    while true {
+        match advance(p) {
+            None -> { return Err("unterminated string"); }
+            Some(c) -> {
+                if c == "\"" { return Ok(out); }
+                if c == "\\" {
+                    match advance(p) {
+                        Some(esc) -> {
+                            if esc == "n" { out += "\n"; }
+                            else if esc == "t" { out += "\t"; }
+                            else if esc == "\"" { out += "\""; }
+                            else if esc == "\\" { out += "\\"; }
+                            else if esc == "/" { out += "/"; }
+                            else { return Err("unsupported escape \\{esc}"); }
+                        }
+                        None -> { return Err("unterminated escape"); }
+                    }
+                } else {
+                    out += c;
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn parse_array(p: Parser) -> Result[Json, String] {
+    p.pos += 1; // consume [
+    let mut items = [];
+    skip_ws(p);
+    if peek(p) == Some("]") {
+        p.pos += 1;
+        return Ok(Json.JArr(items));
+    }
+    while true {
+        match parse_value(p) {
+            Ok(v) -> items.push(v),
+            Err(e) -> { return Err(e); }
+        }
+        skip_ws(p);
+        match advance(p) {
+            Some(c) -> {
+                if c == "]" { return Ok(Json.JArr(items)); }
+                if c != "," { return Err("expected ',' or ']' at {p.pos}"); }
+            }
+            None -> { return Err("unterminated array"); }
+        }
+    }
+    Ok(Json.JArr(items))
+}
+
+fn parse_object(p: Parser) -> Result[Json, String] {
+    p.pos += 1; // consume {
+    let mut entries = [];
+    skip_ws(p);
+    if peek(p) == Some("}") {
+        p.pos += 1;
+        return Ok(Json.JObj(entries));
+    }
+    while true {
+        skip_ws(p);
+        let key = match parse_string(p) {
+            Ok(k) -> k,
+            Err(e) -> { return Err(e); }
+        };
+        skip_ws(p);
+        match expect(p, ":") {
+            Err(e) -> { return Err(e); }
+            Ok(u) -> u,
+        };
+        match parse_value(p) {
+            Ok(v) -> entries.push((key, v)),
+            Err(e) -> { return Err(e); }
+        }
+        skip_ws(p);
+        match advance(p) {
+            Some(c) -> {
+                if c == "}" { return Ok(Json.JObj(entries)); }
+                if c != "," { return Err("expected ',' or '}' at {p.pos}"); }
+            }
+            None -> { return Err("unterminated object"); }
+        }
+    }
+    Ok(Json.JObj(entries))
+}
+
+fn parse(text: String) -> Result[Json, String] {
+    let p = Parser { chars: text.chars(), pos: 0 };
+    let v = parse_value(p);
+    skip_ws(p);
+    match v {
+        Ok(json) -> if p.pos < p.chars.len() {
+            Err("trailing input at {p.pos}")
+        } else {
+            Ok(json)
+        },
+        Err(e) -> Err(e),
+    }
+}
+
+// ---- pretty printer ----
+
+fn quote(s: String) -> String {
+    "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
+}
+
+fn pretty(j: Json, indent: Int) -> String {
+    let pad = "  ".repeat(indent);
+    let inner = "  ".repeat(indent + 1);
+    match j {
+        Json.JNull -> "null",
+        Json.JBool(b) -> str(b),
+        Json.JNum(f) -> if f == f.round() && f.abs() < 1e15 {
+            str(f.to_int())
+        } else {
+            str(f)
+        },
+        Json.JStr(s) -> quote(s),
+        Json.JArr(items) -> if items.is_empty() {
+            "[]"
+        } else {
+            "[\n" + items.map(|v| inner + pretty(v, indent + 1)).join(",\n") + "\n" + pad + "]"
+        },
+        Json.JObj(entries) -> if entries.is_empty() {
+            "\{}"
+        } else {
+            "\{\n" + entries.map(|e| inner + quote(e.0) + ": " + pretty(e.1, indent + 1)).join(",\n") + "\n" + pad + "}"
+        },
+    }
+}
+
+let doc = "\{\"name\": \"fable\", \"tags\": [\"language\", \"vm\"], \"version\": 0.1, \"stable\": false, \"meta\": \{\"loc\": 9000, \"deps\": null}, \"nested\": [[1,2],[3]]}";
+
+match parse(doc) {
+    Ok(json) -> println(pretty(json, 0)),
+    Err(e) -> println("parse error: {e}"),
+}
+
+// Error handling demo.
+match parse("\{\"broken\": ") {
+    Ok(j) -> println(pretty(j, 0)),
+    Err(e) -> println("parse error: {e}"),
+}

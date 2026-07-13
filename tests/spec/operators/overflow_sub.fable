@@ -1,0 +1,5 @@
+// SPEC 2.1 / 6: Int subtraction overflow panics at the minimum value.
+//? panic: integer overflow
+let min = -9223372036854775807 - 1;
+println(min);                //? expect: -9223372036854775808
+println(min - 1);

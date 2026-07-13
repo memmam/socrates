@@ -1,0 +1,13 @@
+// An explicit-generics identity, instantiated at many types in one program.
+// Type arguments are always inferred at call sites (no turbofish).
+fn id[T](x: T) -> T { x }
+println(id(5));            //? expect: 5
+println(id("hello"));      //? expect: hello
+println(id(true));         //? expect: true
+println(id(3.5));          //? expect: 3.5
+println(id([1, 2]));       //? expect: [1, 2]
+println(id((1, "two")));   //? expect: (1, "two")
+println(id(()));           //? expect: ()
+
+// A generic function can even be passed through itself.
+println(id(id)(7));        //? expect: 7

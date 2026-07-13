@@ -1,0 +1,29 @@
+// SPEC 3.1: && and || are short-circuit. The right operand must not be
+// evaluated when the left operand already decides the result.
+let mut calls = 0;
+fn effect(ret: Bool) -> Bool {
+    calls += 1;
+    ret
+}
+
+println(false && effect(true));    //? expect: false
+println(calls);                    //? expect: 0
+println(true || effect(true));     //? expect: true
+println(calls);                    //? expect: 0
+println(true && effect(true));     //? expect: true
+println(calls);                    //? expect: 1
+println(false || effect(false));   //? expect: false
+println(calls);                    //? expect: 2
+
+// Short-circuiting must suppress a right operand that would panic.
+let d = 0;
+println(d != 0 && 10 / d > 1);     //? expect: false
+println(d == 0 || 10 / d > 1);     //? expect: true
+
+// Left-associative chains short-circuit at the first deciding operand.
+println(false && effect(true) && effect(true));   //? expect: false
+println(calls);                    //? expect: 2
+println(true || effect(true) || effect(true));    //? expect: true
+println(calls);                    //? expect: 2
+println(effect(true) && effect(false) && effect(true));  //? expect: false
+println(calls);                    //? expect: 4

@@ -29,9 +29,13 @@ impl Source {
         Source { name: name.into(), text, line_starts }
     }
 
-    /// Map a byte offset to a 1-based line/column.
+    /// Map a byte offset to a 1-based line/column. Offsets inside a multi-byte
+    /// character are rounded down to the character's start.
     pub fn line_col(&self, offset: u32) -> LineCol {
-        let offset = offset.min(self.text.len() as u32);
+        let mut offset = offset.min(self.text.len() as u32);
+        while offset > 0 && !self.text.is_char_boundary(offset as usize) {
+            offset -= 1;
+        }
         let line_idx = match self.line_starts.binary_search(&offset) {
             Ok(i) => i,
             Err(i) => i - 1,

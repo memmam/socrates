@@ -1,0 +1,17 @@
+// SPEC 3.3: break and continue are only valid inside loops (E0305).
+// A function or lambda body starts a fresh (non-loop) context, even when the
+// lambda is written textually inside a loop.
+//? error: E0305
+//? error: `break` outside of a loop
+//? error: `continue` outside of a loop
+break;
+if true {
+    continue;
+}
+fn f() {
+    break;
+}
+while true {
+    let g = || { continue; };
+    g();
+}

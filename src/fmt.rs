@@ -232,6 +232,7 @@ impl Formatter {
         }
         self.out.push_str(" {\n");
         self.indent += 1;
+        self.last_line = self.line_of(d.name.span.end);
         for f in &d.fields {
             self.flush_comments(f.name.span.start);
             self.pad();
@@ -257,6 +258,7 @@ impl Formatter {
         }
         self.out.push_str(" {\n");
         self.indent += 1;
+        self.last_line = self.line_of(d.name.span.end);
         for v in &d.variants {
             self.flush_comments(v.span.start);
             self.pad();
@@ -315,6 +317,9 @@ impl Formatter {
         }
         self.out.push_str("{\n");
         self.indent += 1;
+        // The first inner statement compares its gap against the block
+        // opening, not against whatever preceded the enclosing statement.
+        self.last_line = self.line_of(b.span.start);
         for s in &b.stmts {
             self.stmt(s);
         }
@@ -534,6 +539,7 @@ impl Formatter {
                 self.expr(scrutinee, 0);
                 self.out.push_str(" {\n");
                 self.indent += 1;
+                self.last_line = self.line_of(scrutinee.span.end);
                 for arm in arms {
                     self.flush_comments(arm.span.start);
                     self.pad();

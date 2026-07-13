@@ -1,0 +1,9 @@
+// Polymorphism comes only from explicit [T] parameter lists (SPEC 2.6);
+// a let-bound function value is monomorphic, so its type variable is pinned
+// by the first use and a second use at another type is a mismatch.
+//? error: E0301
+//? error: type mismatch
+fn id[T](x: T) -> T { x }
+let f = id;
+println(f(1));
+println(f("s"));
