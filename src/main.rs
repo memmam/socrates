@@ -42,8 +42,49 @@ fn real_main() -> ExitCode {
             return ExitCode::from(64);
         }
         Some("repl") => return ExitCode::from(repl::run_repl() as u8),
+        Some("lsp") => return ExitCode::from(fable::lsp::run_lsp() as u8),
         Some("run") | Some("check") | Some("dis") | Some("fmt") | Some("tokens")
         | Some("ast") => (args[0].as_str(), &args[1..]),
+        Some("test") => {
+            let paths: Vec<std::path::PathBuf> = args[1..]
+                .iter()
+                .filter(|a| !a.starts_with('-'))
+                .map(std::path::PathBuf::from)
+                .collect();
+            let paths = if paths.is_empty() {
+                vec![std::path::PathBuf::from(".")]
+            } else {
+                paths
+            };
+            let color = std::io::stderr().is_terminal();
+            let (green, red, bold, reset) = if color {
+                ("\x1b[32m", "\x1b[1;31m", "\x1b[1m", "\x1b[0m")
+            } else {
+                ("", "", "", "")
+            };
+            let report = fable::testing::run_test_paths(&paths);
+            if report.total == 0 {
+                eprintln!("fable test: no .fable files found");
+                return ExitCode::from(64);
+            }
+            for (path, why) in &report.failures {
+                eprintln!("{red}FAIL{reset} {bold}{}{reset}", path.display());
+                for line in why.lines() {
+                    eprintln!("     {line}");
+                }
+            }
+            let passed = report.total - report.failures.len();
+            if report.failures.is_empty() {
+                eprintln!("{green}ok{reset}: {passed} test{} passed", if passed == 1 { "" } else { "s" });
+                return ExitCode::SUCCESS;
+            }
+            eprintln!(
+                "{red}FAILED{reset}: {} of {} tests failed",
+                report.failures.len(),
+                report.total
+            );
+            return ExitCode::from(1);
+        }
         Some("--help") | Some("-h") | Some("help") => {
             usage();
             return ExitCode::SUCCESS;
@@ -200,9 +241,12 @@ USAGE:
     fable check <file.fable>      type-check only
     fable dis <file.fable>        show compiled bytecode
     fable fmt <file.fable> [-w]   format source (print, or -w to rewrite)
+    fable test [paths...]         run golden tests (//? expect/error/panic
+                                  directives in .fable files; default: .)
     fable tokens <file.fable>     dump tokens (debug)
     fable ast <file.fable>        dump the AST (debug)
     fable repl                    interactive session
+    fable lsp                     language server (JSON-RPC over stdio)
 
 ENVIRONMENT:
     FABLE_GC_STRESS=1    collect garbage before every allocation

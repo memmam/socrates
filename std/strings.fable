@@ -1,0 +1,47 @@
+// std.strings — string helpers beyond the builtin methods.
+
+// The lines of `s`, without a phantom final line for a trailing newline.
+pub fn lines(s: String) -> List[String] {
+    let parts = s.split("\n");
+    if s.ends_with("\n") {
+        parts.pop();
+    }
+    parts
+}
+
+// Whitespace-separated words (runs of spaces, tabs, and newlines collapse).
+pub fn words(s: String) -> List[String] {
+    s.replace("\t", " ").replace("\n", " ").split(" ").filter(|w| w != "")
+}
+
+pub fn join_lines(xs: List[String]) -> String {
+    xs.join("\n")
+}
+
+// Truncate to at most `n` characters, marking the cut with an ellipsis.
+pub fn ellipsize(s: String, n: Int) -> String {
+    if s.len() <= n {
+        s
+    } else if n <= 3 {
+        s.slice(0, n)
+    } else {
+        s.slice(0, n - 3) + "..."
+    }
+}
+
+// Strip one copy of `prefix`/`suffix` if present.
+pub fn strip_prefix(s: String, prefix: String) -> String {
+    if s.starts_with(prefix) {
+        s.slice(prefix.len(), s.len())
+    } else {
+        s
+    }
+}
+
+pub fn strip_suffix(s: String, suffix: String) -> String {
+    if suffix != "" && s.ends_with(suffix) {
+        s.slice(0, s.len() - suffix.len())
+    } else {
+        s
+    }
+}

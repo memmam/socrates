@@ -105,6 +105,17 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             Value::Unit
         }
 
+        TryCall => {
+            let f = vm.native_arg(argc, 0);
+            match vm.call_value_caught(f) {
+                Ok(v) => make_ok(vm, v),
+                Err(msg) => {
+                    let m = vm.alloc_str(msg);
+                    make_err(vm, m)
+                }
+            }
+        }
+
         // ------------------------------------------------------------------
         // fs.* / os.* (v0.3)
         // ------------------------------------------------------------------

@@ -1,0 +1,20 @@
+// SPEC §7.1 (v0.4): std.flags — rigid, unambiguous CLI parsing:
+// `--name=value` carries values, bare `--name` is boolean, `--` ends flags.
+import std.flags;
+
+let args = ["build", "--verbose", "--out=dist/x", "src", "--", "--not-a-flag"];
+
+println(flags.flag(args, "verbose"));            //? expect: true
+println(flags.flag(args, "quiet"));              //? expect: false
+println(flags.value(args, "out"));               //? expect: Some("dist/x")
+println(flags.value(args, "verbose"));           //? expect: None
+println(flags.value_or(args, "jobs", "1"));      //? expect: 1
+println(flags.positionals(args));                //? expect: ["build", "src", "--not-a-flag"]
+
+// After `--`, nothing is a flag.
+let tail = ["--", "--verbose"];
+println(flags.flag(tail, "verbose"));            //? expect: false
+println(flags.positionals(tail));                //? expect: ["--verbose"]
+
+// Last occurrence of a valued option wins.
+println(flags.value(["--x=1", "--x=2"], "x"));   //? expect: Some("2")

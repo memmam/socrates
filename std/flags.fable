@@ -1,0 +1,73 @@
+// std.flags — tiny, unambiguous CLI-argument helpers for `os.args()` lists.
+//
+// The grammar is deliberately rigid so it needs no spec:
+//   --name=value    a valued option (only this form carries a value)
+//   --name          a boolean flag
+//   anything else   a positional
+//
+// Everything after a literal `--` is positional, per convention.
+
+pub fn flag(args: List[String], name: String) -> Bool {
+    let want = "--{name}";
+    let mut seen = false;
+    let mut raw = false;
+    for a in args {
+        if raw {
+            continue;
+        }
+        if a == "--" {
+            raw = true;
+            continue;
+        }
+        if a == want {
+            seen = true;
+        }
+    }
+    seen
+}
+
+pub fn value(args: List[String], name: String) -> Option[String] {
+    let prefix = "--{name}=";
+    let mut found: Option[String] = None;
+    let mut raw = false;
+    for a in args {
+        if raw {
+            continue;
+        }
+        if a == "--" {
+            raw = true;
+            continue;
+        }
+        if a.starts_with(prefix) {
+            found = Some(a.slice(prefix.len(), a.len()));
+        }
+    }
+    found
+}
+
+// `value` with a fallback.
+pub fn value_or(args: List[String], name: String, fallback: String) -> String {
+    match value(args, name) {
+        Some(v) -> v,
+        None -> fallback,
+    }
+}
+
+pub fn positionals(args: List[String]) -> List[String] {
+    let mut out = [];
+    let mut raw = false;
+    for a in args {
+        if raw {
+            out.push(a);
+            continue;
+        }
+        if a == "--" {
+            raw = true;
+            continue;
+        }
+        if !a.starts_with("--") {
+            out.push(a);
+        }
+    }
+    out
+}

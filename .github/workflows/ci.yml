@@ -37,3 +37,4 @@ jobs:
           ./target/release/fable examples/orbit/main.fable > /dev/null
           ./target/release/fable examples/loc.fable . > /dev/null
           ./target/release/fable check examples/raytracer.fable
+          ./target/release/fable test tests/spec > /dev/null

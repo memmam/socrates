@@ -23,6 +23,7 @@ pub enum Native {
     AssertEq,
     Clock,
     Input,
+    TryCall,
     // math namespace
     MathSqrt,
     MathSin,
@@ -368,6 +369,7 @@ impl Native {
             "assert_eq" => AssertEq,
             "clock" => Clock,
             "input" => Input,
+            "try" => TryCall,
             _ => return None,
         })
     }
@@ -447,6 +449,7 @@ impl Native {
             AssertEq => "assert_eq",
             Clock => "clock",
             Input => "input",
+            TryCall => "try",
             MathSqrt => "math.sqrt",
             MathSin => "math.sin",
             MathCos => "math.cos",
@@ -595,6 +598,8 @@ impl Native {
             AssertEq => (vec![p0(), p0()], Unit, 1),
             Clock => (vec![], Float, 0),
             Input => (vec![], opt(TStr), 0),
+            // try(f) runs f and catches runtime panics.
+            TryCall => (vec![func(vec![], p0())], res(p0(), TStr), 1),
 
             MathSqrt | MathSin | MathCos | MathTan | MathAtan | MathLog | MathLog2 | MathExp
             | MathFloor | MathCeil | MathRound | MathAbs => (vec![Float], Float, 0),

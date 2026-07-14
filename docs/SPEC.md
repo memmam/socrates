@@ -404,6 +404,9 @@ match shape {
   each directory in the colon-separated `FABLE_PATH` environment variable
   (v0.3) — the home for utility modules shared across projects. The E0337
   error lists every location tried.
+- The `std.` prefix is **reserved** (v0.4): `import std.json;` resolves to a
+  module embedded in the interpreter binary, never to a file. Embedded
+  modules may import only other `std` modules. See § 7.1 for the catalog.
 - The REPL and one-shot string evaluation cannot import (E0334).
 
 ---
@@ -441,6 +444,7 @@ match shape {
 | `assert_eq(a, b)` | `[T] fn(T, T) -> Unit` | panics on inequality, printing both |
 | `clock()` | `fn() -> Float` | monotonic seconds |
 | `input()` | `fn() -> Option[String]` | reads one line from stdin (no trailing `\n`); `None` at EOF |
+| `try(f)` | `[T] fn(fn() -> T) -> Result[T, String]` | runs `f`, catching runtime panics as `Err(message)` (v0.4). Side effects before the panic persist; the VM stack is fully restored. `os.exit` is not catchable. |
 
 Two more builtin namespaces (v0.3) cover the glue-language essentials.
 Fallible operations return `Result[_, String]` whose `Err` carries
@@ -468,6 +472,22 @@ Namespaced (no import needed): `math.pi`, `math.e`, `math.sqrt(Float)`,
 `math.abs(Float) -> Float`, `math.min/max(Int, Int) -> Int`,
 `math.min_float/max_float(Float, Float) -> Float`, `math.random() -> Float`
 (uniform [0, 1), xorshift PRNG), `math.seed(Int) -> Unit`.
+
+### 7.1 The standard library (v0.4)
+
+Five modules written in Fable ship inside the interpreter, imported like any
+module (`import std.json;`, aliased with `as`). Everything below is `pub`;
+these modules follow the same visibility rules as user code.
+
+| Module | Exports |
+|--------|---------|
+| `std.json` | `parse(String) -> Result[Json, String]`, `stringify(Json) -> String`, `pretty(Json) -> String`; `enum Json { JNull, JBool, JNum, JStr, JArr, JObj }` with methods `get(key)`, `at(i)`, `as_str()`, `as_num()`, `as_bool()`, `is_null()`, `len()` |
+| `std.flags` | `flag(args, name) -> Bool`, `value(args, name) -> Option[String]` (only `--name=value` carries a value), `value_or(args, name, fallback)`, `positionals(args)`; a literal `--` ends flag parsing |
+| `std.path` | `join`, `base_name`, `dir_name`, `ext`, `strip_ext` — purely textual, slash-separated |
+| `std.strings` | `lines` (trailing-newline aware), `words`, `join_lines`, `ellipsize`, `strip_prefix`, `strip_suffix` |
+| `std.iter` | lazy sequences: `of(list)`, `count_from(n)`, `from_fn(f)` build an `Iter[T]`; adapters `map`, `filter`, `take`, `chain`, `zip`; consumers `collect`, `fold`, `each`, `count`. Implemented entirely in Fable (an `Iter[T]` is a struct holding a `next` closure). |
+
+---
 
 ## 8. Builtin methods
 
@@ -635,6 +655,14 @@ operator at level 9, and struct-literal names may be module-qualified.)
 - `fable dis file.fable` — print disassembled bytecode.
 - `fable fmt file.fable` — print the canonically formatted source
   (`--write` to modify in place). Formatting is idempotent.
+- `fable test [paths...]` (v0.4) — run golden tests: every `.fable` file
+  found is a test, checked against `//? expect:` / `//? error:` /
+  `//? panic:` directives in its comments (a file with no directives must
+  merely run silently). Exit 0 when all pass, 1 otherwise. The
+  interpreter's own spec suite runs through the same code.
+- `fable lsp` (v0.4) — a language server over stdio: diagnostics on
+  open/change (identical to `fable check`, imports included), hover with
+  checked types, and go-to-definition across module files.
 - `fable repl` — interactive REPL; expressions print their value (in `str` form,
   except `String` values print quoted) unless the value is `()`.
 - `fable tokens file.fable` / `fable ast file.fable` — debugging dumps.

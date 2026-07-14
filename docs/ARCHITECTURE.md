@@ -245,6 +245,37 @@ rooting discipline (`alloc_rooted_list`/`temp_roots`) and return
 `Result[_, String]` so failures compose with `?`. The VM carries
 `script_args` for `os.args()`.
 
+## v0.4 additions
+
+**fable test** is the spec harness moved into the library (`testing.rs`);
+the CLI command and the Rust test suite call the same functions.
+
+**The std library** is Fable source embedded with `include_str!`
+(`stdlib.rs`, `std/*.fable`). The loader intercepts the reserved `std.`
+prefix before any filesystem resolution, keys the modules by pseudo-paths
+in the same dedup/cycle maps, and forbids std modules from importing
+anything non-std. From the checker's perspective a std module is just a
+module.
+
+**The language server** (`lsp.rs` + `jsonlite.rs`) reuses the whole
+pipeline: the loader gained an overlay parameter so the unsaved buffer
+shadows the on-disk file, and analysis is simply load + check per module,
+retaining the checker for hover (`types` by NodeId; smallest-span node
+lookup is a ~100-line AST walk) and definition (the `res` table; a stored
+name's prefix locates the defining module's file). Positions are converted
+properly between byte offsets and LSP's UTF-16 line/character pairs.
+
+**try(f)** snapshots frame/stack/root depths, delegates to `call_value`,
+and truncates back on error — the same unwinding discipline `run_entry`
+already used for the REPL.
+
+**GC pacing**: the next-collection threshold's floor rose from 256 to
+4,096 live objects. Small working sets used to collect every ~250
+allocations, and each sweep walks the entire slot table; the closure-churn
+benchmark ran 1,604 collections (161ms), now 98 (38ms), with allocation
+also cheapened by an early-out in `close_upvalues` and a clone-free
+`Op::Closure` path.
+
 ## Testing strategy
 
 - Unit tests per module (lexer shapes, parser precedence, checker

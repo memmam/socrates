@@ -1,0 +1,23 @@
+// SPEC §7.1 (v0.4): std.path — textual path helpers.
+import std.path;
+
+println(path.join("a", "b"));            //? expect: a/b
+println(path.join("a/", "b"));           //? expect: a/b
+println(path.join("", "b"));             //? expect: b
+println(path.join("a", "/abs"));         //? expect: /abs
+
+println(path.base_name("a/b/file.txt")); //? expect: file.txt
+println(path.base_name("file.txt"));     //? expect: file.txt
+println(path.base_name("a/b/"));         //? expect: b
+
+println(path.dir_name("a/b/file.txt"));  //? expect: a/b
+println(path.dir_name("file.txt"));      //? expect:
+println(path.dir_name("a/b/"));          //? expect: a
+
+println(path.ext("a/file.txt"));         //? expect: txt
+println(path.ext("archive.tar.gz"));     //? expect: gz
+println(path.ext("no_ext"));             //? expect:
+println(path.ext(".gitignore"));         //? expect:
+
+println(path.strip_ext("a/file.txt"));   //? expect: a/file
+println(path.strip_ext("no_ext"));       //? expect: no_ext

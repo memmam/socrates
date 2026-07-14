@@ -1,0 +1,312 @@
+// std.json — JSON parsing and serialization.
+//
+//   import std.json;
+//   let doc = json.parse(text)?;
+//   let port = doc.get("server")?.get("port")?.as_num()?;
+//
+// Numbers are Floats (as in JSON itself); integral values stringify without
+// a decimal point. Escapes cover \n \t \" \\ \/ on both directions.
+
+pub enum Json {
+    JNull,
+    JBool(Bool),
+    JNum(Float),
+    JStr(String),
+    JArr(List[Json]),
+    JObj(List[(String, Json)]),
+}
+
+impl Json {
+    // Object member by key (None on non-objects and missing keys).
+    pub fn get(self, key: String) -> Option[Json] {
+        match self {
+            Json.JObj(entries) -> {
+                for e in entries {
+                    if e.0 == key {
+                        return Some(e.1);
+                    }
+                }
+                None
+            }
+            _ -> None,
+        }
+    }
+
+    // Array element by index (None on non-arrays and out of range).
+    pub fn at(self, i: Int) -> Option[Json] {
+        match self {
+            Json.JArr(items) -> items.get(i),
+            _ -> None,
+        }
+    }
+
+    pub fn as_str(self) -> Option[String] {
+        match self {
+            Json.JStr(s) -> Some(s),
+            _ -> None,
+        }
+    }
+
+    pub fn as_num(self) -> Option[Float] {
+        match self {
+            Json.JNum(f) -> Some(f),
+            _ -> None,
+        }
+    }
+
+    pub fn as_bool(self) -> Option[Bool] {
+        match self {
+            Json.JBool(b) -> Some(b),
+            _ -> None,
+        }
+    }
+
+    pub fn is_null(self) -> Bool {
+        match self {
+            Json.JNull -> true,
+            _ -> false,
+        }
+    }
+
+    // Number of object entries or array elements (0 otherwise).
+    pub fn len(self) -> Int {
+        match self {
+            Json.JArr(items) -> items.len(),
+            Json.JObj(entries) -> entries.len(),
+            _ -> 0,
+        }
+    }
+}
+
+// ---- parsing ----
+
+struct Parser {
+    chars: List[String],
+    pos: Int,
+}
+
+fn peek(p: Parser) -> Option[String] {
+    p.chars.get(p.pos)
+}
+
+fn advance(p: Parser) -> Option[String] {
+    let c = p.chars.get(p.pos);
+    p.pos += 1;
+    c
+}
+
+fn skip_ws(p: Parser) {
+    while true {
+        match peek(p) {
+            Some(c) -> {
+                if c == " " || c == "\n" || c == "\t" || c == "\r" {
+                    p.pos += 1;
+                } else {
+                    return;
+                }
+            }
+            None -> { return; }
+        }
+    }
+}
+
+fn expect(p: Parser, want: String) -> Result[Unit, String] {
+    match advance(p) {
+        Some(c) -> if c == want { Ok(()) } else { Err("expected '{want}', found '{c}' at {p.pos}") },
+        None -> Err("expected '{want}', found end of input"),
+    }
+}
+
+fn parse_value(p: Parser) -> Result[Json, String] {
+    skip_ws(p);
+    match peek(p) {
+        None -> Err("unexpected end of input"),
+        Some(c) -> {
+            if c == "\{" { parse_object(p) }
+            else if c == "[" { parse_array(p) }
+            else if c == "\"" { parse_string(p).map(|s| Json.JStr(s)) }
+            else if c == "t" || c == "f" { parse_bool(p) }
+            else if c == "n" { parse_literal(p, "null", Json.JNull) }
+            else { parse_number(p) }
+        }
+    }
+}
+
+fn parse_literal(p: Parser, word: String, value: Json) -> Result[Json, String] {
+    for ch in word {
+        match advance(p) {
+            Some(c) -> if c != ch { return Err("invalid literal at {p.pos}"); },
+            None -> { return Err("unexpected end of input"); }
+        }
+    }
+    Ok(value)
+}
+
+fn parse_bool(p: Parser) -> Result[Json, String] {
+    match peek(p) {
+        Some(c) -> if c == "t" {
+            parse_literal(p, "true", Json.JBool(true))
+        } else {
+            parse_literal(p, "false", Json.JBool(false))
+        },
+        None -> Err("unexpected end of input"),
+    }
+}
+
+fn parse_number(p: Parser) -> Result[Json, String] {
+    let start = p.pos;
+    let digits = "0123456789+-.eE";
+    let mut running = true;
+    while running {
+        match peek(p) {
+            Some(c) -> if digits.contains(c) { p.pos += 1; } else { running = false; },
+            None -> { running = false; }
+        }
+    }
+    let text = p.chars.slice(start, p.pos).join("");
+    match text.parse_float() {
+        Some(f) -> Ok(Json.JNum(f)),
+        None -> Err("invalid number '{text}' at {start}"),
+    }
+}
+
+fn parse_string(p: Parser) -> Result[String, String] {
+    expect(p, "\"")?;
+    let mut out = "";
+    while true {
+        match advance(p) {
+            None -> { return Err("unterminated string"); }
+            Some(c) -> {
+                if c == "\"" { return Ok(out); }
+                if c == "\\" {
+                    match advance(p) {
+                        Some(esc) -> {
+                            if esc == "n" { out += "\n"; }
+                            else if esc == "t" { out += "\t"; }
+                            else if esc == "\"" { out += "\""; }
+                            else if esc == "\\" { out += "\\"; }
+                            else if esc == "/" { out += "/"; }
+                            else { return Err("unsupported escape \\{esc}"); }
+                        }
+                        None -> { return Err("unterminated escape"); }
+                    }
+                } else {
+                    out += c;
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn parse_array(p: Parser) -> Result[Json, String] {
+    p.pos += 1; // consume [
+    let mut items = [];
+    skip_ws(p);
+    if peek(p) == Some("]") {
+        p.pos += 1;
+        return Ok(Json.JArr(items));
+    }
+    while true {
+        items.push(parse_value(p)?);
+        skip_ws(p);
+        match advance(p) {
+            Some(c) -> {
+                if c == "]" { return Ok(Json.JArr(items)); }
+                if c != "," { return Err("expected ',' or ']' at {p.pos}"); }
+            }
+            None -> { return Err("unterminated array"); }
+        }
+    }
+    Ok(Json.JArr(items))
+}
+
+fn parse_object(p: Parser) -> Result[Json, String] {
+    p.pos += 1; // consume {
+    let mut entries = [];
+    skip_ws(p);
+    if peek(p) == Some("}") {
+        p.pos += 1;
+        return Ok(Json.JObj(entries));
+    }
+    while true {
+        skip_ws(p);
+        let key = parse_string(p)?;
+        skip_ws(p);
+        expect(p, ":")?;
+        entries.push((key, parse_value(p)?));
+        skip_ws(p);
+        match advance(p) {
+            Some(c) -> {
+                if c == "}" { return Ok(Json.JObj(entries)); }
+                if c != "," { return Err("expected ',' or '}' at {p.pos}"); }
+            }
+            None -> { return Err("unterminated object"); }
+        }
+    }
+    Ok(Json.JObj(entries))
+}
+
+pub fn parse(text: String) -> Result[Json, String] {
+    let p = Parser { chars: text.chars(), pos: 0 };
+    let json = parse_value(p)?;
+    skip_ws(p);
+    if p.pos < p.chars.len() {
+        Err("trailing input at {p.pos}")
+    } else {
+        Ok(json)
+    }
+}
+
+// ---- serialization ----
+
+fn quote(s: String) -> String {
+    "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\t", "\\t") + "\""
+}
+
+fn num_str(f: Float) -> String {
+    if f == f.round() && f.abs() < 1e15 {
+        str(f.to_int())
+    } else {
+        str(f)
+    }
+}
+
+// Compact single-line form.
+pub fn stringify(j: Json) -> String {
+    match j {
+        Json.JNull -> "null",
+        Json.JBool(b) -> str(b),
+        Json.JNum(f) -> num_str(f),
+        Json.JStr(s) -> quote(s),
+        Json.JArr(items) -> "[" + items.map(|v| stringify(v)).join(",") + "]",
+        Json.JObj(entries) ->
+            "\{" + entries.map(|e| quote(e.0) + ":" + stringify(e.1)).join(",") + "}",
+    }
+}
+
+// Indented, human-facing form.
+pub fn pretty(j: Json) -> String {
+    pretty_at(j, 0)
+}
+
+fn pretty_at(j: Json, indent: Int) -> String {
+    let pad = "  ".repeat(indent);
+    let inner = "  ".repeat(indent + 1);
+    match j {
+        Json.JNull -> "null",
+        Json.JBool(b) -> str(b),
+        Json.JNum(f) -> num_str(f),
+        Json.JStr(s) -> quote(s),
+        Json.JArr(items) -> if items.is_empty() {
+            "[]"
+        } else {
+            "[\n" + items.map(|v| inner + pretty_at(v, indent + 1)).join(",\n") + "\n" + pad + "]"
+        },
+        Json.JObj(entries) -> if entries.is_empty() {
+            "\{}"
+        } else {
+            "\{\n" + entries.map(|e| inner + quote(e.0) + ": " + pretty_at(e.1, indent + 1)).join(",\n") + "\n" + pad + "}"
+        },
+    }
+}
