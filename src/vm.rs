@@ -348,6 +348,43 @@ impl Vm {
         Ok(())
     }
 
+    /// Replace the current frame in place for a tail call: close its
+    /// upvalues, slide the callee slot (when present) and args down over the
+    /// frame, and restart execution in `proto`. The caller sees the eventual
+    /// result exactly where the departing frame would have left its own.
+    fn reuse_frame(
+        &mut self,
+        proto: u32,
+        closure: Option<Handle>,
+        argc: u8,
+    ) -> Result<(), VmError> {
+        let p = &self.program.protos[proto as usize];
+        if p.arity != argc {
+            return Err(self.error(format!(
+                "internal: `{}` expects {} args, got {argc} (VM bug)",
+                p.name, p.arity
+            )));
+        }
+        let f = self.frames.last().unwrap();
+        let (old_base, old_callee) = (f.base, f.callee_slot);
+        self.close_upvalues(old_base);
+        let cut = old_base - usize::from(old_callee);
+        let has_callee = usize::from(closure.is_some());
+        let move_n = argc as usize + has_callee;
+        let start = self.stack.len() - move_n;
+        for i in 0..move_n {
+            self.stack[cut + i] = self.stack[start + i];
+        }
+        self.stack.truncate(cut + move_n);
+        let f = self.frames.last_mut().unwrap();
+        f.proto = proto;
+        f.closure = closure;
+        f.ip = 0;
+        f.base = cut + has_callee;
+        f.callee_slot = has_callee == 1;
+        Ok(())
+    }
+
     /// Call any callable value with the given arguments (used by natives).
     pub fn call_value(&mut self, callee: Value, args: &[Value]) -> Result<Value, VmError> {
         match callee {
@@ -558,6 +595,39 @@ impl Vm {
                 }
                 Op::CallFn(p, argc) => {
                     self.push_frame(p, None, argc, false)?;
+                }
+                Op::TailCallFn(p, argc) => {
+                    self.reuse_frame(p, None, argc)?;
+                }
+                Op::TailCall(argc) => {
+                    let callee = self.peek(argc as usize);
+                    match callee {
+                        Value::Obj(h) => {
+                            let proto = match self.heap.get(h) {
+                                Obj::Closure { proto, .. } => *proto,
+                                _ => {
+                                    return Err(self.error("value is not callable"));
+                                }
+                            };
+                            self.reuse_frame(proto, Some(h), argc)?;
+                        }
+                        Value::Native(n) => {
+                            // A native in tail position pushes no frame; call
+                            // it and return its result like `Op::Return`.
+                            crate::natives::call_native(self, n, argc)?;
+                            let result = self.pop();
+                            self.pop(); // the callee slot
+                            let f = self.frames.pop().unwrap();
+                            self.close_upvalues(f.base);
+                            let cut = f.base - usize::from(f.callee_slot);
+                            self.stack.truncate(cut);
+                            self.stack.push(result);
+                            if self.frames.len() < min_frames {
+                                return Ok(());
+                            }
+                        }
+                        _ => return Err(self.error("value is not callable")),
+                    }
                 }
                 Op::CallNative(n, argc) => {
                     crate::natives::call_native(self, n, argc)?;
