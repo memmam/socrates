@@ -1,0 +1,58 @@
+// path — breadth-first search over the dungeon grid.
+//
+// BFS explores outward from `start` one ring at a time, so the first time
+// it dequeues `goal` it has found a shortest route. The queue is a plain
+// list with a read cursor; parent links are stored per cell in a flat
+// `y * width + x` encoding and walked backwards to rebuild the route.
+
+// Shortest 4-connected route from start to goal (both endpoints included),
+// or None when the goal is unreachable. `open` decides which tiles are
+// walkable, so callers choose the rules (here: anything but a wall).
+pub fn shortest(
+    grid: List[List[String]],
+    start: (Int, Int),
+    goal: (Int, Int),
+    open: fn(String) -> Bool,
+) -> Option[List[(Int, Int)]] {
+    let height = grid.len();
+    let width = grid[0].len();
+    let (sy, sx) = start;
+    let (gy, gx) = goal;
+
+    // prev[y][x] = flat index of the cell we stepped in from; -1 = unseen.
+    let prev = (0..height).map(|_| (0..width).map(|_| -1));
+    prev[sy][sx] = sy * width + sx;   // the start is its own parent
+
+    let queue = [start];
+    let mut head = 0;
+    while head < queue.len() {
+        let (y, x) = queue[head];
+        head += 1;
+        if y == gy && x == gx {
+            break;   // first arrival — shortest by BFS invariant
+        }
+        for (ny, nx) in [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)] {
+            if ny >= 0 && ny < height && nx >= 0 && nx < width
+                && open(grid[ny][nx]) && prev[ny][nx] == -1 {
+                prev[ny][nx] = y * width + x;
+                queue.push((ny, nx));
+            }
+        }
+    }
+
+    if prev[gy][gx] == -1 {
+        return None;   // flood fill exhausted without reaching the goal
+    }
+
+    // Follow the parent links back from the goal, then flip the route.
+    let back = [goal];
+    let mut cy = gy;
+    let mut cx = gx;
+    while cy != sy || cx != sx {
+        let p = prev[cy][cx];
+        cy = p / width;
+        cx = p % width;
+        back.push((cy, cx));
+    }
+    Some(back.reverse())
+}

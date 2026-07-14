@@ -46,10 +46,24 @@ fn real_main() -> ExitCode {
         Some("run") | Some("check") | Some("dis") | Some("fmt") | Some("tokens")
         | Some("ast") => (args[0].as_str(), &args[1..]),
         Some("test") => {
-            let paths: Vec<std::path::PathBuf> = args[1..]
+            // `fable test` takes no flags; silently swallowing `--help` (and
+            // then walking the whole cwd) helps no one. A literal `--` ends
+            // flag checking so dash-prefixed paths can still be named.
+            let rest = &args[1..];
+            let sep = rest.iter().position(|a| a == "--");
+            let flag_zone = &rest[..sep.unwrap_or(rest.len())];
+            if let Some(flag) = flag_zone.iter().find(|a| a.starts_with('-')) {
+                eprintln!("fable test: unknown flag `{flag}`");
+                eprintln!(
+                    "usage: fable test [paths...]   (files or directories; default `.`; `--` ends flags)"
+                );
+                return ExitCode::from(64);
+            }
+            let paths: Vec<std::path::PathBuf> = rest
                 .iter()
-                .filter(|a| !a.starts_with('-'))
-                .map(std::path::PathBuf::from)
+                .enumerate()
+                .filter(|(i, _)| sep != Some(*i))
+                .map(|(_, a)| std::path::PathBuf::from(a))
                 .collect();
             let paths = if paths.is_empty() {
                 vec![std::path::PathBuf::from(".")]

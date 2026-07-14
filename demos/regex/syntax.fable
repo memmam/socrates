@@ -1,0 +1,232 @@
+// syntax.fable — the pattern language: an AST, a recursive-descent parser
+// from pattern text to that AST, and a printer for looking at the result.
+//
+// Supported syntax:
+//   abc         literal characters          .        any single character
+//   x* x+ x?    quantifiers (greedy)        a|b      alternation
+//   (...)       grouping                    ^  $     anchors (text start/end)
+//   [a-z0-9_]   character classes with ranges, [^...] negated
+//   \d \w \s    digit / word / space shorthands (\D \W \S negated)
+//   \. \* \\    backslash makes any metacharacter literal; \n \t as usual
+
+// A compiled pattern. The tree is fully explicit: `Seq([])` is the empty
+// pattern (which matches the empty string anywhere).
+pub enum Ast {
+    Char(String),                         // one literal character
+    Any,                                  // .
+    Class(List[(String, String)], Bool),  // ranges (lo, hi); true = negated
+    Start,                                // ^
+    End,                                  // $
+    Seq(List[Ast]),                       // concatenation
+    Alt(Ast, Ast),                        // left | right (left-biased)
+    Star(Ast),                            // zero or more
+    Plus(Ast),                            // one or more
+    Opt(Ast),                             // zero or one
+}
+
+// ---- the parser -----------------------------------------------------------
+
+// A cursor over the pattern's characters. The empty string plays the role
+// of EOF: it can never be a real character, so peeking past the end is safe.
+struct Parser {
+    src: List[String],
+    pos: Int,
+}
+
+impl Parser {
+    fn at(self, i: Int) -> String { self.src.get(i).unwrap_or("") }
+    fn peek(self) -> String { self.at(self.pos) }
+
+    fn next(self) -> String {
+        let c = self.peek();
+        self.pos += 1;
+        c
+    }
+
+    fn eat(self, c: String) -> Bool {
+        if self.peek() == c {
+            self.pos += 1;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+// Compile a pattern, or explain why it is malformed. Positions in error
+// messages are character offsets into the pattern.
+pub fn compile(pattern: String) -> Result[Ast, String] {
+    let p = Parser { src: pattern.chars(), pos: 0 };
+    let re = alternation(p)?;
+    // `alternation` only stops early at ')'; anything left over is a stray one.
+    if p.peek() == ")" {
+        return Err("unmatched ')' at {p.pos}");
+    }
+    Ok(re)
+}
+
+// alternation = sequence { '|' sequence }
+fn alternation(p: Parser) -> Result[Ast, String] {
+    let mut node = sequence(p)?;
+    while p.eat("|") {
+        node = Ast.Alt(node, sequence(p)?);
+    }
+    Ok(node)
+}
+
+// sequence = { atom [quantifier] } — runs until '|', ')' or the end
+fn sequence(p: Parser) -> Result[Ast, String] {
+    let parts: List[Ast] = [];
+    while p.peek() != "" && p.peek() != "|" && p.peek() != ")" {
+        let node = atom(p)?;
+        parts.push(quantified(p, node));
+    }
+    if parts.len() == 1 { Ok(parts[0]) } else { Ok(Ast.Seq(parts)) }
+}
+
+// Apply trailing '*', '+', '?'. They may stack: `a?*` is (star (opt 'a')).
+fn quantified(p: Parser, base: Ast) -> Ast {
+    let mut node = base;
+    let mut more = true;
+    while more {
+        if p.eat("*") {
+            node = Ast.Star(node);
+        } else if p.eat("+") {
+            node = Ast.Plus(node);
+        } else if p.eat("?") {
+            node = Ast.Opt(node);
+        } else {
+            more = false;
+        }
+    }
+    node
+}
+
+// atom = '(' alternation ')' | '[' class ']' | '.' | '^' | '$' | escape | literal
+fn atom(p: Parser) -> Result[Ast, String] {
+    let start = p.pos;
+    let c = p.next();
+    match c {
+        "(" -> {
+            let inner = alternation(p)?;
+            if !p.eat(")") {
+                return Err("unclosed '(' opened at {start}");
+            }
+            Ok(inner)
+        }
+        "[" -> class(p, start),
+        "." -> Ok(Ast.Any),
+        "^" -> Ok(Ast.Start),
+        "$" -> Ok(Ast.End),
+        "\\" -> escape(p),
+        "*" | "+" | "?" -> Err("nothing to repeat: '{c}' at {start}"),
+        _ -> Ok(Ast.Char(c)),
+    }
+}
+
+// The shorthand classes, as plain range lists.
+fn shorthand(letter: String) -> List[(String, String)] {
+    let l = letter.to_lower();
+    if l == "d" {
+        [("0", "9")]
+    } else if l == "w" {
+        [("a", "z"), ("A", "Z"), ("0", "9"), ("_", "_")]
+    } else {
+        [(" ", " "), ("\t", "\t"), ("\n", "\n"), ("\r", "\r")]
+    }
+}
+
+fn is_shorthand(c: String) -> Bool {
+    c == "d" || c == "w" || c == "s" || c == "D" || c == "W" || c == "S"
+}
+
+// After a '\' outside a class: a shorthand class, a control character,
+// or any metacharacter taken literally.
+fn escape(p: Parser) -> Result[Ast, String] {
+    match p.next() {
+        "" -> Err("dangling '\\' at the end of the pattern"),
+        c if is_shorthand(c) -> Ok(Ast.Class(shorthand(c), c == c.to_upper())),
+        "n" -> Ok(Ast.Char("\n")),
+        "t" -> Ok(Ast.Char("\t")),
+        c -> Ok(Ast.Char(c)),
+    }
+}
+
+// class = '[' ['^'] item+ ']' where item = char | char '-' char | '\' shorthand
+fn class(p: Parser, start: Int) -> Result[Ast, String] {
+    let neg = p.eat("^");
+    let ranges: List[(String, String)] = [];
+    while p.peek() != "]" {
+        if p.peek() == "" {
+            return Err("unterminated '[' opened at {start}");
+        }
+        let c = p.next();
+        // \d, \w, \s expand to their ranges inside a class too.
+        if c == "\\" && is_shorthand(p.peek()) {
+            let letter = p.next();
+            if letter == letter.to_upper() {
+                return Err("negated shorthand '\\{letter}' is not allowed inside [ ]");
+            }
+            for r in shorthand(letter) {
+                ranges.push(r);
+            }
+            continue;
+        }
+        let lo = if c == "\\" { class_char(p)? } else { c };
+        // 'x-y' is a range — unless the '-' is last, as in [a-], where it is
+        // an ordinary character.
+        if p.peek() == "-" && p.at(p.pos + 1) != "]" && p.at(p.pos + 1) != "" {
+            p.pos += 1; // the '-'
+            let c2 = p.next();
+            let hi = if c2 == "\\" { class_char(p)? } else { c2 };
+            if lo > hi {
+                return Err("bad range {lo}-{hi} in character class");
+            }
+            ranges.push((lo, hi));
+        } else {
+            ranges.push((lo, lo));
+        }
+    }
+    p.pos += 1; // the ']'
+    if ranges.is_empty() {
+        return Err("empty character class at {start}");
+    }
+    Ok(Ast.Class(ranges, neg))
+}
+
+// One (possibly escaped) literal character inside [ ].
+fn class_char(p: Parser) -> Result[String, String] {
+    match p.next() {
+        "" -> Err("dangling '\\' in character class"),
+        "n" -> Ok("\n"),
+        "t" -> Ok("\t"),
+        c -> Ok(c),
+    }
+}
+
+// ---- the printer -----------------------------------------------------------
+
+// Render an AST as a compact s-expression — handy for seeing exactly how a
+// pattern parsed, and an exhaustive match over every variant.
+pub fn show(n: Ast) -> String {
+    match n {
+        Ast.Char(c) -> "'{c}'",
+        Ast.Any -> "any",
+        Ast.Class(ranges, neg) -> {
+            let parts = ranges.map(|r| {
+                let (lo, hi) = r;
+                if lo == hi { lo } else { "{lo}-{hi}" }
+            });
+            let mark = if neg { "^" } else { "" };
+            "[{mark}{parts.join(" ")}]"
+        }
+        Ast.Start -> "start",
+        Ast.End -> "end",
+        Ast.Seq(parts) ->
+            if parts.is_empty() { "empty" } else { "(seq {parts.map(show).join(" ")})" },
+        Ast.Alt(a, b) -> "(alt {show(a)} {show(b)})",
+        Ast.Star(x) -> "(star {show(x)})",
+        Ast.Plus(x) -> "(plus {show(x)})",
+        Ast.Opt(x) -> "(opt {show(x)})",
+    }
+}

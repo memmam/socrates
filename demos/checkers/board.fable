@@ -1,0 +1,228 @@
+// board — an 8x8 English draughts board: piece codes, rendering, and the
+// full move generator (forced captures, multi-jumps, crowning).
+//
+// Pieces are small Ints so the search can read and restore them cheaply:
+//   0 empty    1 black man    2 black king    -1 white man    -2 white king
+// The sign is the owner, so `side_of` is a comparison and captures flip signs.
+// Black sits on ranks 1-3 and moves up the board; White sits on ranks 6-8
+// and moves down. Black moves first. Squares are indexed row * 8 + col with
+// row 0 at the top (rank 8).
+
+pub let black = 1;
+pub let white = -1;
+
+// The 32 playable (dark) squares, precomputed once.
+pub let squares: List[Int] = build_squares();
+
+fn build_squares() -> List[Int] {
+    let out: List[Int] = [];
+    for sq in 0..64 {
+        if (sq / 8 + sq % 8) % 2 == 1 { out.push(sq); }
+    }
+    out
+}
+
+// Shared direction tables — allocated once, reused by every movegen call.
+let king_dirs = [(-1, -1), (-1, 1), (1, -1), (1, 1)];
+let up_dirs = [(-1, -1), (-1, 1)];      // black men head toward row 0
+let down_dirs = [(1, -1), (1, 1)];      // white men head toward row 7
+
+pub fn side_of(p: Int) -> Int {
+    if p > 0 { 1 } else if p < 0 { -1 } else { 0 }
+}
+
+pub fn is_king(p: Int) -> Bool { p == 2 || p == -2 }
+
+fn dirs_of(p: Int) -> List[(Int, Int)] {
+    if is_king(p) { king_dirs } else if p == black { up_dirs } else { down_dirs }
+}
+
+fn crown_row(side: Int) -> Int { if side == black { 0 } else { 7 } }
+
+let files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+
+pub fn square_name(sq: Int) -> String { "{files[sq % 8]}{8 - sq / 8}" }
+
+// A move is the full path a piece travels (start square, then every landing
+// square) plus the squares of the pieces it captured along the way.
+pub struct Move {
+    path: List[Int],
+    caps: List[Int],
+}
+
+impl Move {
+    pub fn notation(self) -> String {
+        let sep = if self.caps.is_empty() { "-" } else { "x" };
+        self.path.map(square_name).join(sep)
+    }
+}
+
+// Everything `apply` needs to be reversed exactly: where the piece came
+// from and went, what it was before crowning, and which victims held what.
+pub struct Undo {
+    from: Int,
+    to: Int,
+    moved: Int,
+    caps: List[Int],
+    codes: List[Int],
+}
+
+pub struct Board {
+    cells: List[Int],
+}
+
+pub fn empty() -> Board {
+    Board { cells: (0..64).map(|_| 0) }
+}
+
+pub fn initial() -> Board {
+    let b = empty();
+    for sq in squares {
+        if sq / 8 < 3 { b.cells[sq] = white; }
+        if sq / 8 > 4 { b.cells[sq] = black; }
+    }
+    b
+}
+
+// Build a board from 8 strings of 8 characters, top row (rank 8) first:
+// 'b'/'B'/'w'/'W' are pieces, anything else is empty. Handy for tests.
+pub fn from_rows(rows: List[String]) -> Board {
+    let b = empty();
+    for (r, row) in rows.enumerate() {
+        for (c, ch) in row.chars().enumerate() {
+            b.cells[r * 8 + c] = match ch {
+                "b" -> 1,
+                "B" -> 2,
+                "w" -> -1,
+                "W" -> -2,
+                _ -> 0,
+            };
+        }
+    }
+    b
+}
+
+fn glyph(p: Int) -> String {
+    match p {
+        1 -> "b",
+        2 -> "B",
+        -1 -> "w",
+        -2 -> "W",
+        _ -> ".",
+    }
+}
+
+impl Board {
+    pub fn at(self, sq: Int) -> Int { self.cells[sq] }
+
+    // A compact position fingerprint, used for repetition detection.
+    pub fn key(self) -> String {
+        squares.map(|sq| str(self.cells[sq])).join(",")
+    }
+
+    pub fn count(self, side: Int) -> Int {
+        let mut n = 0;
+        for sq in squares {
+            if side_of(self.cells[sq]) == side { n += 1; }
+        }
+        n
+    }
+
+    pub fn show(self) -> String {
+        let mut out = "";
+        for r in 0..8 {
+            let mut line = "  {8 - r} ";
+            for c in 0..8 {
+                let cell = if (r + c) % 2 == 0 { " " } else { glyph(self.cells[r * 8 + c]) };
+                line += " {cell}";
+            }
+            out += line.trim_end() + "\n";
+        }
+        out + "     a b c d e f g h"
+    }
+
+    // All legal moves for `side`. English draughts: if any capture exists,
+    // captures are the only legal moves, and a jumping piece must keep
+    // jumping as long as it can.
+    pub fn moves_for(self, side: Int) -> List[Move] {
+        let caps: List[Move] = [];
+        for sq in squares {
+            let p = self.cells[sq];
+            if side_of(p) == side {
+                self.extend_jumps(sq, p, [sq], [], caps);
+            }
+        }
+        if !caps.is_empty() { return caps; }
+
+        let quiet: List[Move] = [];
+        for sq in squares {
+            let p = self.cells[sq];
+            if side_of(p) == side {
+                for (dr, dc) in dirs_of(p) {
+                    let r = sq / 8 + dr;
+                    let c = sq % 8 + dc;
+                    if r >= 0 && r < 8 && c >= 0 && c < 8 && self.cells[r * 8 + c] == 0 {
+                        quiet.push(Move { path: [sq, r * 8 + c], caps: [] });
+                    }
+                }
+            }
+        }
+        quiet
+    }
+
+    // Depth-first multi-jump expansion. The board is mutated in place while
+    // exploring (so a piece is never jumped twice) and restored on the way
+    // out. A path is emitted only when no further jump exists from its end —
+    // or immediately when a man crowns, which ends the move by rule.
+    fn extend_jumps(self, sq: Int, p: Int, path: List[Int], taken: List[Int], out: List[Move]) {
+        let mut extended = false;
+        for (dr, dc) in dirs_of(p) {
+            let lr = sq / 8 + 2 * dr;
+            let lc = sq % 8 + 2 * dc;
+            if lr >= 0 && lr < 8 && lc >= 0 && lc < 8 {
+                let mid = (sq / 8 + dr) * 8 + (sq % 8 + dc);
+                let land = lr * 8 + lc;
+                let victim = self.cells[mid];
+                if side_of(victim) == -side_of(p) && self.cells[land] == 0 {
+                    extended = true;
+                    self.cells[mid] = 0;
+                    self.cells[sq] = 0;
+                    self.cells[land] = p;
+                    if !is_king(p) && lr == crown_row(side_of(p)) {
+                        out.push(Move { path: path.concat([land]), caps: taken.concat([mid]) });
+                    } else {
+                        self.extend_jumps(land, p, path.concat([land]), taken.concat([mid]), out);
+                    }
+                    self.cells[land] = 0;
+                    self.cells[sq] = p;
+                    self.cells[mid] = victim;
+                }
+            }
+        }
+        if !extended && path.len() > 1 {
+            out.push(Move { path: path, caps: taken });
+        }
+    }
+
+    // Play a move, returning the record needed to take it back. The search
+    // applies and undoes moves on one shared board instead of copying it.
+    pub fn apply(self, m: Move) -> Undo {
+        let from = m.path[0];
+        let to = m.path[m.path.len() - 1];
+        let moved = self.cells[from];
+        let codes = m.caps.map(|sq| self.cells[sq]);
+        for sq in m.caps { self.cells[sq] = 0; }
+        self.cells[from] = 0;
+        let crowning = !is_king(moved) && to / 8 == crown_row(side_of(moved));
+        self.cells[to] = if crowning { moved * 2 } else { moved };
+        Undo { from, to, moved, caps: m.caps, codes }
+    }
+
+    pub fn undo_move(self, u: Undo) {
+        self.cells[u.to] = 0;
+        self.cells[u.from] = u.moved;
+        for (i, sq) in u.caps.enumerate() {
+            self.cells[sq] = u.codes[i];
+        }
+    }
+}

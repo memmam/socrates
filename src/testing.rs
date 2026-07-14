@@ -9,6 +9,14 @@
 //!   //? panic: <substring> — the program must panic at runtime; the panic
 //!                            message must contain <substring>.
 //!
+//! A directive must begin the line's comment: `//?` inside a string literal
+//! (even one nested in an interpolation hole), inside a `/* */` block
+//! comment, or later in the text of an ordinary `//` comment, is not a
+//! directive (so prose *about* directives can't inject phantom
+//! expectations). Expected and
+//! actual lines are compared ignoring trailing whitespace — trailing spaces
+//! in a directive are invisible in an editor and can't be pinned reliably.
+//!
 //! A file with no directives must merely run to completion with no output.
 //! `expect` cannot be combined with `error`; `expect` + `panic` means the
 //! output-so-far must match before the panic.
@@ -25,10 +33,95 @@ pub struct Directives {
     pub panics: Vec<String>,
 }
 
+/// Per-line lexical mode for the directive scanner. Strings (and their
+/// interpolation holes) cannot span lines in Fable, so only the block-comment
+/// depth carries across lines.
+enum ScanMode {
+    /// Inside a string literal.
+    Str,
+    /// Inside a `{ .. }` interpolation hole; the payload is the brace depth
+    /// (holes contain arbitrary expressions, including `{..}` literals).
+    Hole(u32),
+}
+
+/// Where the line's directive comment starts, if any.
+///
+/// Tracks just enough of Fable's lexical structure to be truthful: string
+/// literals (with `\` escapes), strings nested inside `{ .. }` interpolation
+/// holes (to arbitrary depth), and nested `/* */` block comments — whose
+/// depth persists across lines via `block_depth`. A directive is a **line**
+/// comment that starts with `//?`, found outside all of the above; the first
+/// non-directive line comment ends the scan (the rest of the line is prose).
+fn directive_start(line: &str, block_depth: &mut u32) -> Option<usize> {
+    let b = line.as_bytes();
+    let mut i = 0;
+    let mut stack: Vec<ScanMode> = Vec::new();
+    while i < b.len() {
+        if *block_depth > 0 {
+            // Inside a block comment nothing else is lexical structure.
+            match b[i] {
+                b'/' if b.get(i + 1) == Some(&b'*') => {
+                    *block_depth += 1;
+                    i += 2;
+                    continue;
+                }
+                b'*' if b.get(i + 1) == Some(&b'/') => {
+                    *block_depth -= 1;
+                    i += 2;
+                    continue;
+                }
+                _ => {
+                    i += 1;
+                    continue;
+                }
+            }
+        }
+        match stack.last_mut() {
+            Some(ScanMode::Str) => match b[i] {
+                b'\\' => {
+                    i += 2;
+                    continue;
+                }
+                b'{' => stack.push(ScanMode::Hole(1)),
+                b'"' => {
+                    stack.pop();
+                }
+                _ => {}
+            },
+            Some(ScanMode::Hole(depth)) => match b[i] {
+                b'"' => stack.push(ScanMode::Str),
+                b'{' => *depth += 1,
+                b'}' => {
+                    *depth -= 1;
+                    if *depth == 0 {
+                        stack.pop();
+                    }
+                }
+                _ => {}
+            },
+            None => match b[i] {
+                b'"' => stack.push(ScanMode::Str),
+                b'/' if b.get(i + 1) == Some(&b'*') => {
+                    *block_depth = 1;
+                    i += 2;
+                    continue;
+                }
+                b'/' if b.get(i + 1) == Some(&b'/') => {
+                    return if b.get(i + 2) == Some(&b'?') { Some(i) } else { None };
+                }
+                _ => {}
+            },
+        }
+        i += 1;
+    }
+    None
+}
+
 pub fn parse_directives(text: &str) -> Directives {
     let mut d = Directives::default();
+    let mut block_depth = 0u32;
     for line in text.lines() {
-        let Some(idx) = line.find("//?") else { continue };
+        let Some(idx) = directive_start(line, &mut block_depth) else { continue };
         let rest = line[idx + 3..].trim_start();
         if let Some(v) = rest.strip_prefix("expect:") {
             d.expect.push(v.strip_prefix(' ').unwrap_or(v).to_string());
@@ -125,7 +218,10 @@ pub fn check_one(path: &Path) -> Result<(), String> {
 fn check_stdout(expect: &[String], stdout: &str) -> Result<(), String> {
     let got: Vec<&str> = stdout.lines().collect();
     if got.len() != expect.len()
-        || !got.iter().zip(expect).all(|(g, e)| *g == e.as_str())
+        || !got
+            .iter()
+            .zip(expect)
+            .all(|(g, e)| g.trim_end() == e.trim_end())
     {
         let mut msg = String::new();
         let _ = writeln!(msg, "output mismatch");

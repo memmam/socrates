@@ -1,6 +1,6 @@
 [package]
 name = "fable"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "The Fable programming language: statically typed, garbage collected, implemented from scratch with zero dependencies"
 license = "MIT"

@@ -1,0 +1,122 @@
+# Field-test notes: what ten demos taught the language
+
+The demos in this directory were written against **v0.5** by ten authors
+working independently, each with the same brief: build something real, use
+the prebuilt interpreter, pin your output with `fable test` directives, and
+report every place the language fights you. Each demo was then verified by
+a separate reviewer following only its README. This file is the triage of
+their combined reports — every issue, and what happened to it.
+
+The one-line summary: ten authors hit the same dozen walls, which is the
+strongest possible signal. Those walls became **v0.6**.
+
+## Bugs — fixed in v0.6
+
+| Issue | Reported by | Fix |
+|-------|-------------|-----|
+| `math.seed` collapsed adjacent seeds: state was `seed \| 1`, so seeds 2k and 2k+1 produced **identical** streams (seed-42 and seed-43 dungeons compared equal), and nearby seeds barely diverged. | dungeon (its "different seeds ⇒ different dungeons" golden test failed) | Seeds now pass through a SplitMix64 scramble (`src/vm.rs`). Same seed still reproduces exactly; adjacent seeds are unrelated. Seeded streams are **not** stable across releases — dungeon and wfc re-pinned their goldens. |
+| The `fable test` directive scanner matched `//?` anywhere in a line — including inside string literals and in the prose of ordinary comments — injecting phantom expectations with a baffling "output mismatch". Three authors were bitten by comments *about* directives. | lisp, regex, sudoku | A directive now counts only when `//?` **begins the line's comment**, with enough string-awareness to skip `//` inside quotes (`src/testing.rs`); `tests/spec/lexical/directive_scanner.fable` pins it. |
+| Struct-literal field shorthand `P { x, y }` was implemented (and `fable fmt` even canonicalized *into* it) but absent from the normative spec — five authors independently flagged the mismatch and avoided the feature. | lisp, regex, dungeon, checkers, wfc | Documented in SPEC §2.3 and the grammar. (One report claimed shorthand *failed* to parse inside a function body; that repro was tested and works — misattributed.) |
+
+## Ergonomics — added in v0.6
+
+| Ask | Reported by | What was added |
+|-----|-------------|----------------|
+| Tuple destructuring in `for` heads (`enumerate`/`zip`/`entries` all yield pairs; every loop cost a `let (a, b) = pair;` line) | **8 of 10 demos** — the most-reported issue | `for` heads take any irrefutable pattern: `for (i, x) in xs.enumerate()`, nested tuples, `_`. |
+| Bare `return`/`break`/`continue` as match-arm bodies (interpreters early-exit from arms constantly; the block form was pure ceremony and the parse error cascaded) | lisp, regex | Legal as sugar for the one-statement block. Assignment arms stay errors, now with a targeted hint. |
+| `while true { .. }` not recognized as diverging (functions needed a dead `None // unreachable` after the loop — std/iter.fable itself carried the wart) | wfc + its verifier | A trailing escape-free `while true` diverges; `os.exit` also typechecks anywhere, like `panic`. |
+| `_` as a discard binder in lambdas and loops | checkers, sudoku, wfc | `(0..81).map(\|_\| 0)` and `for _ in 0..3` both work. |
+| `trim_start` / `trim_end` (four demos hand-rolled an O(n²) rtrim from `slice` to keep goldens clean) | lisp, spreadsheet, dungeon, checkers, wfc | Added, Unicode-whitespace, alongside `trim`. |
+| Fixed-precision float formatting (three demos hand-rolled multiply-round-divide, which misrounds 1.005 and can't pad) | spreadsheet, csvql, plot | `Float.to_fixed(n)` — exactly n places, no `-0.00`. |
+| Character ↔ code-point conversion (alphabet lookup tables were the only route to "column letter to index") | spreadsheet, regex | `s.code_at(i) -> Option[Int]` and free `char(code) -> String`. |
+| Substring search from an offset (hand-written scanners exploded strings into char lists to get a cursor) | mdsite | `s.index_of_from(pat, from)` — char indices, like every string index. |
+| Integer randoms (`lo + (random() * span).to_int()` is easy to get subtly wrong) | dungeon, wfc | `math.rand_int(lo, hi)`, inclusive, panics on an empty range. |
+| `math.log10`, float remainder | plot | `math.log10`, `math.fmod`. `%` stays Int-only by design. |
+| The fixed 4,096-frame call-depth cap (deep spreadsheet dependency chains and long regex inputs hit it legitimately) | spreadsheet, regex | `FABLE_MAX_DEPTH` env var (floor 64). The default stays; `try()` still catches overflow. |
+
+## Diagnostics and tooling — sharpened in v0.6
+
+- `let m: Map[..] = {};` now says **"`{}` is an empty block, not an empty
+  map"** with the `{:}` note, instead of a generic Unit-vs-Map mismatch
+  (csvql).
+- `Some(v) -> i = v` now says assignment can't be an arm body and shows the
+  block form (mdsite).
+- `x << 1` now gets "Fable has no bitwise shift operators" from the lexer
+  instead of a bare "expected an expression" (sudoku).
+- `fable test` golden comparison ignores trailing whitespace on both sides —
+  trailing spaces in a directive are invisible in an editor and could never
+  be pinned reliably (checkers).
+- `fable test --help` (or any unknown flag) prints usage and exits 64
+  instead of silently testing the whole working directory (dungeon's
+  verifier).
+- Spec gaps closed in `docs/SPEC.md`: `sort`/`sort_by` documented **stable**
+  (csvql — deterministic `order by` ties silently depended on it),
+  `math.log` documented as natural log (plot), match-arm divergence
+  documented (spreadsheet), field shorthand documented (above).
+
+## Heard, and declined — with reasons
+
+- **Bitwise operators** (sudoku wanted 9-bit candidate masks). One demo,
+  one use case, and Bool tables carried it fine. The `<<` diagnostic keeps
+  the door marked. Waiting for more pull.
+- **Multi-line / raw string literals** (mdsite generated HTML with twenty
+  `push` calls; every literal `{` in CSS needs `\{`). Real friction, but a
+  design decision with interpolation interactions — deferred whole, not
+  half-designed.
+- **A line-width-aware formatter.** The single most-reported *tooling*
+  issue: `fable fmt` collapses deliberate multi-line literals (a 57-entry
+  test table became one 1,427-char line), hoists comments out of list
+  literals, and half-expands if/else-if chains. This is a genuine
+  limitation and staying on the list — but it's a formatter rewrite, not a
+  papercut fix, and the formatter remains *correct* (idempotent,
+  behavior-preserving). None of the demos are fmt-clean; that's honest.
+- **A `Set` type / `min_by`/`max_by` / `List.fill` / `sum`/`min`/`max` /
+  a string builder / a deque.** Each was worked around in one line or two
+  (`Map[K, Bool]`, a fold, `(0..n).map(|_| v)` — nicer now with `_`, a
+  list-plus-cursor queue). Builtin surface grows reluctantly; `std` is the
+  natural home for several of these when usage demands.
+- **`fable test` counts directive-less files as passing** (lisp's
+  verifier). Kept: "a file with no directives must run silently" is
+  documented semantics and useful for smoke-running libraries; a mistyped
+  directive fails loudly the moment output exists.
+- **`os.exit(0)` after a failed load in a demo** (spreadsheet's verifier
+  nit): demo-level choice, left to the demo.
+
+## The review round
+
+Before shipping, four adversarial reviewers attacked the v0.6 interpreter
+diff itself. Confirmed findings, all fixed in the same release:
+
+- The first directive-scanner fix mis-tracked strings nested inside
+  interpolation holes (a boolean toggle), which could make a **real
+  directive silently vanish** — a false *pass* — and wasn't
+  block-comment-aware either. The scanner now models strings, holes (to
+  arbitrary depth), and nested `/* */` comments across lines, and the edge
+  cases are pinned in `tests/spec/lexical/directive_scanner_edge.fable`.
+- Typing `os.exit` like `panic` regressed the REPL: a bare `os.exit(0)`
+  produced "cannot infer the type of `__repl_1`" instead of exiting. The
+  panic-result Unit-defaulting rule now covers it.
+- `math.rand_int` used a widening-multiply reduction without rejection —
+  measurably non-uniform for spans above 2^32. Now Lemire's method *with*
+  rejection: exactly uniform.
+- A valueless bare `return` arm with the comma omitted swallowed the next
+  arm's pattern as its "value" and produced misleading cascades (never a
+  silent misparse); it now gets a targeted diagnostic. Compound
+  assignments (`+=`) in arm bodies get the same hint plain `=` does.
+- `fable fmt` erased the new arm sugar back to block form; arms remember
+  they were written bare and round-trip. `fable test --` ends flag
+  parsing; malformed `FABLE_MAX_DEPTH` warns instead of silently using
+  the default (and the SPEC documents the native-callback caveat of huge
+  caps).
+
+## Performance notes (informational, no action)
+
+- lisp: double interpretation runs ~40–50k evals/sec in the release build;
+  the 100k-iteration tail-recursive Lisp loop dominates its 2.3s runtime —
+  and runs in constant stack because Fable's TCO reaches through `eval`.
+- checkers: ~38k search nodes/sec (507k nodes for the 106-ply game, ~13.5s)
+  using the apply/undo pattern over one shared board.
+- wfc: full-rescan WFC over 4,800 cells took 19.5s (~3–6M interpreted
+  ops/sec); map lookups with interpolated string keys measured at ~0.36s
+  per million — composite string keys are a fine idiom.
+- Everything above survives `FABLE_GC_STRESS=1` byte-identically.

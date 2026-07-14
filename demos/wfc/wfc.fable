@@ -1,0 +1,174 @@
+// wfc — the wave-function-collapse core.
+//
+// Every cell of the output grid starts in *superposition*: the set of all
+// tiles (a Map[String, Bool] used as a set). Each step of the loop
+//
+//   1. finds the most constrained undecided cell — lowest Shannon entropy,
+//      plus a pinch of random noise so ties don't resolve top-left first,
+//   2. collapses it to one tile, chosen at random weighted by the sample
+//      frequencies, and
+//   3. propagates: neighbours drop candidates that no longer have support,
+//      and any cell that shrinks is re-queued (arc consistency).
+//
+// A cell with zero candidates left is a contradiction: the attempt is
+// abandoned and generate() restarts with the next seed.
+
+import rules;
+
+// A finished texture, plus how many seeds it took to get there.
+pub struct Outcome {
+    grid: List[String],
+    attempts: Int,
+}
+
+pub fn generate(r: rules.Rules, w: Int, h: Int, seed: Int, max_tries: Int) -> Option[Outcome] {
+    let mut attempt = 0;
+    while attempt < max_tries {
+        math.seed(seed + attempt);
+        attempt += 1;
+        match run(r, w, h) {
+            Some(g) -> return Some(Outcome { grid: g, attempts: attempt }),
+            None -> {}  // contradiction — reroll with the next seed
+        }
+    }
+    None
+}
+
+// One full attempt; None means it ran into a contradiction.
+fn run(r: rules.Rules, w: Int, h: Int) -> Option[List[String]] {
+    // Start every cell with the full candidate set.
+    let cells: List[Map[String, Bool]] = [];
+    for _ in 0..w * h {
+        let all: Map[String, Bool] = {:};
+        for t in r.tiles {
+            all[t] = true;
+        }
+        cells.push(all);
+    }
+
+    while true {
+        match lowest_entropy(cells, r) {
+            None -> return Some(render(cells, w, h)),  // all cells decided
+            Some(i) -> {
+                let choice: Map[String, Bool] = {:};
+                choice[pick(cells[i], r)] = true;
+                cells[i] = choice;
+                if !propagate(cells, r, w, h, i) {
+                    return None;
+                }
+            }
+        }
+    }
+}
+
+// Index of the undecided cell with the smallest entropy, or None when every
+// cell already holds exactly one tile.
+fn lowest_entropy(cells: List[Map[String, Bool]], r: rules.Rules) -> Option[Int] {
+    let mut best = -1;
+    let mut best_h = 0.0;
+    for (i, cands) in cells.enumerate() {
+        if cands.len() > 1 {
+            let h = entropy(cands, r) + math.random() * 0.001;
+            if best < 0 || h < best_h {
+                best = i;
+                best_h = h;
+            }
+        }
+    }
+    if best < 0 { None } else { Some(best) }
+}
+
+// Shannon entropy of a candidate set under the learned weights:
+//   H = ln(sum w) - (sum w*ln w) / (sum w)
+// Rare tiles contribute little uncertainty, so a cell whose remaining
+// choices are all rare collapses before one that could still be anything.
+fn entropy(cands: Map[String, Bool], r: rules.Rules) -> Float {
+    let mut sum_w = 0.0;
+    let mut sum_wlw = 0.0;
+    for t in r.tiles {
+        if cands.contains_key(t) {
+            let w = r.weights[t].to_float();
+            sum_w += w;
+            sum_wlw += w * math.log(w);
+        }
+    }
+    math.log(sum_w) - sum_wlw / sum_w
+}
+
+// Weighted random choice among a cell's candidates, so tiles common in the
+// sample stay common in the output.
+fn pick(cands: Map[String, Bool], r: rules.Rules) -> String {
+    let mut total = 0;
+    for t in r.tiles {
+        if cands.contains_key(t) {
+            total += r.weights[t];
+        }
+    }
+    let mut roll = math.rand_int(0, total - 1);
+    for t in r.tiles {
+        if cands.contains_key(t) {
+            roll -= r.weights[t];
+            if roll < 0 {
+                return t;
+            }
+        }
+    }
+    panic("pick: empty candidate set")
+}
+
+// Arc consistency outward from a just-shrunk cell: a neighbour keeps a
+// candidate only while at least one of our candidates supports it, and any
+// neighbour that shrinks is queued to constrain *its* neighbours in turn.
+// Returns false on contradiction (a cell lost its last candidate).
+fn propagate(cells: List[Map[String, Bool]], r: rules.Rules, w: Int, h: Int, start: Int) -> Bool {
+    let queue = [start];
+    let mut head = 0;
+    while head < queue.len() {
+        let i = queue[head];
+        head += 1;
+        for d in 0..4 {
+            let nx = i % w + rules.dir_dx[d];
+            let ny = i / w + rules.dir_dy[d];
+            if nx >= 0 && nx < w && ny >= 0 && ny < h {
+                let j = ny * w + nx;
+                let kept: Map[String, Bool] = {:};
+                for t in r.tiles {
+                    if cells[j].contains_key(t) && supported(cells[i], r, d, t) {
+                        kept[t] = true;
+                    }
+                }
+                if kept.len() == 0 {
+                    return false;
+                }
+                if kept.len() < cells[j].len() {
+                    cells[j] = kept;
+                    queue.push(j);
+                }
+            }
+        }
+    }
+    true
+}
+
+// Does any candidate in `cands` allow `t` in direction `d`?
+fn supported(cands: Map[String, Bool], r: rules.Rules, d: Int, t: String) -> Bool {
+    for s in r.tiles {
+        if cands.contains_key(s) && r.allowed(s, d, t) {
+            return true;
+        }
+    }
+    false
+}
+
+// Join the now-singleton cells back into rows of text.
+fn render(cells: List[Map[String, Bool]], w: Int, h: Int) -> List[String] {
+    let rows: List[String] = [];
+    for y in 0..h {
+        let mut row = "";
+        for x in 0..w {
+            row += cells[y * w + x].keys()[0];
+        }
+        rows.push(row);
+    }
+    rows
+}

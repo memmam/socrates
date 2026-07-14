@@ -106,6 +106,11 @@ Structs are **nominal** and have **reference semantics**: `let a = p; a.x = 9.0`
 changes `p.x` too. Structs must be constructed with **all** fields present, in any
 order. `Point { x: 1.0 }` (missing field) and unknown fields are compile errors.
 
+**Field shorthand** (v0.6, documenting long-standing behavior): a field whose
+value is a variable of the same name may be written once — `Point { x, y }`
+means `Point { x: x, y: y }`, and shorthand and explicit fields mix freely
+(`Point { x, y: 2.0 }`). `fable fmt` canonicalizes `x: x` to the shorthand.
+
 ### 2.4 Enums (algebraic data types)
 
 ```fable
@@ -199,16 +204,25 @@ let grade = if score >= 90 { "A" } else if score >= 80 { "B" } else { "C" }
 
 - `if` without `else` has type `Unit` (the branch must also be `Unit`).
 - `match` is an expression (§ 4).
-- `while cond { ... }` and `for x in iterable { ... }` are statements (they cannot
+- `while cond { ... }` and `for pat in iterable { ... }` are statements (they cannot
   appear where a value is required). `for` iterates over a `List[T]` (yielding `T`),
   a `Range` (yielding `Int`), or a `String` (yielding one-character `String`s, by
-  Unicode scalar). The loop variable is a fresh immutable binding each iteration —
-  closures created in the body capture that iteration's value. A `for` loop over a
+  Unicode scalar). The loop head takes an **irrefutable pattern** (v0.6): a name,
+  `_`, or a (nested) tuple/struct pattern — `for (i, x) in xs.enumerate()`,
+  `for (k, v) in m.entries()`, `for _ in 0..3`. Refutable patterns are E0503.
+  Loop bindings are fresh immutable bindings each iteration — closures created
+  in the body capture that iteration's values. A `for` loop over a
   list iterates the **live** list by index (elements pushed during the loop are
   visited; removed elements are skipped), whereas the callback methods (`each`,
   `map`, ...) iterate a **snapshot** taken when the method is called.
 - `break` and `continue` are only valid inside loops. `return expr` / `return`
   exits the enclosing function (top-level `return` is a compile error).
+- **Divergence** (v0.6): a block whose last statement is `return`, `break`,
+  `continue`, or a `while true { ... }` that contains no `break` takes the type
+  demanded by its context — such a block never falls through, so no dead
+  trailing expression is required. A function whose body ends in an escape-free
+  `while true` loop typechecks with any return type. `panic(..)` and
+  `os.exit(..)` likewise typecheck in any value position.
 
 ### 3.4 Lambdas
 
@@ -217,7 +231,11 @@ let double = |x: Int| x * 2
 let add = |a, b| a + b           // OK if the context determines the types
 nums.map(|n| n * n)
 let f = |x: Int| -> Int { x + 1 }   // full form with return type and block
+let fill = (0..3).map(|_| 0)     // `_` discards a parameter (v0.6)
 ```
+
+A parameter written `_` binds nothing and cannot be referenced; several may
+appear in one list (`|_, _| 1`).
 
 Lambdas capture variables from enclosing scopes **by reference** (a captured
 `let mut` counter shared by two closures is one counter). Captures keep values alive
@@ -270,7 +288,13 @@ match shape {
 - Arms are `pattern [if guard] -> expression` separated by commas (trailing comma OK).
   An arm body may be a block: `pattern -> { stmts }`; after a block-bodied arm the
   comma may be omitted.
-- All arms must have the same type; `match` is an expression.
+- An arm body may also be a bare `return [expr]`, `break`, or `continue`
+  (v0.6) — sugar for the one-statement block form, so early exits read
+  `None -> return Err("missing"),` without brace ceremony. (Assignment is
+  still a statement and still needs a block body: `Some(v) -> { x = v; }`.)
+- All arms must have the same type; `match` is an expression. An arm that
+  diverges (its body is or ends in `return`/`break`/`continue`, § 3.3)
+  unifies with arms of any type.
 
 **Patterns:**
 
@@ -295,7 +319,8 @@ match shape {
 
 `let` destructuring is supported for **irrefutable** patterns only:
 `let (a, b) = pair;` and `let Point { x, y } = p;` (a refutable pattern in `let`
-is a compile error).
+is a compile error). `for` loop heads accept the same irrefutable patterns
+(§ 3.3): `for (i, x) in xs.enumerate() { ... }`.
 
 ---
 
@@ -466,15 +491,30 @@ Fallible operations return `Result[_, String]` whose `Err` carries
 | `os.args()` | `fn() -> List[String]` | CLI args after the script path |
 | `os.env(name)` | `fn(String) -> Option[String]` | |
 | `os.run(cmd, args)` | `fn(String, List[String]) -> Result[(Int, String, String), String]` | `Ok((exit code, stdout, stderr))`; `Err` if the binary can't launch |
-| `os.exit(code)` | `fn(Int) -> Unit` | ends the process immediately |
+| `os.exit(code)` | `[T] fn(Int) -> T` | ends the process immediately; like `panic`, typechecks at any expected type (v0.6) |
 | `os.time()` | `fn() -> Float` | Unix-epoch seconds (`clock()` is monotonic) |
 
 Namespaced (no import needed): `math.pi`, `math.e`, `math.sqrt(Float)`,
-`math.sin/cos/tan/atan/atan2/log/log2/exp` (Float), `math.pow(Float, Float)`,
-`math.floor/ceil/round(Float) -> Float`, `math.abs_int(Int) -> Int`,
-`math.abs(Float) -> Float`, `math.min/max(Int, Int) -> Int`,
-`math.min_float/max_float(Float, Float) -> Float`, `math.random() -> Float`
-(uniform [0, 1), xorshift PRNG), `math.seed(Int) -> Unit`.
+`math.sin/cos/tan/atan/atan2/log/log2/log10/exp` (Float; `log` is the
+**natural** logarithm), `math.pow(Float, Float)`,
+`math.fmod(Float, Float) -> Float` (IEEE remainder with the sign of the
+dividend — the `%` operator stays Int-only), `math.floor/ceil/round(Float) ->
+Float`, `math.abs_int(Int) -> Int`, `math.abs(Float) -> Float`,
+`math.min/max(Int, Int) -> Int`, `math.min_float/max_float(Float, Float) ->
+Float`, `math.random() -> Float` (uniform [0, 1), xorshift PRNG),
+`math.rand_int(lo, hi) -> Int` (uniform in the **inclusive** range; panics if
+`lo > hi`), `math.seed(Int) -> Unit`.
+
+`math.seed` scrambles the seed through SplitMix64 before installing it
+(v0.6), so nearby seeds produce unrelated streams; the same seed always
+reproduces the same stream within a release, but streams are **not** stable
+across releases.
+
+One more free function joined the prelude in v0.6:
+
+| Function | Type | Notes |
+|----------|------|-------|
+| `char(code)` | `fn(Int) -> String` | the one-character string for a Unicode scalar value; panics on surrogates/out-of-range. Inverse of `code_at` (§ 8.3). |
 
 ### 7.1 The standard library (v0.4)
 
@@ -520,7 +560,8 @@ Method calls are type-directed (resolved at compile time from the receiver's typ
 `sort() -> List[T]` (returns a new sorted list; elements must be Int/Float/String —
 a concrete violation is a compile error E0322, and a violation reached through a
 generic type parameter panics at runtime), `sort_by(fn(T, T) -> Int) -> List[T]` (comparator returns
-negative/zero/positive), `map[U](fn(T) -> U) -> List[U]`,
+negative/zero/positive; both sorts are **stable** — equal elements keep their
+input order, so tied results are deterministic), `map[U](fn(T) -> U) -> List[U]`,
 `filter(fn(T) -> Bool) -> List[T]`, `each(fn(T) -> Unit) -> Unit`,
 `fold[A](A, fn(A, T) -> A) -> A`, `any(fn(T) -> Bool) -> Bool`,
 `all(fn(T) -> Bool) -> Bool`, `find(fn(T) -> Bool) -> Option[T]`,
@@ -545,9 +586,16 @@ produce empty strings, like Rust), `trim() -> String`, `to_upper() -> String`,
 `contains(String) -> Bool`, `starts_with(String) -> Bool`,
 `ends_with(String) -> Bool`, `replace(String, String) -> String`,
 `slice(Int, Int) -> String` (by chars, clamped),
-`char_at(Int) -> Option[String]`, `index_of(String) -> Option[Int]` (char index),
+`char_at(Int) -> Option[String]`, `code_at(Int) -> Option[Int]` (the Unicode
+scalar value at a char index, v0.6; inverse of the free `char()` function),
+`index_of(String) -> Option[Int]` (char index),
+`index_of_from(String, Int) -> Option[Int]` (v0.6: search from a char index;
+the result is still an absolute char index; out-of-range starts find nothing,
+except that the empty pattern matches at the end),
 `repeat(Int) -> String`, `pad_left(Int, String) -> String`,
-`pad_right(Int, String) -> String`, `parse_int() -> Option[Int]`
+`pad_right(Int, String) -> String`,
+`trim() -> String`, `trim_start() -> String`, `trim_end() -> String`
+(Unicode whitespace; v0.6 added the one-sided pair), `parse_int() -> Option[Int]`
 (optional sign, decimal only, no surrounding spaces),
 `parse_float() -> Option[Float]`, `to_string() -> String` (identity).
 
@@ -569,7 +617,9 @@ Iteration order is **insertion order** (deterministic). Map literals:
 `min(Int) -> Int`, `max(Int) -> Int`.
 `Float`: `to_int() -> Int` (truncates toward zero; panics on NaN or out of Int
 range), `to_string() -> String`, `abs()`, `floor()`, `ceil()`, `round()`,
-`sqrt()`, `is_nan() -> Bool`.
+`sqrt()`, `is_nan() -> Bool`, `to_fixed(Int) -> String` (v0.6: exactly n
+decimal places, half-away-from-zero as in Rust's `{:.n}`; n clamps to
+`[0, 17]`; a result that is all zeros drops its minus sign, so no `-0.00`).
 
 ### 8.6 `Option[T]` / `Result[T, E]` methods
 
@@ -621,7 +671,7 @@ let_pattern = IDENT | tuple_pat | struct_pat ;
 assign_or_expr_stmt = expr [ assign_op expr ] ";"?   (* ";" required unless final in block *)
 assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "%=" ;
 while_stmt  = "while" expr block ;
-for_stmt    = "for" IDENT "in" expr block ;
+for_stmt    = "for" let_pattern "in" expr block ;
 return_stmt = "return" [ expr ] ";" ;
 
 type        = "Int" | "Float" | "Bool" | "String" | "Unit"
@@ -632,9 +682,12 @@ type        = "Int" | "Float" | "Bool" | "String" | "Unit"
 
 expr        = or_expr | if_expr | match_expr | block | lambda ;
 lambda      = "|" [ lambda_params ] "|" ( [ "->" type ] block | expr ) ;
+lambda_params = lambda_param { "," lambda_param } [ "," ] ;
+lambda_param  = ( IDENT | "_" ) [ ":" type ] ;
 if_expr     = "if" expr block [ "else" ( if_expr | block ) ] ;
 match_expr  = "match" expr "{" arm { "," arm } [ "," ] "}" ;
-arm         = pattern [ "if" expr ] "->" expr ;
+arm         = pattern [ "if" expr ] "->" arm_body ;
+arm_body    = expr | "return" [ expr ] | "break" | "continue" ;
 pattern     = or_pat ;
 or_pat      = base_pat { "|" base_pat } ;
 base_pat    = literal | "_" | IDENT
@@ -644,7 +697,8 @@ base_pat    = literal | "_" | IDENT
 ```
 
 (Expression grammar follows the precedence table in § 3.1; `?` is a postfix
-operator at level 9, and struct-literal names may be module-qualified.)
+operator at level 9, and struct-literal names may be module-qualified.
+A struct-literal field is `IDENT ":" expr` or the shorthand `IDENT` — § 2.3.)
 
 ---
 
@@ -662,7 +716,13 @@ operator at level 9, and struct-literal names may be module-qualified.)
   found is a test, checked against `//? expect:` / `//? error:` /
   `//? panic:` directives in its comments (a file with no directives must
   merely run silently). Exit 0 when all pass, 1 otherwise. The
-  interpreter's own spec suite runs through the same code.
+  interpreter's own spec suite runs through the same code. Two precision
+  rules (v0.6): a directive counts only when `//?` **begins a line
+  comment** — prose in `//` or `/* */` comments and string literals (even
+  nested in interpolation holes) that merely mention `//?` are inert —
+  and expected/actual lines are compared ignoring trailing whitespace
+  (trailing spaces in a directive are invisible in an editor, so they can't
+  be pinned reliably). Unknown flags are rejected with a usage message.
 - `fable lsp` (v0.4) — a language server over stdio: diagnostics on
   open/change (identical to `fable check`, imports included), hover with
   checked types, go-to-definition across module files, and completion
@@ -694,9 +754,16 @@ misbehavior): 255 parameters per function/lambda, 255 fields per enum variant,
 60,000 fields per struct, 60,000 elements per list/map/tuple literal or string
 interpolation, 60,000 local variables per function, 65,000 global bindings,
 2,000 levels of syntactic nesting (E0207), 20,000 nested operations per
-expression (E0324). At runtime: 4,096 call frames ("stack overflow" panic),
-display nesting deeper than 10,000 levels renders as `...`, and equality on
-values whose *map* nesting exceeds 64 levels panics.
+expression (E0324). At runtime: 4,096 call frames ("stack overflow" panic) —
+the cap is configurable via the `FABLE_MAX_DEPTH` environment variable
+(v0.6; floor 64; malformed values warn and keep the default), for recursive
+tree-walking workloads whose depth is data-dependent. One honest caveat:
+recursion that passes *through native callbacks* (`map`/`sort_by`
+comparators, `try`) also consumes the interpreter's own native stack, so a
+very large cap can turn the graceful, catchable panic into a hard process
+abort in such programs — raise it generously but not astronomically.
+Display nesting deeper than 10,000 levels renders as `...`,
+and equality on values whose *map* nesting exceeds 64 levels panics.
 
 One behavioral caveat: map keys are hashed at insertion. **Mutating a list,
 map, or struct after using it as a key strands the entry** — it still counts

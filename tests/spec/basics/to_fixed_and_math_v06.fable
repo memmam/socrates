@@ -1,0 +1,46 @@
+// v0.6 numeric additions: Float.to_fixed, math.log10 / fmod / rand_int,
+// and the reseeded RNG.
+
+// to_fixed renders with exactly n decimal places.
+println((2.0 / 3.0).to_fixed(2));       //? expect: 0.67
+println(3.14159.to_fixed(4));           //? expect: 3.1416
+println(1.5.to_fixed(0));               //? expect: 2
+println(7.0.to_fixed(2));               //? expect: 7.00
+println((-2.5).to_fixed(1));            //? expect: -2.5
+// A negative value that rounds to zero has no stray sign.
+println((0.0 - 0.0001).to_fixed(2));    //? expect: 0.00
+println((-0.0).to_fixed(1));            //? expect: 0.0
+// Places are clamped to a sane range.
+println(0.5.to_fixed(-3));              //? expect: 0
+
+println(math.log10(1000.0));            //? expect: 3.0
+println(math.log10(1.0));               //? expect: 0.0
+println(math.fmod(7.5, 2.0));           //? expect: 1.5
+println(math.fmod(-7.5, 2.0));          //? expect: -1.5
+
+// Nearby seeds produce different streams (the v0.5 `seed | 1` collapse of
+// 2k / 2k+1 is fixed).
+math.seed(42);
+let a = math.random();
+math.seed(43);
+let b = math.random();
+println(a == b);                        //? expect: false
+
+// Same seed still reproduces exactly.
+math.seed(42);
+let c = math.random();
+println(a == c);                        //? expect: true
+
+// rand_int stays in its inclusive range and hits both ends eventually.
+math.seed(7);
+let mut lo_seen = false;
+let mut hi_seen = false;
+let mut in_range = true;
+for _ in 0..200 {
+    let r = math.rand_int(1, 6);
+    if r == 1 { lo_seen = true; }
+    if r == 6 { hi_seen = true; }
+    if r < 1 || r > 6 { in_range = false; }
+}
+println(lo_seen && hi_seen && in_range);    //? expect: true
+println(math.rand_int(5, 5));               //? expect: 5

@@ -1,0 +1,37 @@
+// v0.6 string additions: trim_start/trim_end, code_at, char(), and
+// index_of_from (offset search, in character indices).
+
+println("  x  ".trim_start() + "|");    //? expect: x  |
+println("  x  ".trim_end() + "|");      //? expect:   x|
+println("\t hi \n".trim_end() + "|");   //? expect: 	 hi|
+println("".trim_start() + "|");         //? expect: |
+println("   ".trim_end() + "|");        //? expect: |
+
+// code_at: the Unicode scalar value at a character index.
+println("A".code_at(0));                //? expect: Some(65)
+println("héllo".code_at(1));            //? expect: Some(233)
+println("abc".code_at(3));              //? expect: None
+println("abc".code_at(-1));             //? expect: None
+
+// char: the one-character string for a scalar value.
+println(char(65));                      //? expect: A
+println(char(233));                     //? expect: é
+println(char(128021));                  //? expect: 🐕
+println(char("Z".code_at(0).unwrap())); //? expect: Z
+
+// Round-trip over a mixed-width string.
+let s = "aé🐕";
+let mut codes = [];
+for c in s {
+    codes.push(c.code_at(0).unwrap());
+}
+println(codes);                         //? expect: [97, 233, 128021]
+
+// index_of_from searches from a character offset.
+println("abcabc".index_of("b"));            //? expect: Some(1)
+println("abcabc".index_of_from("b", 2));    //? expect: Some(4)
+println("abcabc".index_of_from("b", 5));    //? expect: None
+println("abcabc".index_of_from("a", 0));    //? expect: Some(0)
+println("héhé".index_of_from("hé", 1));     //? expect: Some(2)
+println("abc".index_of_from("", 3));        //? expect: Some(3)
+println("abc".index_of_from("x", 99));      //? expect: None

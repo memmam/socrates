@@ -475,14 +475,16 @@ impl<'a> Parser<'a> {
 
     fn for_stmt(&mut self) -> PResult<Stmt> {
         let start = self.advance().span;
-        let var = self.ident("loop variable")?;
+        // A full pattern, so `for (i, x) in xs.enumerate()` and `for _ in r`
+        // work; the checker enforces irrefutability exactly as for `let`.
+        let pattern = self.pattern()?;
         self.expect(&TokenKind::In, "`in`")?;
         let iter = self.no_struct_expr()?;
         let body = self.block()?;
         Ok(Stmt {
             span: start.to(body.span),
             id: self.id(),
-            kind: StmtKind::For { var, var_id: self.id(), iter, body },
+            kind: StmtKind::For { pattern, iter, body },
         })
     }
 
@@ -1313,7 +1315,14 @@ impl<'a> Parser<'a> {
         } else {
             self.advance(); // `|`
             while !self.at(&TokenKind::Pipe) {
-                let name = self.ident("lambda parameter")?;
+                // `_` discards the argument: it binds nothing and cannot be
+                // referenced (the lexer never produces `_` as an expression).
+                let name = if self.at(&TokenKind::Underscore) {
+                    let span = self.advance().span;
+                    Ident { name: "_".to_string(), span }
+                } else {
+                    self.ident("lambda parameter")?
+                };
                 let ty = if self.eat(&TokenKind::Colon) { Some(self.type_expr()?) } else { None };
                 params.push(LambdaParam { name, ty, id: self.id() });
                 if !self.eat(&TokenKind::Comma) {
@@ -1375,13 +1384,13 @@ impl<'a> Parser<'a> {
             let pattern = self.pattern()?;
             let guard = if self.eat(&TokenKind::If) { Some(self.no_struct_expr()?) } else { None };
             self.expect(&TokenKind::Arrow, "`->` after match pattern")?;
-            let body = self.expr()?;
+            let (body, sugar) = self.arm_body()?;
             let arm_span = pat_start.to(body.span);
             let body_is_block = matches!(
                 body.kind,
                 ExprKind::Block(_) | ExprKind::If { .. } | ExprKind::Match { .. }
             );
-            arms.push(MatchArm { pattern, guard, body, span: arm_span });
+            arms.push(MatchArm { pattern, guard, body, span: arm_span, sugar });
             if !self.eat(&TokenKind::Comma) {
                 // Allow omitting the comma after a block-bodied arm.
                 if !body_is_block {
@@ -1401,6 +1410,78 @@ impl<'a> Parser<'a> {
             id: self.id(),
             kind: ExprKind::Match { scrutinee: Box::new(scrutinee), arms },
         })
+    }
+
+    /// A match-arm body: an expression, or — as sugar for the block form —
+    /// a bare `return [expr]`, `break`, or `continue`, which parses as if
+    /// written `{ return expr; }`. The `bool` reports whether the sugar was
+    /// used, so the formatter can print it back.
+    fn arm_body(&mut self) -> PResult<(Expr, bool)> {
+        let start = self.span();
+        let stmt = match self.peek() {
+            TokenKind::Return => {
+                self.advance();
+                let value = if self.at(&TokenKind::Comma) || self.at(&TokenKind::RBrace) {
+                    None
+                } else {
+                    let v = self.expr()?;
+                    // A valueless bare `return` with the comma omitted would
+                    // have swallowed the NEXT arm's pattern as its value; the
+                    // `->` right after the "value" gives it away.
+                    if self.at(&TokenKind::Arrow) {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "E0200",
+                                "this parsed as the `return` value, but it looks like the next arm",
+                            )
+                            .with_label(v.span, "consumed as the returned value")
+                            .with_note(
+                                "a bare `return` with no value needs a comma before the next arm: `-> return,`",
+                            ),
+                        );
+                        return Err(());
+                    }
+                    Some(v)
+                };
+                let end = value.as_ref().map_or(start, |v| v.span);
+                Some(Stmt { span: start.to(end), id: self.id(), kind: StmtKind::Return(value) })
+            }
+            TokenKind::Break => {
+                self.advance();
+                Some(Stmt { span: start, id: self.id(), kind: StmtKind::Break })
+            }
+            TokenKind::Continue => {
+                self.advance();
+                Some(Stmt { span: start, id: self.id(), kind: StmtKind::Continue })
+            }
+            _ => None,
+        };
+        if let Some(stmt) = stmt {
+            let span = stmt.span;
+            let block = Block { stmts: vec![stmt], span, id: self.id() };
+            return Ok((Expr { span, id: self.id(), kind: ExprKind::Block(block) }, true));
+        }
+        let body = self.expr()?;
+        // A statement-shaped arm (`Some(v) -> x = v`, `.. -> n += v`) is a
+        // common trip-up; point at the fix instead of a bare "expected `,`".
+        if matches!(
+            self.peek(),
+            TokenKind::Eq
+                | TokenKind::PlusEq
+                | TokenKind::MinusEq
+                | TokenKind::StarEq
+                | TokenKind::SlashEq
+                | TokenKind::PercentEq
+        ) {
+            let span = self.span();
+            self.diags.push(
+                Diagnostic::error("E0200", "assignment cannot be a match-arm body")
+                    .with_label(span, "assignment is a statement, not an expression")
+                    .with_note("wrap the arm body in a block: `pattern -> { place = value; }`"),
+            );
+            return Err(());
+        }
+        Ok((body, false))
     }
 
     // ---- patterns ----

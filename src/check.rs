@@ -758,7 +758,32 @@ impl Checker {
                 let init_ty = self.check_expr(init, annotated.as_ref());
                 let bound_ty = match &annotated {
                     Some(want) => {
-                        self.expect_type(want, &init_ty, init.span, ty.as_ref().map(|t| t.span));
+                        // `let m: Map[..] = {};` — `{}` is an empty block, and
+                        // the generic Unit-vs-Map mismatch hides the fix.
+                        let empty_block_as_map = matches!(
+                            &init.kind,
+                            ExprKind::Block(b) if b.stmts.is_empty()
+                        ) && matches!(
+                            self.uni.shallow_resolve(want),
+                            Type::Map(_, _)
+                        );
+                        if empty_block_as_map {
+                            self.diags.push(
+                                Diagnostic::error(
+                                    "E0301",
+                                    "`{}` is an empty block, not an empty map",
+                                )
+                                .with_label(init.span, "this has type `Unit`")
+                                .with_note("the empty map literal is `{:}`"),
+                            );
+                        } else {
+                            self.expect_type(
+                                want,
+                                &init_ty,
+                                init.span,
+                                ty.as_ref().map(|t| t.span),
+                            );
+                        }
                         want.clone()
                     }
                     None => init_ty,
@@ -766,7 +791,7 @@ impl Checker {
                 let mut binds = PatBinds::default();
                 let mut seen = HashSet::new();
                 self.check_pattern(pattern, &bound_ty, &mut binds, &mut seen);
-                self.assert_irrefutable(pattern);
+                self.assert_irrefutable(pattern, "a `let` binding");
                 self.materialize_binds(binds, *mutable);
                 let _ = in_fn;
             }
@@ -790,7 +815,7 @@ impl Checker {
                 self.expect_unit_body(&body_ty, body);
                 *self.loop_depth.last_mut().unwrap() -= 1;
             }
-            StmtKind::For { var, var_id, iter, body } => {
+            StmtKind::For { pattern, iter, body } => {
                 let iter_ty = self.check_expr(iter, None);
                 let elem_ty = match self.uni.shallow_resolve(&iter_ty) {
                     Type::List(t) => *t,
@@ -821,8 +846,11 @@ impl Checker {
                     }
                 };
                 self.scopes.push(HashMap::new());
-                let local = self.alloc_local(&var.name, false, elem_ty, var.span);
-                self.res.insert(*var_id, Res::Local(local));
+                let mut binds = PatBinds::default();
+                let mut seen = HashSet::new();
+                self.check_pattern(pattern, &elem_ty, &mut binds, &mut seen);
+                self.assert_irrefutable(pattern, "a `for` loop");
+                self.materialize_binds(binds, false);
                 *self.loop_depth.last_mut().unwrap() += 1;
                 let body_ty = self.check_block(body, None);
                 self.expect_unit_body(&body_ty, body);
@@ -986,6 +1014,16 @@ impl Checker {
                     StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue => {
                         self.check_stmt(stmt, true);
                         // Diverges: the block can take any type.
+                        result = self.fresh_defaulting(stmt.span, "diverging block");
+                    }
+                    // `while true { .. }` with no way to break only leaves via
+                    // `return` (or never) — it diverges like a trailing
+                    // `return`, so no dead expression is needed after it.
+                    StmtKind::While { cond, body }
+                        if matches!(cond.kind, ExprKind::Bool(true))
+                            && !block_contains_break(body) =>
+                    {
+                        self.check_stmt(stmt, true);
                         result = self.fresh_defaulting(stmt.span, "diverging block");
                     }
                     _ => {
@@ -1906,10 +1944,10 @@ impl Checker {
                 }
             }
         }
-        // `panic(..)`'s polymorphic result defaults to Unit when nothing
-        // constrains it (e.g. a bare `panic("boom");` statement, including the
-        // REPL's hidden result binding).
-        if matches!(native, Native::Panic) {
+        // `panic(..)` and `os.exit(..)` have polymorphic results that default
+        // to Unit when nothing constrains them (e.g. a bare `panic("boom");`
+        // statement, including the REPL's hidden result binding).
+        if matches!(native, Native::Panic | Native::OsExit) {
             if let Type::Var(v) = self.uni.shallow_resolve(&ret) {
                 if let Some(o) = self.var_origins.iter_mut().find(|o| o.var == v) {
                     o.default_unit = true;
@@ -1917,7 +1955,7 @@ impl Checker {
                     self.var_origins.push(VarOrigin {
                         var: v,
                         span: call_span,
-                        what: "panic result",
+                        what: "exit result",
                         default_unit: true,
                     });
                 }
@@ -3317,13 +3355,13 @@ impl Checker {
         }
     }
 
-    fn assert_irrefutable(&mut self, pat: &Pattern) {
+    fn assert_irrefutable(&mut self, pat: &Pattern, what: &str) {
         let refutable_span = self.find_refutable(pat);
         if let Some((span, why)) = refutable_span {
             self.diags.push(
-                Diagnostic::error("E0503", "refutable pattern in `let` binding")
+                Diagnostic::error("E0503", format!("refutable pattern in {what}"))
                     .with_label(span, why)
-                    .with_note("`let` patterns must always match; use `match` instead"),
+                    .with_note("the pattern must always match here; use `match` instead"),
             );
         }
     }
@@ -3696,6 +3734,87 @@ struct DeferredMatch {
     scrut_ty: Type,
     scrut_span: Span,
     arms: Vec<DeferredArm>,
+}
+
+/// Does this block contain a `break` anywhere in its subtree?
+///
+/// Used to decide whether a trailing `while true { .. }` diverges. This
+/// deliberately over-approximates — it descends into nested loops and
+/// lambdas, where a `break` could never target the outer loop — because a
+/// false "contains break" merely falls back to the old non-diverging
+/// typing, while a false "no break" would type an escapable loop as
+/// diverging (unsound).
+fn block_contains_break(block: &Block) -> bool {
+    block.stmts.iter().any(stmt_contains_break)
+}
+
+fn stmt_contains_break(stmt: &Stmt) -> bool {
+    match &stmt.kind {
+        StmtKind::Break => true,
+        StmtKind::Continue | StmtKind::Import { .. } => false,
+        // Item declarations own their bodies; a `break` inside a nested `fn`
+        // can never target this loop, and the checker rejects it there anyway.
+        StmtKind::Fn(_) | StmtKind::Struct(_) | StmtKind::Enum(_) | StmtKind::Impl(_) => false,
+        StmtKind::Let { init, .. } => expr_contains_break(init),
+        StmtKind::Assign { target, value, .. } => {
+            expr_contains_break(target) || expr_contains_break(value)
+        }
+        StmtKind::Expr { expr, .. } => expr_contains_break(expr),
+        StmtKind::While { cond, body } => expr_contains_break(cond) || block_contains_break(body),
+        StmtKind::For { iter, body, .. } => {
+            expr_contains_break(iter) || block_contains_break(body)
+        }
+        StmtKind::Return(v) => v.as_ref().is_some_and(expr_contains_break),
+    }
+}
+
+fn expr_contains_break(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::Int(_)
+        | ExprKind::Float(_)
+        | ExprKind::Bool(_)
+        | ExprKind::Str(_)
+        | ExprKind::Unit
+        | ExprKind::Var(_) => false,
+        ExprKind::StringInterp { exprs, .. } => exprs.iter().any(expr_contains_break),
+        ExprKind::Field { base, .. } => expr_contains_break(base),
+        ExprKind::Call { callee, args } => {
+            expr_contains_break(callee) || args.iter().any(expr_contains_break)
+        }
+        ExprKind::MethodCall { recv, args, .. } => {
+            expr_contains_break(recv) || args.iter().any(expr_contains_break)
+        }
+        ExprKind::Unary { expr, .. } | ExprKind::Try(expr) => expr_contains_break(expr),
+        ExprKind::Binary { lhs, rhs, .. } => {
+            expr_contains_break(lhs) || expr_contains_break(rhs)
+        }
+        ExprKind::Index { base, index } => {
+            expr_contains_break(base) || expr_contains_break(index)
+        }
+        ExprKind::List(items) | ExprKind::Tuple(items) => items.iter().any(expr_contains_break),
+        ExprKind::MapLit(entries) => entries
+            .iter()
+            .any(|(k, v)| expr_contains_break(k) || expr_contains_break(v)),
+        ExprKind::Range { lo, hi, .. } => expr_contains_break(lo) || expr_contains_break(hi),
+        ExprKind::StructLit { fields, .. } => {
+            fields.iter().any(|(_, v)| expr_contains_break(v))
+        }
+        // Over-approximation: `break` in a lambda is an error anyway.
+        ExprKind::Lambda { body, .. } => expr_contains_break(body),
+        ExprKind::If { cond, then, els } => {
+            expr_contains_break(cond)
+                || block_contains_break(then)
+                || els.as_deref().is_some_and(expr_contains_break)
+        }
+        ExprKind::Block(b) => block_contains_break(b),
+        ExprKind::Match { scrutinee, arms } => {
+            expr_contains_break(scrutinee)
+                || arms.iter().any(|a| {
+                    a.guard.as_ref().is_some_and(expr_contains_break)
+                        || expr_contains_break(&a.body)
+                })
+        }
+    }
 }
 
 #[derive(Default)]

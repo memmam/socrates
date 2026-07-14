@@ -1,0 +1,7 @@
+// Refutable patterns are rejected in `for` heads, like in `let`.
+//? error: refutable pattern in a `for` loop
+//? error: E0503
+
+for Some(x) in [Some(1), None] {
+    println(x);
+}

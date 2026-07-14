@@ -1,0 +1,5 @@
+// `<<` and `>>` don't exist; the lexer says so instead of leaving the
+// parser to emit a bare "expected an expression".
+//? error: unexpected `<<`; Fable has no bitwise shift operators
+let m = 5;
+println(m << 1);

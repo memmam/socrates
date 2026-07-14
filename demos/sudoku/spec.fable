@@ -1,0 +1,97 @@
+// spec — golden tests for the sudoku demo's plumbing: parser validation,
+// the unsolvable path (including trail unwinding), the solver against a
+// published ground-truth solution, and the independent verifier.
+//
+//   ./target/release/fable test demos/sudoku
+
+import board;
+import solver;
+
+fn err_of[T](r: Result[T, String]) -> String {
+    match r {
+        Ok(_) -> "(no error)",
+        Err(e) -> e,
+    }
+}
+
+// -- parser validation -----------------------------------------------------
+
+println("short input : {err_of(board.parse("12345"))}");
+println("stray char  : {err_of(board.parse("x" + ".".repeat(80)))}");
+println("clashing 5s : {err_of(board.parse("55" + ".".repeat(79)))}");
+
+// -- an unsolvable (but self-consistent) puzzle ----------------------------
+// Row 1 forces its last cell to 9, but column 9 already holds a 9, so the
+// very first propagation pass hits a contradiction. solve() must report
+// failure AND leave the board exactly as it found it (the trail unwinds).
+
+let unsolvable = "12345678." + ".".repeat(63) + "........9";
+let u = board.parse(unsolvable).unwrap();
+let before = u.flat();
+let st_u = solver.new_stats();
+let solved_u = solver.solve(u, st_u);
+println("unsolvable  : solved={solved_u} board_restored={u.flat() == before}");
+
+// -- ground truth ----------------------------------------------------------
+// The Inkala 2010 puzzle has a unique, published solution; the solver must
+// reproduce it exactly.
+
+let hard =
+    "8........" +
+    "..36....." +
+    ".7..9.2.." +
+    ".5...7..." +
+    "....457.." +
+    "...1...3." +
+    "..1....68" +
+    "..85...1." +
+    ".9....4..";
+let known =
+    "812753649943682175675491283154237896" +
+    "369845721287169534521974368438526917796318452";
+let inkala = board.parse(hard).unwrap();
+let st_h = solver.new_stats();
+let solved_h = solver.solve(inkala, st_h);
+println("inkala 2010 : solved={solved_h} matches_published={inkala.flat() == known}");
+
+// -- propagation solves the easy puzzle on its own -------------------------
+
+let easy =
+    "53..7...." +
+    "6..195..." +
+    ".98....6." +
+    "8...6...3" +
+    "4..8.3..1" +
+    "7...2...6" +
+    ".6....28." +
+    "...419..5" +
+    "....8..79";
+let e = board.parse(easy).unwrap();
+let st_e = solver.new_stats();
+let solved_e = solver.solve(e, st_e);
+println("easy        : solved={solved_e} guesses={st_e.guesses} backtracks={st_e.backtracks}");
+
+// -- the verifier really is independent -------------------------------------
+// Stomp one solved (non-given) cell; verify must flag the duplicated digit.
+
+e.cells[2] = 5;
+println("verifier    : {err_of(board.verify(e, board.parse(easy).unwrap()))}");
+
+// -- panics stay contained ---------------------------------------------------
+// Reading off the board panics (index out of bounds); try() catches it.
+
+match try(|| e.get(9, 0)) {
+    Ok(v) -> println("off-board   : returned {v}"),
+    Err(m) -> println("off-board   : caught panic: {m}"),
+}
+
+// ---- golden output ----
+
+//? expect: short input : expected 81 cells, got 5
+//? expect: stray char  : cell 0: invalid character "x"
+//? expect: clashing 5s : given 5 at r1c2 clashes with another given
+//? expect: unsolvable  : solved=false board_restored=true
+//? expect: inkala 2010 : solved=true matches_published=true
+//? expect: easy        : solved=true guesses=0 backtracks=0
+//? expect: verifier    : row 1 is not a permutation of 1..9
+//? expect: off-board   : caught panic: list index out of bounds: index 81, length 81

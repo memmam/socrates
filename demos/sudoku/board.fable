@@ -1,0 +1,162 @@
+// board — the sudoku grid: parsing with validation, pretty-printing,
+// constant-time constraint bookkeeping for the solver, and an independent
+// verifier for finished grids.
+//
+// A Board is 81 cells (row-major, 0 = empty) plus three "used" tables so
+// that `allows(r, c, d)` — may digit d go at (r, c)? — is three list
+// lookups instead of a scan. Boards have reference semantics, so the
+// solver mutates one shared grid in place and undoes on backtrack.
+
+pub struct Board {
+    cells: List[Int],            // 81 cells, row-major; 0 = empty
+    row_used: List[List[Bool]],  // row_used[r][d]: digit d already in row r
+    col_used: List[List[Bool]],  // col_used[c][d]: digit d already in column c
+    box_used: List[List[Bool]],  // box_used[b][d]: digit d already in box b
+}
+
+// 9 units x digits 1..9 (index 0 unused), all free.
+fn used_table() -> List[List[Bool]] {
+    (0..9).map(|_| (0..10).map(|_| false))
+}
+
+pub fn empty() -> Board {
+    Board {
+        cells: (0..81).map(|_| 0),
+        row_used: used_table(),
+        col_used: used_table(),
+        box_used: used_table(),
+    }
+}
+
+// Which 3x3 box holds (r, c)? Boxes are numbered 0..9, row-major.
+pub fn box_of(r: Int, c: Int) -> Int {
+    r / 3 * 3 + c / 3
+}
+
+impl Board {
+    pub fn get(self, r: Int, c: Int) -> Int {
+        self.cells[r * 9 + c]
+    }
+
+    // Can digit d be placed at (r, c) without clashing?
+    pub fn allows(self, r: Int, c: Int, d: Int) -> Bool {
+        !self.row_used[r][d] && !self.col_used[c][d] && !self.box_used[box_of(r, c)][d]
+    }
+
+    pub fn place(self, r: Int, c: Int, d: Int) {
+        self.cells[r * 9 + c] = d;
+        self.row_used[r][d] = true;
+        self.col_used[c][d] = true;
+        self.box_used[box_of(r, c)][d] = true;
+    }
+
+    pub fn unplace(self, r: Int, c: Int) {
+        let d = self.cells[r * 9 + c];
+        self.cells[r * 9 + c] = 0;
+        self.row_used[r][d] = false;
+        self.col_used[c][d] = false;
+        self.box_used[box_of(r, c)][d] = false;
+    }
+
+    // All digits that could legally go in the empty cell (r, c).
+    pub fn candidates(self, r: Int, c: Int) -> List[Int] {
+        (1..=9).filter(|d| self.allows(r, c, d))
+    }
+
+    pub fn clue_count(self) -> Int {
+        self.cells.filter(|d| d != 0).len()
+    }
+
+    // The grid as one 81-character line ('.' for empty) — handy for tests.
+    pub fn flat(self) -> String {
+        self.cells.map(|d| if d == 0 { "." } else { str(d) }).join("")
+    }
+
+    // Pretty 13-line grid with box rules:
+    //   +-------+-------+-------+
+    //   | 5 3 . | . 7 . | . . . |
+    pub fn show(self) -> String {
+        let rule = "+-------+-------+-------+";
+        let lines = [rule];
+        for r in 0..9 {
+            let mut line = "|";
+            for c in 0..9 {
+                let d = self.get(r, c);
+                let mark = if d == 0 { "." } else { str(d) };
+                line += " {mark}";
+                if c % 3 == 2 {
+                    line += " |";
+                }
+            }
+            lines.push(line);
+            if r % 3 == 2 {
+                lines.push(rule);
+            }
+        }
+        lines.join("\n")
+    }
+}
+
+// Parse a puzzle from 81 characters: digits 1-9 are givens, '.' or '0' is
+// an empty cell. Rejects wrong lengths, stray characters, and givens that
+// clash with an earlier given in the same row/column/box.
+pub fn parse(text: String) -> Result[Board, String] {
+    let chars = text.chars();
+    if chars.len() != 81 {
+        return Err("expected 81 cells, got {chars.len()}");
+    }
+    let b = empty();
+    for (i, ch) in chars.enumerate() {
+        if ch == "." || ch == "0" {
+            continue;
+        }
+        let d = ch.parse_int().unwrap_or(-1);
+        if d < 1 || d > 9 {
+            return Err("cell {i}: invalid character \"{ch}\"");
+        }
+        let r = i / 9;
+        let c = i % 9;
+        if !b.allows(r, c, d) {
+            return Err("given {d} at r{r + 1}c{c + 1} clashes with another given");
+        }
+        b.place(r, c, d);
+    }
+    Ok(b)
+}
+
+// Does this unit (a list of 9 cells) contain each digit exactly once?
+fn unit_ok(b: Board, cells: List[(Int, Int)]) -> Bool {
+    let seen = (0..10).map(|_| false);
+    for (r, c) in cells {
+        let d = b.get(r, c);
+        if d < 1 || d > 9 || seen[d] {
+            return false;
+        }
+        seen[d] = true;
+    }
+    true
+}
+
+// Independent check of a finished grid: every given from the original
+// puzzle must be intact, and all 27 units must each hold digits 1..9.
+// Deliberately ignores the solver's bookkeeping — it re-derives everything
+// from the cells alone.
+pub fn verify(solved: Board, givens: Board) -> Result[Unit, String] {
+    for (i, g) in givens.cells.enumerate() {
+        if g != 0 && solved.cells[i] != g {
+            return Err("given at r{i / 9 + 1}c{i % 9 + 1} was changed");
+        }
+    }
+    for u in 0..9 {
+        if !unit_ok(solved, (0..9).map(|k| (u, k))) {
+            return Err("row {u + 1} is not a permutation of 1..9");
+        }
+        if !unit_ok(solved, (0..9).map(|k| (k, u))) {
+            return Err("column {u + 1} is not a permutation of 1..9");
+        }
+        if !unit_ok(solved, (0..9).map(|k| (u / 3 * 3 + k / 3, u % 3 * 3 + k % 3))) {
+            return Err("box {u + 1} is not a permutation of 1..9");
+        }
+    }
+    Ok(())
+}

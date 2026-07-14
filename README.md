@@ -84,7 +84,7 @@ executed against the interpreter before it was written down.
   strings, and lazy iterators, written in Fable and embedded in the binary.
 - **A test runner** (v0.4). `fable test dir/` — any `.fable` file with
   `//? expect/error/panic` directives is a test; the interpreter's own
-  247-test suite uses the same command's code.
+  262-test suite uses the same command's code.
 - **A language server** (v0.4). `fable lsp` — diagnostics as you type,
   hover types, go-to-definition across modules, and completion (v0.5)
   that works mid-edit. JSON-RPC hand-rolled; still zero dependencies.
@@ -94,9 +94,14 @@ executed against the interpreter before it was written down.
   persistent incremental compilation, `:type`, and working imports
   (v0.5), a comment-preserving formatter (`fmt`), and a bytecode
   disassembler (`dis`).
-- **An executable book** (v0.5). All 106 runnable snippets in `book/`
+- **An executable book** (v0.5). All 112 runnable snippets in `book/`
   execute in CI — including the deliberate-error demos, verified to fail
   the way the prose says they do.
+- **A field-tested v0.6.** Ten demo programs in `demos/` — written against
+  v0.5 with orders to report every papercut — pulled in `for`-loop
+  patterns, statement match arms, divergence, a dozen missing
+  string/float/math builtins, and one genuine RNG bug fix. Their triage
+  is `demos/NOTES.md`; the story is book chapter 10.
 
 ## Try it
 
@@ -221,6 +226,8 @@ book/             the Fable book
 tests/spec/       golden tests (expect / error / panic directives)
 examples/         mandelbrot, raytracer, game of life, brainfuck,
                   JSON parser, algorithms, a tiny text adventure
+demos/            ten field-test programs (lisp, spreadsheet, regex,
+                  dungeon, mdsite, csvql, checkers, plot, sudoku, wfc)
 ```
 
 ## Testing
@@ -252,10 +259,23 @@ standard library (including lazy iterators written in Fable itself),
 `fable lsp`, and catchable panics. v0.5 closed the loop: the REPL
 imports, the language server completes, and the book runs in CI.
 
-Fable is **feature-complete as designed**. What remains out of scope —
-full traits, per-field visibility, a package manager, a debugger, Windows
-paths — stays out until real programs demand it; a language grows better
-from the pull of its users than the push of its builder.
+v0.5 also made a promise: further growth would come from the pull of real
+usage, not the push of a roadmap. v0.6 is that pull, cashed in. Ten demo
+programs (`demos/` — a Lisp, a spreadsheet, a regex engine, a checkers
+engine, and six more) were written against v0.5 with orders to report
+every papercut; their reports drove `for`-loop patterns
+(`for (i, x) in xs.enumerate()`), bare `return`/`break`/`continue` match
+arms, `while true` divergence, `_` lambda parameters, `trim_start`/
+`trim_end`/`code_at`/`char`/`index_of_from`/`to_fixed`,
+`math.rand_int`/`log10`/`fmod`, a real `math.seed` bug fix, a
+directive-scanner fix in `fable test`, and `FABLE_MAX_DEPTH`. The full
+triage — including what was heard and declined — is `demos/NOTES.md`;
+the story is [book chapter 10](book/10-field-test.md).
+
+What remains out of scope — full traits, per-field visibility, a package
+manager, a debugger, Windows paths — stays out until real programs demand
+it; a language grows better from the pull of its users than the push of
+its builder.
 
 ## License
 

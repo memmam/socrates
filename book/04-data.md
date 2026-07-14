@@ -363,28 +363,26 @@ println(n);
 ```
 
 ```text
-error[E0503]: refutable pattern in `let` binding
+error[E0503]: refutable pattern in a `let` binding
   --> demo.fable:2:5
    |
 2 | let Some(n) = opt;
    |     ^^^^^^^ this variant pattern can fail
-  note: `let` patterns must always match; use `match` instead
+  note: the pattern must always match here; use `match` instead
 ```
 
-## Early exit from a match arm: `{ return ...; }`
+## Early exit from a match arm: `return`
 
-`return` is a statement, not an expression, so it cannot appear bare on the
-right of an arrow — `None -> return 0,` fails to parse (`error[E0200]:
-expected an expression, found `return``). The idiom is to give the arm a
-block body: `pattern -> { return ...; }`. A block that ends in `return`
-never produces a value, so the checker exempts it from the "all arms have
-the same type" rule. That makes `match` a tidy way to peel off the failure
-case and continue with the success value:
+An arm body may be a bare `return` (or `break`/`continue` inside a loop) —
+sugar, added in v0.6, for the one-statement block `{ return ...; }`. An arm
+that exits never produces a value, so the checker exempts it from the "all
+arms have the same type" rule. That makes `match` a tidy way to peel off the
+failure case and continue with the success value:
 
 ```fable
 fn summarize(xs: List[Int]) -> String {
     let first = match xs.first() {
-        None -> { return "empty list"; }
+        None -> return "empty list",
         Some(n) -> n,
     };
     let total = xs.fold(0, |acc, x| acc + x);
@@ -404,7 +402,9 @@ Here `first` is an `Int` — the `None` arm never yields a value because it
 exits `summarize` entirely. This idiom is the workhorse of Fable error
 handling when the failure case needs its own logic; when it would just be
 `return`, the `?` operator (chapter 7) says the same thing in one character.
-`examples/json.fable` uses both.
+`examples/json.fable` uses both. (Assignment stays statement-only: an arm
+that assigns still needs a block body, `Some(v) -> { x = v; }`, and the
+error message says so.)
 
 ## Recursive data: a binary search tree
 

@@ -1,0 +1,275 @@
+// checkers — English draughts played against itself by a negamax
+// alpha-beta engine. Fully deterministic: fixed depth, first-best
+// tie-breaking, no randomness.
+//
+//   ./target/release/fable demos/checkers/main.fable
+
+import board;
+import engine;
+
+let depth = 6;
+
+fn side_name(side: Int) -> String {
+    if side == board.black { "black" } else { "white" }
+}
+
+fn signed(n: Int) -> String {
+    if n >= 0 { "+{n}" } else { str(n) }
+}
+
+println("checkers self-play — negamax, depth {depth} plus capture extension");
+println("black (b/B) moves up the board, white (w/W) moves down; captures are forced");
+println("");
+
+let b = board.initial();
+println(b.show());
+println("");
+
+let mut side = board.black;
+let mut ply = 1;
+let mut quiet = 0;          // plies since the last capture or crowning
+let mut verdict = "";
+let mut total = engine.new_stats();
+let mut shown = 0;          // last ply whose board we printed
+let seen: Map[String, Int] = {:};   // position -> times reached (repetition draw)
+
+while verdict == "" {
+    let st = engine.new_stats();
+    match engine.best_move(b, side, depth, st) {
+        None -> {
+            verdict = "{side_name(-side)} wins — {side_name(side)} has no legal moves";
+        }
+        Some((m, score)) -> {
+            let u = b.apply(m);
+            let crowned = b.at(u.to) != u.moved;
+            if m.caps.len() > 0 || crowned { quiet = 0; } else { quiet += 1; }
+            total = total + st;
+            let tag = if crowned { "  (crowned)" } else { "" };
+            println("{str(ply).pad_left(3, " ")}. {side_name(side)} {m.notation().pad_right(12, " ")} eval {signed(score).pad_left(6, " ")}  nodes {st.nodes}{tag}");
+            if ply % 16 == 0 {
+                println("");
+                println(b.show());
+                println("");
+                shown = ply;
+            }
+            let key = "{-side}:{b.key()}";
+            let times = seen.get(key).unwrap_or(0) + 1;
+            seen[key] = times;
+            if times >= 3 { verdict = "draw — threefold repetition"; }
+            if quiet >= 50 { verdict = "draw — 50 plies without a capture or crowning"; }
+            if ply >= 180 && verdict == "" { verdict = "draw — move limit reached"; }
+            side = -side;
+            ply += 1;
+        }
+    }
+}
+
+if shown != ply - 1 {
+    println("");
+    println(b.show());
+}
+println("");
+println("result:   {verdict}");
+println("material: black {b.count(board.black)}, white {b.count(board.white)}");
+println("search:   {total.nodes} nodes, {total.cutoffs} beta cutoffs over {ply - 1} plies");
+
+// ---- pinned full-game output (regenerate by running this file) ----
+//? expect: checkers self-play — negamax, depth 6 plus capture extension
+//? expect: black (b/B) moves up the board, white (w/W) moves down; captures are forced
+//? expect:
+//? expect:   8    w   w   w   w
+//? expect:   7  w   w   w   w
+//? expect:   6    w   w   w   w
+//? expect:   5  .   .   .   .
+//? expect:   4    .   .   .   .
+//? expect:   3  b   b   b   b
+//? expect:   2    b   b   b   b
+//? expect:   1  b   b   b   b
+//? expect:      a b c d e f g h
+//? expect:
+//? expect:   1. black c3-b4        eval     +0  nodes 4557
+//? expect:   2. white d6-c5        eval     -4  nodes 4505
+//? expect:   3. black b4xd6        eval     +4  nodes 1186
+//? expect:   4. white c7xe5        eval     -4  nodes 6016
+//? expect:   5. black g3-h4        eval     -2  nodes 9226
+//? expect:   6. white b6-c5        eval     -4  nodes 10635
+//? expect:   7. black e3-f4        eval     -2  nodes 5578
+//? expect:   8. white e5xg3        eval     +2  nodes 1249
+//? expect:   9. black h2xf4        eval    -12  nodes 2110
+//? expect:  10. white f6-g5        eval    +12  nodes 11687
+//? expect:  11. black h4xf6        eval    -14  nodes 588
+//? expect:  12. white g7xe5xg3     eval    +14  nodes 2450
+//? expect:  13. black f2xh4        eval    -14  nodes 3357
+//? expect:  14. white e7-d6        eval     +4  nodes 15390
+//? expect:  15. black b2-c3        eval     -4  nodes 14374
+//? expect:  16. white d8-c7        eval     -2  nodes 15546
+//? expect:
+//? expect:   8    w   .   w   w
+//? expect:   7  w   w   .   .
+//? expect:   6    .   w   .   w
+//? expect:   5  .   w   .   .
+//? expect:   4    .   .   .   b
+//? expect:   3  b   b   .   .
+//? expect:   2    .   b   .   .
+//? expect:   1  b   b   b   b
+//? expect:      a b c d e f g h
+//? expect:
+//? expect:  17. black d2-e3        eval     +4  nodes 9819
+//? expect:  18. white f8-g7        eval     -6  nodes 15719
+//? expect:  19. black e3-d4        eval     +0  nodes 8397
+//? expect:  20. white c5xe3        eval     +0  nodes 3905
+//? expect:  21. black e1-d2        eval     -4  nodes 9064
+//? expect:  22. white a7-b6        eval     +4  nodes 2394
+//? expect:  23. black d2xf4        eval     -6  nodes 2574
+//? expect:  24. white g7-f6        eval     +4  nodes 14068
+//? expect:  25. black c1-d2        eval     -6  nodes 17961
+//? expect:  26. white f6-e5        eval     +4  nodes 15256
+//? expect:  27. black g1-h2        eval     -4  nodes 3916
+//? expect:  28. white e5xg3        eval     -2  nodes 815
+//? expect:  29. black h2xf4        eval     -2  nodes 1628
+//? expect:  30. white d6-e5        eval     -4  nodes 6183
+//? expect:  31. black f4xd6        eval     +0  nodes 475
+//? expect:  32. white c7xe5        eval     -2  nodes 1569
+//? expect:
+//? expect:   8    w   .   .   w
+//? expect:   7  .   .   .   .
+//? expect:   6    w   .   .   w
+//? expect:   5  .   .   w   .
+//? expect:   4    .   .   .   b
+//? expect:   3  b   b   .   .
+//? expect:   2    .   b   .   .
+//? expect:   1  b   .   .   .
+//? expect:      a b c d e f g h
+//? expect:
+//? expect:  33. black a3-b4        eval     +0  nodes 3160
+//? expect:  34. white h8-g7        eval     -4  nodes 2660
+//? expect:  35. black d2-e3        eval     +2  nodes 1829
+//? expect:  36. white g7-f6        eval     -6  nodes 2186
+//? expect:  37. black e3-d4        eval     +2  nodes 2287
+//? expect:  38. white h6-g5        eval     -2  nodes 1424
+//? expect:  39. black b4-c5        eval     +2  nodes 566
+//? expect:  40. white b8-a7        eval     -4  nodes 466
+//? expect:  41. black a1-b2        eval     +4  nodes 483
+//? expect:  42. white e5-f4        eval     -8  nodes 706
+//? expect:  43. black c3-b4        eval     +4  nodes 945
+//? expect:  44. white b6-a5        eval     -8  nodes 839
+//? expect:  45. black b2-c3        eval    -32  nodes 846
+//? expect:  46. white f4-e3        eval    -10  nodes 533
+//? expect:  47. black c5-d6        eval     +4  nodes 1235
+//? expect:  48. white g5-f4        eval    -10  nodes 2182
+//? expect:
+//? expect:   8    .   .   .   .
+//? expect:   7  w   .   .   .
+//? expect:   6    .   b   w   .
+//? expect:   5  w   .   .   .
+//? expect:   4    b   b   w   b
+//? expect:   3  .   b   w   .
+//? expect:   2    .   .   .   .
+//? expect:   1  .   .   .   .
+//? expect:      a b c d e f g h
+//? expect:
+//? expect:  49. black d6-e7        eval   +116  nodes 2729
+//? expect:  50. white f4-g3        eval   -116  nodes 2709
+//? expect:  51. black e7-f8        eval   +110  nodes 3339  (crowned)
+//? expect:  52. white e3-d2        eval   -116  nodes 2090
+//? expect:  53. black f8-g7        eval    +78  nodes 2339
+//? expect:  54. white g3-f2        eval    -82  nodes 2066
+//? expect:  55. black g7xe5        eval    +78  nodes 1918
+//? expect:  56. white d2-c1        eval    -82  nodes 5948  (crowned)
+//? expect:  57. black h4-g5        eval    +80  nodes 7618
+//? expect:  58. white f2-e1        eval    -84  nodes 7326  (crowned)
+//? expect:  59. black g5-f6        eval    +82  nodes 6719
+//? expect:  60. white e1-d2        eval     +0  nodes 5333
+//? expect:  61. black d4-c5        eval     +0  nodes 2527
+//? expect:  62. white d2-e3        eval     +8  nodes 2391
+//? expect:  63. black c5-d6        eval    -14  nodes 3182
+//? expect:  64. white a7-b6        eval    -22  nodes 1487
+//? expect:
+//? expect:   8    .   .   .   .
+//? expect:   7  .   .   .   .
+//? expect:   6    w   b   b   .
+//? expect:   5  w   .   B   .
+//? expect:   4    b   .   .   .
+//? expect:   3  .   b   W   .
+//? expect:   2    .   .   .   .
+//? expect:   1  .   W   .   .
+//? expect:      a b c d e f g h
+//? expect:
+//? expect:  65. black d6-c7        eval    +22  nodes 2261
+//? expect:  66. white e3-f2        eval   -128  nodes 3911
+//? expect:  67. black c7-d8        eval   +126  nodes 3952  (crowned)
+//? expect:  68. white f2-e3        eval    -60  nodes 2858
+//? expect:  69. black f6-e7        eval    +74  nodes 3716
+//? expect:  70. white e3-d4        eval    -78  nodes 2489
+//? expect:  71. black b4-c5        eval    +72  nodes 843
+//? expect:  72. white d4xf6        eval    -38  nodes 518
+//? expect:  73. black c5xa7        eval    +38  nodes 1125
+//? expect:  74. white f6-e5        eval    -46  nodes 4278
+//? expect:  75. black a7-b8        eval    +44  nodes 5528  (crowned)
+//? expect:  76. white c1-b2        eval    -48  nodes 3996
+//? expect:  77. black c3-d4        eval    +44  nodes 1309
+//? expect:  78. white e5xc3        eval    -48  nodes 956
+//? expect:  79. black b8-c7        eval    +44  nodes 3116
+//? expect:  80. white a5-b4        eval    -48  nodes 5866
+//? expect:
+//? expect:   8    .   B   .   .
+//? expect:   7  .   B   b   .
+//? expect:   6    .   .   .   .
+//? expect:   5  .   .   .   .
+//? expect:   4    w   .   .   .
+//? expect:   3  .   W   .   .
+//? expect:   2    W   .   .   .
+//? expect:   1  .   .   .   .
+//? expect:      a b c d e f g h
+//? expect:
+//? expect:  81. black c7-d6        eval    +44  nodes 4606
+//? expect:  82. white c3-d4        eval    -46  nodes 3437
+//? expect:  83. black e7-f8        eval    +46  nodes 5462  (crowned)
+//? expect:  84. white b4-c3        eval    -46  nodes 6273
+//? expect:  85. black f8-e7        eval     +4  nodes 12600
+//? expect:  86. white c3-d2        eval     -6  nodes 6284
+//? expect:  87. black d6-e5        eval     +2  nodes 18827
+//? expect:  88. white d4xf6        eval     -4  nodes 310
+//? expect:  89. black e7xg5        eval     +0  nodes 916
+//? expect:  90. white b2-c3        eval     -2  nodes 3058
+//? expect:  91. black d8-c7        eval     +0  nodes 6201
+//? expect:  92. white c3-d4        eval     +0  nodes 6851
+//? expect:  93. black c7-d6        eval     +0  nodes 7643
+//? expect:  94. white d2-c1        eval     +2  nodes 8234  (crowned)
+//? expect:  95. black g5-f6        eval     -2  nodes 8307
+//? expect:  96. white c1-b2        eval     +0  nodes 6942
+//? expect:
+//? expect:   8    .   .   .   .
+//? expect:   7  .   .   .   .
+//? expect:   6    .   B   B   .
+//? expect:   5  .   .   .   .
+//? expect:   4    .   W   .   .
+//? expect:   3  .   .   .   .
+//? expect:   2    W   .   .   .
+//? expect:   1  .   .   .   .
+//? expect:      a b c d e f g h
+//? expect:
+//? expect:  97. black d6-e5        eval     +0  nodes 8667
+//? expect:  98. white b2-c3        eval     +2  nodes 4011
+//? expect:  99. black e5-d6        eval     -2  nodes 3522
+//? expect: 100. white d4-e3        eval     +0  nodes 4581
+//? expect: 101. black d6-e5        eval     +0  nodes 7640
+//? expect: 102. white e3-d4        eval     +2  nodes 2818
+//? expect: 103. black e5-d6        eval     -2  nodes 3522
+//? expect: 104. white d4-e3        eval     +0  nodes 4581
+//? expect: 105. black d6-e5        eval     +0  nodes 7640
+//? expect: 106. white e3-d4        eval     +2  nodes 2818
+//? expect:
+//? expect:   8    .   .   .   .
+//? expect:   7  .   .   .   .
+//? expect:   6    .   .   B   .
+//? expect:   5  .   .   B   .
+//? expect:   4    .   W   .   .
+//? expect:   3  .   W   .   .
+//? expect:   2    .   .   .   .
+//? expect:   1  .   .   .   .
+//? expect:      a b c d e f g h
+//? expect:
+//? expect: result:   draw — threefold repetition
+//? expect: material: black 2, white 2
+//? expect: search:   506738 nodes, 161291 beta cutoffs over 106 plies

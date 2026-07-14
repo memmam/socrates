@@ -822,8 +822,8 @@ fn walk_stmt(stmt: &Stmt, f: &mut impl FnMut(NodeId, Span)) {
             walk_expr(cond, f);
             walk_block(body, f);
         }
-        StmtKind::For { var, var_id, iter, body } => {
-            f(*var_id, var.span);
+        StmtKind::For { pattern, iter, body } => {
+            walk_pattern(pattern, f);
             walk_expr(iter, f);
             walk_block(body, f);
         }

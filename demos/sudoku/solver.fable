@@ -1,0 +1,125 @@
+// solver — naked-singles constraint propagation plus depth-first
+// backtracking with the most-constrained-cell (MRV) heuristic.
+//
+// The search mutates one shared Board. Every placement made by
+// propagation is logged on a trail list so a failed branch can unwind
+// exactly what it added; guesses are undone individually. Stats counts
+// the work so puzzles can be compared.
+
+import board;
+
+pub struct Stats {
+    assignments: Int,  // total digits placed (propagated singles + guesses)
+    guesses: Int,      // speculative placements at branch points
+    backtracks: Int,   // guesses undone after a contradiction
+}
+
+pub fn new_stats() -> Stats {
+    Stats { assignments: 0, guesses: 0, backtracks: 0 }
+}
+
+impl Stats {
+    pub fn line(self) -> String {
+        "assignments={self.assignments} guesses={self.guesses} backtracks={self.backtracks}"
+    }
+}
+
+// Place d at (r, c) and log the cell on the trail for later unwinding.
+fn assign(b: board.Board, trail: List[Int], r: Int, c: Int, d: Int, st: Stats) {
+    b.place(r, c, d);
+    trail.push(r * 9 + c);
+    st.assignments += 1;
+}
+
+// Undo every placement logged on the trail, newest first.
+fn unwind(b: board.Board, trail: List[Int]) {
+    let mut k = trail.len() - 1;
+    while k >= 0 {
+        let i = trail[k];
+        b.unplace(i / 9, i % 9);
+        k -= 1;
+    }
+}
+
+// Naked-singles propagation: while some empty cell has exactly one
+// candidate, fill it in (each fill can create new singles, so loop to a
+// fixpoint). Returns false on a contradiction — a cell with no candidates.
+fn propagate(b: board.Board, trail: List[Int], st: Stats) -> Bool {
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for i in 0..81 {
+            if b.cells[i] != 0 {
+                continue;
+            }
+            let cands = b.candidates(i / 9, i % 9);
+            if cands.is_empty() {
+                return false;
+            }
+            if cands.len() == 1 {
+                assign(b, trail, i / 9, i % 9, cands[0], st);
+                changed = true;
+            }
+        }
+    }
+    true
+}
+
+// The most-constrained empty cell and its candidates, or None if the grid
+// is full. After propagation every empty cell has >= 2 candidates, so a
+// 2-candidate cell is as constrained as it gets — stop looking early.
+fn best_cell(b: board.Board) -> Option[(Int, Int, List[Int])] {
+    let mut best_i = -1;
+    let mut best: List[Int] = [];
+    for i in 0..81 {
+        if b.cells[i] != 0 {
+            continue;
+        }
+        let cands = b.candidates(i / 9, i % 9);
+        if best_i < 0 || cands.len() < best.len() {
+            best_i = i;
+            best = cands;
+        }
+        if best.len() == 2 {
+            break;
+        }
+    }
+    if best_i < 0 {
+        None
+    } else {
+        Some((best_i / 9, best_i % 9, best))
+    }
+}
+
+// Depth-first search. Returns true with the board solved in place, or
+// false with the board exactly as this call found it.
+fn search(b: board.Board, st: Stats) -> Bool {
+    let trail: List[Int] = [];
+    if !propagate(b, trail, st) {
+        unwind(b, trail);
+        return false;
+    }
+    match best_cell(b) {
+        None -> true,  // no empty cells left: solved
+        Some((r, c, cands)) -> {
+            for d in cands {
+                st.guesses += 1;
+                assign(b, trail, r, c, d, st);
+                if search(b, st) {
+                    return true;
+                }
+                b.unplace(r, c);
+                trail.pop();
+                st.backtracks += 1;
+            }
+            unwind(b, trail);
+            false
+        }
+    }
+}
+
+// Solve the board in place, tallying work into st. On failure (the puzzle
+// has no solution) the board is restored to its input state.
+pub fn solve(b: board.Board, st: Stats) -> Bool {
+    search(b, st)
+}

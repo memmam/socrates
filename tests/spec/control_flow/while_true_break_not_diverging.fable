@@ -1,0 +1,10 @@
+// A `while true` containing a `break` does NOT diverge: the function body
+// falls through with type Unit, which cannot be its Int result.
+//? error: E0301
+
+fn f() -> Int {
+    while true {
+        break;
+    }
+}
+println(f());

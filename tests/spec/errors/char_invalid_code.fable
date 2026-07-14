@@ -1,0 +1,4 @@
+// `char` panics on a value that is not a Unicode scalar (surrogates,
+// negatives, > 0x10FFFF).
+//? panic: char: invalid character code 55296
+println(char(55296));

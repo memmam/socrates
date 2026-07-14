@@ -1,0 +1,15 @@
+# cycles.sheet — every kind of unhappy cell, plus one healthy survivor.
+# B2 -> B3 -> B4 -> B2 is a three-cell reference cycle; B5 merely *reads*
+# a cycling cell, so the error propagates to it.
+case,result
+three-cell cycle a,=B3+1
+three-cell cycle b,=B4*2
+three-cell cycle c,=B2-3
+reads the cycle,=B2+10
+self reference,=B6
+divide by zero,=10/0
+words in math,=A1+1
+unknown function,=frobnicate(7)
+out-of-grid ref,=XYZ99+1
+parse error,=1++2
+still fine,=sum(1,2,3)*avg(2,4)

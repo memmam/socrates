@@ -1,0 +1,16 @@
+// `_` as a lambda parameter (v0.6): binds nothing, cannot be referenced,
+// and several may appear in one parameter list.
+
+println((0..4).map(|_| 9));             //? expect: [9, 9, 9, 9]
+
+let fill = |n: Int, v: String| (0..n).map(|_| v);
+println(fill(3, "x").join(""));         //? expect: xxx
+
+// Mixed used/ignored parameters, and two `_`s side by side.
+let pick = |a: Int, _: Int| a;
+println(pick(1, 2));                    //? expect: 1
+let both = |_, _| "neither";
+println(both(true, false));             //? expect: neither
+
+// fold with an ignored accumulator or element.
+println([1, 2, 3].fold(0, |acc, _| acc + 1));   //? expect: 3

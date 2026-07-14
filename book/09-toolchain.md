@@ -30,7 +30,7 @@ ok: 1 test passed
 compile error containing the substring; `//? panic:` a runtime panic. A file
 with no directives passes by running silently. `fable test dir/` walks
 recursively; the exit code is 1 on any failure, so it slots into CI as-is.
-Fable's own 247-test spec suite runs through the identical code path.
+Fable's own 262-test spec suite runs through the identical code path.
 
 ## 9.2 The standard library
 
@@ -157,4 +157,5 @@ with the tool the tests themselves helped build.
 ---
 
 Previous: [The Glue Chapter](08-glue.md) ·
+Next: [The Field Test](10-field-test.md) ·
 [Back to the index](README.md)

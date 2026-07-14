@@ -13,7 +13,28 @@ use crate::bytecode::{CompiledProgram, Const, Op, RtDef};
 use crate::source::Source;
 use crate::value::{FMap, Handle, Heap, Obj, Upval, Value};
 
-const MAX_FRAMES: usize = 4096;
+const DEFAULT_MAX_FRAMES: usize = 4096;
+
+/// The call-depth cap. `FABLE_MAX_DEPTH` overrides the default (floor 64 —
+/// below that the prelude itself couldn't run); recursive tree-walking
+/// workloads on deep data legitimately want more headroom than the default.
+/// A malformed value warns rather than being silently ignored — the variable
+/// is usually set by someone actively chasing a stack-overflow panic.
+fn max_frames() -> usize {
+    let Ok(raw) = std::env::var("FABLE_MAX_DEPTH") else {
+        return DEFAULT_MAX_FRAMES;
+    };
+    match raw.trim().parse::<usize>() {
+        Ok(n) => n.max(64),
+        Err(_) => {
+            eprintln!(
+                "warning: ignoring FABLE_MAX_DEPTH={raw:?} (not a number); \
+                 using the default of {DEFAULT_MAX_FRAMES}"
+            );
+            DEFAULT_MAX_FRAMES
+        }
+    }
+}
 
 pub struct TraceFrame {
     pub fn_name: String,
@@ -76,6 +97,8 @@ pub struct Vm {
     pub out: Box<dyn Write>,
     start: Instant,
     rng: u64,
+    /// Call-depth cap, read once from `FABLE_MAX_DEPTH` at construction.
+    max_frames: usize,
 }
 
 impl Vm {
@@ -101,6 +124,7 @@ impl Vm {
             script_args: Vec::new(),
             out,
             start: Instant::now(),
+            max_frames: max_frames(),
             rng: 0x9E3779B97F4A7C15 ^ {
                 use std::time::{SystemTime, UNIX_EPOCH};
                 SystemTime::now()
@@ -343,7 +367,7 @@ impl Vm {
         argc: u8,
         callee_slot: bool,
     ) -> Result<(), VmError> {
-        if self.frames.len() >= MAX_FRAMES {
+        if self.frames.len() >= self.max_frames {
             return Err(self.error("stack overflow"));
         }
         let p = &self.program.protos[proto as usize];
@@ -1561,18 +1585,48 @@ impl Vm {
     }
 
     pub fn rng_next(&mut self) -> f64 {
+        let r = self.rng_next_u64();
+        (r >> 11) as f64 / (1u64 << 53) as f64
+    }
+
+    pub fn rng_next_u64(&mut self) -> u64 {
         // xorshift64*
         let mut x = self.rng;
         x ^= x >> 12;
         x ^= x << 25;
         x ^= x >> 27;
         self.rng = x;
-        let r = x.wrapping_mul(0x2545F4914F6CDD1D);
-        (r >> 11) as f64 / (1u64 << 53) as f64
+        x.wrapping_mul(0x2545F4914F6CDD1D)
+    }
+
+    /// A uniform integer in `[lo, hi]` (inclusive). Callers must check
+    /// `lo <= hi`. Lemire's widening-multiply method **with rejection**, so
+    /// the distribution is exactly uniform even for spans near 2^64 (the
+    /// rejection probability is `(2^64 mod span) / 2^64` per draw).
+    pub fn rng_range(&mut self, lo: i64, hi: i64) -> i64 {
+        // `span == 0` encodes the full 2^64 range (lo = i64::MIN, hi = i64::MAX).
+        let span = hi.wrapping_sub(lo).wrapping_add(1) as u64;
+        if span == 0 {
+            return self.rng_next_u64() as i64;
+        }
+        let threshold = span.wrapping_neg() % span;
+        loop {
+            let m = (self.rng_next_u64() as u128) * (span as u128);
+            if (m as u64) >= threshold {
+                return lo.wrapping_add((m >> 64) as i64);
+            }
+        }
     }
 
     pub fn rng_seed(&mut self, seed: i64) {
-        self.rng = (seed as u64) | 1;
+        // SplitMix64: adjacent seeds must produce unrelated streams (the old
+        // `seed | 1` collapsed 2k and 2k+1 to the same state), and the state
+        // must never be zero (xorshift's fixed point).
+        let mut z = (seed as u64).wrapping_add(0x9E3779B97F4A7C15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+        z ^= z >> 31;
+        self.rng = if z == 0 { 0x9E3779B97F4A7C15 } else { z };
     }
 }
 

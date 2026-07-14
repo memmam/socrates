@@ -1,0 +1,9 @@
+// This file must pass with NO directives registered. Prose that merely
+// mentions `//? expect:` syntax (like this comment) is not a directive,
+// and neither is directive-looking text inside a string literal — only a
+// comment that *starts* with //? counts. A phantom expectation would fail
+// this file, since it prints nothing.
+let s = "docs say //? expect: banana";
+assert(s.len() > 0);
+let url = "http://example.com"; // and a // inside a string doesn't end it //? here
+assert(url.starts_with("http"));

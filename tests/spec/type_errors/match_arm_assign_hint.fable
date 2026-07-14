@@ -1,0 +1,9 @@
+// Assignment as a bare match-arm body gets a targeted message, not a
+// generic "expected `,`".
+//? error: assignment cannot be a match-arm body
+let mut i = 0;
+match Some(3) {
+    Some(v) -> i = v,
+    None -> {}
+}
+println(i);

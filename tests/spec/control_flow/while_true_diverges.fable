@@ -1,0 +1,45 @@
+// A trailing `while true { .. }` with no `break` diverges (v0.6): the
+// enclosing function needs no dead expression after it, because the loop
+// can only be left with `return`.
+
+fn first_over(xs: List[Int], limit: Int) -> Option[Int] {
+    let mut i = 0;
+    while true {
+        if i >= xs.len() { return None; }
+        if xs[i] > limit { return Some(xs[i]); }
+        i += 1;
+    }
+}
+println(first_over([1, 8, 3], 5));      //? expect: Some(8)
+println(first_over([1, 2], 5));         //? expect: None
+
+// The value position works too: a diverging loop as a whole fn body.
+fn count_to(n: Int) -> Int {
+    let mut k = 0;
+    while true {
+        k += 1;
+        if k == n { return k; }
+    }
+}
+println(count_to(3));                   //? expect: 3
+
+// With a `break` the loop can fall through, so the old rule still applies:
+// the function returns what follows the loop.
+fn with_break() -> Int {
+    let mut n = 0;
+    while true {
+        n += 2;
+        if n >= 6 { break; }
+    }
+    n
+}
+println(with_break());                  //? expect: 6
+
+// os.exit diverges the same way (never actually called here).
+fn or_die(o: Option[Int]) -> Int {
+    match o {
+        Some(v) -> v,
+        None -> os.exit(2),
+    }
+}
+println(or_die(Some(7)));               //? expect: 7

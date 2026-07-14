@@ -473,7 +473,7 @@ impl<'a> Compiler<'a> {
                     self.patch_jump(j);
                 }
             }
-            StmtKind::For { var_id, iter, body, var } => {
+            StmtKind::For { pattern, iter, body } => {
                 let locals_at_entry = self.ctx().locals.len();
                 let depth_at_entry = self.depth();
                 self.expr(iter);
@@ -485,7 +485,7 @@ impl<'a> Compiler<'a> {
 
                 let depth_at_body = self.depth(); // [.., iter, state]
                 let next = self.here();
-                let done = self.emit(Op::ForNext(0), var.span);
+                let done = self.emit(Op::ForNext(0), pattern.span);
                 // ForNext pushed the element on the fall-through path.
                 let d = self.depth();
                 self.set_depth(d + 1);
@@ -497,12 +497,7 @@ impl<'a> Compiler<'a> {
                 });
 
                 self.begin_scope();
-                if let Some(Res::Local(id)) = self.res.get(var_id) {
-                    let id = *id;
-                    self.declare_local(id);
-                } else {
-                    self.declare_local(ANON);
-                }
+                self.bind_loop_pattern(pattern);
                 for s in &body.stmts {
                     self.stmt_discard(s);
                 }
@@ -559,6 +554,47 @@ impl<'a> Compiler<'a> {
                     self.set_depth(d + unwind);
                 }
                 self.emit_loop(target, stmt.span);
+            }
+        }
+    }
+
+    /// Bind a `for`-loop pattern to the element ForNext just pushed. The
+    /// element (and any extracted bindings) live in the loop's body scope,
+    /// so they unwind on every iteration via the scope machinery.
+    fn bind_loop_pattern(&mut self, pattern: &Pattern) {
+        if let PatternKind::Binding(_) = &pattern.kind {
+            if let Some(Res::Local(id)) = self.res.get(&pattern.id) {
+                let id = *id;
+                self.declare_local(id);
+            } else {
+                self.declare_local(ANON);
+            }
+            return;
+        }
+        if matches!(pattern.kind, PatternKind::Wildcard) {
+            self.declare_local(ANON);
+            return;
+        }
+        // Destructuring: keep the element as an anonymous local and extract
+        // each binding by path, exactly like `let` destructuring.
+        let mut paths = Vec::new();
+        self.collect_bind_paths(pattern, &mut Vec::new(), &mut paths);
+        let anon_slot = self.declare_local(ANON);
+        for (path, node) in &paths {
+            self.emit(Op::GetLocal(anon_slot), pattern.span);
+            for step in path {
+                self.emit(*step, pattern.span);
+            }
+            match self.res.get(node) {
+                Some(Res::Local(id)) => {
+                    let id = *id;
+                    self.declare_local(id);
+                }
+                _ => {
+                    // Checker errored (or the binding is a variant misparse);
+                    // keep the stack balanced.
+                    self.emit(Op::Pop, pattern.span);
+                }
             }
         }
     }

@@ -1,0 +1,50 @@
+// `for` loop heads take irrefutable patterns (v0.6): tuples, `_`, nesting.
+// The bindings are immutable and scoped to the body, like the old plain
+// loop variable.
+
+// Tuple destructuring pairs with enumerate/zip/entries.
+for (i, x) in ["a", "b", "c"].enumerate() {
+    println("{i}: {x}");                //? expect: 0: a
+}                                       //? expect: 1: b
+                                        //? expect: 2: c
+
+let ns = [1, 2, 3];
+let ws = ["one", "two", "three"];
+for (n, w) in ns.zip(ws) {
+    println("{n} is {w}");              //? expect: 1 is one
+}                                       //? expect: 2 is two
+                                        //? expect: 3 is three
+
+// `_` discards the element entirely.
+let mut count = 0;
+for _ in 0..4 {
+    count += 1;
+}
+println(count);                         //? expect: 4
+
+// Nested tuples destructure all the way down.
+for (a, (b, c)) in [(1, (2, 3)), (4, (5, 6))] {
+    println(a + b + c);                 //? expect: 6
+}                                       //? expect: 15
+
+// `_` inside a tuple discards one position.
+let mut sum = 0;
+for (v, _) in [(10, "x"), (20, "y")] {
+    sum += v;
+}
+println(sum);                           //? expect: 30
+
+// Plain loop variables still work, and iterate maps' entries() as pairs.
+let m = {"a": 1, "b": 2};
+for (k, v) in m.entries() {
+    println("{k}={v}");                 //? expect: a=1
+}                                       //? expect: b=2
+
+// break/continue behave identically with destructured heads.
+let mut kept = [];
+for (i, s) in ["p", "q", "skip", "r", "stop", "t"].enumerate() {
+    if s == "skip" { continue; }
+    if s == "stop" { break; }
+    kept.push("{i}{s}");
+}
+println(kept.join(","));                //? expect: 0p,1q,3r

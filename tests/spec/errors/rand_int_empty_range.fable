@@ -1,0 +1,3 @@
+// math.rand_int panics on an empty range rather than guessing.
+//? panic: math.rand_int: empty range 5..=2
+println(math.rand_int(5, 2));

@@ -24,6 +24,8 @@ pub enum Native {
     Clock,
     Input,
     TryCall,
+    /// `char(code)` — the one-character string for a Unicode scalar value.
+    CharFromCode,
     // math namespace
     MathSqrt,
     MathSin,
@@ -46,6 +48,9 @@ pub enum Native {
     MathMaxFloat,
     MathRandom,
     MathSeed,
+    MathRandInt,
+    MathLog10,
+    MathFmod,
 
     // fs.* — file system access (v0.3). Fallible operations return
     // Result[_, String] with the OS error message.
@@ -109,6 +114,10 @@ pub enum Native {
     StrReplace,
     StrSlice,
     StrCharAt,
+    StrCodeAt,
+    StrTrimStart,
+    StrTrimEnd,
+    StrIndexOfFrom,
     StrIndexOf,
     StrRepeat,
     StrPadLeft,
@@ -144,6 +153,7 @@ pub enum Native {
     FloatRound,
     FloatSqrt,
     FloatIsNan,
+    FloatToFixed,
     // Option methods
     OptIsSome,
     OptIsNone,
@@ -273,6 +283,7 @@ impl Native {
             "clock" => Clock,
             "input" => Input,
             "try" => TryCall,
+            "char" => CharFromCode,
             _ => return None,
         })
     }
@@ -316,8 +327,8 @@ impl Native {
         match ns {
             "math" => &[
                 "pi", "e", "sqrt", "sin", "cos", "tan", "atan", "atan2", "log", "log2",
-                "exp", "pow", "floor", "ceil", "round", "abs_int", "abs", "min", "max",
-                "min_float", "max_float", "random", "seed",
+                "log10", "exp", "pow", "fmod", "floor", "ceil", "round", "abs_int", "abs",
+                "min", "max", "min_float", "max_float", "random", "seed", "rand_int",
             ],
             "fs" => &[
                 "read", "write", "append", "exists", "is_dir", "list_dir", "create_dir",
@@ -355,6 +366,9 @@ impl Native {
             "max_float" => MathMember::Fn(MathMaxFloat),
             "random" => MathMember::Fn(MathRandom),
             "seed" => MathMember::Fn(MathSeed),
+            "rand_int" => MathMember::Fn(MathRandInt),
+            "log10" => MathMember::Fn(MathLog10),
+            "fmod" => MathMember::Fn(MathFmod),
             _ => return None,
         })
     }
@@ -371,6 +385,7 @@ impl Native {
             Clock => "clock",
             Input => "input",
             TryCall => "try",
+            CharFromCode => "char",
             MathSqrt => "math.sqrt",
             MathSin => "math.sin",
             MathCos => "math.cos",
@@ -392,6 +407,9 @@ impl Native {
             MathMaxFloat => "math.max_float",
             MathRandom => "math.random",
             MathSeed => "math.seed",
+            MathRandInt => "math.rand_int",
+            MathLog10 => "math.log10",
+            MathFmod => "math.fmod",
             FsRead => "fs.read",
             FsWrite => "fs.write",
             FsAppend => "fs.append",
@@ -448,6 +466,10 @@ impl Native {
             StrReplace => "replace",
             StrSlice => "slice",
             StrCharAt => "char_at",
+            StrCodeAt => "code_at",
+            StrTrimStart => "trim_start",
+            StrTrimEnd => "trim_end",
+            StrIndexOfFrom => "index_of_from",
             StrIndexOf => "index_of",
             StrRepeat => "repeat",
             StrPadLeft => "pad_left",
@@ -480,6 +502,7 @@ impl Native {
             FloatRound => "round",
             FloatSqrt => "sqrt",
             FloatIsNan => "is_nan",
+            FloatToFixed => "to_fixed",
             OptIsSome => "is_some",
             OptIsNone => "is_none",
             OptUnwrap => "unwrap",
@@ -522,13 +545,19 @@ impl Native {
             // try(f) runs f and catches runtime panics.
             TryCall => (vec![func(vec![], p0())], res(p0(), TStr), 1),
 
-            MathSqrt | MathSin | MathCos | MathTan | MathAtan | MathLog | MathLog2 | MathExp
-            | MathFloor | MathCeil | MathRound | MathAbs => (vec![Float], Float, 0),
-            MathAtan2 | MathPow | MathMinFloat | MathMaxFloat => (vec![Float, Float], Float, 0),
+            MathSqrt | MathSin | MathCos | MathTan | MathAtan | MathLog | MathLog2 | MathLog10
+            | MathExp | MathFloor | MathCeil | MathRound | MathAbs => (vec![Float], Float, 0),
+            MathAtan2 | MathPow | MathMinFloat | MathMaxFloat | MathFmod => {
+                (vec![Float, Float], Float, 0)
+            }
             MathAbsInt => (vec![Int], Int, 0),
             MathMin | MathMax => (vec![Int, Int], Int, 0),
             MathRandom => (vec![], Float, 0),
             MathSeed => (vec![Int], Unit, 0),
+            MathRandInt => (vec![Int, Int], Int, 0),
+            // `char` panics on an invalid scalar value (codes normally come
+            // from `code_at`, which only produces valid ones).
+            CharFromCode => (vec![Int], TStr, 0),
 
             FsRead => (vec![TStr], res(TStr, TStr), 0),
             FsWrite | FsAppend => (vec![TStr, TStr], res(Unit, TStr), 0),
@@ -538,7 +567,9 @@ impl Native {
             OsArgs => (vec![], list(TStr), 0),
             OsEnv => (vec![TStr], opt(TStr), 0),
             OsRun => (vec![TStr, list(TStr)], res(tup(vec![Int, TStr, TStr]), TStr), 0),
-            OsExit => (vec![Int], Unit, 0),
+            // Diverges: like `panic`, the return type is a scheme variable so
+            // an exit typechecks in any value position.
+            OsExit => (vec![Int], p0(), 1),
             OsTime => (vec![], Float, 0),
 
             // List[T] — receiver args at P0.
@@ -579,7 +610,10 @@ impl Native {
             StrReplace => (vec![TStr, TStr], TStr, 0),
             StrSlice => (vec![Int, Int], TStr, 0),
             StrCharAt => (vec![Int], opt(TStr), 0),
+            StrCodeAt => (vec![Int], opt(Int), 0),
+            StrTrimStart | StrTrimEnd => (vec![], TStr, 0),
             StrIndexOf => (vec![TStr], opt(Int), 0),
+            StrIndexOfFrom => (vec![TStr, Int], opt(Int), 0),
             StrRepeat => (vec![Int], TStr, 0),
             StrPadLeft | StrPadRight => (vec![Int, TStr], TStr, 0),
             StrParseInt => (vec![], opt(Int), 0),
@@ -609,6 +643,7 @@ impl Native {
             FloatToString => (vec![], TStr, 0),
             FloatAbs | FloatFloor | FloatCeil | FloatRound | FloatSqrt => (vec![], Float, 0),
             FloatIsNan => (vec![], Bool, 0),
+            FloatToFixed => (vec![Int], TStr, 0),
 
             // Option[T] — receiver arg at P0.
             OptIsSome | OptIsNone => (vec![], Bool, 1),
@@ -684,6 +719,8 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Str, "chars", Native::StrChars),
     (Recv::Str, "split", Native::StrSplit),
     (Recv::Str, "trim", Native::StrTrim),
+    (Recv::Str, "trim_start", Native::StrTrimStart),
+    (Recv::Str, "trim_end", Native::StrTrimEnd),
     (Recv::Str, "to_upper", Native::StrToUpper),
     (Recv::Str, "to_lower", Native::StrToLower),
     (Recv::Str, "contains", Native::StrContains),
@@ -692,7 +729,9 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Str, "replace", Native::StrReplace),
     (Recv::Str, "slice", Native::StrSlice),
     (Recv::Str, "char_at", Native::StrCharAt),
+    (Recv::Str, "code_at", Native::StrCodeAt),
     (Recv::Str, "index_of", Native::StrIndexOf),
+    (Recv::Str, "index_of_from", Native::StrIndexOfFrom),
     (Recv::Str, "repeat", Native::StrRepeat),
     (Recv::Str, "pad_left", Native::StrPadLeft),
     (Recv::Str, "pad_right", Native::StrPadRight),
@@ -724,6 +763,7 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Float, "round", Native::FloatRound),
     (Recv::Float, "sqrt", Native::FloatSqrt),
     (Recv::Float, "is_nan", Native::FloatIsNan),
+    (Recv::Float, "to_fixed", Native::FloatToFixed),
     (Recv::Option_, "is_some", Native::OptIsSome),
     (Recv::Option_, "is_none", Native::OptIsNone),
     (Recv::Option_, "unwrap", Native::OptUnwrap),

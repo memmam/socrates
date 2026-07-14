@@ -25,6 +25,10 @@ down; output shown is real output.
 9. [The Toolchain Release](09-toolchain.md) — v0.4: `fable test`, the
    embedded standard library, the `fable lsp` language server, catchable
    panics with `try`, and lazy iterators built as a library.
+10. [The Field Test](10-field-test.md) — v0.6: ten demo programs stress the
+    language, and everything their reports pulled in — `for` patterns, arm
+    statement sugar, divergence, the string/number chores, a real RNG bug,
+    and the papercuts declined on purpose.
 
 For the terse normative rules, see the [language specification](../docs/SPEC.md);
 for implementation internals, [ARCHITECTURE.md](../docs/ARCHITECTURE.md).

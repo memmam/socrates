@@ -1,0 +1,124 @@
+// plot — a function plotter that renders SVG.
+//
+// Three series (a damped sine, a damped cosine, and a cubic) are sampled,
+// framed, and drawn with axes, ticks, a legend, and direct labels; a
+// hypotrochoid ("spirograph") goes into a second SVG; and one series is
+// printed as a terminal sparkline so the demo talks even without a browser.
+//
+//   ./target/release/fable demos/plot/main.fable [out_dir]
+//
+// Output lands in demos/plot/ by default (or out_dir if given).
+
+import svg;
+import chart;
+
+// --- the functions being plotted -------------------------------------------
+
+fn damped_sin(x: Float) -> Float { math.exp(-x / 4.0) * math.sin(x) }
+fn damped_cos(x: Float) -> Float { math.exp(-x / 4.0) * math.cos(x) }
+fn cubic(x: Float) -> Float { x * (x - 4.0) * (x - 10.0) / 120.0 }
+
+// --- chart 1: the line plot --------------------------------------------------
+
+fn line_chart() -> String {
+    let c = chart.chart("Damped oscillation vs. a cubic on [0, 10]", 640, 400);
+    c.add(chart.sample("sin(x)·e^(-x/4)", "#2a78d6", damped_sin, 0.0, 10.0, 120));
+    c.add(chart.sample("cos(x)·e^(-x/4)", "#1baf7a", damped_cos, 0.0, 10.0, 120));
+    c.add(chart.sample("x(x-4)(x-10)/120", "#eda100", cubic, 0.0, 10.0, 120));
+    c.render()
+}
+
+// --- chart 2: a spirograph ----------------------------------------------------
+
+// Hypotrochoid: a pen at distance d from the center of a circle of radius r
+// rolling inside a circle of radius big. With big=5, r=3 the curve closes
+// after three turns (t = 6*pi).
+fn spirograph() -> String {
+    let big = 5.0;
+    let r = 3.0;
+    let pen = 5.0;
+    let steps = 900;
+    let scale = 190.0 / (big - r + pen);   // fit the max radius into the canvas
+
+    let pts = [];
+    for i in 0..=steps {
+        let t = 6.0 * math.pi * i.to_float() / steps.to_float();
+        let x = (big - r) * math.cos(t) + pen * math.cos((big - r) / r * t);
+        let y = (big - r) * math.sin(t) - pen * math.sin((big - r) / r * t);
+        pts.push((210.0 + scale * x, 210.0 + scale * y));
+    }
+
+    let d = svg.doc(420, 420);
+    d.rect(0.0, 0.0, 420.0, 420.0, "#1a1a19");
+    // Draw the curve as short strokes that walk around the hue wheel.
+    // Adjacent chunks share an endpoint, so the curve stays unbroken.
+    let chunk = 12;
+    let mut i = 0;
+    let mut seg = 0;
+    while i < steps {
+        let end = math.min(i + chunk, steps);
+        d.polyline(pts.slice(i, end + 1), "hsl({360 * seg * chunk / steps}, 80%, 62%)", 1.6);
+        i = end;
+        seg += 1;
+    }
+    d.text(210.0, 404.0, 11, "middle", "#898781", "hypotrochoid R=5 r=3 d=5, {seg} strokes");
+    d.render()
+}
+
+// --- terminal sparkline --------------------------------------------------------
+
+// The sample where a series is lowest: (x, y) at the minimum.
+fn arg_min(s: chart.Series) -> (Float, Float) {
+    let mut bx = s.xs[0];
+    let mut by = s.ys[0];
+    for (x, y) in s.xs.zip(s.ys) {
+        if y < by { bx = x; by = y; }
+    }
+    (bx, by)
+}
+
+// --- glue ------------------------------------------------------------------------
+
+fn run(out_dir: String) -> Result[Unit, String] {
+    let plot = line_chart();
+    fs.write("{out_dir}/plot.svg", plot)?;
+    println("wrote {out_dir}/plot.svg ({plot.byte_len()} bytes, 3 series x 120 samples)");
+
+    let spiro = spirograph();
+    fs.write("{out_dir}/spirograph.svg", spiro)?;
+    println("wrote {out_dir}/spirograph.svg ({spiro.byte_len()} bytes, 901 points)");
+    Ok(())
+}
+
+println("plot — a function plotter written in Fable");
+println("");
+
+// A deterministic sparkline of the damped sine, so the terminal shows the
+// shape the SVG will have.
+let spark = chart.sample("sin(x)·e^(-x/4)", "", damped_sin, 0.0, 10.0, 48);
+let (mx, my) = arg_min(spark);
+println("sin(x)·e^(-x/4)  {chart.sparkline(spark.ys)}");
+println("                 48 samples on [0, 10], minimum {my.to_fixed(3)} near x = {mx.to_fixed(3)}");
+println("");
+
+let out_dir = match os.args().first() {
+    Some(dir) -> dir,
+    None -> if fs.is_dir("demos/plot") { "demos/plot" } else { "." },
+};
+
+match run(out_dir) {
+    Ok(_) -> {}
+    Err(e) -> {
+        println("plot: {e}");
+        os.exit(1);
+    }
+}
+
+// Golden output (checked by `./target/release/fable test demos/plot`):
+//? expect: plot — a function plotter written in Fable
+//? expect:
+//? expect: sin(x)·e^(-x/4)  ▃▅▆▇▇████▇▇▆▅▄▄▃▂▂▂▁▁▁▁▁▁▂▂▂▃▃▃▄▄▄▄▄▄▄▄▄▄▄▄▃▃▃▃▃
+//? expect:                  48 samples on [0, 10], minimum -0.318 near x = 4.468
+//? expect:
+//? expect: wrote demos/plot/plot.svg (8809 bytes, 3 series x 120 samples)
+//? expect: wrote demos/plot/spirograph.svg (22839 bytes, 901 points)

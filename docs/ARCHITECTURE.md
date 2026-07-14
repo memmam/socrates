@@ -293,6 +293,52 @@ deliberate-failure demos (`errors`/`panics`), support-file blocks are
 written into a per-chapter directory for real multi-file imports, and
 directive-bearing blocks run under `fable test` semantics.
 
+## v0.6 additions
+
+The field-test release: ten demo programs (`demos/`) were written against
+v0.5 and their issue reports triaged into fixes (`demos/NOTES.md` is the
+ledger). The mechanically interesting parts:
+
+**`for` patterns**: `StmtKind::For` now carries a `Pattern` instead of an
+`Ident`. The checker reuses the `let` machinery verbatim
+(`check_pattern` → `assert_irrefutable` → `materialize_binds`, inside the
+loop's scope, so bindings are always locals). The compiler binds the
+element ForNext pushes via `bind_loop_pattern`: the single-name fast path
+declares the slot in place; destructuring keeps the element as an
+anonymous local and extracts each binding by navigation path, exactly like
+`let` (`collect_bind_paths`). Everything lives in the body scope, so the
+per-iteration unwind and `break`/`continue` depth logic are unchanged.
+
+**Divergence**: `check_block` already typed a trailing
+`return`/`break`/`continue` as a fresh defaulting variable; a trailing
+`while true { .. }` now joins it when `block_contains_break` says the loop
+cannot fall through. The break-scan deliberately **over-approximates**
+(it descends into nested loops and lambdas where a `break` couldn't target
+this loop) because a false "contains break" merely reverts to the old
+typing, while a false "no break" would be unsound. `os.exit` switched its
+scheme to `panic`-style (`ret = Param(0)`), which is the whole change.
+
+**Match-arm statement sugar**: the parser desugars `-> return x` /
+`-> break` / `-> continue` into a one-statement block body, so the
+checker's divergence rule, the compiler, and the formatter all see a shape
+they already handle (fmt canonicalizes the sugar to the block form).
+
+**RNG**: `math.seed` collapsed adjacent seeds — state was `seed | 1`, so
+2k and 2k+1 were identical streams (found by the dungeon demo's
+different-seeds test). Seeds now pass through SplitMix64; `rand_int` uses
+the widening-multiply reduction over a raw `u64` draw.
+
+**Directive scanner**: `//?` only counts when it begins the line's comment,
+with just enough string-awareness to skip `//` inside quotes; golden
+comparison ignores trailing whitespace on both sides. Three demo authors
+were bitten by prose *about* directives becoming directives.
+
+New builtins (`trim_start`/`trim_end`/`code_at`/`index_of_from`,
+`char`, `to_fixed`, `math.rand_int`/`log10`/`fmod`) follow the existing
+pattern: one enum variant, one `sig()` scheme, one `METHOD_TABLE` row (the
+LSP completes them for free), one `natives.rs` arm. `FABLE_MAX_DEPTH` is
+read once at VM construction into a `max_frames` field.
+
 ## Testing strategy
 
 - Unit tests per module (lexer shapes, parser precedence, checker

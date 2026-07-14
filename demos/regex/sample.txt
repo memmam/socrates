@@ -1,0 +1,10 @@
+2026-07-14 09:12:01 INFO  server started on port 8080
+2026-07-14 09:12:04 INFO  GET /index.html 200 12ms
+2026-07-14 09:12:09 WARN  slow request GET /search 200 1450ms
+2026-07-14 09:12:11 ERROR database timeout after 3000ms
+2026-07-14 09:12:15 INFO  GET /img/logo.png 304 2ms
+2026-07-14 09:12:20 ERROR unhandled exception in worker-3
+2026-07-14 09:12:22 INFO  POST /api/login 401 8ms
+2026-07-14 09:12:23 WARN  retrying job 42 (attempt 2)
+2026-07-14 09:12:30 INFO  GET /api/items 200 17ms
+2026-07-14 09:12:31 INFO  shutdown requested

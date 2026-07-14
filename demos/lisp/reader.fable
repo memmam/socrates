@@ -1,0 +1,111 @@
+// reader — the s-expression reader: source text -> tokens -> Sexp trees.
+//
+// The reader knows nothing about evaluation. `(foo 1 2)` is just
+// Form([Sym("foo"), Num(1), Num(2)]); giving it meaning is eval's job.
+
+// An s-expression — the one shape all of Lisp is made of.
+pub enum Sexp {
+    Num(Int),
+    Sym(String),
+    Form(List[Sexp]),
+}
+
+impl Sexp {
+    // Render an expression back to source form (used in error messages).
+    pub fn show(self) -> String {
+        match self {
+            Sexp.Num(n) -> str(n),
+            Sexp.Sym(s) -> s,
+            Sexp.Form(items) -> "(" + items.map(|x| x.show()).join(" ") + ")",
+        }
+    }
+}
+
+fn is_space(c: String) -> Bool {
+    c == " " || c == "\n" || c == "\t" || c == "\r"
+}
+
+// Split source into tokens: parens, quote marks, and atoms.
+// A `;` starts a comment that runs to the end of the line.
+pub fn tokenize(src: String) -> List[String] {
+    let toks: List[String] = [];
+    let chars = src.chars();
+    let n = chars.len();
+    let mut i = 0;
+    while i < n {
+        let c = chars[i];
+        if c == "(" || c == ")" || c == "'" {
+            toks.push(c);
+            i += 1;
+        } else if c == ";" {
+            while i < n && chars[i] != "\n" {
+                i += 1;
+            }
+        } else if is_space(c) {
+            i += 1;
+        } else {
+            let start = i;
+            while i < n && !is_space(chars[i]) && !"();'".contains(chars[i]) {
+                i += 1;
+            }
+            toks.push(chars.slice(start, i).join(""));
+        }
+    }
+    toks
+}
+
+// The parser cursor. Structs have reference semantics, so helpers that
+// take a Reader can advance `pos` for their caller.
+struct Reader {
+    toks: List[String],
+    pos: Int,
+}
+
+fn next(r: Reader) -> Option[String] {
+    let t = r.toks.get(r.pos);
+    r.pos += 1;
+    t
+}
+
+// Parse every top-level form in `src`.
+pub fn parse_all(src: String) -> Result[List[Sexp], String] {
+    let r = Reader { toks: tokenize(src), pos: 0 };
+    let forms: List[Sexp] = [];
+    while r.pos < r.toks.len() {
+        forms.push(parse_expr(r)?);
+    }
+    Ok(forms)
+}
+
+fn parse_expr(r: Reader) -> Result[Sexp, String] {
+    match next(r) {
+        None -> Err("unexpected end of input"),
+        Some("(") -> parse_form(r),
+        Some(")") -> Err("unexpected ')'"),
+        // 'x is reader sugar for (quote x).
+        Some("'") -> Ok(Sexp.Form([Sexp.Sym("quote"), parse_expr(r)?])),
+        Some(t) -> Ok(atom(t)),
+    }
+}
+
+fn parse_form(r: Reader) -> Result[Sexp, String] {
+    let items: List[Sexp] = [];
+    while true {
+        match r.toks.get(r.pos) {
+            None -> return Err("missing ')'"),
+            Some(")") -> {
+                r.pos += 1;
+                return Ok(Sexp.Form(items));
+            }
+            Some(_) -> items.push(parse_expr(r)?),
+        }
+    }
+}
+
+// Anything that parses as an integer is a number; the rest are symbols.
+fn atom(t: String) -> Sexp {
+    match t.parse_int() {
+        Some(n) -> Sexp.Num(n),
+        None -> Sexp.Sym(t),
+    }
+}

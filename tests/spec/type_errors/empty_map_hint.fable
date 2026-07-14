@@ -1,0 +1,4 @@
+// `{}` is an empty block; the empty map is `{:}`. The error says so.
+//? error: `{}` is an empty block, not an empty map
+let m: Map[String, Int] = {};
+println(m.len());

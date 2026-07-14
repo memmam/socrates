@@ -1,0 +1,94 @@
+// rules — learn a wave-function-collapse tile set from an ASCII sample.
+//
+// A tile is a single character. One scan over the sample records:
+//   * every distinct tile, in first-seen order,
+//   * how often each occurs (its weight — used for entropy and sampling),
+//   * which tile was seen next to which, per direction (the adjacency rules).
+//
+// Fable has no set type, so the rule table (and later each cell's candidate
+// set in wfc.fable) is a Map[String, Bool] used as a set.
+
+// The four cardinal directions, in the fixed order up, right, down, left.
+// wfc.fable indexes the same tables, so learning and generation agree.
+pub let dir_dx = [0, 1, 0, -1];
+pub let dir_dy = [-1, 0, 1, 0];
+
+pub fn dir_name(d: Int) -> String {
+    let names = ["up", "right", "down", "left"];
+    names[d]
+}
+
+pub struct Rules {
+    tiles: List[String],        // distinct tiles, first-seen order
+    weights: Map[String, Int],  // tile -> occurrences in the sample
+    allow: Map[String, Bool],   // set of "a:d:b" — b may sit in direction d of a
+}
+
+// The set key for "tile b may appear in direction d of tile a".
+fn key(a: String, d: Int, b: String) -> String {
+    "{a}:{d}:{b}"
+}
+
+pub fn learn(sample: List[String]) -> Rules {
+    let grid = sample.map(|row| row.chars());
+    let h = grid.len();
+    assert(h > 0);
+    let w = grid[0].len();
+    for row in grid {
+        if row.len() != w {
+            panic("rules.learn: sample is not rectangular");
+        }
+    }
+
+    let tiles: List[String] = [];
+    let weights: Map[String, Int] = {:};
+    let allow: Map[String, Bool] = {:};
+    for (y, row) in grid.enumerate() {
+        for (x, a) in row.enumerate() {
+            if !weights.contains_key(a) {
+                tiles.push(a);
+                weights[a] = 0;
+            }
+            weights[a] += 1;
+            // Record the neighbour actually seen in each direction.
+            for d in 0..4 {
+                let nx = x + dir_dx[d];
+                let ny = y + dir_dy[d];
+                if nx >= 0 && nx < w && ny >= 0 && ny < h {
+                    allow[key(a, d, grid[ny][nx])] = true;
+                }
+            }
+        }
+    }
+    Rules { tiles, weights, allow }
+}
+
+impl Rules {
+    // May tile `b` sit in direction `d` of tile `a`?
+    pub fn allowed(self, a: String, d: Int, b: String) -> Bool {
+        self.allow.contains_key(key(a, d, b))
+    }
+
+    // Every tile that may sit in direction `d` of `a`, as one string ("~#").
+    pub fn neighbours(self, a: String, d: Int) -> String {
+        let mut out = "";
+        for b in self.tiles {
+            if self.allowed(a, d, b) {
+                out += b;
+            }
+        }
+        out
+    }
+
+    // One printable line per tile: its weight and the allowed neighbour
+    // set in each direction, e.g.  '#' weight 28  up[~#.] right[~#.] ...
+    pub fn describe(self) -> List[String] {
+        self.tiles.map(|t| {
+            let mut line = "'{t}' weight {str(self.weights[t]).pad_left(2, " ")} ";
+            for d in 0..4 {
+                line += " {dir_name(d)}[{self.neighbours(t, d).pad_right(4, " ")}]";
+            }
+            line
+        })
+    }
+}

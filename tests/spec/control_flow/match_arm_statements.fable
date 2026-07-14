@@ -1,0 +1,40 @@
+// Bare `return`, `break`, and `continue` as match-arm bodies (v0.6):
+// sugar for the one-statement block form, so early exits don't need
+// brace ceremony.
+
+fn size_label(n: Int) -> String {
+    let s = match n {
+        0 -> "zero",
+        _ if n < 0 -> return "negative",
+        _ if n > 99 -> return "big",
+        _ -> "small",
+    };
+    "({s})"
+}
+println(size_label(0));                 //? expect: (zero)
+println(size_label(-4));                //? expect: negative
+println(size_label(7));                 //? expect: (small)
+println(size_label(1000));              //? expect: big
+
+// `return` with no value returns Unit from a Unit function.
+fn report(o: Option[Int]) {
+    match o {
+        None -> return,
+        Some(v) -> println("got {v}"),
+    }
+    println("(reported)");
+}
+report(Some(3));                        //? expect: got 3
+                                        //? expect: (reported)
+report(None);
+
+// break/continue arms drive loops directly.
+let mut acc = [];
+for w in ["keep", "skip", "keep", "end", "unreached"] {
+    match w {
+        "skip" -> continue,
+        "end" -> break,
+        _ -> { acc.push(w); }
+    }
+}
+println(acc.len());                     //? expect: 2

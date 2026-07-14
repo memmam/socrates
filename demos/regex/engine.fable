@@ -1,0 +1,66 @@
+// engine.fable — the matcher: classic recursive backtracking, written in
+// continuation-passing style. `walk(node, cs, pos, k)` asks: can `node`
+// match at `pos` so that the continuation `k` accepts the end position?
+// Backtracking falls out of `||` and `&&`: when a continuation rejects,
+// control returns to the most recent choice point, which tries its next
+// option — no explicit stack, the call stack *is* the backtrack stack.
+
+import syntax;
+
+// Character-class membership: inside any range, flipped when negated.
+fn in_class(ranges: List[(String, String)], neg: Bool, c: String) -> Bool {
+    let hit = ranges.any(|r| {
+        let (lo, hi) = r;
+        lo <= c && c <= hi
+    });
+    hit != neg
+}
+
+fn walk(n: syntax.Ast, cs: List[String], pos: Int, k: fn(Int) -> Bool) -> Bool {
+    match n {
+        Char(c) -> pos < cs.len() && cs[pos] == c && k(pos + 1),
+        Any -> pos < cs.len() && k(pos + 1),
+        Class(ranges, neg) -> pos < cs.len() && in_class(ranges, neg, cs[pos]) && k(pos + 1),
+        Start -> pos == 0 && k(pos),
+        End -> pos == cs.len() && k(pos),
+        Seq(parts) -> walk_seq(parts, 0, cs, pos, k),
+        Alt(a, b) -> walk(a, cs, pos, k) || walk(b, cs, pos, k),
+        Star(x) -> walk_star(x, cs, pos, k),
+        Plus(x) -> walk(x, cs, pos, |end| walk_star(x, cs, end, k)),
+        Opt(x) -> walk(x, cs, pos, k) || k(pos),
+    }
+}
+
+// Concatenation: match parts[i] here, then — wherever it ends — the rest.
+fn walk_seq(parts: List[syntax.Ast], i: Int, cs: List[String], pos: Int, k: fn(Int) -> Bool) -> Bool {
+    if i == parts.len() {
+        k(pos)
+    } else {
+        walk(parts[i], cs, pos, |end| walk_seq(parts, i + 1, cs, end, k))
+    }
+}
+
+// Greedy star: prefer one more repetition, fall back to stopping here.
+// `end != pos` refuses zero-width repetitions so patterns like (a?)* halt.
+fn walk_star(x: syntax.Ast, cs: List[String], pos: Int, k: fn(Int) -> Bool) -> Bool {
+    walk(x, cs, pos, |end| end != pos && walk_star(x, cs, end, k)) || k(pos)
+}
+
+// The (start, end) character span of the leftmost match — and, for that
+// start, the first end the greedy walk accepts. None when nothing matches.
+pub fn find(re: syntax.Ast, text: String) -> Option[(Int, Int)] {
+    let cs = text.chars();
+    let mut hit = 0;
+    for start in 0..=cs.len() {
+        if walk(re, cs, start, |end| { hit = end; true }) {
+            return Some((start, hit));
+        }
+    }
+    None
+}
+
+// Does the pattern match anywhere in the text? Anchor with ^ and $ to
+// demand a whole-string match.
+pub fn matches(re: syntax.Ast, text: String) -> Bool {
+    find(re, text).is_some()
+}

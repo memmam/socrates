@@ -1,0 +1,111 @@
+// spec — golden tests for the rules and the search: move generation,
+// forced captures, multi-jump chains, crowning, undo, and alpha-beta.
+//
+//   ./target/release/fable test demos/checkers
+
+import board;
+import engine;
+
+// ---- the starting position ----
+let b0 = board.initial();
+println(b0.count(board.black));                    //? expect: 12
+println(b0.count(board.white));                    //? expect: 12
+println(b0.moves_for(board.black).len());          //? expect: 7
+println(b0.moves_for(board.black)[0].notation());  //? expect: a3-b4
+println(engine.evaluate(b0));                      //? expect: 0
+
+// ---- captures are forced: the idle a3 man may not move ----
+let forced = board.from_rows([
+    "........",
+    "........",
+    "........",
+    "....w...",
+    "...b....",
+    "b.......",
+    "........",
+    "........",
+]);
+let fm = forced.moves_for(board.black);
+println(fm.len());                                 //? expect: 1
+println(fm[0].notation());                         //? expect: d4xf6
+
+// ---- multi-jumps chain until the piece runs out of victims ----
+let chain = board.from_rows([
+    "........",
+    "........",
+    "........",
+    "....w...",
+    "........",
+    "..w.....",
+    ".b......",
+    "........",
+]);
+println(chain.moves_for(board.black)[0].notation());   //? expect: b2xd4xf6
+
+// ---- crowning: a man on the back rank becomes a king; undo restores all ----
+let crowning = board.from_rows([
+    "........",
+    "..w.....",
+    ".b......",
+    "........",
+    "........",
+    "........",
+    "........",
+    "........",
+]);
+let cm = crowning.moves_for(board.black)[0];
+println(cm.notation());                            //? expect: b6xd8
+let u = crowning.apply(cm);
+println(crowning.at(3));                           //? expect: 2
+crowning.undo_move(u);
+println(crowning.at(17));                          //? expect: 1
+println(crowning.at(10));                          //? expect: -1
+println(crowning.at(3));                           //? expect: 0
+
+// ---- kings move in all four directions ----
+let lone = board.from_rows([
+    "........",
+    "........",
+    "........",
+    "........",
+    "...B....",
+    "........",
+    "........",
+    "........",
+]);
+println(lone.moves_for(board.black).map(|m| m.notation()).join(" "));
+//? expect: d4-c5 d4-e5 d4-c3 d4-e3
+
+// ---- the search declines the capture that walks into a recapture ----
+// Black must jump (captures are forced) but can pick a direction: after
+// d4xf6 the man is recaptured by g7xe5 (h8 blocks the onward jump), while
+// d4xb6 keeps the man safe. Depth 4 sees the difference.
+let tactics = board.from_rows([
+    ".......w",
+    "......w.",
+    "........",
+    "..w.w...",
+    "...b....",
+    "........",
+    "........",
+    "........",
+]);
+let st = engine.new_stats();
+match engine.best_move(tactics, board.black, 4, st) {
+    Some((m, _)) -> println(m.notation()),
+    None -> println("no move"),
+}
+//? expect: d4xb6
+println(st.nodes > 0);                             //? expect: true
+
+// ---- Stats merge with the overloaded + ----
+let s3 = engine.Stats { nodes: 3, cutoffs: 1 } + engine.Stats { nodes: 39, cutoffs: 7 };
+println("{s3.nodes} {s3.cutoffs}");                //? expect: 42 8
+
+// ---- determinism: the same search twice, move for move, node for node ----
+let r1 = engine.new_stats();
+let r2 = engine.new_stats();
+let m1 = engine.best_move(board.initial(), board.black, 5, r1);
+let m2 = engine.best_move(board.initial(), board.black, 5, r2);
+println(m1 == m2);                                 //? expect: true
+println(r1.nodes == r2.nodes);                     //? expect: true

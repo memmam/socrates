@@ -1,0 +1,29 @@
+# cities.csv — metro population (millions) and elevation (metres)
+city,country,continent,pop,elev
+Tokyo,Japan,Asia,37.3,40
+Delhi,India,Asia,32.9,216
+Shanghai,China,Asia,29.2,4
+Seoul,South Korea,Asia,25.5,38
+Beijing,China,Asia,21.5,43
+Mumbai,India,Asia,21.3,14
+Jakarta,Indonesia,Asia,10.6,8
+Moscow,Russia,Europe,12.7,156
+Paris,France,Europe,11.2,35
+London,United Kingdom,Europe,9.6,11
+Madrid,Spain,Europe,6.8,657
+Rome,Italy,Europe,4.3,21
+Berlin,Germany,Europe,3.6,34
+Mexico City,Mexico,North America,22.3,2240
+New York,United States,North America,18.8,10
+Los Angeles,United States,North America,12.5,93
+Chicago,United States,North America,8.9,181
+Toronto,Canada,North America,6.4,76
+Sao Paulo,Brazil,South America,22.4,760
+Buenos Aires,Argentina,South America,15.4,25
+Bogota,Colombia,South America,11.3,2640
+Lima,Peru,South America,11.2,161
+Cairo,Egypt,Africa,21.8,23
+Kinshasa,DR Congo,Africa,16.3,240
+Lagos,Nigeria,Africa,15.9,41
+Nairobi,Kenya,Africa,5.1,1795
+Sydney,Australia,Oceania,5.1,58

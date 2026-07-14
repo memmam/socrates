@@ -139,9 +139,10 @@ pub enum StmtKind {
         cond: Expr,
         body: Block,
     },
+    /// `for pattern in iter { .. }` — any irrefutable pattern (a name, `_`,
+    /// or nested tuple/struct patterns), enforced by the checker like `let`.
     For {
-        var: Ident,
-        var_id: NodeId,
+        pattern: Pattern,
         iter: Expr,
         body: Block,
     },
@@ -270,6 +271,10 @@ pub struct MatchArm {
     pub guard: Option<Expr>,
     pub body: Expr,
     pub span: Span,
+    /// The body was written as a bare `return`/`break`/`continue` and
+    /// desugared to a one-statement block; the formatter prints it back
+    /// in the sugar form.
+    pub sugar: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

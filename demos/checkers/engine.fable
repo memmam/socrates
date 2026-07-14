@@ -1,0 +1,108 @@
+// engine — positional evaluation and negamax alpha-beta search with a
+// capture extension. Scores are in "centi-men": a man is worth 100.
+
+import board;
+
+let win = 30000;
+let inf = 1000000;
+
+// Search statistics. `add` overloads `+`, so main can merge per-move
+// tallies into a running total with `total = total + st`.
+pub struct Stats {
+    nodes: Int,
+    cutoffs: Int,
+}
+
+pub fn new_stats() -> Stats {
+    Stats { nodes: 0, cutoffs: 0 }
+}
+
+impl Stats {
+    pub fn add(self, o: Stats) -> Stats {
+        Stats { nodes: self.nodes + o.nodes, cutoffs: self.cutoffs + o.cutoffs }
+    }
+}
+
+// Static evaluation from Black's point of view. Material dominates;
+// the positional terms give the search a sense of direction:
+//   - men gain value as they advance toward the crowning rank,
+//   - back-rank men delay the opponent's crowning,
+//   - kings prefer the center, and edge pieces see fewer moves.
+pub fn evaluate(b: board.Board) -> Int {
+    let mut sc = 0;
+    for sq in board.squares {
+        let p = b.at(sq);
+        if p != 0 {
+            let s = board.side_of(p);
+            let r = sq / 8;
+            let c = sq % 8;
+            let mut v = 0;
+            if board.is_king(p) {
+                v = 160 + 2 * (math.min(r, 7 - r) + math.min(c, 7 - c));
+            } else {
+                let adv = if s == board.black { 7 - r } else { r };
+                v = 100 + 4 * adv;
+                if adv == 0 { v += 6; }
+            }
+            if c == 0 || c == 7 { v -= 2; }
+            sc += s * v;
+        }
+    }
+    sc
+}
+
+// Negamax with alpha-beta pruning. `side` is the player to move and the
+// returned score is from that player's point of view. When the nominal
+// depth runs out in the middle of a forced-capture melee, the search keeps
+// extending until the position is quiet, so material never silently
+// evaporates just past the horizon.
+fn negamax(b: board.Board, side: Int, depth: Int, alpha: Int, beta: Int, st: Stats) -> Int {
+    st.nodes += 1;
+    let moves = b.moves_for(side);
+    if moves.is_empty() {
+        // The side to move has no moves and loses. Adding the remaining
+        // depth makes the engine prefer quick wins and drawn-out losses.
+        return -win - depth;
+    }
+    if depth <= 0 && moves[0].caps.is_empty() {
+        return side * evaluate(b);
+    }
+    let mut best = -inf;
+    let mut a = alpha;
+    for m in moves {
+        let u = b.apply(m);
+        let sc = -negamax(b, -side, depth - 1, -beta, -a, st);
+        b.undo_move(u);
+        if sc > best {
+            best = sc;
+            if best > a { a = best; }
+        }
+        if a >= beta {
+            st.cutoffs += 1;
+            break;
+        }
+    }
+    best
+}
+
+// Search the root: the chosen move and its score, or None when the side to
+// move has already lost. Ties break toward the earliest move in generation
+// order, which makes self-play fully deterministic.
+pub fn best_move(b: board.Board, side: Int, depth: Int, st: Stats) -> Option[(board.Move, Int)] {
+    let moves = b.moves_for(side);
+    if moves.is_empty() { return None; }
+    let mut best = moves[0];
+    let mut best_sc = -inf;
+    let mut a = -inf;
+    for m in moves {
+        let u = b.apply(m);
+        let sc = -negamax(b, -side, depth - 1, -inf, -a, st);
+        b.undo_move(u);
+        if sc > best_sc {
+            best_sc = sc;
+            best = m;
+            if sc > a { a = sc; }
+        }
+    }
+    Some((best, best_sc))
+}

@@ -104,6 +104,26 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             vm.rng_seed(s);
             Value::Unit
         }
+        MathRandInt => {
+            let lo = int_arg(vm, argc, 0)?;
+            let hi = int_arg(vm, argc, 1)?;
+            if lo > hi {
+                return Err(vm.error(format!("math.rand_int: empty range {lo}..={hi}")));
+            }
+            Value::Int(vm.rng_range(lo, hi))
+        }
+        MathLog10 => Value::Float(float_arg(vm, argc, 0)?.log10()),
+        MathFmod => Value::Float(float_arg(vm, argc, 0)? % float_arg(vm, argc, 1)?),
+        CharFromCode => {
+            let code = int_arg(vm, argc, 0)?;
+            let c = u32::try_from(code).ok().and_then(char::from_u32);
+            match c {
+                Some(c) => vm.alloc_str(c.to_string()),
+                None => {
+                    return Err(vm.error(format!("char: invalid character code {code}")));
+                }
+            }
+        }
 
         TryCall => {
             let f = vm.native_arg(argc, 0);
@@ -579,6 +599,14 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             let s = recv_str(vm, argc)?;
             vm.alloc_str(s.trim().to_string())
         }
+        StrTrimStart => {
+            let s = recv_str(vm, argc)?;
+            vm.alloc_str(s.trim_start().to_string())
+        }
+        StrTrimEnd => {
+            let s = recv_str(vm, argc)?;
+            vm.alloc_str(s.trim_end().to_string())
+        }
         StrToUpper => {
             let s = recv_str(vm, argc)?;
             vm.alloc_str(s.to_ascii_uppercase())
@@ -639,6 +667,18 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                 }
             }
         }
+        StrCodeAt => {
+            let s = recv_str(vm, argc)?;
+            let i = int_arg(vm, argc, 1)?;
+            if i < 0 {
+                make_none(vm)
+            } else {
+                match s.chars().nth(i as usize) {
+                    Some(c) => make_some(vm, Value::Int(c as i64)),
+                    None => make_none(vm),
+                }
+            }
+        }
         StrIndexOf => {
             let s = recv_str(vm, argc)?;
             let sub = vm.str_of(vm.native_arg(argc, 1))?;
@@ -647,6 +687,32 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                     let char_idx = s[..byte_idx].chars().count() as i64;
                     make_some(vm, Value::Int(char_idx))
                 }
+                None => make_none(vm),
+            }
+        }
+        StrIndexOfFrom => {
+            let s = recv_str(vm, argc)?;
+            let sub = vm.str_of(vm.native_arg(argc, 1))?;
+            let from = int_arg(vm, argc, 2)?.max(0) as usize;
+            // `from` is a character index, like every string index in Fable.
+            // Past-the-end starts find nothing (except the empty pattern,
+            // which matches at the very end).
+            let byte_from = s
+                .char_indices()
+                .nth(from)
+                .map(|(b, _)| b)
+                .or(if from >= s.chars().count() { Some(s.len()) } else { None });
+            let hit = byte_from.and_then(|bf| {
+                if bf == s.len() && !sub.is_empty() {
+                    None
+                } else {
+                    s[bf..].find(&sub).map(|rel| {
+                        s[..bf + rel].chars().count() as i64
+                    })
+                }
+            });
+            match hit {
+                Some(char_idx) => make_some(vm, Value::Int(char_idx)),
                 None => make_none(vm),
             }
         }
@@ -836,6 +902,17 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         FloatRound => Value::Float(float_arg(vm, argc, 0)?.round()),
         FloatSqrt => Value::Float(float_arg(vm, argc, 0)?.sqrt()),
         FloatIsNan => Value::Bool(float_arg(vm, argc, 0)?.is_nan()),
+        FloatToFixed => {
+            let f = float_arg(vm, argc, 0)?;
+            let places = int_arg(vm, argc, 1)?.clamp(0, 17) as usize;
+            let mut out = format!("{f:.places$}");
+            // A value that rounds to zero displays as zero, not "-0.00" —
+            // labels built from rounded floats shouldn't grow stray signs.
+            if out.starts_with('-') && out[1..].chars().all(|c| c == '0' || c == '.') {
+                out.remove(0);
+            }
+            vm.alloc_str(out)
+        }
 
         // ------------------------------------------------------------------
         // Option methods
