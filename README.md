@@ -24,8 +24,10 @@ println("total area: {total}");
 
 Everything here — lexer, parser, unification-based type inference,
 Maranget exhaustiveness checking, bytecode compiler, stack VM, mark-and-sweep
-garbage collector, REPL, formatter, and disassembler — lives in about 12,000
-lines of dependency-free Rust in `src/`.
+garbage collector, REPL, formatter, and disassembler — lives in about 13,700
+lines of dependency-free Rust in `src/`, exercised by 200+ golden spec tests
+(every one a runnable Fable program) and a book whose every snippet was
+executed against the interpreter before it was written down.
 
 ## Highlights
 
