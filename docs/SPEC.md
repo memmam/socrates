@@ -1,8 +1,9 @@
 # The Fable Language Specification
 
-**Version 0.1** — This document is the normative reference for the Fable programming
-language. The implementation (`src/`), the golden test suite (`tests/spec/`), and the
-book (`book/`) must all agree with this document.
+**Version 0.6** — This document is the normative reference for the Fable
+programming language. Inline `(vN)` tags mark the release where a feature
+landed. The implementation (`src/`), the golden test suite (`tests/spec/`),
+and the book (`book/`) must all agree with this document.
 
 Fable is a statically-typed, expression-oriented, garbage-collected programming
 language with algebraic data types, pattern matching with exhaustiveness checking,
