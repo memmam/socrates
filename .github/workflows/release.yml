@@ -1,0 +1,40 @@
+name: Release
+
+# Pushing a tag like v0.6.0 builds the release binary, runs the full
+# validation suite against it, and creates a DRAFT GitHub release with
+# the binary attached — publish it by hand after a once-over.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  draft-release:
+    name: Draft release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build and validate
+        run: |
+          cargo build --release
+          cargo test
+          ./target/release/fable test tests/spec demos > /dev/null
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          cp target/release/fable dist/
+          cp LICENSE NOTICE README.md dist/
+          tar -C dist -czf "fable-${GITHUB_REF_NAME}-x86_64-linux.tar.gz" .
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --title "Fable $GITHUB_REF_NAME" \
+            --notes-file .github/RELEASE_NOTES.md \
+            "fable-${GITHUB_REF_NAME}-x86_64-linux.tar.gz"
