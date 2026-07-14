@@ -71,6 +71,8 @@ pub struct Vm {
     /// Cached zero-upvalue closures for `PushFn`.
     fn_closures: Vec<Option<Value>>,
     pub temp_roots: Vec<Value>,
+    /// Arguments after the script path on the CLI (`os.args()`).
+    pub script_args: Vec<String>,
     pub out: Box<dyn Write>,
     start: Instant,
     rng: u64,
@@ -96,6 +98,7 @@ impl Vm {
             interned: Vec::new(),
             fn_closures: Vec::new(),
             temp_roots: Vec::new(),
+            script_args: Vec::new(),
             out,
             start: Instant::now(),
             rng: 0x9E3779B97F4A7C15 ^ {

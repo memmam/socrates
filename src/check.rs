@@ -1331,10 +1331,15 @@ impl Checker {
                 (0..ngen).map(|_| self.fresh(e.span, "type argument")).collect();
             return Type::Named(def, inst);
         }
-        if name == "math" {
+        if Native::is_namespace(name) {
+            let hint = match name {
+                "math" => "use `math.sqrt(..)`, `math.pi`, ...",
+                "fs" => "use `fs.read(..)`, `fs.write(..)`, ...",
+                _ => "use `os.args()`, `os.env(..)`, ...",
+            };
             self.diags.push(
-                Diagnostic::error("E0410", "`math` is a namespace, not a value")
-                    .with_label(e.span, "use `math.sqrt(..)`, `math.pi`, ..."),
+                Diagnostic::error("E0410", format!("`{name}` is a namespace, not a value"))
+                    .with_label(e.span, hint),
             );
             return self.fresh(e.span, "namespace");
         }
@@ -1489,8 +1494,8 @@ impl Checker {
                 if let Some(key) = self.imports.get(name).cloned() {
                     return self.check_module_member(e, name, &key, field);
                 }
-                if name == "math" {
-                    match Native::math_member(&field.name) {
+                if Native::is_namespace(name) {
+                    match Native::namespace_member(name, &field.name) {
                         Some(MathMember::Const(v)) => {
                             self.res.insert(e.id, Res::FloatConst(v));
                             return Type::Float;
@@ -1503,7 +1508,7 @@ impl Checker {
                             self.diags.push(
                                 Diagnostic::error(
                                     "E0413",
-                                    format!("no such member `math.{}`", field.name),
+                                    format!("no such member `{name}.{}`", field.name),
                                 )
                                 .with_label(field.span, ""),
                             );
@@ -1662,8 +1667,8 @@ impl Checker {
                         return self.check_variant_ctor(e, def, name, method, args);
                     }
                 }
-                if name == "math" {
-                    match Native::math_member(&method.name) {
+                if Native::is_namespace(name) {
+                    match Native::namespace_member(name, &method.name) {
                         Some(MathMember::Fn(n)) => {
                             // NativeFn (not Method): the receiver is a
                             // namespace, so the compiler must not push it.
@@ -1674,7 +1679,7 @@ impl Checker {
                             self.diags.push(
                                 Diagnostic::error(
                                     "E0420",
-                                    format!("`math.{}` is a constant, not a function", method.name),
+                                    format!("`{name}.{}` is a constant, not a function", method.name),
                                 )
                                 .with_label(method.span, ""),
                             );
@@ -1684,7 +1689,7 @@ impl Checker {
                             self.diags.push(
                                 Diagnostic::error(
                                     "E0413",
-                                    format!("no such member `math.{}`", method.name),
+                                    format!("no such member `{name}.{}`", method.name),
                                 )
                                 .with_label(method.span, ""),
                             );

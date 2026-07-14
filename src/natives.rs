@@ -106,6 +106,136 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
 
         // ------------------------------------------------------------------
+        // fs.* / os.* (v0.3)
+        // ------------------------------------------------------------------
+        FsRead => {
+            let path = str_arg(vm, argc, 0)?;
+            match std::fs::read_to_string(&path) {
+                Ok(text) => {
+                    let v = vm.alloc_str(text);
+                    make_ok(vm, v)
+                }
+                Err(e) => make_io_err(vm, &path, e),
+            }
+        }
+        FsWrite => {
+            let path = str_arg(vm, argc, 0)?;
+            let contents = str_arg(vm, argc, 1)?;
+            match std::fs::write(&path, contents) {
+                Ok(()) => make_ok(vm, Value::Unit),
+                Err(e) => make_io_err(vm, &path, e),
+            }
+        }
+        FsAppend => {
+            let path = str_arg(vm, argc, 0)?;
+            let contents = str_arg(vm, argc, 1)?;
+            let r = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .and_then(|mut f| std::io::Write::write_all(&mut f, contents.as_bytes()));
+            match r {
+                Ok(()) => make_ok(vm, Value::Unit),
+                Err(e) => make_io_err(vm, &path, e),
+            }
+        }
+        FsExists => {
+            let path = str_arg(vm, argc, 0)?;
+            Value::Bool(std::path::Path::new(&path).exists())
+        }
+        FsListDir => {
+            let path = str_arg(vm, argc, 0)?;
+            match std::fs::read_dir(&path) {
+                Ok(entries) => {
+                    let mut names: Vec<String> = entries
+                        .filter_map(|e| e.ok())
+                        .map(|e| e.file_name().to_string_lossy().into_owned())
+                        .collect();
+                    names.sort();
+                    let out = alloc_rooted_list(vm, Vec::new());
+                    for n in names {
+                        let nv = vm.alloc_str(n);
+                        push_into(vm, out, nv);
+                    }
+                    let list = finish_rooted(vm, 1, Value::Obj(out));
+                    make_ok(vm, list)
+                }
+                Err(e) => make_io_err(vm, &path, e),
+            }
+        }
+        FsCreateDir => {
+            let path = str_arg(vm, argc, 0)?;
+            match std::fs::create_dir_all(&path) {
+                Ok(()) => make_ok(vm, Value::Unit),
+                Err(e) => make_io_err(vm, &path, e),
+            }
+        }
+        FsRemove => {
+            let path = str_arg(vm, argc, 0)?;
+            let p = std::path::Path::new(&path);
+            let r = if p.is_dir() { std::fs::remove_dir(p) } else { std::fs::remove_file(p) };
+            match r {
+                Ok(()) => make_ok(vm, Value::Unit),
+                Err(e) => make_io_err(vm, &path, e),
+            }
+        }
+        OsArgs => {
+            let args = vm.script_args.clone();
+            let out = alloc_rooted_list(vm, Vec::new());
+            for a in args {
+                let av = vm.alloc_str(a);
+                push_into(vm, out, av);
+            }
+            finish_rooted(vm, 1, Value::Obj(out))
+        }
+        OsEnv => {
+            let name = str_arg(vm, argc, 0)?;
+            match std::env::var(&name) {
+                Ok(v) => {
+                    let sv = vm.alloc_str(v);
+                    make_some(vm, sv)
+                }
+                Err(_) => make_none(vm),
+            }
+        }
+        OsRun => {
+            let cmd = str_arg(vm, argc, 0)?;
+            let arg_list = list_arg(vm, argc, 1)?;
+            let mut cmd_args = Vec::with_capacity(arg_list.len());
+            for v in arg_list {
+                cmd_args.push(vm.str_of(v)?);
+            }
+            match std::process::Command::new(&cmd).args(&cmd_args).output() {
+                Ok(out) => {
+                    let code = Value::Int(i64::from(out.status.code().unwrap_or(-1)));
+                    let stdout = vm.alloc_str(String::from_utf8_lossy(&out.stdout).into_owned());
+                    vm.temp_roots.push(stdout);
+                    let stderr = vm.alloc_str(String::from_utf8_lossy(&out.stderr).into_owned());
+                    vm.temp_roots.push(stderr);
+                    let t = make_tuple(vm, vec![code, stdout, stderr]);
+                    vm.temp_roots.truncate(vm.temp_roots.len() - 2);
+                    make_ok(vm, t)
+                }
+                Err(e) => {
+                    let msg = vm.alloc_str(format!("cannot run `{cmd}`: {e}"));
+                    make_err(vm, msg)
+                }
+            }
+        }
+        OsExit => {
+            let code = int_arg(vm, argc, 0)?;
+            std::process::exit(code as i32);
+        }
+        OsTime => {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let secs = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs_f64())
+                .unwrap_or(0.0);
+            Value::Float(secs)
+        }
+
+        // ------------------------------------------------------------------
         // List methods (receiver = arg 0)
         // ------------------------------------------------------------------
         ListLen => Value::Int(list_ref(vm, argc)?.len() as i64),
@@ -875,6 +1005,26 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
 // ---------------------------------------------------------------------------
 // Argument helpers
 // ---------------------------------------------------------------------------
+
+fn str_arg(vm: &Vm, argc: u8, i: u8) -> Result<String, VmError> {
+    vm.str_of(vm.native_arg(argc, i))
+}
+
+fn list_arg(vm: &Vm, argc: u8, i: u8) -> Result<Vec<Value>, VmError> {
+    match vm.native_arg(argc, i) {
+        Value::Obj(h) => match vm.heap.get(h) {
+            Obj::List(items) => Ok(items.clone()),
+            _ => Err(vm.error("internal: expected List argument (VM bug)")),
+        },
+        _ => Err(vm.error("internal: expected List argument (VM bug)")),
+    }
+}
+
+/// An `Err` carrying "<path>: <os error>".
+fn make_io_err(vm: &mut Vm, path: &str, e: std::io::Error) -> Value {
+    let msg = vm.alloc_str(format!("{path}: {e}"));
+    make_err(vm, msg)
+}
 
 fn int_arg(vm: &Vm, argc: u8, i: u8) -> Result<i64, VmError> {
     match vm.native_arg(argc, i) {
