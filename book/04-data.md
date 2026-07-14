@@ -59,7 +59,7 @@ true
 
 `==` is structural (it compares field values, not identity), so two
 independently built `Counter { n: 2 }` values also compare equal. There is
-no built-in `clone` for structs in v0.1 — to copy one, build a new literal
+no built-in `clone` for structs — to copy one, build a new literal
 from the old fields. Tuples, by contrast, are immutable values; a struct is
 the right choice when you want named fields or shared, mutable state.
 
@@ -82,10 +82,10 @@ Pair { first: 1, second: "one" }
 0.5
 ```
 
-(Strings nested inside a printed container are quoted.) Fable has no
-user-defined methods or traits in v0.1, so operations on your types are free
-functions — the standard shape of a Fable program is a handful of types
-followed by the functions that work on them.
+(Strings nested inside a printed container are quoted.) Operations on your
+types can be free functions — a handful of types followed by the functions
+that work on them is a fine shape for a Fable program — or, since v0.2,
+methods in an `impl` block (chapter 7). There are still no traits.
 
 ## Enums
 
@@ -131,9 +131,9 @@ Constructing a variant requires the enum name (`Circle(1.0)` alone is
 
 Fable has no null. The prelude defines two enums you will use constantly:
 `enum Option[T] { Some(T), None }` and `enum Result[T, E] { Ok(T), Err(E) }`.
-They are not special to the language — no privileged syntax, no `?` operator
-in v0.1 — except for one courtesy: their variants may be used *unqualified*,
-both when constructing and in patterns. `Some(5)` and `Option.Some(5)` are
+Only two things about them are special: the `?` operator (chapter 7)
+propagates their failure cases, and — a courtesy — their variants may be
+used *unqualified*, both when constructing and in patterns. `Some(5)` and `Option.Some(5)` are
 the same value.
 
 ```fable
@@ -401,9 +401,10 @@ empty list
 ```
 
 Here `first` is an `Int` — the `None` arm never yields a value because it
-exits `summarize` entirely. Without a `?` operator in v0.1, this idiom is
-the workhorse of Fable error handling; you will find it all over
-`examples/json.fable`.
+exits `summarize` entirely. This idiom is the workhorse of Fable error
+handling when the failure case needs its own logic; when it would just be
+`return`, the `?` operator (chapter 7) says the same thing in one character.
+`examples/json.fable` uses both.
 
 ## Recursive data: a binary search tree
 
@@ -459,6 +460,5 @@ In practice, reach for the built-in `List[T]` first.
 You can now define the two halves of Fable's data vocabulary — structs
 (named fields, mutable, reference semantics) and enums (immutable tagged
 choices) — make them generic, and take them apart with patterns checked for
-exhaustiveness and reachability. The v0.1 constraints shape the idioms: no
-methods or traits means free functions over your types, and no `?` operator
-means `match` plus `{ return ...; }` for error paths.
+exhaustiveness and reachability. Chapter 7 adds the v0.2 conveniences on
+top: methods in `impl` blocks and `?` for the error paths.

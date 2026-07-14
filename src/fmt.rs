@@ -115,7 +115,22 @@ impl Formatter {
         self.blank_line_if_gap(s.span.start);
         self.pad();
         match &s.kind {
-            StmtKind::Fn(f) => self.fn_decl(f),
+            StmtKind::Fn(f) => self.fn_decl(f, false),
+            StmtKind::Import { path, alias } => {
+                self.out.push_str("import ");
+                for (i, seg) in path.iter().enumerate() {
+                    if i > 0 {
+                        self.out.push('.');
+                    }
+                    self.out.push_str(&seg.name);
+                }
+                if let Some(a) = alias {
+                    self.out.push_str(" as ");
+                    self.out.push_str(&a.name);
+                }
+                self.out.push_str(";\n");
+            }
+            StmtKind::Impl(d) => self.impl_decl(d),
             StmtKind::Struct(d) => self.struct_decl(d),
             StmtKind::Enum(d) => self.enum_decl(d),
             StmtKind::Let { mutable, pattern, ty, init } => {
@@ -190,7 +205,9 @@ impl Formatter {
         self.last_line = self.line_of(s.span.end.saturating_sub(1));
     }
 
-    fn fn_decl(&mut self, f: &FnDecl) {
+    /// `method` marks an impl-block method: its first parameter prints as a
+    /// bare `self` (the parser synthesized its type annotation).
+    fn fn_decl(&mut self, f: &FnDecl, method: bool) {
         self.out.push_str("fn ");
         self.out.push_str(&f.name.name);
         if !f.generics.is_empty() {
@@ -209,6 +226,9 @@ impl Formatter {
                 self.out.push_str(", ");
             }
             self.out.push_str(&p.name.name);
+            if method && i == 0 {
+                continue;
+            }
             self.out.push_str(": ");
             self.type_expr(&p.ty);
         }
@@ -220,6 +240,30 @@ impl Formatter {
         self.out.push(' ');
         self.block(&f.body);
         self.out.push('\n');
+    }
+
+    fn impl_decl(&mut self, d: &ImplDecl) {
+        self.out.push_str("impl ");
+        self.out.push_str(&d.ty_name.name);
+        self.generics(&d.generics);
+        if d.methods.is_empty() {
+            self.out.push_str(" {}\n");
+            return;
+        }
+        self.out.push_str(" {\n");
+        self.indent += 1;
+        self.last_line = self.line_of(d.ty_name.span.end);
+        for m in &d.methods {
+            self.flush_comments(m.span.start);
+            self.blank_line_if_gap(m.span.start);
+            self.pad();
+            self.fn_decl(m, true);
+            self.last_line = self.line_of(m.span.end.saturating_sub(1));
+        }
+        self.indent -= 1;
+        self.flush_comments(d.span.end);
+        self.pad();
+        self.out.push_str("}\n");
     }
 
     fn struct_decl(&mut self, d: &StructDecl) {
@@ -406,6 +450,10 @@ impl Formatter {
                     UnOp::Not => "!",
                 });
                 self.expr(expr, 8);
+            }
+            ExprKind::Try(inner) => {
+                self.expr(inner, 9);
+                self.out.push('?');
             }
             ExprKind::Binary { op, lhs, rhs, .. } => {
                 let p = bin_prec(*op);

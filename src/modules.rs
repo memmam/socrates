@@ -1,0 +1,181 @@
+//! The module loader: resolves `import` statements to files, parses each
+//! module once, and returns all modules in dependency order (root last).
+//!
+//! `import a.b;` in `/dir/file.fable` loads `/dir/a/b.fable`. Every module is
+//! identified by a *key* — its import path as first encountered ("a.b") — used
+//! as the name-mangling prefix inside the shared checker; the root module's
+//! key is empty (its names stay unprefixed). Files are deduplicated by
+//! canonical path, so a diamond `main → a → c, main → b → c` loads `c` once.
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use crate::ast::{Program, StmtKind};
+use crate::diag::Diagnostic;
+use crate::source::Source;
+use crate::span::Span;
+use crate::{diag, lexer, parser};
+
+pub struct ModuleUnit {
+    /// Name-mangling prefix: "" for the root module, the module key otherwise.
+    pub prefix: String,
+    pub source: Source,
+    pub program: Program,
+    /// Import alias (as written or defaulted) → module key.
+    pub imports: HashMap<String, String>,
+}
+
+/// Load `root` and everything it transitively imports. Modules come back in
+/// dependency order (imports before importers, root last), each parsed with
+/// globally unique `NodeId`s so they can share one checker.
+///
+/// On failure, returns the diagnostics together with the source they belong
+/// to (lex/parse errors of any module, unreadable files, cycles).
+pub fn load_modules(root: &Path) -> Result<Vec<ModuleUnit>, (Source, Vec<Diagnostic>)> {
+    let mut loader = Loader {
+        units: Vec::new(),
+        key_by_path: HashMap::new(),
+        keys_taken: HashMap::new(),
+        loading: Vec::new(),
+        next_id: 0,
+    };
+    loader.load(root, String::new())?;
+    Ok(loader.units)
+}
+
+struct Loader {
+    units: Vec<ModuleUnit>,
+    /// Canonical path → module key, for diamond dedup.
+    key_by_path: HashMap<PathBuf, String>,
+    /// Keys already claimed (uniqueness backstop for same-named modules from
+    /// different directories).
+    keys_taken: HashMap<String, u32>,
+    /// DFS stack of (canonical path, display name) for cycle reporting.
+    loading: Vec<(PathBuf, String)>,
+    next_id: u32,
+}
+
+impl Loader {
+    fn load(
+        &mut self,
+        path: &Path,
+        key: String,
+    ) -> Result<(), (Source, Vec<Diagnostic>)> {
+        let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let display = path.display().to_string();
+        let text = match std::fs::read_to_string(path) {
+            Ok(t) => t,
+            Err(e) => {
+                let source = Source::new(display.clone(), String::new());
+                return Err((
+                    source,
+                    vec![Diagnostic::error(
+                        "E0335",
+                        format!("cannot read `{display}`: {e}"),
+                    )],
+                ));
+            }
+        };
+        let source = Source::new(display.clone(), text.clone());
+
+        let lexed = lexer::lex(&text);
+        let parsed = parser::parse_with_ids(lexed.tokens, &text, self.next_id);
+        let mut diags = lexed.diags;
+        diags.extend(parsed.diags);
+        if diag::has_errors(&diags) {
+            return Err((source, diags));
+        }
+        self.next_id = parsed.node_count;
+
+        self.key_by_path.insert(canon.clone(), key.clone());
+        self.loading.push((canon, display));
+
+        let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
+        let mut imports: HashMap<String, String> = HashMap::new();
+        for stmt in &parsed.program.stmts {
+            let StmtKind::Import { path: segs, alias } = &stmt.kind else { continue };
+            let target_key = self.resolve_import(&dir, segs, stmt.span, &source)?;
+            let alias_name = alias
+                .as_ref()
+                .map(|a| a.name.clone())
+                .unwrap_or_else(|| segs.last().unwrap().name.clone());
+            if imports.insert(alias_name.clone(), target_key).is_some() {
+                return Err((
+                    source,
+                    vec![Diagnostic::error(
+                        "E0336",
+                        format!("duplicate import alias `{alias_name}`"),
+                    )
+                    .with_label(stmt.span, "already imported under this name")
+                    .with_note("use `as` to give one of them a different alias")],
+                ));
+            }
+        }
+
+        self.loading.pop();
+        self.units.push(ModuleUnit {
+            prefix: key,
+            source,
+            program: parsed.program,
+            imports,
+        });
+        Ok(())
+    }
+
+    /// Resolve (and if necessary load) one import; returns the module key.
+    fn resolve_import(
+        &mut self,
+        dir: &Path,
+        segs: &[crate::ast::Ident],
+        span: Span,
+        importer: &Source,
+    ) -> Result<String, (Source, Vec<Diagnostic>)> {
+        let dotted: Vec<&str> = segs.iter().map(|s| s.name.as_str()).collect();
+        let dotted = dotted.join(".");
+        let mut rel = PathBuf::new();
+        for s in segs {
+            rel.push(&s.name);
+        }
+        rel.set_extension("fable");
+        let target = dir.join(&rel);
+        if !target.is_file() {
+            return Err((
+                importer.clone(),
+                vec![Diagnostic::error(
+                    "E0337",
+                    format!("cannot find module `{dotted}`"),
+                )
+                .with_label(span, format!("looked for `{}`", target.display()))],
+            ));
+        }
+        let canon = target.canonicalize().unwrap_or_else(|_| target.clone());
+
+        if self.loading.iter().any(|(p, _)| *p == canon) {
+            let chain: Vec<&str> = self
+                .loading
+                .iter()
+                .map(|(_, name)| name.as_str())
+                .collect();
+            return Err((
+                importer.clone(),
+                vec![Diagnostic::error(
+                    "E0338",
+                    format!("circular import of `{dotted}`"),
+                )
+                .with_label(span, "this import completes a cycle")
+                .with_note(format!("import chain: {}", chain.join(" → ")))],
+            ));
+        }
+        if let Some(k) = self.key_by_path.get(&canon) {
+            return Ok(k.clone());
+        }
+
+        // Claim a unique key: the dotted import path, disambiguated if a
+        // different file already took it.
+        let n = self.keys_taken.entry(dotted.clone()).or_insert(0);
+        *n += 1;
+        let key = if *n == 1 { dotted } else { format!("{dotted}#{n}") };
+        self.load(&target, key.clone())?;
+        Ok(key)
+    }
+}

@@ -81,6 +81,11 @@ fn describe(op: &Op, at: usize, program: &CompiledProgram) -> String {
             program.protos.get(*p as usize).map(|f| f.name.as_str()).unwrap_or("?")
         ),
         Op::CallNative(nat, n) => format!("call_native {} argc={n}", nat.name()),
+        Op::TailCall(n) => format!("tail_call   {n}"),
+        Op::TailCallFn(p, n) => format!(
+            "tail_callfn {p} argc={n} ; {}",
+            program.protos.get(*p as usize).map(|f| f.name.as_str()).unwrap_or("?")
+        ),
         Op::MakeVariant { def, variant, arity } => {
             let name = match program.defs.get(*def as usize) {
                 Some(crate::bytecode::RtDef::Enum { name, variants }) => format!(

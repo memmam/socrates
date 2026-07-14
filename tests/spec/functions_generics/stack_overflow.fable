@@ -1,6 +1,8 @@
-// Unbounded recursion panics with "stack overflow" (exit code 70); output
-// produced before the panic must still appear.
+// Unbounded non-tail recursion panics with "stack overflow" (exit code 70);
+// output produced before the panic must still appear. (The `+ 1` keeps the
+// call out of tail position — since v0.2, calls in tail position reuse the
+// frame and never overflow; see tests/spec/tco/.)
 //? panic: stack overflow
-fn boom(n: Int) -> Int { boom(n + 1) }
+fn boom(n: Int) -> Int { boom(n + 1) + 1 }
 println("starting");       //? expect: starting
 println(boom(0));

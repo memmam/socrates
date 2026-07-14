@@ -65,10 +65,16 @@ impl ProgramBuilder {
             c.fn_proto_map.push(idx);
         }
 
-        // Compile declared function bodies.
+        // Compile declared function and method bodies.
         for stmt in &program.stmts {
-            if let StmtKind::Fn(f) = &stmt.kind {
-                c.compile_fn_decl(f);
+            match &stmt.kind {
+                StmtKind::Fn(f) => c.compile_fn_decl(f),
+                StmtKind::Impl(im) => {
+                    for m in &im.methods {
+                        c.compile_fn_decl(m);
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -394,7 +400,7 @@ impl<'a> Compiler<'a> {
             };
             self.ctx().locals.push(LocalSlot { local_id: id, slot: i as u16, captured: false });
         }
-        self.block_expr(&f.body);
+        self.block_expr_tail(&f.body);
         self.emit(Op::Return, f.body.span);
         let ctx = self.ctxs.pop().unwrap();
         let mut proto = ctx.proto;
@@ -419,7 +425,7 @@ impl<'a> Compiler<'a> {
             };
             self.ctx().locals.push(LocalSlot { local_id: id, slot: i as u16, captured: false });
         }
-        self.expr(body);
+        self.expr_tail(body);
         self.emit(Op::Return, body.span);
         let ctx = self.ctxs.pop().unwrap();
         let mut proto = ctx.proto;
@@ -435,7 +441,11 @@ impl<'a> Compiler<'a> {
 
     fn stmt(&mut self, stmt: &Stmt) {
         match &stmt.kind {
-            StmtKind::Fn(_) | StmtKind::Struct(_) | StmtKind::Enum(_) => {}
+            StmtKind::Fn(_)
+            | StmtKind::Struct(_)
+            | StmtKind::Enum(_)
+            | StmtKind::Impl(_)
+            | StmtKind::Import { .. } => {}
             StmtKind::Let { pattern, init, .. } => self.let_stmt(pattern, init, stmt.span),
             StmtKind::Assign { target, op, value } => self.assign(target, *op, value, stmt.span),
             StmtKind::Expr { expr, tail } => {
@@ -512,7 +522,7 @@ impl<'a> Compiler<'a> {
             }
             StmtKind::Return(value) => {
                 match value {
-                    Some(v) => self.expr(v),
+                    Some(v) => self.expr_tail(v),
                     None => {
                         self.emit(Op::Unit, stmt.span);
                     }
@@ -816,6 +826,15 @@ impl<'a> Compiler<'a> {
                             e.span,
                         );
                     }
+                    Some(Res::Global(slot)) => {
+                        // A module global: `alias.value`.
+                        self.emit(Op::GetGlobal(slot as u16), e.span);
+                    }
+                    Some(Res::Fn(idx)) => {
+                        // A module function as a value: `alias.f`.
+                        let p = self.fn_proto_map[idx as usize];
+                        self.emit(Op::PushFn(p), e.span);
+                    }
                     _ => {
                         self.emit(Op::Unit, e.span);
                     }
@@ -830,6 +849,32 @@ impl<'a> Compiler<'a> {
                             self.expr(a);
                         }
                         self.emit(Op::CallNative(native, args.len() as u8 + 1), e.span);
+                    }
+                    Some(Res::Fn(idx)) => {
+                        // User-defined method: the receiver is argument 0.
+                        self.expr(recv);
+                        for a in args {
+                            self.expr(a);
+                        }
+                        let p = self.fn_proto_map[idx as usize];
+                        self.emit(Op::CallFn(p, args.len() as u8 + 1), e.span);
+                    }
+                    Some(Res::ModuleFn(idx)) => {
+                        // `alias.f(args)` — the receiver is a namespace.
+                        for a in args {
+                            self.expr(a);
+                        }
+                        let p = self.fn_proto_map[idx as usize];
+                        self.emit(Op::CallFn(p, args.len() as u8), e.span);
+                    }
+                    Some(Res::Global(slot)) => {
+                        // `alias.value(args)` — a module global holding a
+                        // function value.
+                        self.emit(Op::GetGlobal(slot as u16), e.span);
+                        for a in args {
+                            self.expr(a);
+                        }
+                        self.emit(Op::Call(args.len() as u8), e.span);
                     }
                     Some(Res::NativeFn(native)) => {
                         // `math.sqrt(x)` — the receiver is a namespace.
@@ -916,6 +961,24 @@ impl<'a> Compiler<'a> {
                     UnOp::Neg => self.emit(Op::Neg, e.span),
                     UnOp::Not => self.emit(Op::Not, e.span),
                 };
+            }
+            ExprKind::Try(inner) => {
+                // `Some`/`Ok` are both variant 0 of their prelude enums, and
+                // `None`/`Err` are variant 1 — the failure value on the stack
+                // IS the propagated return value, so no re-wrapping is needed.
+                self.expr(inner);
+                self.emit(Op::TestVariant(0), e.span);
+                let fail = self.emit_jump(Op::JumpIfFalse(0), e.span);
+                self.emit(Op::GetVariantField(0), e.span);
+                let end = self.emit_jump(Op::Jump(0), e.span);
+                let depth_after = self.depth();
+                self.patch_jump(fail);
+                // Fail path: the None/Err value is on top; return it as-is.
+                self.emit(Op::Return, e.span);
+                self.patch_jump(end);
+                // Both paths leave one value; the tracked depth followed the
+                // fail path's Return, so restore the success-path depth.
+                self.set_depth(depth_after);
             }
             ExprKind::Binary { op, op_span, lhs, rhs } => match op {
                 BinOp::And => {
@@ -1025,6 +1088,93 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    /// Compile an expression in tail position: the emitted value immediately
+    /// becomes the enclosing function's return value. Calls become tail
+    /// calls; `if`/`match`/block forward tail position into their result
+    /// branches. Any op sequence emitted after a rewritten call is dead on
+    /// that path (the frame is replaced), but is kept for the other paths
+    /// and for depth bookkeeping (tail variants share their originals'
+    /// stack effects).
+    fn expr_tail(&mut self, e: &Expr) {
+        match &e.kind {
+            ExprKind::Call { .. } | ExprKind::MethodCall { .. } => {
+                self.expr(e);
+                self.retarget_last_call();
+            }
+            ExprKind::If { cond, then, els } => {
+                self.expr(cond);
+                let jf = self.emit_jump(Op::JumpIfFalse(0), cond.span);
+                let d0 = self.depth();
+                self.block_expr_tail(then);
+                match els {
+                    Some(els) => {
+                        let jend = self.emit_jump(Op::Jump(0), e.span);
+                        self.patch_jump(jf);
+                        self.set_depth(d0);
+                        self.expr_tail(els);
+                        self.patch_jump(jend);
+                    }
+                    None => {
+                        let jend = self.emit_jump(Op::Jump(0), e.span);
+                        self.patch_jump(jf);
+                        self.set_depth(d0);
+                        self.emit(Op::Unit, e.span);
+                        self.patch_jump(jend);
+                    }
+                }
+            }
+            ExprKind::Block(block) => self.block_expr_tail(block),
+            ExprKind::Match { scrutinee, arms } => {
+                self.match_expr_impl(e, scrutinee, arms, true)
+            }
+            _ => self.expr(e),
+        }
+    }
+
+    /// Rewrite a just-emitted `Call`/`CallFn` into its tail variant. The
+    /// replacement is 1:1 in place, so no jump offsets shift. Natives and
+    /// variant constructors push no frame and are left as-is.
+    fn retarget_last_call(&mut self) {
+        match self.ctx().proto.code.last_mut() {
+            Some(op @ Op::CallFn(..)) => {
+                let Op::CallFn(p, n) = *op else { unreachable!() };
+                *op = Op::TailCallFn(p, n);
+            }
+            Some(op @ Op::Call(..)) => {
+                let Op::Call(n) = *op else { unreachable!() };
+                *op = Op::TailCall(n);
+            }
+            _ => {}
+        }
+    }
+
+    /// `block_expr`, but the final tail expression is in tail position.
+    fn block_expr_tail(&mut self, block: &Block) {
+        self.begin_scope();
+        let n = block.stmts.len();
+        let mut has_value = false;
+        for (i, stmt) in block.stmts.iter().enumerate() {
+            let last = i + 1 == n;
+            if last {
+                match &stmt.kind {
+                    StmtKind::Expr { expr, tail: true } => {
+                        self.expr_tail(expr);
+                        has_value = true;
+                    }
+                    _ => {
+                        self.stmt(stmt);
+                    }
+                }
+            } else {
+                self.stmt(stmt);
+            }
+        }
+        if !has_value {
+            self.emit(Op::Unit, block.span);
+        }
+        self.end_scope_expr(block.span);
+    }
+
     /// Compile a block that yields a value.
     fn block_expr(&mut self, block: &Block) {
         self.begin_scope();
@@ -1077,6 +1227,16 @@ impl<'a> Compiler<'a> {
     // ------------------------------------------------------------------
 
     fn match_expr(&mut self, e: &Expr, scrutinee: &Expr, arms: &[MatchArm]) {
+        self.match_expr_impl(e, scrutinee, arms, false)
+    }
+
+    fn match_expr_impl(
+        &mut self,
+        e: &Expr,
+        scrutinee: &Expr,
+        arms: &[MatchArm],
+        tail: bool,
+    ) {
         self.expr(scrutinee);
         let scrut_slot = self.declare_local(ANON);
         let base_depth = self.depth();
@@ -1111,7 +1271,11 @@ impl<'a> Compiler<'a> {
             }
 
             // 4. Body.
-            self.expr(&arm.body);
+            if tail {
+                self.expr_tail(&arm.body);
+            } else {
+                self.expr(&arm.body);
+            }
             if nbinds > 0 {
                 self.emit(Op::EndBlock(nbinds), arm.span);
             }
@@ -1349,8 +1513,8 @@ fn stack_effect(op: &Op) -> i32 {
         PopN(n) | EndBlock(n) | PopScope(n) => -(*n as i32),
         Jump(_) | JumpIfFalsePeek(_) | JumpIfTruePeek(_) | Neg | Not | ToString | GetField(_)
         | TupleGet(_) | GetVariantField(_) | MatchFail => 0,
-        Call(n) => -(*n as i32),
-        CallFn(_, n) | CallNative(_, n) => 1 - (*n as i32),
+        Call(n) | TailCall(n) => -(*n as i32),
+        CallFn(_, n) | TailCallFn(_, n) | CallNative(_, n) => 1 - (*n as i32),
         Return => -1,
         Concat(n) | MakeList(n) | MakeTuple(n) => 1 - (*n as i32),
         MakeMap(n) => 1 - 2 * (*n as i32),

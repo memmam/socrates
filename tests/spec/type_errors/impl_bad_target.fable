@@ -1,0 +1,20 @@
+// SPEC §5.1 (v0.2): E0331 — impl targets must be user-defined structs or
+// enums; built-in types (including prelude Option/Result) and unknown names
+// are rejected.
+//? error: E0331
+//? error: cannot define methods on the built-in type `Int`
+//? error: cannot define methods on the built-in type `Option`
+//? error: cannot `impl` unknown type `Mystery`
+impl Int {
+    fn double(self) -> Int {
+        self
+    }
+}
+impl Option {
+    fn tap(self) {
+    }
+}
+impl Mystery {
+    fn poke(self) {
+    }
+}

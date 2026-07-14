@@ -16,6 +16,9 @@ down; output shown is real output.
    tuples, Ranges, and the string toolbox.
 6. [Under the Hood](06-under-the-hood.md) — bytecode, closures at runtime,
    the garbage collector, and what `fable dis` shows you.
+7. [Methods, `?`, Modules, and Tail Calls](07-v02-features.md) — the v0.2
+   features: `impl` blocks, error propagation with `?`, multi-file programs,
+   and tail-call optimization.
 
 For the terse normative rules, see the [language specification](../docs/SPEC.md);
 for implementation internals, [ARCHITECTURE.md](../docs/ARCHITECTURE.md).

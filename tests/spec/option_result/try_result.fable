@@ -1,0 +1,53 @@
+// SPEC §3.6 (v0.2): the `?` operator on Result. `expr?` unwraps `Ok` or
+// returns the `Err` from the enclosing function. The error types must agree;
+// the Ok types are independent.
+fn parse_pos(s: String) -> Result[Int, String] {
+    match s.parse_int() {
+        Some(n) -> if n > 0 { Ok(n) } else { Err("not positive: {n}") },
+        None -> Err("not a number: {s}"),
+    }
+}
+
+fn add_parsed(a: String, b: String) -> Result[Int, String] {
+    Ok(parse_pos(a)? + parse_pos(b)?)
+}
+
+println(add_parsed("2", "3"));       //? expect: Ok(5)
+println(add_parsed("x", "3"));       //? expect: Err("not a number: x")
+println(add_parsed("2", "-4"));      //? expect: Err("not positive: -4")
+
+// The Ok types may differ: unwrap Result[Int, String], return Result[String, String].
+fn show_parsed(s: String) -> Result[String, String] {
+    let n = parse_pos(s)?;
+    Ok("parsed {n}")
+}
+println(show_parsed("7"));           //? expect: Ok("parsed 7")
+println(show_parsed("nope"));        //? expect: Err("not a number: nope")
+
+// `?` chains left to right and stops at the first Err.
+fn chain(xs: List[String]) -> Result[Int, String] {
+    let mut total = 0;
+    for x in xs {
+        total += parse_pos(x)?;
+    }
+    Ok(total)
+}
+println(chain(["1", "2", "3"]));     //? expect: Ok(6)
+println(chain(["1", "bad", "3"]));   //? expect: Err("not a number: bad")
+
+// Err payloads pass through untouched, including structured ones.
+fn fail_with_pair() -> Result[Int, (Int, String)] {
+    Err((404, "missing"))
+}
+fn relay() -> Result[String, (Int, String)] {
+    let v = fail_with_pair()?;
+    Ok(str(v))
+}
+println(relay());                    //? expect: Err((404, "missing"))
+
+// `?` on a method-call result, mid-expression.
+fn head_doubled(xs: List[Int]) -> Option[Int] {
+    Some(xs.first()? * 2)
+}
+println(head_doubled([21]));         //? expect: Some(42)
+println(head_doubled([]));           //? expect: None

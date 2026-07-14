@@ -268,6 +268,33 @@ impl<'a> Parser<'a> {
                 let span = e.span;
                 Ok(Some(Stmt { span, id: self.id(), kind: StmtKind::Enum(e) }))
             }
+            TokenKind::Impl => {
+                let i = self.impl_decl()?;
+                if !top_level {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "E0201",
+                            "impl blocks are only allowed at the top level",
+                        )
+                        .with_label(i.span, "declared here"),
+                    );
+                }
+                let span = i.span;
+                Ok(Some(Stmt { span, id: self.id(), kind: StmtKind::Impl(i) }))
+            }
+            TokenKind::Import => {
+                let s = self.import_stmt()?;
+                if !top_level {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "E0201",
+                            "imports are only allowed at the top level",
+                        )
+                        .with_label(s.span, ""),
+                    );
+                }
+                Ok(Some(s))
+            }
             TokenKind::Let => self.let_stmt().map(Some),
             TokenKind::While => self.while_stmt().map(Some),
             TokenKind::For => self.for_stmt().map(Some),
@@ -423,6 +450,121 @@ impl<'a> Parser<'a> {
         let generics = self.generics()?;
         self.expect(&TokenKind::LParen, "`(`")?;
         let mut params = Vec::new();
+        while !self.at(&TokenKind::RParen) {
+            let pname = self.ident("parameter name")?;
+            self.expect(&TokenKind::Colon, "`:` (parameter types are required)")?;
+            let ty = self.type_expr()?;
+            params.push(Param { name: pname, ty, id: self.id() });
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(&TokenKind::RParen, "`)`")?;
+        let ret = if self.eat(&TokenKind::Arrow) { Some(self.type_expr()?) } else { None };
+        let body = self.block()?;
+        Ok(FnDecl {
+            span: start.to(body.span),
+            id: self.id(),
+            name,
+            generics,
+            params,
+            ret,
+            body,
+        })
+    }
+
+    /// `import a.b;` / `import a.b as c;`
+    fn import_stmt(&mut self) -> PResult<Stmt> {
+        let start = self.advance().span; // `import`
+        let mut path = vec![self.ident("module name")?];
+        while self.eat(&TokenKind::Dot) {
+            path.push(self.ident("module name")?);
+        }
+        // `as` is contextual: an ordinary identifier here.
+        let alias = if matches!(self.peek(), TokenKind::Ident(n) if n == "as") {
+            self.advance();
+            Some(self.ident("module alias")?)
+        } else {
+            None
+        };
+        let end = self.span();
+        self.expect(&TokenKind::Semi, "`;` after import")?;
+        Ok(Stmt {
+            span: start.to(end),
+            id: self.id(),
+            kind: StmtKind::Import { path, alias },
+        })
+    }
+
+    fn impl_decl(&mut self) -> PResult<ImplDecl> {
+        let start = self.advance().span; // `impl`
+        let ty_name = self.ident("type name")?;
+        let generics = self.generics()?;
+        self.expect(&TokenKind::LBrace, "`{`")?;
+        let mut methods = Vec::new();
+        while !self.at(&TokenKind::RBrace) {
+            if !self.at(&TokenKind::Fn) {
+                self.error_here(format!(
+                    "expected `fn` or `}}` in an impl block, found {}",
+                    self.peek().describe()
+                ));
+                return Err(());
+            }
+            methods.push(self.method_decl(&ty_name, &generics)?);
+        }
+        let end = self.expect(&TokenKind::RBrace, "`}`")?.span;
+        Ok(ImplDecl { span: start.to(end), id: self.id(), ty_name, generics, methods })
+    }
+
+    /// A method inside an impl block: like `fn_decl`, but the first parameter
+    /// must be a bare `self`, whose type (`TypeName[G, ...]`) is synthesized
+    /// here so methods run through the ordinary function machinery.
+    fn method_decl(&mut self, ty_name: &Ident, impl_generics: &[Ident]) -> PResult<FnDecl> {
+        let start = self.advance().span; // `fn`
+        let name = self.ident("method name")?;
+        let generics = self.generics()?;
+        self.expect(&TokenKind::LParen, "`(`")?;
+        let mut params = Vec::new();
+        match self.peek() {
+            TokenKind::Ident(n) if n == "self" => {
+                let pname = self.ident("parameter name")?;
+                if self.at(&TokenKind::Colon) {
+                    self.error_here(
+                        "`self` takes no type annotation; it always has the impl type",
+                    );
+                    return Err(());
+                }
+                let span = pname.span;
+                let args = impl_generics
+                    .iter()
+                    .map(|g| TypeExpr {
+                        span,
+                        id: self.id(),
+                        kind: TypeExprKind::Named {
+                            name: Ident { name: g.name.clone(), span },
+                            args: Vec::new(),
+                        },
+                    })
+                    .collect();
+                let ty = TypeExpr {
+                    span,
+                    id: self.id(),
+                    kind: TypeExprKind::Named {
+                        name: Ident { name: ty_name.name.clone(), span },
+                        args,
+                    },
+                };
+                params.push(Param { name: pname, ty, id: self.id() });
+                self.eat(&TokenKind::Comma);
+            }
+            _ => {
+                self.error_here(format!(
+                    "the first parameter of a method must be `self`, found {}",
+                    self.peek().describe()
+                ));
+                return Err(());
+            }
+        }
         while !self.at(&TokenKind::RParen) {
             let pname = self.ident("parameter name")?;
             self.expect(&TokenKind::Colon, "`:` (parameter types are required)")?;
@@ -817,6 +959,11 @@ impl<'a> Parser<'a> {
                         kind: ExprKind::Index { base: Box::new(expr), index: Box::new(index) },
                     };
                 }
+                TokenKind::Question => {
+                    let q = self.advance().span;
+                    let span = expr.span.to(q);
+                    expr = Expr { span, id: self.id(), kind: ExprKind::Try(Box::new(expr)) };
+                }
                 _ => break,
             }
         }
@@ -919,6 +1066,28 @@ impl<'a> Parser<'a> {
                 if self.at(&TokenKind::LBrace) && !self.no_struct && self.looks_like_struct_lit() {
                     let name = Ident { name, span: tok_span };
                     return self.struct_lit(name);
+                }
+                // Qualified struct literal `alias.Name { ... }`: the dotted
+                // name is stored joined ("alias.Name"); the checker splits it.
+                if self.at(&TokenKind::Dot)
+                    && matches!(self.peek2(), TokenKind::Ident(_))
+                    && matches!(
+                        self.tokens[(self.pos + 2).min(self.tokens.len() - 1)].kind,
+                        TokenKind::LBrace
+                    )
+                    && !self.no_struct
+                {
+                    let save = self.pos;
+                    self.advance(); // `.`
+                    let second = self.ident("type name")?;
+                    if self.looks_like_struct_lit() {
+                        let name = Ident {
+                            name: format!("{name}.{}", second.name),
+                            span: tok_span.to(second.span),
+                        };
+                        return self.struct_lit(name);
+                    }
+                    self.pos = save;
                 }
                 Ok(Expr { span: tok_span, id: self.id(), kind: ExprKind::Var(name) })
             }
@@ -1290,16 +1459,34 @@ impl<'a> Parser<'a> {
                 self.advance();
                 let head = Ident { name, span: tok_span };
 
-                // Qualified variant: `Enum.Variant` / `Enum.Variant(...)`.
+                // Qualified variant: `Enum.Variant` / `Enum.Variant(...)`,
+                // or module-qualified `alias.Enum.Variant(...)` (the enum
+                // name is stored joined: "alias.Enum"). A module-qualified
+                // struct pattern `alias.Type { .. }` is also caught here.
                 if self.at(&TokenKind::Dot) {
                     self.advance();
-                    let variant = self.ident("variant name")?;
+                    let mut enum_name = head;
+                    let mut variant = self.ident("variant name")?;
+                    if self.at(&TokenKind::Dot) {
+                        self.advance();
+                        enum_name = Ident {
+                            name: format!("{}.{}", enum_name.name, variant.name),
+                            span: enum_name.span.to(variant.span),
+                        };
+                        variant = self.ident("variant name")?;
+                    } else if self.at(&TokenKind::LBrace) {
+                        let name = Ident {
+                            name: format!("{}.{}", enum_name.name, variant.name),
+                            span: enum_name.span.to(variant.span),
+                        };
+                        return self.struct_pattern(name, tok_span);
+                    }
                     let (fields, has_parens, end) = self.variant_fields(variant.span)?;
                     return Ok(Pattern {
                         span: tok_span.to(end),
                         id: self.id(),
                         kind: PatternKind::Variant {
-                            enum_name: Some(head),
+                            enum_name: Some(enum_name),
                             variant,
                             fields,
                             has_parens,
@@ -1318,35 +1505,7 @@ impl<'a> Parser<'a> {
                 }
                 // Struct pattern: `Point { ... }`.
                 if self.at(&TokenKind::LBrace) {
-                    self.advance();
-                    let mut fields = Vec::new();
-                    let mut rest = false;
-                    while !self.at(&TokenKind::RBrace) {
-                        if self.eat(&TokenKind::DotDot) {
-                            rest = true;
-                            break;
-                        }
-                        let fname = self.ident("field name")?;
-                        let pat = if self.eat(&TokenKind::Colon) {
-                            self.pattern()?
-                        } else {
-                            Pattern {
-                                span: fname.span,
-                                id: self.id(),
-                                kind: PatternKind::Binding(fname.name.clone()),
-                            }
-                        };
-                        fields.push((fname, pat));
-                        if !self.eat(&TokenKind::Comma) {
-                            break;
-                        }
-                    }
-                    let end = self.expect(&TokenKind::RBrace, "`}`")?.span;
-                    return Ok(Pattern {
-                        span: tok_span.to(end),
-                        id: self.id(),
-                        kind: PatternKind::Struct { name: head, fields, rest },
-                    });
+                    return self.struct_pattern(head, tok_span);
                 }
                 // Plain binding (the checker may reinterpret `None` etc. as a
                 // nullary variant).
@@ -1361,6 +1520,40 @@ impl<'a> Parser<'a> {
                 Err(())
             }
         }
+    }
+
+    /// The body of a struct pattern, after its (possibly module-qualified)
+    /// name; the cursor is at `{`.
+    fn struct_pattern(&mut self, name: Ident, start: Span) -> PResult<Pattern> {
+        self.advance(); // `{`
+        let mut fields = Vec::new();
+        let mut rest = false;
+        while !self.at(&TokenKind::RBrace) {
+            if self.eat(&TokenKind::DotDot) {
+                rest = true;
+                break;
+            }
+            let fname = self.ident("field name")?;
+            let pat = if self.eat(&TokenKind::Colon) {
+                self.pattern()?
+            } else {
+                Pattern {
+                    span: fname.span,
+                    id: self.id(),
+                    kind: PatternKind::Binding(fname.name.clone()),
+                }
+            };
+            fields.push((fname, pat));
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        let end = self.expect(&TokenKind::RBrace, "`}`")?.span;
+        Ok(Pattern {
+            span: start.to(end),
+            id: self.id(),
+            kind: PatternKind::Struct { name, fields, rest },
+        })
     }
 
     fn variant_fields(&mut self, name_span: Span) -> PResult<(Vec<Pattern>, bool, Span)> {
@@ -1393,7 +1586,17 @@ impl<'a> Parser<'a> {
         match self.peek().clone() {
             TokenKind::Ident(name) => {
                 self.advance();
-                let name = Ident { name, span: tok_span };
+                let mut name = Ident { name, span: tok_span };
+                // Qualified type from an imported module: `alias.Type`. Stored
+                // joined ("alias.Type"); the checker splits it.
+                if self.at(&TokenKind::Dot) && matches!(self.peek2(), TokenKind::Ident(_)) {
+                    self.advance();
+                    let second = self.ident("type name")?;
+                    name = Ident {
+                        name: format!("{}.{}", name.name, second.name),
+                        span: name.span.to(second.span),
+                    };
+                }
                 let mut args = Vec::new();
                 let mut span = tok_span;
                 if self.eat(&TokenKind::LBracket) {

@@ -47,6 +47,9 @@ pub enum Res {
     TupleIndex(u32),
     /// Builtin method call.
     Method(Native),
+    /// A module-qualified function call `alias.f(args)`: like `Fn`, but the
+    /// receiver is a namespace, so the compiler must not push it.
+    ModuleFn(u32),
     /// Struct literal: `field_order[i]` is the def-order index of the i-th
     /// written field.
     StructLit { def: DefId, field_order: Vec<u32> },
@@ -103,6 +106,8 @@ pub struct Checker {
     pub uni: Unifier,
     pub fns: Vec<FnInfo>,
     fn_by_name: HashMap<String, u32>,
+    /// User-defined methods: `(type def, method name)` → index into `fns`.
+    methods: HashMap<(DefId, String), u32>,
     pub globals: Vec<GlobalInfo>,
     global_by_name: HashMap<String, u32>,
     pub res: HashMap<NodeId, Res>,
@@ -127,8 +132,13 @@ pub struct Checker {
     /// Locals allocated in the current function (slot-width guard).
     cur_fn_locals: u32,
     /// Names of all top-level `let`s in the current program (for better
-    /// "used before declaration" errors).
+    /// "used before declaration" errors), stored qualified.
     pending_globals: HashSet<String>,
+    /// Name-mangling prefix of the module being checked ("" for the root
+    /// module and the REPL): its top-level names register as "prefix.name".
+    module_prefix: String,
+    /// The current module's imports: alias → module key.
+    imports: HashMap<String, String>,
 }
 
 impl Default for Checker {
@@ -144,6 +154,7 @@ impl Checker {
             uni: Unifier::new(),
             fns: Vec::new(),
             fn_by_name: HashMap::new(),
+            methods: HashMap::new(),
             globals: Vec::new(),
             global_by_name: HashMap::new(),
             res: HashMap::new(),
@@ -161,30 +172,55 @@ impl Checker {
             deferred_matches: Vec::new(),
             cur_fn_locals: 0,
             pending_globals: HashSet::new(),
+            module_prefix: String::new(),
+            imports: HashMap::new(),
         }
     }
 
     /// Check a whole program (callable repeatedly for REPL sessions; state
     /// accumulates).
     pub fn check_program(&mut self, program: &Program) {
+        self.check_module(program, "", HashMap::new());
+    }
+
+    /// Check one module of a multi-file program. `prefix` mangles the
+    /// module's top-level names ("" for the root module); `imports` maps this
+    /// module's aliases to module keys. Modules must be checked in dependency
+    /// order (the loader's output order).
+    pub fn check_module(
+        &mut self,
+        program: &Program,
+        prefix: &str,
+        imports: HashMap<String, String>,
+    ) {
+        self.module_prefix = prefix.to_string();
+        self.imports = imports;
         self.predeclare_types(program);
         self.define_type_bodies(program);
         self.collect_fns(program);
 
         self.pending_globals.clear();
+        let mut let_names = HashSet::new();
         for stmt in &program.stmts {
             if let StmtKind::Let { pattern, .. } = &stmt.kind {
-                collect_pattern_names(pattern, &mut self.pending_globals);
+                collect_pattern_names(pattern, &mut let_names);
             }
         }
+        self.pending_globals = let_names.iter().map(|n| self.qualify(n)).collect();
 
         debug_assert!(self.scopes.is_empty());
         for stmt in &program.stmts {
             self.check_stmt(stmt, false);
         }
         for stmt in &program.stmts {
-            if let StmtKind::Fn(f) = &stmt.kind {
-                self.check_fn_body(f);
+            match &stmt.kind {
+                StmtKind::Fn(f) => self.check_fn_body(f),
+                StmtKind::Impl(im) => {
+                    for m in &im.methods {
+                        self.check_fn_body(m);
+                    }
+                }
+                _ => {}
             }
         }
         self.finalize();
@@ -197,6 +233,53 @@ impl Checker {
     // ------------------------------------------------------------------
     // Pass 1: types
     // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // Module-aware name lookup
+    // ------------------------------------------------------------------
+
+    /// The stored (mangled) form of one of the current module's top-level
+    /// names.
+    fn qualify(&self, name: &str) -> String {
+        if self.module_prefix.is_empty() {
+            name.to_string()
+        } else {
+            format!("{}.{name}", self.module_prefix)
+        }
+    }
+
+    fn lookup_fn(&self, name: &str) -> Option<u32> {
+        self.fn_by_name.get(&self.qualify(name)).copied()
+    }
+
+    fn lookup_global(&self, name: &str) -> Option<u32> {
+        self.global_by_name.get(&self.qualify(name)).copied()
+    }
+
+    /// A type visible under its unqualified name: one of the current
+    /// module's own, or a prelude type (Option/Result are visible
+    /// everywhere).
+    fn lookup_def_local(&self, name: &str) -> Option<DefId> {
+        if let Some(d) = self.defs.lookup(&self.qualify(name)) {
+            return Some(d);
+        }
+        if !self.module_prefix.is_empty() && matches!(name, "Option" | "Result") {
+            return self.defs.lookup(name);
+        }
+        None
+    }
+
+    /// Resolve a possibly module-qualified type name: "alias.Type" through
+    /// the current imports, otherwise a local/prelude lookup.
+    fn resolve_def_name(&self, name: &str) -> Option<DefId> {
+        match name.split_once('.') {
+            Some((alias, rest)) => {
+                let key = self.imports.get(alias)?;
+                self.defs.lookup(&format!("{key}.{rest}"))
+            }
+            None => self.lookup_def_local(name),
+        }
+    }
 
     fn predeclare_types(&mut self, program: &Program) {
         const RESERVED: &[&str] =
@@ -217,7 +300,7 @@ impl Checker {
                 );
                 continue;
             }
-            if self.defs.lookup(&name.name).is_some() {
+            if self.defs.lookup(&self.qualify(&name.name)).is_some() {
                 self.diags.push(
                     Diagnostic::error(
                         "E0403",
@@ -240,15 +323,16 @@ impl Checker {
                 }
             }
             let generic_names: Vec<String> = generics.iter().map(|g| g.name.clone()).collect();
+            let stored = self.qualify(&name.name);
             let def = if is_struct {
                 TypeDef::Struct(StructDef {
-                    name: name.name.clone(),
+                    name: stored,
                     generics: generic_names,
                     fields: Vec::new(),
                 })
             } else {
                 TypeDef::Enum(EnumDef {
-                    name: name.name.clone(),
+                    name: stored,
                     generics: generic_names,
                     variants: Vec::new(),
                 })
@@ -261,8 +345,10 @@ impl Checker {
         for stmt in &program.stmts {
             match &stmt.kind {
                 StmtKind::Struct(s) => {
-                    let Some(def_id) = self.defs.lookup(&s.name.name) else { continue };
-                    if self.defs.get(def_id).name() != s.name.name
+                    let Some(def_id) = self.defs.lookup(&self.qualify(&s.name.name)) else {
+                        continue;
+                    };
+                    if self.defs.get(def_id).name() != self.qualify(&s.name.name)
                         || !matches!(self.defs.get(def_id), TypeDef::Struct(_))
                     {
                         continue;
@@ -303,7 +389,9 @@ impl Checker {
                     self.generic_scope.clear();
                 }
                 StmtKind::Enum(e) => {
-                    let Some(def_id) = self.defs.lookup(&e.name.name) else { continue };
+                    let Some(def_id) = self.defs.lookup(&self.qualify(&e.name.name)) else {
+                        continue;
+                    };
                     if !matches!(self.defs.get(def_id), TypeDef::Enum(_)) {
                         continue;
                     }
@@ -354,61 +442,137 @@ impl Checker {
 
     fn collect_fns(&mut self, program: &Program) {
         for stmt in &program.stmts {
-            let StmtKind::Fn(f) = &stmt.kind else { continue };
-            if self.fn_by_name.contains_key(&f.name.name) {
-                self.diags.push(
-                    Diagnostic::error(
-                        "E0407",
-                        format!("duplicate function `{}`", f.name.name),
-                    )
-                    .with_label(f.name.span, "redefined here"),
-                );
-                // Fall through: register anyway so the body still checks (the
-                // later definition wins for name lookup).
-            }
-            let mut seen = HashSet::new();
-            for g in &f.generics {
-                if !seen.insert(g.name.clone()) {
-                    self.diags.push(
-                        Diagnostic::error(
-                            "E0404",
-                            format!("duplicate type parameter `{}`", g.name),
-                        )
-                        .with_label(g.span, ""),
-                    );
+            match &stmt.kind {
+                StmtKind::Fn(f) => {
+                    let stored = self.qualify(&f.name.name);
+                    if self.fn_by_name.contains_key(&stored) {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "E0407",
+                                format!("duplicate function `{}`", f.name.name),
+                            )
+                            .with_label(f.name.span, "redefined here"),
+                        );
+                        // Fall through: register anyway so the body still
+                        // checks (the later definition wins for name lookup).
+                    }
+                    let idx = self.register_fn(f, &[], stored.clone());
+                    self.fn_by_name.insert(stored, idx);
                 }
+                StmtKind::Impl(im) => self.collect_impl(im),
+                _ => {}
             }
-            if f.params.len() > 255 {
+        }
+    }
+
+    /// Validate and register one function (or method) signature. `outer`
+    /// holds enclosing generic binders (an impl block's); the function's own
+    /// generics are appended after them, matching `Param` indices.
+    fn register_fn(&mut self, f: &FnDecl, outer: &[String], name: String) -> u32 {
+        let mut seen: HashSet<String> = outer.iter().cloned().collect();
+        for g in &f.generics {
+            if !seen.insert(g.name.clone()) {
                 self.diags.push(
                     Diagnostic::error(
-                        "E0325",
-                        format!(
-                            "function `{}` has {} parameters; the limit is 255",
-                            f.name.name,
-                            f.params.len()
-                        ),
+                        "E0404",
+                        format!("duplicate type parameter `{}`", g.name),
                     )
-                    .with_label(f.name.span, ""),
+                    .with_label(g.span, ""),
                 );
             }
-            self.generic_scope = f.generics.iter().map(|g| g.name.clone()).collect();
-            let params: Vec<Type> = f.params.iter().map(|p| self.resolve_type_expr(&p.ty)).collect();
-            let ret = match &f.ret {
-                Some(t) => self.resolve_type_expr(t),
-                None => Type::Unit,
-            };
-            self.generic_scope.clear();
+        }
+        if f.params.len() > 255 {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0325",
+                    format!(
+                        "function `{}` has {} parameters; the limit is 255",
+                        name,
+                        f.params.len()
+                    ),
+                )
+                .with_label(f.name.span, ""),
+            );
+        }
+        let generics: Vec<String> = outer
+            .iter()
+            .cloned()
+            .chain(f.generics.iter().map(|g| g.name.clone()))
+            .collect();
+        self.generic_scope = generics.clone();
+        let params: Vec<Type> = f.params.iter().map(|p| self.resolve_type_expr(&p.ty)).collect();
+        let ret = match &f.ret {
+            Some(t) => self.resolve_type_expr(t),
+            None => Type::Unit,
+        };
+        self.generic_scope.clear();
 
-            let idx = self.fns.len() as u32;
-            self.fns.push(FnInfo {
-                name: f.name.name.clone(),
-                generics: f.generics.iter().map(|g| g.name.clone()).collect(),
-                params,
-                ret,
-                span: f.name.span,
-            });
-            self.fn_by_name.insert(f.name.name.clone(), idx);
-            self.res.insert(f.id, Res::Fn(idx));
+        let idx = self.fns.len() as u32;
+        self.fns.push(FnInfo {
+            name,
+            generics,
+            params,
+            ret,
+            span: f.name.span,
+        });
+        self.res.insert(f.id, Res::Fn(idx));
+        idx
+    }
+
+    fn collect_impl(&mut self, im: &ImplDecl) {
+        let tname = im.ty_name.name.as_str();
+        let def = match self.lookup_def_local(tname) {
+            Some(d) if d != OPTION_DEF && d != RESULT_DEF => d,
+            _ => {
+                let msg = if matches!(
+                    tname,
+                    "Int" | "Float" | "Bool" | "String" | "Unit" | "Range" | "List" | "Map"
+                        | "Option" | "Result"
+                ) {
+                    format!("cannot define methods on the built-in type `{tname}`")
+                } else {
+                    format!("cannot `impl` unknown type `{tname}`")
+                };
+                self.diags.push(
+                    Diagnostic::error("E0331", msg)
+                        .with_label(im.ty_name.span, "not a user-defined struct or enum"),
+                );
+                return;
+            }
+        };
+        let want = self.defs.get(def).generics().len();
+        if im.generics.len() != want {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0332",
+                    format!(
+                        "`{tname}` has {want} type parameter{}, but this impl binds {}",
+                        if want == 1 { "" } else { "s" },
+                        im.generics.len()
+                    ),
+                )
+                .with_label(im.ty_name.span, "type parameter count must match the declaration"),
+            );
+            return;
+        }
+        let outer: Vec<String> = im.generics.iter().map(|g| g.name.clone()).collect();
+        for m in &im.methods {
+            let key = (def, m.name.name.clone());
+            if let Some(&prev) = self.methods.get(&key) {
+                let prev_span = self.fns[prev as usize].span;
+                self.diags.push(
+                    Diagnostic::error(
+                        "E0333",
+                        format!("duplicate method `{}` on `{tname}`", m.name.name),
+                    )
+                    .with_label(m.name.span, "redefined here")
+                    .with_secondary(prev_span, "first defined here"),
+                );
+                continue;
+            }
+            let stored = format!("{}.{}", self.defs.get(def).name(), m.name.name);
+            let idx = self.register_fn(m, &outer, stored);
+            self.methods.insert(key, idx);
         }
     }
 
@@ -487,7 +651,7 @@ impl Checker {
                                 arity_error(self, 0);
                             }
                             Type::Param(i as u32)
-                        } else if let Some(def) = self.defs.lookup(n) {
+                        } else if let Some(def) = self.resolve_def_name(n) {
                             let want = self.defs.get(def).generics().len();
                             if args.len() != want {
                                 arity_error(self, want);
@@ -507,7 +671,13 @@ impl Checker {
                                 format!("unknown type `{}`", n),
                             )
                             .with_label(name.span, "not found");
-                            if let Some(sugg) = self.suggest_type(n) {
+                            if let Some((alias, _)) = n.split_once('.') {
+                                if !self.imports.contains_key(alias) {
+                                    d = d.with_note(format!(
+                                        "`{alias}` is not an imported module in this file"
+                                    ));
+                                }
+                            } else if let Some(sugg) = self.suggest_type(n) {
                                 d = d.with_note(format!("did you mean `{sugg}`?"));
                             }
                             self.diags.push(d);
@@ -527,7 +697,25 @@ impl Checker {
 
     fn check_stmt(&mut self, stmt: &Stmt, in_fn: bool) {
         match &stmt.kind {
-            StmtKind::Fn(_) | StmtKind::Struct(_) | StmtKind::Enum(_) => {}
+            StmtKind::Fn(_) | StmtKind::Struct(_) | StmtKind::Enum(_) | StmtKind::Impl(_) => {}
+            StmtKind::Import { path, alias, .. } => {
+                // Loading happened before checking; here we only validate that
+                // the alias was actually provided by the module loader (it is
+                // absent in the REPL and in one-shot string evaluation).
+                let alias_name = alias
+                    .as_ref()
+                    .map(|a| a.name.clone())
+                    .unwrap_or_else(|| path.last().unwrap().name.clone());
+                if !self.imports.contains_key(&alias_name) {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "E0334",
+                            "imports are only available when running a file",
+                        )
+                        .with_label(stmt.span, "cannot import here"),
+                    );
+                }
+            }
             StmtKind::Let { mutable, pattern, ty, init } => {
                 let annotated = ty.as_ref().map(|t| self.resolve_type_expr(t));
                 let init_ty = self.check_expr(init, annotated.as_ref());
@@ -718,6 +906,18 @@ impl Checker {
                             .with_label(target.span, "cannot assign to a tuple component"),
                     );
                 }
+                if matches!(
+                    self.res.get(&target.id),
+                    Some(Res::Global(_) | Res::Fn(_))
+                ) {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "E0308",
+                            "cannot assign to a module member from outside its module",
+                        )
+                        .with_label(target.span, "modules own their bindings"),
+                    );
+                }
                 // Struct fields are mutable; other Field resolutions
                 // (constants, variants) already errored during checking.
             }
@@ -853,6 +1053,7 @@ impl Checker {
                     }
                 }
             }
+            ExprKind::Try(inner) => self.check_try(e, inner),
             ExprKind::Binary { op, op_span, lhs, rhs } => {
                 self.check_binary(*op, *op_span, lhs, rhs)
             }
@@ -1026,12 +1227,12 @@ impl Checker {
             }
         }
         // Globals.
-        if let Some(&slot) = self.global_by_name.get(name) {
+        if let Some(slot) = self.lookup_global(name) {
             self.res.insert(e.id, Res::Global(slot));
             return self.globals[slot as usize].ty.clone();
         }
         // Declared functions.
-        if let Some(&idx) = self.fn_by_name.get(name) {
+        if let Some(idx) = self.lookup_fn(name) {
             self.res.insert(e.id, Res::Fn(idx));
             let info = self.fns[idx as usize].clone();
             let inst: Vec<Type> = (0..info.generics.len())
@@ -1073,8 +1274,19 @@ impl Checker {
             );
             return self.fresh(e.span, "namespace");
         }
+        // An imported module used as a value.
+        if self.imports.contains_key(name) {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0410",
+                    format!("`{name}` is an imported module, not a value"),
+                )
+                .with_label(e.span, format!("use `{name}.member`")),
+            );
+            return self.fresh(e.span, "namespace");
+        }
         // Enum/struct type used as a value.
-        if let Some(def) = self.defs.lookup(name) {
+        if let Some(def) = self.lookup_def_local(name) {
             let kind = match self.defs.get(def) {
                 TypeDef::Enum(_) => "enum",
                 TypeDef::Struct(_) => "struct",
@@ -1089,7 +1301,7 @@ impl Checker {
             return self.fresh(e.span, "type as value");
         }
         // Known global declared later in the file.
-        if self.pending_globals.contains(name) && self.scopes.is_empty() {
+        if self.pending_globals.contains(&self.qualify(name)) && self.scopes.is_empty() {
             self.diags.push(
                 Diagnostic::error(
                     "E0412",
@@ -1109,10 +1321,94 @@ impl Checker {
         self.fresh(e.span, "undefined name")
     }
 
+    /// A bare enum variant path used as a value: `Shape.Empty` (or
+    /// module-qualified `geo.Shape.Empty`). Nullary variants construct; a
+    /// payload-taking constructor must be called (E0409).
+    fn check_variant_path(&mut self, e: &Expr, def: DefId, variant: &Ident) -> Type {
+        let TypeDef::Enum(ed) = self.defs.get(def) else { unreachable!() };
+        let ename = ed.name.clone();
+        let Some(vidx) = ed.variants.iter().position(|v| v.name == variant.name) else {
+            let variants: Vec<&str> = ed.variants.iter().map(|v| v.name.as_str()).collect();
+            self.diags.push(
+                Diagnostic::error(
+                    "E0414",
+                    format!("no variant `{}` on enum `{ename}`", variant.name),
+                )
+                .with_label(variant.span, "")
+                .with_note(format!("variants: {}", variants.join(", "))),
+            );
+            return self.fresh(e.span, "unknown variant");
+        };
+        let TypeDef::Enum(ed) = self.defs.get(def) else { unreachable!() };
+        let nfields = ed.variants[vidx].fields.len();
+        let ngen = ed.generics.len();
+        self.res.insert(e.id, Res::Variant { def, variant: vidx as u32 });
+        if nfields > 0 {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0409",
+                    format!("the constructor `{ename}.{}` must be called", variant.name),
+                )
+                .with_label(e.span, "")
+                .with_note(format!(
+                    "to pass it as a function, wrap it: `|x| {ename}.{}(x)`",
+                    variant.name
+                )),
+            );
+        }
+        let inst: Vec<Type> = (0..ngen).map(|_| self.fresh(e.span, "type argument")).collect();
+        Type::Named(def, inst)
+    }
+
+    /// `alias.member` where `alias` is an imported module: a function
+    /// reference, a global, or an error.
+    fn check_module_member(&mut self, e: &Expr, alias: &str, key: &str, field: &Ident) -> Type {
+        let qname = format!("{key}.{}", field.name);
+        if let Some(&idx) = self.fn_by_name.get(&qname) {
+            self.res.insert(e.id, Res::Fn(idx));
+            let info = self.fns[idx as usize].clone();
+            let inst: Vec<Type> = (0..info.generics.len())
+                .map(|_| self.fresh(e.span, "type argument"))
+                .collect();
+            let params: Vec<Type> = info.params.iter().map(|p| substitute(p, &inst)).collect();
+            let ret = substitute(&info.ret, &inst);
+            return Type::Fn(params, Box::new(ret));
+        }
+        if let Some(&slot) = self.global_by_name.get(&qname) {
+            self.res.insert(e.id, Res::Global(slot));
+            return self.globals[slot as usize].ty.clone();
+        }
+        if let Some(def) = self.defs.lookup(&qname) {
+            let kind = match self.defs.get(def) {
+                TypeDef::Enum(_) => "enum",
+                TypeDef::Struct(_) => "struct",
+            };
+            self.diags.push(
+                Diagnostic::error(
+                    "E0411",
+                    format!("`{alias}.{}` is a {kind} type, not a value", field.name),
+                )
+                .with_label(e.span, ""),
+            );
+            return self.fresh(e.span, "type as value");
+        }
+        self.diags.push(
+            Diagnostic::error(
+                "E0413",
+                format!("no such member `{alias}.{}`", field.name),
+            )
+            .with_label(field.span, "not found in the imported module"),
+        );
+        self.fresh(e.span, "unknown member")
+    }
+
     fn check_field(&mut self, e: &Expr, base: &Expr, field: &Ident) -> Type {
         // Special bases: namespaces and enum paths.
         if let ExprKind::Var(name) = &base.kind {
             if !self.name_is_value(name) {
+                if let Some(key) = self.imports.get(name).cloned() {
+                    return self.check_module_member(e, name, &key, field);
+                }
                 if name == "math" {
                     match Native::math_member(&field.name) {
                         Some(MathMember::Const(v)) => {
@@ -1135,50 +1431,33 @@ impl Checker {
                         }
                     }
                 }
-                if let Some(def) = self.defs.lookup(name) {
-                    if let TypeDef::Enum(ed) = self.defs.get(def) {
-                        let Some(vidx) =
-                            ed.variants.iter().position(|v| v.name == field.name)
-                        else {
-                            let variants: Vec<&str> =
-                                ed.variants.iter().map(|v| v.name.as_str()).collect();
-                            self.diags.push(
-                                Diagnostic::error(
-                                    "E0414",
-                                    format!(
-                                        "no variant `{}` on enum `{name}`",
-                                        field.name
-                                    ),
-                                )
-                                .with_label(field.span, "")
-                                .with_note(format!("variants: {}", variants.join(", "))),
-                            );
-                            return self.fresh(e.span, "unknown variant");
-                        };
-                        let nfields = ed.variants[vidx].fields.len();
-                        let ngen = ed.generics.len();
-                        self.res
-                            .insert(e.id, Res::Variant { def, variant: vidx as u32 });
-                        if nfields > 0 {
-                            self.diags.push(
-                                Diagnostic::error(
-                                    "E0409",
-                                    format!(
-                                        "the constructor `{name}.{}` must be called",
-                                        field.name
-                                    ),
-                                )
-                                .with_label(e.span, "")
-                                .with_note(format!(
-                                    "to pass it as a function, wrap it: `|x| {name}.{}(x)`",
-                                    field.name
-                                )),
-                            );
-                        }
-                        let inst: Vec<Type> =
-                            (0..ngen).map(|_| self.fresh(e.span, "type argument")).collect();
-                        return Type::Named(def, inst);
+                if let Some(def) = self.lookup_def_local(name) {
+                    if matches!(self.defs.get(def), TypeDef::Enum(_)) {
+                        return self.check_variant_path(e, def, field);
                     }
+                }
+            }
+        }
+
+        // Module-qualified enum path: `alias.Enum.Variant` (nullary).
+        if let ExprKind::Field { base: inner, field: tyname } = &base.kind {
+            if let ExprKind::Var(alias) = &inner.kind {
+                if !self.name_is_value(alias) && self.imports.contains_key(alias.as_str()) {
+                    if let Some(def) =
+                        self.resolve_def_name(&format!("{alias}.{}", tyname.name))
+                    {
+                        if matches!(self.defs.get(def), TypeDef::Enum(_)) {
+                            return self.check_variant_path(e, def, field);
+                        }
+                    }
+                    self.diags.push(
+                        Diagnostic::error(
+                            "E0413",
+                            format!("no enum `{}` in module `{alias}`", tyname.name),
+                        )
+                        .with_label(tyname.span, ""),
+                    );
+                    return self.fresh(e.span, "unknown member");
                 }
             }
         }
@@ -1280,8 +1559,8 @@ impl Checker {
 
     fn name_is_value(&self, name: &str) -> bool {
         self.scopes.iter().any(|s| s.contains_key(name))
-            || self.global_by_name.contains_key(name)
-            || self.fn_by_name.contains_key(name)
+            || self.global_by_name.contains_key(&self.qualify(name))
+            || self.fn_by_name.contains_key(&self.qualify(name))
     }
 
     fn check_method_call(
@@ -1295,7 +1574,10 @@ impl Checker {
         // Enum variant construction: `Shape.Circle(1.0)`, `Option.Some(x)`.
         if let ExprKind::Var(name) = &recv.kind {
             if !self.name_is_value(name) {
-                if let Some(def) = self.defs.lookup(name) {
+                if let Some(key) = self.imports.get(name).cloned() {
+                    return self.check_module_call(e, name, &key, method, args);
+                }
+                if let Some(def) = self.lookup_def_local(name) {
                     if let TypeDef::Enum(_) = self.defs.get(def) {
                         return self.check_variant_ctor(e, def, name, method, args);
                     }
@@ -1336,8 +1618,45 @@ impl Checker {
             }
         }
 
+        // Module-qualified variant construction: `alias.Enum.Variant(args)`.
+        if let ExprKind::Field { base: inner, field: tyname } = &recv.kind {
+            if let ExprKind::Var(alias) = &inner.kind {
+                if !self.name_is_value(alias) && self.imports.contains_key(alias.as_str()) {
+                    if let Some(def) =
+                        self.resolve_def_name(&format!("{alias}.{}", tyname.name))
+                    {
+                        if matches!(self.defs.get(def), TypeDef::Enum(_)) {
+                            let ename = self.defs.get(def).name().to_string();
+                            return self.check_variant_ctor(e, def, &ename, method, args);
+                        }
+                    }
+                    self.diags.push(
+                        Diagnostic::error(
+                            "E0413",
+                            format!("no enum `{}` in module `{alias}`", tyname.name),
+                        )
+                        .with_label(tyname.span, ""),
+                    );
+                    for a in args {
+                        self.check_expr(a, None);
+                    }
+                    return self.fresh(e.span, "unknown member");
+                }
+            }
+        }
+
         let rt = self.check_expr(recv, None);
         let resolved = self.uni.shallow_resolve(&rt);
+
+        // User-defined methods (impl blocks) on structs and enums. Prelude
+        // Option/Result defs never appear in the map (impls on them are
+        // rejected), so builtin method dispatch below is unaffected.
+        if let Type::Named(def, _) = &resolved {
+            if let Some(&idx) = self.methods.get(&(*def, method.name.clone())) {
+                return self.check_user_method_call(e, recv, &rt, method, args, idx);
+            }
+        }
+
         let (kind, recv_args): (Recv, Vec<Type>) = match &resolved {
             Type::Int => (Recv::Int, vec![]),
             Type::Float => (Recv::Float, vec![]),
@@ -1604,6 +1923,173 @@ impl Checker {
         Type::Named(def, inst)
     }
 
+    /// `alias.f(args)` where `alias` is an imported module: a direct call of
+    /// a module function, or a call through a module global holding a
+    /// function value.
+    fn check_module_call(
+        &mut self,
+        e: &Expr,
+        alias: &str,
+        key: &str,
+        method: &Ident,
+        args: &[Expr],
+    ) -> Type {
+        let qname = format!("{key}.{}", method.name);
+        if let Some(&idx) = self.fn_by_name.get(&qname) {
+            self.res.insert(e.id, Res::ModuleFn(idx));
+            let info = self.fns[idx as usize].clone();
+            let inst: Vec<Type> = (0..info.generics.len())
+                .map(|_| self.fresh(e.span, "type argument"))
+                .collect();
+            let params: Vec<Type> = info.params.iter().map(|p| substitute(p, &inst)).collect();
+            let ret = substitute(&info.ret, &inst);
+            if args.len() != params.len() {
+                self.diags.push(
+                    Diagnostic::error(
+                        "E0317",
+                        format!(
+                            "`{alias}.{}` takes {} argument{}, found {}",
+                            method.name,
+                            params.len(),
+                            if params.len() == 1 { "" } else { "s" },
+                            args.len()
+                        ),
+                    )
+                    .with_label(e.span, "")
+                    .with_secondary(info.span, "function declared here"),
+                );
+                for a in args {
+                    self.check_expr(a, None);
+                }
+                return ret;
+            }
+            for (a, p) in args.iter().zip(&params) {
+                let at = self.check_expr(a, Some(p));
+                self.expect_type(p, &at, a.span, None);
+            }
+            return ret;
+        }
+        if let Some(&slot) = self.global_by_name.get(&qname) {
+            self.res.insert(e.id, Res::Global(slot));
+            let gty = self.globals[slot as usize].ty.clone();
+            return self.check_callable_value(e, &gty, args, method.span);
+        }
+        self.diags.push(
+            Diagnostic::error(
+                "E0413",
+                format!("no such member `{alias}.{}`", method.name),
+            )
+            .with_label(method.span, "not found in the imported module"),
+        );
+        for a in args {
+            self.check_expr(a, None);
+        }
+        self.fresh(e.span, "unknown member")
+    }
+
+    /// Check a call of an arbitrary value of (hopefully) function type.
+    fn check_callable_value(
+        &mut self,
+        e: &Expr,
+        callee_ty: &Type,
+        args: &[Expr],
+        callee_span: Span,
+    ) -> Type {
+        match self.uni.shallow_resolve(callee_ty) {
+            Type::Fn(params, ret) => {
+                if args.len() != params.len() {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "E0317",
+                            format!(
+                                "this function takes {} argument{}, found {}",
+                                params.len(),
+                                if params.len() == 1 { "" } else { "s" },
+                                args.len()
+                            ),
+                        )
+                        .with_label(e.span, ""),
+                    );
+                    for a in args {
+                        self.check_expr(a, None);
+                    }
+                    return *ret;
+                }
+                for (a, p) in args.iter().zip(&params) {
+                    let at = self.check_expr(a, Some(p));
+                    self.expect_type(p, &at, a.span, None);
+                }
+                *ret
+            }
+            Type::Var(_) => {
+                self.cannot_infer_here(callee_span, "called value");
+                for a in args {
+                    self.check_expr(a, None);
+                }
+                self.fresh(e.span, "call result")
+            }
+            other => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "E0318",
+                        format!("cannot call a value of type `{}`", self.show(&other)),
+                    )
+                    .with_label(callee_span, "not a function"),
+                );
+                for a in args {
+                    self.check_expr(a, None);
+                }
+                self.fresh(e.span, "call result")
+            }
+        }
+    }
+
+    /// A call of a user-defined method: instantiate the registered fn's
+    /// scheme and unify parameter 0 with the receiver.
+    fn check_user_method_call(
+        &mut self,
+        e: &Expr,
+        recv: &Expr,
+        recv_ty: &Type,
+        method: &Ident,
+        args: &[Expr],
+        idx: u32,
+    ) -> Type {
+        self.res.insert(e.id, Res::Fn(idx));
+        let info = self.fns[idx as usize].clone();
+        let inst: Vec<Type> = (0..info.generics.len())
+            .map(|_| self.fresh(e.span, "type argument"))
+            .collect();
+        let params: Vec<Type> = info.params.iter().map(|p| substitute(p, &inst)).collect();
+        let ret = substitute(&info.ret, &inst);
+        self.expect_type(&params[0], recv_ty, recv.span, None);
+        if args.len() != params.len() - 1 {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0317",
+                    format!(
+                        "`{}` takes {} argument{}, found {}",
+                        method.name,
+                        params.len() - 1,
+                        if params.len() == 2 { "" } else { "s" },
+                        args.len()
+                    ),
+                )
+                .with_label(e.span, "")
+                .with_secondary(info.span, "method declared here"),
+            );
+            for a in args {
+                self.check_expr(a, None);
+            }
+            return ret;
+        }
+        for (a, p) in args.iter().zip(&params[1..]) {
+            let at = self.check_expr(a, Some(p));
+            self.expect_type(p, &at, a.span, None);
+        }
+        ret
+    }
+
     fn check_call(
         &mut self,
         e: &Expr,
@@ -1614,9 +2100,9 @@ impl Checker {
         // Calls with special callees: declared fns, natives, prelude variants.
         if let ExprKind::Var(name) = &callee.kind {
             let is_local = self.scopes.iter().any(|s| s.contains_key(name.as_str()))
-                || self.global_by_name.contains_key(name.as_str());
+                || self.global_by_name.contains_key(&self.qualify(name));
             if !is_local {
-                if let Some(&idx) = self.fn_by_name.get(name.as_str()) {
+                if let Some(idx) = self.lookup_fn(name) {
                     self.res.insert(callee.id, Res::Fn(idx));
                     let info = self.fns[idx as usize].clone();
                     let inst: Vec<Type> = (0..info.generics.len())
@@ -1712,6 +2198,99 @@ impl Checker {
                     self.check_expr(a, None);
                 }
                 self.fresh(e.span, "call result")
+            }
+        }
+    }
+
+    /// `expr?` — unwrap `Some`/`Ok`, or return the `None`/`Err` from the
+    /// enclosing function. The enclosing return type must be an `Option` (for
+    /// an Option operand) or a `Result` with the same error type (for a Result
+    /// operand); its success type is unconstrained by the `?` itself.
+    fn check_try(&mut self, e: &Expr, inner: &Expr) -> Type {
+        let t = self.check_expr(inner, None);
+        let ret = match self.fn_stack.last() {
+            Some(FnCtx::Fn { ret } | FnCtx::Lambda { ret }) => Some(ret.clone()),
+            None => {
+                self.diags.push(
+                    Diagnostic::error("E0328", "`?` outside of a function")
+                        .with_label(e.span, "`?` propagates failure by returning early")
+                        .with_note(
+                            "on `None`/`Err`, `?` returns from the enclosing function; \
+                             there is none here",
+                        ),
+                );
+                None
+            }
+        };
+        match self.uni.shallow_resolve(&t) {
+            Type::Named(d, args) if d == OPTION_DEF => {
+                if let Some(ret) = ret {
+                    let some = self.fresh(e.span, "try result");
+                    let want = Type::Named(OPTION_DEF, vec![some]);
+                    if self.uni.unify(&want, &ret).is_err() {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "E0329",
+                                "`?` on an `Option` requires the enclosing function to \
+                                 return `Option`",
+                            )
+                            .with_label(
+                                e.span,
+                                format!(
+                                    "the `None` case would return `None`, but the function \
+                                     returns `{}`",
+                                    self.show(&ret)
+                                ),
+                            ),
+                        );
+                    }
+                }
+                args[0].clone()
+            }
+            Type::Named(d, args) if d == RESULT_DEF => {
+                if let Some(ret) = ret {
+                    let ok = self.fresh(e.span, "try result");
+                    let want = Type::Named(RESULT_DEF, vec![ok, args[1].clone()]);
+                    if self.uni.unify(&want, &ret).is_err() {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "E0329",
+                                format!(
+                                    "`?` on a `{}` requires the enclosing function to \
+                                     return `Result` with error type `{}`",
+                                    self.show(&Type::Named(RESULT_DEF, args.clone())),
+                                    self.show(&args[1])
+                                ),
+                            )
+                            .with_label(
+                                e.span,
+                                format!(
+                                    "the `Err` case would return the error, but the \
+                                     function returns `{}`",
+                                    self.show(&ret)
+                                ),
+                            ),
+                        );
+                    }
+                }
+                args[0].clone()
+            }
+            Type::Var(_) => {
+                self.cannot_infer_here(inner.span, "operand of `?`");
+                self.fresh(e.span, "try result")
+            }
+            other => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "E0330",
+                        format!(
+                            "`?` requires an `Option` or `Result`, found `{}`",
+                            self.show(&other)
+                        ),
+                    )
+                    .with_label(inner.span, "only `Option` and `Result` can be unwrapped with `?`"),
+                );
+                self.fresh(e.span, "try result")
             }
         }
     }
@@ -1860,7 +2439,7 @@ impl Checker {
     }
 
     fn check_struct_lit(&mut self, e: &Expr, name: &Ident, fields: &[(Ident, Expr)]) -> Type {
-        let Some(def) = self.defs.lookup(&name.name) else {
+        let Some(def) = self.resolve_def_name(&name.name) else {
             let mut d = Diagnostic::error(
                 "E0401",
                 format!("unknown struct `{}`", name.name),
@@ -2248,7 +2827,7 @@ impl Checker {
             }
             PatternKind::Variant { enum_name, variant, fields, has_parens } => {
                 let def = match enum_name {
-                    Some(en) => match self.defs.lookup(&en.name) {
+                    Some(en) => match self.resolve_def_name(&en.name) {
                         Some(d) if matches!(self.defs.get(d), TypeDef::Enum(_)) => d,
                         Some(_) => {
                             self.diags.push(
@@ -2361,7 +2940,7 @@ impl Checker {
                 }
             }
             PatternKind::Struct { name, fields, rest } => {
-                let Some(def) = self.defs.lookup(&name.name) else {
+                let Some(def) = self.resolve_def_name(&name.name) else {
                     self.diags.push(
                         Diagnostic::error(
                             "E0401",
@@ -2515,13 +3094,14 @@ impl Checker {
                     continue;
                 }
                 let slot = self.globals.len() as u32;
+                let stored = self.qualify(&group.name);
                 self.globals.push(GlobalInfo {
-                    name: group.name.clone(),
+                    name: stored.clone(),
                     mutable,
                     ty: group.ty.clone(),
                     span: group.span,
                 });
-                self.global_by_name.insert(group.name.clone(), slot);
+                self.global_by_name.insert(stored, slot);
                 for node in group.nodes {
                     self.res.insert(node, Res::Global(slot));
                 }

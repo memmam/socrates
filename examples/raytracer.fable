@@ -6,13 +6,15 @@
 struct Vec3 { x: Float, y: Float, z: Float }
 
 fn v3(x: Float, y: Float, z: Float) -> Vec3 { Vec3 { x: x, y: y, z: z } }
-fn add(a: Vec3, b: Vec3) -> Vec3 { v3(a.x + b.x, a.y + b.y, a.z + b.z) }
-fn sub(a: Vec3, b: Vec3) -> Vec3 { v3(a.x - b.x, a.y - b.y, a.z - b.z) }
-fn scale(a: Vec3, s: Float) -> Vec3 { v3(a.x * s, a.y * s, a.z * s) }
-fn mul(a: Vec3, b: Vec3) -> Vec3 { v3(a.x * b.x, a.y * b.y, a.z * b.z) }
-fn dot(a: Vec3, b: Vec3) -> Float { a.x * b.x + a.y * b.y + a.z * b.z }
-fn norm(a: Vec3) -> Vec3 { scale(a, 1.0 / math.sqrt(dot(a, a))) }
-fn reflect(d: Vec3, n: Vec3) -> Vec3 { sub(d, scale(n, 2.0 * dot(d, n))) }
+
+impl Vec3 {
+    fn add(self, b: Vec3) -> Vec3 { v3(self.x + b.x, self.y + b.y, self.z + b.z) }
+    fn sub(self, b: Vec3) -> Vec3 { v3(self.x - b.x, self.y - b.y, self.z - b.z) }
+    fn scale(self, s: Float) -> Vec3 { v3(self.x * s, self.y * s, self.z * s) }
+    fn dot(self, b: Vec3) -> Float { self.x * b.x + self.y * b.y + self.z * b.z }
+    fn norm(self) -> Vec3 { self.scale(1.0 / math.sqrt(self.dot(self))) }
+    fn reflect(self, n: Vec3) -> Vec3 { self.sub(n.scale(2.0 * self.dot(n))) }
+}
 
 struct Sphere {
     center: Vec3,
@@ -31,9 +33,9 @@ struct Hit {
 
 // Ray-sphere intersection: nearest positive t, if any.
 fn hit_sphere(s: Sphere, origin: Vec3, dir: Vec3) -> Option[Float] {
-    let oc = sub(origin, s.center);
-    let b = 2.0 * dot(oc, dir);
-    let c = dot(oc, oc) - s.radius * s.radius;
+    let oc = origin.sub(s.center);
+    let b = 2.0 * oc.dot(dir);
+    let c = oc.dot(oc) - s.radius * s.radius;
     let disc = b * b - 4.0 * c;
     if disc < 0.0 {
         None
@@ -54,7 +56,7 @@ fn hit_floor(origin: Vec3, dir: Vec3) -> Option[Hit] {
     if t <= 0.001 {
         return None;
     }
-    let p = add(origin, scale(dir, t));
+    let p = origin.add(dir.scale(t));
     let checker = (p.x.floor().to_int() + p.z.floor().to_int()) % 2;
     let color = if checker == 0 { v3(0.9, 0.9, 0.9) } else { v3(0.15, 0.15, 0.2) };
     Some(Hit { t: t, point: p, normal: v3(0.0, 1.0, 0.0), color: color, mirror: 0.15 })
@@ -80,11 +82,11 @@ fn closest_hit(origin: Vec3, dir: Vec3) -> Option[Hit] {
                     Some(h) -> t < h.t,
                 };
                 if better {
-                    let p = add(origin, scale(dir, t));
+                    let p = origin.add(dir.scale(t));
                     best = Some(Hit {
                         t: t,
                         point: p,
-                        normal: norm(sub(p, s.center)),
+                        normal: p.sub(s.center).norm(),
                         color: s.color,
                         mirror: s.mirror,
                     });
@@ -98,9 +100,9 @@ fn closest_hit(origin: Vec3, dir: Vec3) -> Option[Hit] {
 let light = v3(-4.0, 5.0, 1.0);
 
 fn in_shadow(p: Vec3) -> Bool {
-    let to_light = sub(light, p);
-    let dist = math.sqrt(dot(to_light, to_light));
-    let dir = scale(to_light, 1.0 / dist);
+    let to_light = light.sub(p);
+    let dist = math.sqrt(to_light.dot(to_light));
+    let dir = to_light.scale(1.0 / dist);
     match closest_hit(p, dir) {
         Some(h) -> h.t < dist,
         None -> false,
@@ -109,21 +111,21 @@ fn in_shadow(p: Vec3) -> Bool {
 
 fn sky(dir: Vec3) -> Vec3 {
     let t = (dir.y + 1.0) * 0.5;
-    add(scale(v3(1.0, 1.0, 1.0), 1.0 - t), scale(v3(0.4, 0.6, 0.95), t))
+    v3(1.0, 1.0, 1.0).scale(1.0 - t).add(v3(0.4, 0.6, 0.95).scale(t))
 }
 
 fn trace(origin: Vec3, dir: Vec3, depth: Int) -> Vec3 {
     match closest_hit(origin, dir) {
         None -> sky(dir),
         Some(h) -> {
-            let ldir = norm(sub(light, h.point));
-            let diffuse = math.max_float(0.0, dot(h.normal, ldir));
+            let ldir = light.sub(h.point).norm();
+            let diffuse = math.max_float(0.0, h.normal.dot(ldir));
             let lit = if in_shadow(h.point) { 0.0 } else { diffuse };
             let ambient = 0.12;
-            let mut color = scale(h.color, ambient + 0.88 * lit);
+            let mut color = h.color.scale(ambient + 0.88 * lit);
             if h.mirror > 0.0 && depth > 0 {
-                let bounce = trace(h.point, norm(reflect(dir, h.normal)), depth - 1);
-                color = add(scale(color, 1.0 - h.mirror), scale(bounce, h.mirror));
+                let bounce = trace(h.point, dir.reflect(h.normal).norm(), depth - 1);
+                color = color.scale(1.0 - h.mirror).add(bounce.scale(h.mirror));
             }
             color
         }
@@ -150,7 +152,7 @@ for y in 0..height {
         let u = (x.to_float() + 0.5) / width.to_float() * 2.0 - 1.0;
         let v = 1.0 - (y.to_float() + 0.5) / height.to_float() * 2.0;
         let aspect = width.to_float() / height.to_float();
-        let dir = norm(v3(u * aspect * 0.6, v * 0.6, -1.0));
+        let dir = v3(u * aspect * 0.6, v * 0.6, -1.0).norm();
         let c = trace(cam, dir, 4);
         row.push("{to_byte(c.x)} {to_byte(c.y)} {to_byte(c.z)}");
     }

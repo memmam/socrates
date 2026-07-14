@@ -59,6 +59,12 @@ pub enum Op {
     /// Call a native: args (including the receiver, for methods) are the top
     /// `n` values.
     CallNative(Native, u8),
+    /// Tail-call forms of `Call`/`CallFn`: close this frame's upvalues, slide
+    /// the callee+args over the current frame, and reuse it instead of
+    /// pushing a new one (so tail recursion runs in constant frame space).
+    /// A `TailCall` of a native value calls it and returns its result.
+    TailCall(u8),
+    TailCallFn(u32, u8),
     Return,
 
     // Arithmetic / logic (operand types guaranteed compatible by the checker;

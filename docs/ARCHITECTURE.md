@@ -179,6 +179,46 @@ structures (buildable via struct field mutation) error instead of hanging.
 - **Disassembler** (`dis.rs`): protos, constants, jump targets, and symbolic
   operands (`get_global 0 ; evens`).
 
+## v0.2 additions
+
+**impl blocks.** A method is an ordinary checker function whose first
+parameter is the receiver: the parser synthesizes `self`'s `TypeExpr`
+(`TypeName[G, ...]`) so methods run through the same signature-collection,
+body-checking, and proto-compilation paths as free functions, registered
+under a mangled name (`Point.len`) and indexed by `(DefId, method name)`.
+Method-call dispatch consults that map after resolving the receiver type,
+ahead of the builtin `Recv` tables; calls lower to `CallFn` with the
+receiver as argument 0. No VM changes at all.
+
+**`?` operator.** `ExprKind::Try` compiles to
+`TestVariant(0); JumpIfFalse fail; GetVariantField(0); Jump end; fail: Return`
+— `Some`/`Ok` are variant 0 of their prelude enums and the failure value on
+the stack *is* the propagated return value, so the fail path is a bare
+`Return`. The checker unifies the enclosing return type with
+`Option[fresh]`/`Result[fresh, E]` per the operand.
+
+**Tail calls.** The compiler threads tail position from `return` operands,
+function/lambda body tails, and `if`/`match`/block result positions, then
+rewrites a just-emitted `Call`/`CallFn` into `TailCall`/`TailCallFn`
+in place — the tail variants have the same operand shapes and stack effects,
+so no jump offsets or depth bookkeeping move. In the VM, `reuse_frame`
+closes the departing frame's upvalues, slides the callee slot and arguments
+down over it, and resets the frame in place; a native value in tail
+position is called and its result returned directly.
+
+**Modules.** `modules.rs` DFS-loads imports (file-relative paths,
+canonical-path dedup for diamonds, cycle detection), parsing each file with
+offset NodeIds — the same trick the REPL uses — so all modules share one
+checker. Each module checks under a name-mangling prefix: its top-level
+names register as `"key.name"` in the existing fn/global/def tables, and
+every unqualified lookup qualifies with the current module's prefix (the
+prelude `Option`/`Result` stay visible everywhere). Qualified references
+resolve through the module's alias map; module function calls get their own
+`Res::ModuleFn` so the compiler knows not to push a receiver. Compilation
+reuses `ProgramBuilder::compile_chunk` per module (again the REPL path),
+and the VM runs each module's script proto in dependency order over shared
+globals — `run_entry_at` is the only VM addition.
+
 ## Testing strategy
 
 - Unit tests per module (lexer shapes, parser precedence, checker

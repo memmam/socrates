@@ -340,8 +340,10 @@ panic: division by zero
 ```
 
 Deep recursion panics too (`panic: stack overflow`) rather than crashing;
-long traces are truncated after 64 frames. Fable has no tail-call
-optimization in v0.1 — reach for a loop instead.
+long traces are truncated after 64 frames. Calls in tail position reuse
+their frame (see chapter 7), so only recursion with pending work — a `+`
+around the recursive call, say — spends the 4,096-frame budget; give such a
+function an accumulator, or reach for a loop.
 
 ## Performance
 

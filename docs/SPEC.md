@@ -28,9 +28,12 @@ Identifiers match `[A-Za-z_][A-Za-z0-9_]*`. By convention, types and enum varian
 Keywords (reserved, cannot be identifiers):
 
 ```
-let mut fn struct enum match if else while for in return break continue
-true false
+let mut fn struct enum impl import match if else while for in
+return break continue true false
 ```
+
+The words `as` (import aliases) and `self` (method receivers) are contextual:
+they are ordinary identifiers everywhere else.
 
 The words `and`, `or`, and `not` are ordinary identifiers (the operators are
 spelled `&&`, `||`, `!`); using `and`/`or` in infix position gets a targeted
@@ -55,7 +58,7 @@ error (E0106) pointing at the symbolic spelling.
 ### 1.4 Operators and punctuation
 
 ```
-+ - * / %  == != < <= > >=  && || !  =  -> =>  . , : ; ( ) [ ] { }  .. ..=  |  _
++ - * / %  == != < <= > >=  && || !  =  -> =>  . , : ; ( ) [ ] { }  .. ..=  |  _  ?
 ```
 
 ---
@@ -168,7 +171,7 @@ Fable is expression-oriented. Blocks are expressions; the last expression in a b
 | 6     | `+` `-`                  | left  | Int, Float; `+` also String ++ String |
 | 7     | `*` `/` `%`              | left  | Int, Float (`%` Int only) |
 | 8     | unary `-` `!`            | —     | Int/Float; Bool |
-| 9     | call `f(x)`, index `a[i]`, field `.x`, method `.m(x)`, tuple index `.0` | left | |
+| 9     | call `f(x)`, index `a[i]`, field `.x`, method `.m(x)`, tuple index `.0`, try `?` | left | |
 
 Comparison operators are **non-associative**: `a < b < c` is a parse error.
 Integer division truncates toward zero; `/` or `%` by integer zero **panics**.
@@ -221,6 +224,30 @@ past the defining scope (closure upvalues).
 - `m[k]` on `Map[K, V]`: panics if the key is absent (use `m.get(k)` for `Option[V]`).
   `m[k] = v` inserts or overwrites.
 - `s[i]` on `String` is **not allowed** (compile error) — use `s.chars()` or `s.slice()`.
+
+---
+
+### 3.6 The `?` operator
+
+`expr?` unwraps a successful `Option`/`Result` or propagates the failure by
+returning it from the enclosing function (or lambda):
+
+- If `expr: Option[T]`: `Some(v)?` evaluates to `v`; `None?` returns `None`
+  from the enclosing function, whose return type must be an `Option` (its
+  payload type is independent of `T`).
+- If `expr: Result[T, E]`: `Ok(v)?` evaluates to `v`; `Err(e)?` returns the
+  `Err` unchanged, so the enclosing return type must be a `Result` with the
+  same error type `E` (its success type is independent of `T`).
+
+`?` binds at postfix precedence (`-x?` is `-(x?)`; `a.f()?.g()?` chains).
+Errors: `?` outside a function (E0328), an incompatible enclosing return type
+(E0329), a non-`Option`/`Result` operand (E0330).
+
+```fable
+fn parse_sum(a: String, b: String) -> Option[Int] {
+    Some(a.parse_int()? + b.parse_int()?)
+}
+```
 
 ---
 
@@ -288,8 +315,71 @@ expression statements        // execute in order
 - Semicolons terminate statements. The final expression of a block may omit the
   semicolon to become the block's value. `fn`, `struct`, `enum`, `if`, `match`,
   `while`, `for` used as statements do not need a trailing semicolon.
-- Items (`fn`, `struct`, `enum`) may only appear at the top level (no nested named
-  functions — use lambdas).
+- Items (`fn`, `struct`, `enum`, `impl`, `import`) may only appear at the top
+  level (no nested named functions — use lambdas).
+
+### 5.1 impl blocks (methods)
+
+`impl TypeName { ... }` defines methods on a user-declared struct or enum.
+Each method's first parameter is a bare `self` (no type annotation — it has
+the impl type); calls use dot syntax on a value of the type.
+
+```fable
+struct Point { x: Float, y: Float }
+
+impl Point {
+    fn len(self) -> Float { (self.x * self.x + self.y * self.y).sqrt() }
+    fn scaled(self, k: Float) -> Point { Point { x: self.x * k, y: self.y * k } }
+}
+
+let p = Point { x: 3.0, y: 4.0 };
+println(p.scaled(2.0).len());   // 10.0
+```
+
+- A generic type's impl re-binds its type parameters by position:
+  `impl Pair[A, B] { ... }` — the binder names are local to the block and the
+  count must match the declaration (E0332). Methods may add their own
+  generics after the impl's.
+- Multiple impl blocks per type are allowed; method names must be unique per
+  type across all of them (E0333).
+- Only user-declared structs and enums can be impl targets — not builtins or
+  the prelude `Option`/`Result` (E0331).
+- Methods are hoisted like functions (order-independent, mutual recursion
+  works) and are ordinary functions with the receiver as argument 0; a method
+  travels with its type across modules.
+
+### 5.2 Modules and imports
+
+A program may span multiple files. `import a.b;` (top level only) loads
+`a/b.fable` **relative to the importing file** and binds it under the alias
+`b` — the last path segment — or a chosen name with `import a.b as m;`.
+
+```fable
+import geo;                       // loads geo.fable
+import util.strings as s;         // loads util/strings.fable
+
+let p = geo.Point { x: 1.0, y: 2.0 };   // qualified struct literal
+let d: geo.Point = geo.origin();        // qualified type
+println(geo.dist(p, d));                // qualified function call
+let f = geo.dist;                       // module functions are values
+match shape {
+    geo.Shape.Circle(r) -> r,           // qualified variant pattern
+    Rect(w, h) -> w * h,                // or type-directed, unqualified
+    geo.Shape.Empty -> 0.0,
+}
+```
+
+- Every module is loaded once (diamond imports share the copy) and its
+  top-level code runs once, before any file that imports it; the root file
+  runs last. Circular imports are a compile error (E0338); a missing file is
+  E0337; duplicate aliases in one file are E0336.
+- A module's top-level names are reachable only through its alias — imports
+  are not transitive, and there is no visibility control in v0.2: everything
+  is public.
+- Module bindings are readable from outside (`geo.counter`) but assignable
+  only inside their own module (E0308). Methods on a module's types work on
+  its values everywhere without qualification.
+- The REPL and one-shot string evaluation cannot import (E0334).
 
 ---
 
@@ -302,6 +392,12 @@ expression statements        // execute in order
   has run, and call-stack overflow (the call depth is capped at 4096 frames).
   Exit codes: success 0, usage error 64, compile error 65, unreadable input 66,
   panic 70.
+- **Tail calls are optimized**: a call in tail position — the operand of
+  `return`, the final expression of a function or lambda body, or the result
+  position of an `if`/`match`/block that is itself in tail position — reuses
+  the caller's frame instead of pushing a new one. Tail recursion (direct,
+  mutual, or through function values) therefore runs in constant stack space
+  and never hits the frame cap; non-tail recursion still overflows.
 - The runtime uses a tracing mark-and-sweep garbage collector. Setting the environment
   variable `FABLE_GC_STRESS=1` forces a collection before every allocation (testing);
   `FABLE_GC_LOG=1` logs collections to stderr.
@@ -435,7 +531,10 @@ methods; calling an unknown method is a compile error naming the receiver type.
 
 ```ebnf
 program     = { item | stmt } ;
-item        = fn_decl | struct_decl | enum_decl ;
+item        = fn_decl | struct_decl | enum_decl | impl_decl | import_stmt ;
+impl_decl   = "impl" IDENT [ generics ] "{" { method_decl } "}" ;
+method_decl = "fn" IDENT [ generics ] "(" "self" [ "," params ] ")" [ "->" type ] block ;
+import_stmt = "import" IDENT { "." IDENT } [ "as" IDENT ] ";" ;
 fn_decl     = "fn" IDENT [ generics ] "(" [ params ] ")" [ "->" type ] block ;
 generics    = "[" IDENT { "," IDENT } "]" ;
 params      = param { "," param } [ "," ] ;
@@ -457,7 +556,7 @@ for_stmt    = "for" IDENT "in" expr block ;
 return_stmt = "return" [ expr ] ";" ;
 
 type        = "Int" | "Float" | "Bool" | "String" | "Unit"
-            | IDENT [ "[" type { "," type } "]" ]        (* named / generic *)
+            | IDENT [ "." IDENT ] [ "[" type { "," type } "]" ]  (* named / generic / module-qualified *)
             | "(" type "," type { "," type } ")"          (* tuple *)
             | "fn" "(" [ type { "," type } ] ")" [ "->" type ]
             | "List" "[" type "]" | "Map" "[" type "," type "]" | "Range" ;
@@ -471,11 +570,12 @@ pattern     = or_pat ;
 or_pat      = base_pat { "|" base_pat } ;
 base_pat    = literal | "_" | IDENT
             | "(" pattern "," pattern { "," pattern } ")"
-            | path [ "(" pattern { "," pattern } ")" ]     (* enum variant *)
-            | IDENT "{" [ field_pats ] [ ".." ] "}" ;      (* struct *)
+            | path [ "(" pattern { "," pattern } ")" ]     (* enum variant; path may be module-qualified *)
+            | path "{" [ field_pats ] [ ".." ] "}" ;       (* struct; ditto *)
 ```
 
-(Expression grammar follows the precedence table in § 3.1.)
+(Expression grammar follows the precedence table in § 3.1; `?` is a postfix
+operator at level 9, and struct-literal names may be module-qualified.)
 
 ---
 

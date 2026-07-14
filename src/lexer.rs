@@ -257,6 +257,8 @@ impl<'a> Lexer<'a> {
             "fn" => TokenKind::Fn,
             "struct" => TokenKind::Struct,
             "enum" => TokenKind::Enum,
+            "impl" => TokenKind::Impl,
+            "import" => TokenKind::Import,
             "match" => TokenKind::Match,
             "if" => TokenKind::If,
             "else" => TokenKind::Else,
@@ -498,6 +500,10 @@ impl<'a> Lexer<'a> {
             ',' => {
                 self.pos += 1;
                 self.push(TokenKind::Comma, start, self.pos);
+            }
+            '?' => {
+                self.pos += 1;
+                self.push(TokenKind::Question, start, self.pos);
             }
             ':' => {
                 self.pos += 1;

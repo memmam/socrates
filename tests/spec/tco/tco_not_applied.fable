@@ -1,0 +1,8 @@
+// SPEC §6 (v0.2): non-tail recursion still consumes frames and overflows —
+// the `+` must run after the recursive call returns, so no frame reuse is
+// possible.
+//? panic: stack overflow
+fn sum_to(n: Int) -> Int {
+    if n == 0 { 0 } else { n + sum_to(n - 1) }
+}
+println(sum_to(100000));

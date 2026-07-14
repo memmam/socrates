@@ -1,0 +1,42 @@
+// SPEC §6 (v0.2): tail calls through dynamic callees (closures, fn values,
+// natives) also reuse the frame.
+fn apply_n(f: fn(Int) -> Int, n: Int, x: Int) -> Int {
+    if n == 0 { x } else { apply_n(f, n - 1, f(x)) }
+}
+println(apply_n(|x| x + 1, 100000, 0));   //? expect: 100000
+
+// A closure in tail position (Call → TailCall on a closure value).
+fn trampoline(f: fn(Int) -> Int, x: Int) -> Int {
+    f(x)
+}
+println(trampoline(|x| x * 2, 21));       //? expect: 42
+
+// Lambdas' bodies are tail positions of the lambda itself; a self-recursive
+// helper through a fn value stays frame-constant.
+fn loop_via_value(n: Int) -> Int {
+    let dec = |k: Int| k - 1;
+    if n == 0 { 7 } else { loop_via_value(dec(n)) }
+}
+println(loop_via_value(80000));           //? expect: 7
+
+// A native value in tail position: the VM calls it and returns its result.
+fn shout(f: fn(Int) -> String, x: Int) -> String {
+    f(x)
+}
+println(shout(str, 99));                  //? expect: 99
+
+// Upvalues captured from a frame that is later replaced by a tail call must
+// be closed at the tail call, each keeping its own frame's value.
+fn capture_and_tail(n: Int, acc: List[fn() -> Int]) -> Int {
+    if n == 0 {
+        return acc.len();
+    }
+    let k = n;
+    acc.push(|| k);
+    capture_and_tail(n - 1, acc)
+}
+let fns: List[fn() -> Int] = [];
+println(capture_and_tail(3, fns));        //? expect: 3
+println(fns[0]());                        //? expect: 3
+println(fns[1]());                        //? expect: 2
+println(fns[2]());                        //? expect: 1

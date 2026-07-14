@@ -308,9 +308,9 @@ println(tock());
 ```
 
 `tick` and `tock` count independently — separate calls, separate `n`s. A
-closure with private mutable state is as close as v0.1 Fable gets to objects
-(there are no user-defined methods or traits), and for many uses it is
-plenty.
+closure with private mutable state is the lightest kind of object Fable
+offers — for named fields and methods, pair a struct with an `impl` block
+(chapters 4 and 7).
 
 ## Generic functions
 
@@ -396,30 +396,40 @@ call stack is finite: 4096 frames in the current implementation. Blow past it
 and the program panics:
 
 ```fable
-fn countdown(n: Int) -> Int {
-    if n == 0 { 0 } else { countdown(n - 1) }
+fn sum_to(n: Int) -> Int {
+    if n == 0 { 0 } else { n + sum_to(n - 1) }
 }
 
-println(countdown(1_000_000));
+println(sum_to(1_000_000));
 ```
 
 ```text
 panic: stack overflow
-  at countdown (demo.fable:2:28)
-  at countdown (demo.fable:2:28)
-  at countdown (demo.fable:2:28)
+  at sum_to (demo.fable:2:32)
+  at sum_to (demo.fable:2:32)
+  at sum_to (demo.fable:2:32)
   ...
-  at ... and 4032 more frames (:0:0)
+  at ... and 4032 more frames
 ```
 
 (The runtime prints 64 frames before summarizing the rest; the middle is
 elided here.) Like any panic, this exits with code 70.
 
-Note that `countdown` calls itself in tail position and *still* overflows:
-Fable v0.1 deliberately has no tail-call optimization. The same program with
-`countdown(4000)` runs fine, so ordinary recursion — parsers, tree walks,
-divide-and-conquer — is not in danger. For depths in the tens of thousands,
-use a loop and a `mut` variable instead.
+The limit only applies to calls with work left pending — here every frame
+holds an unfinished `+`. A call in *tail position* (the last thing its
+function does) reuses the frame instead of pushing one, so the accumulator
+version runs at any depth:
+
+```fable
+fn sum_acc(n: Int, acc: Int) -> Int {
+    if n == 0 { acc } else { sum_acc(n - 1, acc + n) }
+}
+
+println(sum_acc(1_000_000, 0));   // 500000500000 — constant stack space
+```
+
+Chapter 7 covers tail calls in detail. Ordinary bounded recursion — parsers,
+tree walks, divide-and-conquer — was never in danger either way.
 
 ## Where we are
 

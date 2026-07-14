@@ -1,0 +1,72 @@
+// SPEC §3.6 (v0.2): the `?` operator on Option. `expr?` unwraps `Some` or
+// returns `None` from the enclosing function. The enclosing return type must
+// be an Option, but its payload type is independent of the operand's.
+fn first_even(xs: List[Int]) -> Option[Int] {
+    for x in xs {
+        if x % 2 == 0 {
+            return Some(x);
+        }
+    }
+    None
+}
+
+fn double_first_even(xs: List[Int]) -> Option[Int] {
+    let x = first_even(xs)?;
+    Some(x * 2)
+}
+
+println(double_first_even([1, 3, 4, 5]));   //? expect: Some(8)
+println(double_first_even([1, 3, 5]));      //? expect: None
+
+// `?` chains postfix with method calls and further `?`s.
+fn sum_firsts(a: List[Int], b: List[Int]) -> Option[Int] {
+    Some(first_even(a)? + first_even(b)?)
+}
+println(sum_firsts([2], [4]));              //? expect: Some(6)
+println(sum_firsts([2], [3]));              //? expect: None
+println(sum_firsts([1], [4]));              //? expect: None
+
+// Payload types may differ: unwrap an Option[Int], return an Option[String].
+fn describe(xs: List[Int]) -> Option[String] {
+    let x = first_even(xs)?;
+    Some("even: {x}")
+}
+println(describe([7, 8]));                  //? expect: Some("even: 8")
+println(describe([7]));                     //? expect: None
+
+// Double unwrap: `??` peels two Option layers.
+fn inner(x: Option[Option[Int]]) -> Option[Int] {
+    Some(x?? + 1)
+}
+println(inner(Some(Some(41))));             //? expect: Some(42)
+println(inner(Some(None)));                 //? expect: None
+println(inner(None));                       //? expect: None
+
+// `?` inside a lambda returns from the lambda, not the enclosing function.
+fn lambda_try() -> Option[Int] {
+    let bump = |o: Option[Int]| Some(o? + 1);
+    let a = bump(Some(1));
+    let b = bump(None);
+    println(a);                             //? expect: Some(2)
+    println(b);                             //? expect: None
+    a
+}
+println(lambda_try());                      //? expect: Some(2)
+
+// Unary minus binds looser than `?`: `-x?` is `-(x?)`.
+fn neg_first(xs: List[Int]) -> Option[Int] {
+    Some(-first_even(xs)?)
+}
+println(neg_first([6]));                    //? expect: Some(-6)
+
+// The short-circuit skips the rest of the expression entirely.
+fn count_calls(xs: List[Int], calls: List[Int]) -> Option[Int] {
+    let x = first_even(xs)?;
+    calls.push(1);
+    Some(x)
+}
+let calls: List[Int] = [];
+count_calls([1], calls);
+println(calls.len());                       //? expect: 0
+count_calls([2], calls);
+println(calls.len());                       //? expect: 1

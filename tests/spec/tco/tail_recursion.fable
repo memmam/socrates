@@ -1,0 +1,53 @@
+// SPEC §6 (v0.2): calls in tail position reuse the caller's frame, so tail
+// recursion runs in constant stack space — far past the 4,096-frame limit
+// that non-tail recursion hits.
+fn count_down(n: Int, acc: Int) -> Int {
+    if n == 0 { acc } else { count_down(n - 1, acc + 1) }
+}
+println(count_down(100000, 0));      //? expect: 100000
+
+// Tail position propagates through `return`.
+fn count_ret(n: Int) -> Int {
+    if n == 0 {
+        return 0;
+    }
+    return count_ret(n - 1);
+}
+println(count_ret(50000));           //? expect: 0
+
+// Mutual recursion is also frame-constant: each call replaces the frame.
+fn is_even(n: Int) -> Bool {
+    if n == 0 { true } else { is_odd(n - 1) }
+}
+fn is_odd(n: Int) -> Bool {
+    if n == 0 { false } else { is_even(n - 1) }
+}
+println(is_even(100001));            //? expect: false
+println(is_odd(99999));              //? expect: true
+
+// Tail position propagates through match arms.
+fn drain(n: Int) -> String {
+    match n {
+        0 -> "done",
+        _ -> drain(n - 1),
+    }
+}
+println(drain(60000));               //? expect: done
+
+// ... and through nested blocks in tail position.
+fn via_block(n: Int) -> Int {
+    if n == 0 { 42 } else {
+        let step = 1;
+        { via_block(n - step) }
+    }
+}
+println(via_block(70000));           //? expect: 42
+
+// The optimization only applies to true tail calls: `1 + f(...)` must still
+// evaluate the addition after the call returns, and deep enough non-tail
+// recursion overflows (see tco_not_applied panic test). Shallow non-tail
+// recursion still computes correctly:
+fn sum_to(n: Int) -> Int {
+    if n == 0 { 0 } else { n + sum_to(n - 1) }
+}
+println(sum_to(100));                //? expect: 5050
