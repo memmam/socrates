@@ -1,0 +1,13 @@
+# budget.sheet — a small grocery budget.
+# One line per row; commas separate columns; '#' lines are ignored.
+# Commas inside parentheses belong to the formula, not the file format.
+Item,Qty,Price,Total
+Apples,4,1.50,=B2*C2
+Bread,2,3.25,=B3*C3
+Cheese,1,7.90,=B4*C4
+Milk,3,0.95,=B5*C5
+,,Subtotal,=sum(D2:D5)
+,,Tax (8%),=D6*0.08
+,,Total,=D6+D7
+,,Priciest,=max(D2:D5)
+,,Avg price,=avg(C2:C5)
