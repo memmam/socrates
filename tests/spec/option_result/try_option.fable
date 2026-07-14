@@ -1,4 +1,4 @@
-// SPEC §8.7 (v0.2): the `?` operator on Option. `expr?` unwraps `Some` or
+// SPEC §3.6 (v0.2): the `?` operator on Option. `expr?` unwraps `Some` or
 // returns `None` from the enclosing function. The enclosing return type must
 // be an Option, but its payload type is independent of the operand's.
 fn first_even(xs: List[Int]) -> Option[Int] {

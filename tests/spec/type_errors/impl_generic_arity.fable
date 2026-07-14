@@ -1,4 +1,4 @@
-// SPEC §5.4 (v0.2): E0332 — an impl must bind exactly as many type
+// SPEC §5.1 (v0.2): E0332 — an impl must bind exactly as many type
 // parameters as the type declares.
 //? error: E0332
 //? error: `Pair` has 2 type parameters, but this impl binds 1

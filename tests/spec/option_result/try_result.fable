@@ -1,4 +1,4 @@
-// SPEC §8.7 (v0.2): the `?` operator on Result. `expr?` unwraps `Ok` or
+// SPEC §3.6 (v0.2): the `?` operator on Result. `expr?` unwraps `Ok` or
 // returns the `Err` from the enclosing function. The error types must agree;
 // the Ok types are independent.
 fn parse_pos(s: String) -> Result[Int, String] {

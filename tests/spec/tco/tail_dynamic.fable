@@ -1,4 +1,4 @@
-// SPEC §7.5 (v0.2): tail calls through dynamic callees (closures, fn values,
+// SPEC §6 (v0.2): tail calls through dynamic callees (closures, fn values,
 // natives) also reuse the frame.
 fn apply_n(f: fn(Int) -> Int, n: Int, x: Int) -> Int {
     if n == 0 { x } else { apply_n(f, n - 1, f(x)) }

@@ -61,6 +61,16 @@ executed against the interpreter before it was written down.
   expressions — including nested strings with their own interpolations.
 - **Batteries.** ~110 built-in methods across `List`, `Map`, `String`,
   `Option`, `Result`, `Range`, `Int`, `Float`, plus a `math` namespace.
+- **Methods on your own types** (v0.2). `impl Point { fn len(self) -> Float
+  { ... } }` — generic impls, multiple blocks, dot-syntax dispatch.
+- **The `?` operator** (v0.2). `Some(a.parse_int()? + b.parse_int()?)` —
+  unwrap or propagate, for both `Option` and `Result`.
+- **Multi-file modules** (v0.2). `import geo;` loads `geo.fable` relative to
+  the importing file: qualified calls, types, variants, and patterns, with
+  diamond dedup and cycle detection.
+- **Tail-call optimization** (v0.2). Calls in tail position reuse the frame:
+  tail recursion — direct, mutual, or through closures — runs in constant
+  stack space.
 - **A whole toolchain**: `run`, `check`, a REPL with persistent incremental
   compilation and `:type`, a comment-preserving formatter (`fmt`), and a
   bytecode disassembler (`dis`).
@@ -123,15 +133,22 @@ enum Tree {
     Leaf(Int),
     Node(Tree, Tree),
 }
-fn sum(t: Tree) -> Int {
-    match t {
-        Tree.Leaf(v) -> v,
-        Tree.Node(l, r) -> sum(l) + sum(r),
+
+// Methods live in impl blocks; `self` is the receiver.
+impl Tree {
+    fn sum(self) -> Int {
+        match self {
+            Tree.Leaf(v) -> v,
+            Tree.Node(l, r) -> l.sum() + r.sum(),
+        }
     }
 }
 
-// Option and Result are built in, with combinators.
+// Option and Result are built in, with combinators and the `?` operator.
 let n = "42".parse_int().map(|v| v * 2).unwrap_or(0);
+fn add_parsed(a: String, b: String) -> Option[Int] {
+    Some(a.parse_int()? + b.parse_int()?)
+}
 
 // Collections know functional and imperative tricks alike.
 let squares = (1..=10).map(|n| n * n).filter(|n| n % 2 == 0);
@@ -163,6 +180,7 @@ src/
   builtins.rs     their type schemes (shared with the checker)
   fmt.rs          comment-preserving formatter
   repl.rs         incremental REPL with rollback
+  modules.rs      the import loader (dedup, cycle detection)
   dis.rs          disassembler
 docs/SPEC.md      the normative language specification
 book/             the Fable book
@@ -190,8 +208,11 @@ let x: Int = "no";    //? error: type mismatch
 
 Fable is a complete, working language built as a demonstration project.
 The spec (`docs/SPEC.md`) is the source of truth; deviations are bugs.
-Things deliberately out of scope for v0.1: user-defined methods/traits,
-multi-file modules, a `?` operator, and tail-call optimization.
+
+v0.2 delivered everything v0.1 had declared out of scope — user-defined
+methods (`impl` blocks), multi-file modules (`import`), the `?` operator,
+and tail-call optimization. Still deliberately out of scope: traits/
+interfaces, visibility controls, and a package manager.
 
 ## License
 

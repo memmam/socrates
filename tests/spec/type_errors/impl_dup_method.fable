@@ -1,4 +1,4 @@
-// SPEC §5.4 (v0.2): E0333 — method names must be unique per type, across all
+// SPEC §5.1 (v0.2): E0333 — method names must be unique per type, across all
 // of its impl blocks.
 //? error: E0333
 //? error: duplicate method `area` on `Square`

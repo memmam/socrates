@@ -396,7 +396,7 @@ ababab
 `starts_with`, `ends_with`, and `pad_right` round out the set. One honest
 limitation: `to_upper` and `to_lower` map ASCII letters only —
 `"étude".to_upper()` is `"éTUDE"`, the `é` passing through unchanged. Full
-Unicode case mapping is out of scope for v0.1.
+Unicode case mapping is out of scope.
 
 ### Splitting
 

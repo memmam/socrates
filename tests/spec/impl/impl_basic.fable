@@ -1,4 +1,4 @@
-// SPEC §5.4 (v0.2): impl blocks define methods on user structs. `self` is the
+// SPEC §5.1 (v0.2): impl blocks define methods on user structs. `self` is the
 // receiver; methods are called with dot syntax and may call each other, call
 // free functions, and be defined across multiple impl blocks.
 struct Point {

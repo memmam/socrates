@@ -1,4 +1,4 @@
-// SPEC §8.7 (v0.2): E0330 — `?` only applies to Option and Result values.
+// SPEC §3.6 (v0.2): E0330 — `?` only applies to Option and Result values.
 //? error: E0330
 //? error: `?` requires an `Option` or `Result`, found `Int`
 fn f(x: Int) -> Option[Int] {

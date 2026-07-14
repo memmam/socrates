@@ -366,8 +366,9 @@ expression-bodied functions. The next chapters tour the language proper —
 values and types, control flow, pattern matching, and the collection
 library.
 
-One expectation to set now: Fable v0.1 is deliberately small. There are no
-user-defined methods or traits, no multi-file modules, and no `?` operator —
-programs are single files, and `.method()` calls are reserved for the
-built-in types. What the language does include, it checks thoroughly at
-compile time, as the diagnostics above suggest.
+One expectation to set now: Fable is deliberately small. v0.2 added methods
+on your own types, multi-file modules, the `?` operator, and tail-call
+optimization (chapter 7 covers all four) — but there are still no traits,
+no visibility modifiers, and no package manager. What the language does
+include, it checks thoroughly at compile time, as the diagnostics above
+suggest.

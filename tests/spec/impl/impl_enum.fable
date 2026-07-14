@@ -1,4 +1,4 @@
-// SPEC §5.4 (v0.2): impl blocks work on user enums; methods can match on
+// SPEC §5.1 (v0.2): impl blocks work on user enums; methods can match on
 // `self` and recurse.
 enum Tree {
     Leaf(Int),

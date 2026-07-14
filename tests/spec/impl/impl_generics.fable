@@ -1,4 +1,4 @@
-// SPEC §5.4 (v0.2): impl blocks on generic types re-bind the declaration's
+// SPEC §5.1 (v0.2): impl blocks on generic types re-bind the declaration's
 // type parameters (`impl Pair[A, B]`); methods may add their own generics,
 // which follow the impl's in the combined scheme.
 struct Pair[A, B] {

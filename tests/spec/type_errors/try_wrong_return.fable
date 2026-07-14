@@ -1,4 +1,4 @@
-// SPEC §8.7 (v0.2): E0329 — the enclosing function's return type must match
+// SPEC §3.6 (v0.2): E0329 — the enclosing function's return type must match
 // the `?` operand's shape: Option needs an Option return; Result needs a
 // Result return with the SAME error type.
 //? error: E0329

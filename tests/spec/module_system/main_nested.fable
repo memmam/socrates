@@ -1,4 +1,4 @@
-// SPEC §10 (v0.2): dotted import paths map to subdirectories (`import
+// SPEC §5.2 (v0.2): dotted import paths map to subdirectories (`import
 // lib.vec;` → `lib/vec.fable`), the default alias is the last segment, and
 // `as` renames. Modules may import their own dependencies; a shared module
 // loads once.

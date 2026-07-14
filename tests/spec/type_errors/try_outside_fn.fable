@@ -1,4 +1,4 @@
-// SPEC §8.7 (v0.2): `?` propagates by returning from the enclosing function,
+// SPEC §3.6 (v0.2): `?` propagates by returning from the enclosing function,
 // so it is an error at the top level (E0328), including inside top-level
 // control flow — only fn and lambda bodies count.
 //? error: E0328

@@ -1,4 +1,4 @@
-// SPEC §5.4 (v0.2): parse errors — every method takes `self` first, with no
+// SPEC §5.1 (v0.2): parse errors — every method takes `self` first, with no
 // type annotation, and impl blocks contain only `fn` items.
 //? error: E0200
 //? error: the first parameter of a method must be `self`

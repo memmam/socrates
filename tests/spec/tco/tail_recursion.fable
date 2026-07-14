@@ -1,4 +1,4 @@
-// SPEC §7.5 (v0.2): calls in tail position reuse the caller's frame, so tail
+// SPEC §6 (v0.2): calls in tail position reuse the caller's frame, so tail
 // recursion runs in constant stack space — far past the 4,096-frame limit
 // that non-tail recursion hits.
 fn count_down(n: Int, acc: Int) -> Int {

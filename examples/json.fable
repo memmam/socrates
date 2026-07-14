@@ -69,6 +69,8 @@ fn parse_value(p: Parser) -> Result[Json, String] {
     }
 }
 
+// Error propagation uses the `?` operator throughout: any `Err` from a
+// sub-parser returns from the enclosing function unchanged.
 fn parse_literal(p: Parser, word: String, value: Json) -> Result[Json, String] {
     for ch in word {
         match advance(p) {
@@ -110,10 +112,7 @@ fn parse_number(p: Parser) -> Result[Json, String] {
 }
 
 fn parse_string(p: Parser) -> Result[String, String] {
-    match expect(p, "\"") {
-        Err(e) -> { return Err(e); }
-        Ok(u) -> u,
-    };
+    expect(p, "\"")?;
     let mut out = "";
     while true {
         match advance(p) {
@@ -150,10 +149,7 @@ fn parse_array(p: Parser) -> Result[Json, String] {
         return Ok(Json.JArr(items));
     }
     while true {
-        match parse_value(p) {
-            Ok(v) -> items.push(v),
-            Err(e) -> { return Err(e); }
-        }
+        items.push(parse_value(p)?);
         skip_ws(p);
         match advance(p) {
             Some(c) -> {
@@ -176,19 +172,10 @@ fn parse_object(p: Parser) -> Result[Json, String] {
     }
     while true {
         skip_ws(p);
-        let key = match parse_string(p) {
-            Ok(k) -> k,
-            Err(e) -> { return Err(e); }
-        };
+        let key = parse_string(p)?;
         skip_ws(p);
-        match expect(p, ":") {
-            Err(e) -> { return Err(e); }
-            Ok(u) -> u,
-        };
-        match parse_value(p) {
-            Ok(v) -> entries.push((key, v)),
-            Err(e) -> { return Err(e); }
-        }
+        expect(p, ":")?;
+        entries.push((key, parse_value(p)?));
         skip_ws(p);
         match advance(p) {
             Some(c) -> {
@@ -203,15 +190,12 @@ fn parse_object(p: Parser) -> Result[Json, String] {
 
 fn parse(text: String) -> Result[Json, String] {
     let p = Parser { chars: text.chars(), pos: 0 };
-    let v = parse_value(p);
+    let json = parse_value(p)?;
     skip_ws(p);
-    match v {
-        Ok(json) -> if p.pos < p.chars.len() {
-            Err("trailing input at {p.pos}")
-        } else {
-            Ok(json)
-        },
-        Err(e) -> Err(e),
+    if p.pos < p.chars.len() {
+        Err("trailing input at {p.pos}")
+    } else {
+        Ok(json)
     }
 }
 

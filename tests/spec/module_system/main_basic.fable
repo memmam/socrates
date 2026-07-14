@@ -1,4 +1,4 @@
-// SPEC §10 (v0.2): multi-file modules. `import geo;` loads `geo.fable` from
+// SPEC §5.2 (v0.2): multi-file modules. `import geo;` loads `geo.fable` from
 // this file's directory; members are reached as `geo.name`, types as
 // `geo.Type`, and enum variants as `geo.Shape.Variant`.
 import geo;

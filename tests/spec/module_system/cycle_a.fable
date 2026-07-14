@@ -1,4 +1,4 @@
-// SPEC §10 (v0.2): circular imports are detected and rejected (E0338).
+// SPEC §5.2 (v0.2): circular imports are detected and rejected (E0338).
 // cycle_a → cycle_b → cycle_a.
 //? error: E0338
 //? error: circular import
