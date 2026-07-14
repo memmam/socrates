@@ -8,9 +8,35 @@ You may obtain a copy of the License in the LICENSE file or at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Relicensing notice: repository revisions prior to this notice were briefly
-published under the MIT License with the placeholder attribution "The Fable
-Authors". The copyright holder hereby rescinds that MIT License offer to the
-maximum extent permitted by applicable law; no new grants are made under the
-MIT License from this revision forward, and this work is offered solely
-under the Apache License, Version 2.0.
+PRIOR-LICENSE NOTICE
+
+1. This work is offered solely under the Apache License, Version 2.0.
+   No license other than Apache-2.0 is offered for any revision of this
+   work — past, present, or future — except as narrowly described in
+   paragraph 3.
+
+2. For a brief window, an MIT License file with the placeholder
+   attribution "The Fable Authors" was present in this repository:
+   first published in commit e512fab (2026-07-14 18:15:17 UTC), present
+   on the main branch only between commits 096627f (merged 2026-07-14
+   18:37:03 UTC) and 31751f0 (merged 2026-07-14 19:03:28 UTC), and
+   removed by commit 6d79918 (2026-07-14 18:57:39 UTC). That text
+   remains visible in version-control history, as history; its presence
+   in a historical revision is a record of what was once offered, not a
+   standing offer. Checking out, downloading, cloning, or copying any
+   historical revision on or after the date of this notice does not
+   grant, renew, or revive any rights under the MIT License.
+
+3. To the limited extent that a recipient actually obtained a copy of
+   this work during the window described in paragraph 2 and under the
+   MIT License then offered, any rights so obtained extend only to the
+   exact contents of the revisions within that window and to nothing
+   published before or since. The copyright holder rescinds the MIT
+   License offer to the maximum extent permitted by applicable law and
+   makes no new grants under it. The burden of demonstrating receipt
+   within the window rests with the party claiming it.
+
+4. All use, reproduction, and distribution of this work from this
+   notice forward is governed exclusively by the Apache License,
+   Version 2.0, including its NOTICE-preservation requirements
+   (Section 4(d)), which apply to this file.
