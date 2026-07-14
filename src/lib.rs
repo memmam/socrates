@@ -80,11 +80,37 @@ pub fn run_capture_path(path: &std::path::Path) -> RunOutcome {
         .expect("interpreter thread panicked")
 }
 
+/// `run_capture_path` with an explicit module search path (for tests; the
+/// default reads `FABLE_PATH`).
+pub fn run_capture_path_with(
+    path: &std::path::Path,
+    search: &[std::path::PathBuf],
+) -> RunOutcome {
+    let path = path.to_path_buf();
+    let search = search.to_vec();
+    std::thread::Builder::new()
+        .stack_size(512 * 1024 * 1024)
+        .spawn(move || {
+            let units = match modules::load_modules_with(&path, &search) {
+                Ok(u) => u,
+                Err((_source, diags)) => return RunOutcome::CompileError(diags),
+            };
+            run_units(units)
+        })
+        .expect("failed to spawn interpreter thread")
+        .join()
+        .expect("interpreter thread panicked")
+}
+
 fn run_capture_path_here(path: &std::path::Path) -> RunOutcome {
     let units = match modules::load_modules(path) {
         Ok(u) => u,
         Err((_source, diags)) => return RunOutcome::CompileError(diags),
     };
+    run_units(units)
+}
+
+fn run_units(units: Vec<modules::ModuleUnit>) -> RunOutcome {
     let mut warnings = Vec::new();
     let mut checker = check::Checker::new();
     let mut builder = compiler::ProgramBuilder::new();

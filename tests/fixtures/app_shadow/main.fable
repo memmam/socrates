@@ -1,0 +1,3 @@
+// Fixture: a sibling module shadows a same-named search-path module.
+import textutil;
+println(textutil.origin());

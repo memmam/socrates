@@ -1,0 +1,3 @@
+// Fixture: the imported module exists nowhere (not as a sibling, not on the
+// search path) — the E0337 error lists every location tried.
+import no_such_thing;
