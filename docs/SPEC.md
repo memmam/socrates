@@ -28,7 +28,7 @@ Identifiers match `[A-Za-z_][A-Za-z0-9_]*`. By convention, types and enum varian
 Keywords (reserved, cannot be identifiers):
 
 ```
-let mut fn struct enum impl import match if else while for in
+let mut pub fn struct enum impl import match if else while for in
 return break continue true false
 ```
 
@@ -176,6 +176,11 @@ Fable is expression-oriented. Blocks are expressions; the last expression in a b
 Comparison operators are **non-associative**: `a < b < c` is a parse error.
 Integer division truncates toward zero; `/` or `%` by integer zero **panics**.
 Float division by zero yields `inf`/`nan` per IEEE-754.
+
+The arithmetic operators (and unary `-`) also apply to user types through
+**operator methods** (v0.3, § 5.1): `a + b` dispatches to `a.add(b)` when
+`a`'s type defines one. `==`/`!=` remain structural for all types and cannot
+be overloaded; compound assignment (`+=`) never dispatches.
 
 ### 3.2 Equality
 
@@ -346,7 +351,16 @@ println(p.scaled(2.0).len());   // 10.0
   the prelude `Option`/`Result` (E0331).
 - Methods are hoisted like functions (order-independent, mutual recursion
   works) and are ordinary functions with the receiver as argument 0; a method
-  travels with its type across modules.
+  travels with its type across modules. In a module, a method is callable
+  from outside only if marked `pub` (v0.3, § 5.2).
+- **Operator methods** (v0.3): the well-known method names `add`, `sub`,
+  `mul`, `div`, `rem`, and `neg` overload `+ - * / %` and unary `-` for the
+  type. Dispatch is on the **left** operand's type only, so mixed signatures
+  work (`vec * 2.0` calls `fn mul(self, k: Float)`); the right operand and
+  result types are whatever the method declares. A binary operator method
+  takes exactly one parameter besides `self`; `neg` takes none. Equality
+  stays structural, and compound assignment is sugar that never dispatches —
+  write `x = x + y`.
 
 ### 5.2 Modules and imports
 
@@ -374,11 +388,22 @@ match shape {
   runs last. Circular imports are a compile error (E0338); a missing file is
   E0337; duplicate aliases in one file are E0336.
 - A module's top-level names are reachable only through its alias — imports
-  are not transitive, and there is no visibility control in v0.2: everything
-  is public.
-- Module bindings are readable from outside (`geo.counter`) but assignable
-  only inside their own module (E0308). Methods on a module's types work on
-  its values everywhere without qualification.
+  are not transitive.
+- **Visibility** (v0.3): module items are private by default. `pub` on a
+  `fn`, `struct`, `enum`, top-level `let`, or an impl-block method exports
+  it. The rule is: **naming** a foreign item requires `pub` (qualified
+  calls, globals, types, struct literals, qualified patterns, and method
+  dispatch across modules — E0339), while **using a value you hold** does
+  not (field reads and type-directed variant patterns on a foreign value
+  always work). The prelude is public; `pub` in the root module is
+  meaningless but harmless. There is no field-level visibility, and the
+  checker does not yet flag private types in `pub` signatures.
+- `pub` module bindings are readable from outside (`geo.counter`) but
+  assignable only inside their own module (E0308).
+- Import paths resolve relative to the importing file first, then against
+  each directory in the colon-separated `FABLE_PATH` environment variable
+  (v0.3) — the home for utility modules shared across projects. The E0337
+  error lists every location tried.
 - The REPL and one-shot string evaluation cannot import (E0334).
 
 ---
@@ -416,6 +441,26 @@ match shape {
 | `assert_eq(a, b)` | `[T] fn(T, T) -> Unit` | panics on inequality, printing both |
 | `clock()` | `fn() -> Float` | monotonic seconds |
 | `input()` | `fn() -> Option[String]` | reads one line from stdin (no trailing `\n`); `None` at EOF |
+
+Two more builtin namespaces (v0.3) cover the glue-language essentials.
+Fallible operations return `Result[_, String]` whose `Err` carries
+`"<path>: <OS error>"`, composing with `?`:
+
+| Member | Type | Notes |
+|--------|------|-------|
+| `fs.read(path)` | `fn(String) -> Result[String, String]` | whole file as UTF-8 |
+| `fs.write(path, s)` | `fn(String, String) -> Result[Unit, String]` | create/truncate |
+| `fs.append(path, s)` | `fn(String, String) -> Result[Unit, String]` | creates if missing |
+| `fs.exists(path)` | `fn(String) -> Bool` | |
+| `fs.is_dir(path)` | `fn(String) -> Bool` | |
+| `fs.list_dir(path)` | `fn(String) -> Result[List[String], String]` | entry names, sorted |
+| `fs.create_dir(path)` | `fn(String) -> Result[Unit, String]` | recursive (`mkdir -p`) |
+| `fs.remove(path)` | `fn(String) -> Result[Unit, String]` | file or empty directory |
+| `os.args()` | `fn() -> List[String]` | CLI args after the script path |
+| `os.env(name)` | `fn(String) -> Option[String]` | |
+| `os.run(cmd, args)` | `fn(String, List[String]) -> Result[(Int, String, String), String]` | `Ok((exit code, stdout, stderr))`; `Err` if the binary can't launch |
+| `os.exit(code)` | `fn(Int) -> Unit` | ends the process immediately |
+| `os.time()` | `fn() -> Float` | Unix-epoch seconds (`clock()` is monotonic) |
 
 Namespaced (no import needed): `math.pi`, `math.e`, `math.sqrt(Float)`,
 `math.sin/cos/tan/atan/atan2/log/log2/exp` (Float), `math.pow(Float, Float)`,
@@ -531,9 +576,10 @@ methods; calling an unknown method is a compile error naming the receiver type.
 
 ```ebnf
 program     = { item | stmt } ;
-item        = fn_decl | struct_decl | enum_decl | impl_decl | import_stmt ;
+item        = [ "pub" ] ( fn_decl | struct_decl | enum_decl | let_stmt )
+            | impl_decl | import_stmt ;
 impl_decl   = "impl" IDENT [ generics ] "{" { method_decl } "}" ;
-method_decl = "fn" IDENT [ generics ] "(" "self" [ "," params ] ")" [ "->" type ] block ;
+method_decl = [ "pub" ] "fn" IDENT [ generics ] "(" "self" [ "," params ] ")" [ "->" type ] block ;
 import_stmt = "import" IDENT { "." IDENT } [ "as" IDENT ] ";" ;
 fn_decl     = "fn" IDENT [ generics ] "(" [ params ] ")" [ "->" type ] block ;
 generics    = "[" IDENT { "," IDENT } "]" ;
@@ -581,7 +627,10 @@ operator at level 9, and struct-literal names may be module-qualified.)
 
 ## 10. Tooling behavior
 
-- `fable run file.fable` (or `fable file.fable`) — compile and run.
+- `fable run file.fable [args...]` (or `fable file.fable [args...]`) —
+  compile and run; everything after the script path reaches the program as
+  `os.args()`. Imports resolve file-relative, then via `FABLE_PATH`
+  (colon-separated directories).
 - `fable check file.fable` — compile only; print diagnostics.
 - `fable dis file.fable` — print disassembled bytecode.
 - `fable fmt file.fable` — print the canonically formatted source

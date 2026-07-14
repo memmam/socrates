@@ -1,9 +1,9 @@
 // The innermost module of the nested-import chain.
-struct Pair {
+pub struct Pair {
     a: Int,
     b: Int,
 }
 
-fn sum(p: Pair) -> Int {
+pub fn sum(p: Pair) -> Int {
     p.a + p.b
 }

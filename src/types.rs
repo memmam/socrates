@@ -68,6 +68,9 @@ impl Type {
 
 #[derive(Debug, Clone)]
 pub struct StructDef {
+    /// Visible to importing modules (`pub struct`). Always true for the
+    /// prelude and irrelevant within the defining module.
+    pub is_pub: bool,
     pub name: String,
     pub generics: Vec<String>,
     /// Field types may contain `Type::Param(i)` referring to `generics[i]`.
@@ -76,6 +79,7 @@ pub struct StructDef {
 
 #[derive(Debug, Clone)]
 pub struct EnumDef {
+    pub is_pub: bool,
     pub name: String,
     pub generics: Vec<String>,
     pub variants: Vec<Variant>,
@@ -127,6 +131,7 @@ impl Defs {
     pub fn new() -> Defs {
         let mut defs = Defs { types: Vec::new(), by_name: HashMap::new() };
         let option = defs.add(TypeDef::Enum(EnumDef {
+            is_pub: true,
             name: "Option".into(),
             generics: vec!["T".into()],
             variants: vec![
@@ -136,6 +141,7 @@ impl Defs {
         }));
         debug_assert_eq!(option, OPTION_DEF);
         let result = defs.add(TypeDef::Enum(EnumDef {
+            is_pub: true,
             name: "Result".into(),
             generics: vec!["T".into(), "E".into()],
             variants: vec![

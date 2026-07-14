@@ -29,15 +29,33 @@ pub struct ModuleUnit {
 /// dependency order (imports before importers, root last), each parsed with
 /// globally unique `NodeId`s so they can share one checker.
 ///
+/// Imports resolve relative to the importing file first, then against each
+/// directory in the `FABLE_PATH` environment variable (colon-separated) —
+/// the home for utility modules shared across projects.
+///
 /// On failure, returns the diagnostics together with the source they belong
 /// to (lex/parse errors of any module, unreadable files, cycles).
 pub fn load_modules(root: &Path) -> Result<Vec<ModuleUnit>, (Source, Vec<Diagnostic>)> {
+    let search: Vec<PathBuf> = std::env::var("FABLE_PATH")
+        .ok()
+        .map(|v| v.split(':').filter(|s| !s.is_empty()).map(PathBuf::from).collect())
+        .unwrap_or_default();
+    load_modules_with(root, &search)
+}
+
+/// `load_modules` with an explicit search path (testable without touching
+/// the process environment).
+pub fn load_modules_with(
+    root: &Path,
+    search: &[PathBuf],
+) -> Result<Vec<ModuleUnit>, (Source, Vec<Diagnostic>)> {
     let mut loader = Loader {
         units: Vec::new(),
         key_by_path: HashMap::new(),
         keys_taken: HashMap::new(),
         loading: Vec::new(),
         next_id: 0,
+        search: search.to_vec(),
     };
     loader.load(root, String::new())?;
     Ok(loader.units)
@@ -53,6 +71,9 @@ struct Loader {
     /// DFS stack of (canonical path, display name) for cycle reporting.
     loading: Vec<(PathBuf, String)>,
     next_id: u32,
+    /// Extra directories imports resolve against, after the importing file's
+    /// own directory (`FABLE_PATH`).
+    search: Vec<PathBuf>,
 }
 
 impl Loader {
@@ -137,17 +158,25 @@ impl Loader {
             rel.push(&s.name);
         }
         rel.set_extension("fable");
-        let target = dir.join(&rel);
-        if !target.is_file() {
-            return Err((
-                importer.clone(),
-                vec![Diagnostic::error(
-                    "E0337",
-                    format!("cannot find module `{dotted}`"),
-                )
-                .with_label(span, format!("looked for `{}`", target.display()))],
-            ));
+        // File-relative first, then each FABLE_PATH directory.
+        let mut tried = Vec::new();
+        let mut found = None;
+        for base in std::iter::once(dir).chain(self.search.iter().map(PathBuf::as_path)) {
+            let candidate = base.join(&rel);
+            if candidate.is_file() {
+                found = Some(candidate);
+                break;
+            }
+            tried.push(candidate);
         }
+        let Some(target) = found else {
+            let mut d = Diagnostic::error("E0337", format!("cannot find module `{dotted}`"))
+                .with_label(span, format!("looked for `{}`", tried[0].display()));
+            for t in &tried[1..] {
+                d = d.with_note(format!("also tried `{}` (FABLE_PATH)", t.display()));
+            }
+            return Err((importer.clone(), vec![d]));
+        };
         let canon = target.canonicalize().unwrap_or_else(|_| target.clone());
 
         if self.loading.iter().any(|(p, _)| *p == canon) {

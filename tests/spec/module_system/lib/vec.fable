@@ -2,21 +2,21 @@
 // via a relative path.
 import pair;
 
-struct V2[T] {
+pub struct V2[T] {
     x: T,
     y: T,
 }
 
 impl V2[T] {
-    fn swap(self) -> V2[T] {
+    pub fn swap(self) -> V2[T] {
         V2 { x: self.y, y: self.x }
     }
 }
 
-fn make(x: Int, y: Int) -> V2[Int] {
+pub fn make(x: Int, y: Int) -> V2[Int] {
     V2 { x: x, y: y }
 }
 
-fn to_pair(v: V2[Int]) -> pair.Pair {
+pub fn to_pair(v: V2[Int]) -> pair.Pair {
     pair.Pair { a: v.x, b: v.y }
 }

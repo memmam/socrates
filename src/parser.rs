@@ -220,6 +220,50 @@ impl<'a> Parser<'a> {
     /// Parse one statement. `top_level` allows item declarations. `in_block`
     /// enables tail-expression semantics before a closing `}`.
     fn stmt(&mut self, top_level: bool, in_block: bool) -> PResult<Option<Stmt>> {
+        if self.at(&TokenKind::Pub) {
+            let pub_span = self.advance().span;
+            if !top_level {
+                self.diags.push(
+                    Diagnostic::error("E0201", "`pub` is only allowed at the top level")
+                        .with_label(pub_span, ""),
+                );
+            }
+            return match self.peek() {
+                TokenKind::Fn => {
+                    let mut f = self.fn_decl()?;
+                    f.is_pub = true;
+                    let span = pub_span.to(f.span);
+                    Ok(Some(Stmt { span, id: self.id(), kind: StmtKind::Fn(f) }))
+                }
+                TokenKind::Struct => {
+                    let mut s = self.struct_decl()?;
+                    s.is_pub = true;
+                    let span = pub_span.to(s.span);
+                    Ok(Some(Stmt { span, id: self.id(), kind: StmtKind::Struct(s) }))
+                }
+                TokenKind::Enum => {
+                    let mut e = self.enum_decl()?;
+                    e.is_pub = true;
+                    let span = pub_span.to(e.span);
+                    Ok(Some(Stmt { span, id: self.id(), kind: StmtKind::Enum(e) }))
+                }
+                TokenKind::Let => {
+                    let mut stmt = self.let_stmt()?;
+                    if let StmtKind::Let { is_pub, .. } = &mut stmt.kind {
+                        *is_pub = true;
+                    }
+                    stmt.span = pub_span.to(stmt.span);
+                    Ok(Some(stmt))
+                }
+                other => {
+                    self.error_here(format!(
+                        "expected `fn`, `struct`, `enum`, or `let` after `pub`, found {}",
+                        other.describe()
+                    ));
+                    Err(())
+                }
+            };
+        }
         match self.peek() {
             TokenKind::Semi => {
                 self.advance(); // stray semicolon: harmless empty statement
@@ -408,7 +452,7 @@ impl<'a> Parser<'a> {
         Ok(Stmt {
             span: start.to(end),
             id: self.id(),
-            kind: StmtKind::Let { mutable, pattern, ty, init },
+            kind: StmtKind::Let { is_pub: false, mutable, pattern, ty, init },
         })
     }
 
@@ -463,6 +507,7 @@ impl<'a> Parser<'a> {
         let ret = if self.eat(&TokenKind::Arrow) { Some(self.type_expr()?) } else { None };
         let body = self.block()?;
         Ok(FnDecl {
+            is_pub: false,
             span: start.to(body.span),
             id: self.id(),
             name,
@@ -503,14 +548,18 @@ impl<'a> Parser<'a> {
         self.expect(&TokenKind::LBrace, "`{`")?;
         let mut methods = Vec::new();
         while !self.at(&TokenKind::RBrace) {
+            let is_pub = self.eat(&TokenKind::Pub);
             if !self.at(&TokenKind::Fn) {
                 self.error_here(format!(
-                    "expected `fn` or `}}` in an impl block, found {}",
+                    "expected {} or `}}` in an impl block, found {}",
+                    if is_pub { "`fn`" } else { "`pub` or `fn`" },
                     self.peek().describe()
                 ));
                 return Err(());
             }
-            methods.push(self.method_decl(&ty_name, &generics)?);
+            let mut m = self.method_decl(&ty_name, &generics)?;
+            m.is_pub = is_pub;
+            methods.push(m);
         }
         let end = self.expect(&TokenKind::RBrace, "`}`")?.span;
         Ok(ImplDecl { span: start.to(end), id: self.id(), ty_name, generics, methods })
@@ -578,6 +627,7 @@ impl<'a> Parser<'a> {
         let ret = if self.eat(&TokenKind::Arrow) { Some(self.type_expr()?) } else { None };
         let body = self.block()?;
         Ok(FnDecl {
+            is_pub: false,
             span: start.to(body.span),
             id: self.id(),
             name,
@@ -618,7 +668,7 @@ impl<'a> Parser<'a> {
             }
         }
         let end = self.expect(&TokenKind::RBrace, "`}`")?.span;
-        Ok(StructDecl { span: start.to(end), id: self.id(), name, generics, fields })
+        Ok(StructDecl { is_pub: false, span: start.to(end), id: self.id(), name, generics, fields })
     }
 
     fn enum_decl(&mut self) -> PResult<EnumDecl> {
@@ -652,7 +702,7 @@ impl<'a> Parser<'a> {
             }
         }
         let end = self.expect(&TokenKind::RBrace, "`}`")?.span;
-        Ok(EnumDecl { span: start.to(end), id: self.id(), name, generics, variants })
+        Ok(EnumDecl { is_pub: false, span: start.to(end), id: self.id(), name, generics, variants })
     }
 
     // ---- blocks ----

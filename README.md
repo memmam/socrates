@@ -71,6 +71,15 @@ executed against the interpreter before it was written down.
 - **Tail-call optimization** (v0.2). Calls in tail position reuse the frame:
   tail recursion — direct, mutual, or through closures — runs in constant
   stack space.
+- **Visibility** (v0.3). Module items are private by default; `pub` exports
+  functions, types, bindings, and individual methods.
+- **Operator overloading** (v0.3). `a + b` dispatches to `a.add(b)` on user
+  types — Lua-metamethod style, left-operand dispatch, mixed signatures
+  like `vec * 2.0` welcome. Equality stays structural.
+- **A real glue language** (v0.3). `fs.read/write/list_dir/...` and
+  `os.args/env/run/exit/time`, all Result-based and `?`-friendly, plus a
+  `FABLE_PATH` search path for your shared modules. `examples/loc.fable` is
+  a working line-counting tool in ~100 lines.
 - **A whole toolchain**: `run`, `check`, a REPL with persistent incremental
   compilation and `:type`, a comment-preserving formatter (`fmt`), and a
   bytecode disassembler (`dis`).
@@ -88,6 +97,9 @@ cargo build --release
 
 # An interpreter running inside an interpreter
 ./target/release/fable examples/brainfuck.fable
+
+# A glue script: count lines of code in this repository
+./target/release/fable examples/loc.fable .
 
 # Poke at the machinery
 ./target/release/fable dis examples/algorithms.fable
@@ -211,8 +223,11 @@ The spec (`docs/SPEC.md`) is the source of truth; deviations are bugs.
 
 v0.2 delivered everything v0.1 had declared out of scope — user-defined
 methods (`impl` blocks), multi-file modules (`import`), the `?` operator,
-and tail-call optimization. Still deliberately out of scope: traits/
-interfaces, visibility controls, and a package manager.
+and tail-call optimization. v0.3 made it a real glue language: `pub`
+visibility, operator methods, a `FABLE_PATH` module search path, and
+`fs`/`os` builtins. Still deliberately out of scope: full traits (operator
+methods cover the common case), per-field visibility, and a package
+manager.
 
 ## License
 

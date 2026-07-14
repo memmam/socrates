@@ -133,7 +133,10 @@ impl Formatter {
             StmtKind::Impl(d) => self.impl_decl(d),
             StmtKind::Struct(d) => self.struct_decl(d),
             StmtKind::Enum(d) => self.enum_decl(d),
-            StmtKind::Let { mutable, pattern, ty, init } => {
+            StmtKind::Let { is_pub, mutable, pattern, ty, init } => {
+                if *is_pub {
+                    self.out.push_str("pub ");
+                }
                 self.out.push_str("let ");
                 if *mutable {
                     self.out.push_str("mut ");
@@ -208,6 +211,9 @@ impl Formatter {
     /// `method` marks an impl-block method: its first parameter prints as a
     /// bare `self` (the parser synthesized its type annotation).
     fn fn_decl(&mut self, f: &FnDecl, method: bool) {
+        if f.is_pub {
+            self.out.push_str("pub ");
+        }
         self.out.push_str("fn ");
         self.out.push_str(&f.name.name);
         if !f.generics.is_empty() {
@@ -267,6 +273,9 @@ impl Formatter {
     }
 
     fn struct_decl(&mut self, d: &StructDecl) {
+        if d.is_pub {
+            self.out.push_str("pub ");
+        }
         self.out.push_str("struct ");
         self.out.push_str(&d.name.name);
         self.generics(&d.generics);
@@ -293,6 +302,9 @@ impl Formatter {
     }
 
     fn enum_decl(&mut self, d: &EnumDecl) {
+        if d.is_pub {
+            self.out.push_str("pub ");
+        }
         self.out.push_str("enum ");
         self.out.push_str(&d.name.name);
         self.generics(&d.generics);

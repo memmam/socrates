@@ -18,6 +18,9 @@ pub struct Program {
 
 #[derive(Debug, Clone)]
 pub struct FnDecl {
+    /// `pub fn ...` — visible to importing modules (v0.3). Meaningless (and
+    /// harmless) in the root module.
+    pub is_pub: bool,
     pub name: Ident,
     pub generics: Vec<Ident>,
     pub params: Vec<Param>,
@@ -36,6 +39,7 @@ pub struct Param {
 
 #[derive(Debug, Clone)]
 pub struct StructDecl {
+    pub is_pub: bool,
     pub name: Ident,
     pub generics: Vec<Ident>,
     pub fields: Vec<FieldDef>,
@@ -51,6 +55,7 @@ pub struct FieldDef {
 
 #[derive(Debug, Clone)]
 pub struct EnumDecl {
+    pub is_pub: bool,
     pub name: Ident,
     pub generics: Vec<Ident>,
     pub variants: Vec<VariantDef>,
@@ -110,8 +115,9 @@ pub enum StmtKind {
         path: Vec<Ident>,
         alias: Option<Ident>,
     },
-    /// `let [mut] pattern [: ty] = expr;`
+    /// `[pub] let [mut] pattern [: ty] = expr;`
     Let {
+        is_pub: bool,
         mutable: bool,
         pattern: Pattern,
         ty: Option<TypeExpr>,

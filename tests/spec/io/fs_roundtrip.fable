@@ -1,0 +1,42 @@
+// SPEC §7 (v0.3): the fs namespace — write, read, append, exists, list_dir,
+// create_dir, remove. Fallible operations return Result[_, String]. The test
+// works under target/ (gitignored) and cleans up after itself.
+let dir = "target/spec_io_t1";
+
+println(fs.create_dir(dir));                 //? expect: Ok(())
+println(fs.create_dir(dir));                 //? expect: Ok(())
+
+println(fs.write("{dir}/a.txt", "alpha\n")); //? expect: Ok(())
+println(fs.write("{dir}/b.txt", "beta"));    //? expect: Ok(())
+println(fs.append("{dir}/b.txt", " gamma")); //? expect: Ok(())
+
+println(fs.read("{dir}/a.txt"));             //? expect: Ok("alpha\n")
+println(fs.read("{dir}/b.txt"));             //? expect: Ok("beta gamma")
+
+println(fs.exists("{dir}/a.txt"));           //? expect: true
+println(fs.exists("{dir}/zzz.txt"));         //? expect: false
+println(fs.is_dir(dir));                     //? expect: true
+println(fs.is_dir("{dir}/a.txt"));           //? expect: false
+
+println(fs.list_dir(dir));                   //? expect: Ok(["a.txt", "b.txt"])
+
+// Reading a missing file is an Err, not a panic.
+let missing = match fs.read("{dir}/zzz.txt") {
+    Ok(_) -> "found?!",
+    Err(_) -> "missing",
+};
+println(missing);                            //? expect: missing
+
+// Errors compose with `?` like any other Result.
+fn read_both(dir: String) -> Result[String, String] {
+    let a = fs.read("{dir}/a.txt")?;
+    let b = fs.read("{dir}/b.txt")?;
+    Ok(a.trim() + "+" + b)
+}
+println(read_both(dir));                     //? expect: Ok("alpha+beta gamma")
+
+// Clean up: remove the files, then the (now empty) directory.
+println(fs.remove("{dir}/a.txt"));           //? expect: Ok(())
+println(fs.remove("{dir}/b.txt"));           //? expect: Ok(())
+println(fs.remove(dir));                     //? expect: Ok(())
+println(fs.exists(dir));                     //? expect: false

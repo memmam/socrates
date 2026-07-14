@@ -1,0 +1,6 @@
+// Imports a module that is NOT a sibling: the loader must find it on the
+// search path (tests/fixtures/shared_lib).
+import textutil;
+
+println(textutil.shout("hello"));
+println(textutil.initials(["fully", "automated", "build"]));

@@ -62,10 +62,13 @@ fn real_main() -> ExitCode {
         }
     };
 
-    let Some(path) = rest.iter().find(|a| !a.starts_with('-')) else {
+    let Some(path_pos) = rest.iter().position(|a| !a.starts_with('-')) else {
         eprintln!("fable: `{cmd}` needs a file argument");
         return ExitCode::from(64);
     };
+    let path = &rest[path_pos];
+    // Everything after the script path belongs to the script (`os.args()`).
+    let script_args: Vec<String> = rest[path_pos + 1..].to_vec();
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(e) => {
@@ -157,6 +160,7 @@ fn real_main() -> ExitCode {
             let first_source = units.remove(0).source;
             let mut machine =
                 vm::Vm::new(program, first_source, Box::new(std::io::stdout()));
+            machine.script_args = script_args;
             for unit in units {
                 machine.sources.push(unit.source);
             }

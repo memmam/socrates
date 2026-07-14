@@ -142,17 +142,17 @@ name:
 
 ```fable
 // geo.fable
-struct Point { x: Float, y: Float }
+pub struct Point { x: Float, y: Float }
 
 impl Point {
-    fn dist(self, other: Point) -> Float {
+    pub fn dist(self, other: Point) -> Float {
         let dx = self.x - other.x;
         let dy = self.y - other.y;
         (dx * dx + dy * dy).sqrt()
     }
 }
 
-fn origin() -> Point {
+pub fn origin() -> Point {
     Point { x: 0.0, y: 0.0 }
 }
 ```
@@ -180,8 +180,9 @@ The semantics are deliberately simple:
   (diamonds share state), and its top-level code runs once, before any
   importer's. The root file runs last.
 - Circular imports are a compile error with the cycle spelled out (E0338).
-- Everything is public in v0.2. Module globals are readable from outside
-  (`geo.gravity`) but only the owning module can assign them.
+- Module items are private unless marked `pub` (added in v0.3 — chapter 8).
+  `pub` module globals are readable from outside (`geo.gravity`) but only
+  the owning module can assign them.
 - Errors and panics point into the right file — stack traces span modules.
 
 `examples/orbit/` is a working two-file program: `vec.fable` is a vector
@@ -233,4 +234,5 @@ same programs as v0.1, now reading the way they always wanted to.
 ---
 
 Previous: [Under the Hood](06-under-the-hood.md) ·
+Next: [The Glue Chapter](08-glue.md) ·
 [Back to the index](README.md)

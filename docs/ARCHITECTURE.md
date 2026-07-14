@@ -219,6 +219,32 @@ reuses `ProgramBuilder::compile_chunk` per module (again the REPL path),
 and the VM runs each module's script proto in dependency order over shared
 globals — `run_entry_at` is the only VM addition.
 
+## v0.3 additions
+
+**Visibility.** `pub` flags travel on FnInfo/GlobalInfo/TypeDef (methods are
+FnInfos, so per-method visibility came free). Enforcement lives exactly at
+the foreign-naming choke points added for modules: the import-qualified
+lookup paths and cross-module method dispatch (a stored name's module is its
+prefix before the last dot). Structural use of foreign values — field reads,
+type-directed patterns — is deliberately ungated.
+
+**Operator methods.** `check_binary` intercepts before unifying operand
+types: a `Named` left operand with the operator's well-known method (`add`,
+`sub`, `mul`, `div`, `rem`; `neg` for unary minus) checks like a one-argument
+method call and records `Res::Fn` on the operator node; the compiler emits a
+plain `CallFn`. No new ops, no VM changes. Compound assignment and `==` are
+deliberately excluded.
+
+**Module search path.** The loader takes an ordered dir list (file-relative
+first, then `FABLE_PATH` entries); canonical-path dedup already made
+same-file-through-different-bases safe.
+
+**fs/os.** The `math` namespace machinery generalized to a
+`namespace_member(ns, member)` table; the new natives follow the existing
+rooting discipline (`alloc_rooted_list`/`temp_roots`) and return
+`Result[_, String]` so failures compose with `?`. The VM carries
+`script_args` for `os.args()`.
+
 ## Testing strategy
 
 - Unit tests per module (lexer shapes, parser precedence, checker

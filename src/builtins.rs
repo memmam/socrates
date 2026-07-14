@@ -45,6 +45,24 @@ pub enum Native {
     MathMaxFloat,
     MathRandom,
     MathSeed,
+
+    // fs.* — file system access (v0.3). Fallible operations return
+    // Result[_, String] with the OS error message.
+    FsRead,
+    FsWrite,
+    FsAppend,
+    FsExists,
+    FsIsDir,
+    FsListDir,
+    FsCreateDir,
+    FsRemove,
+
+    // os.* — process environment (v0.3).
+    OsArgs,
+    OsEnv,
+    OsRun,
+    OsExit,
+    OsTime,
     // List methods
     ListLen,
     ListIsEmpty,
@@ -354,6 +372,39 @@ impl Native {
         })
     }
 
+    /// Is `name` a builtin namespace (usable only as `name.member`)?
+    pub fn is_namespace(name: &str) -> bool {
+        matches!(name, "math" | "fs" | "os")
+    }
+
+    /// Resolve `<ns>.<member>` for any builtin namespace.
+    pub fn namespace_member(ns: &str, member: &str) -> Option<MathMember> {
+        use Native::*;
+        match ns {
+            "math" => Self::math_member(member),
+            "fs" => Some(MathMember::Fn(match member {
+                "read" => FsRead,
+                "write" => FsWrite,
+                "append" => FsAppend,
+                "exists" => FsExists,
+                "is_dir" => FsIsDir,
+                "list_dir" => FsListDir,
+                "create_dir" => FsCreateDir,
+                "remove" => FsRemove,
+                _ => return None,
+            })),
+            "os" => Some(MathMember::Fn(match member {
+                "args" => OsArgs,
+                "env" => OsEnv,
+                "run" => OsRun,
+                "exit" => OsExit,
+                "time" => OsTime,
+                _ => return None,
+            })),
+            _ => None,
+        }
+    }
+
     /// Resolve a `math.<name>` member. Returns either a function or a constant.
     pub fn math_member(name: &str) -> Option<MathMember> {
         use Native::*;
@@ -417,6 +468,19 @@ impl Native {
             MathMaxFloat => "math.max_float",
             MathRandom => "math.random",
             MathSeed => "math.seed",
+            FsRead => "fs.read",
+            FsWrite => "fs.write",
+            FsAppend => "fs.append",
+            FsExists => "fs.exists",
+            FsIsDir => "fs.is_dir",
+            FsListDir => "fs.list_dir",
+            FsCreateDir => "fs.create_dir",
+            FsRemove => "fs.remove",
+            OsArgs => "os.args",
+            OsEnv => "os.env",
+            OsRun => "os.run",
+            OsExit => "os.exit",
+            OsTime => "os.time",
             ListLen => "len",
             ListIsEmpty => "is_empty",
             ListPush => "push",
@@ -539,6 +603,17 @@ impl Native {
             MathMin | MathMax => (vec![Int, Int], Int, 0),
             MathRandom => (vec![], Float, 0),
             MathSeed => (vec![Int], Unit, 0),
+
+            FsRead => (vec![TStr], res(TStr, TStr), 0),
+            FsWrite | FsAppend => (vec![TStr, TStr], res(Unit, TStr), 0),
+            FsExists | FsIsDir => (vec![TStr], Bool, 0),
+            FsListDir => (vec![TStr], res(list(TStr), TStr), 0),
+            FsCreateDir | FsRemove => (vec![TStr], res(Unit, TStr), 0),
+            OsArgs => (vec![], list(TStr), 0),
+            OsEnv => (vec![TStr], opt(TStr), 0),
+            OsRun => (vec![TStr, list(TStr)], res(tup(vec![Int, TStr, TStr]), TStr), 0),
+            OsExit => (vec![Int], Unit, 0),
+            OsTime => (vec![], Float, 0),
 
             // List[T] — receiver args at P0.
             ListLen => (vec![], Int, 1),

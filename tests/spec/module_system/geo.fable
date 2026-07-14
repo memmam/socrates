@@ -1,25 +1,25 @@
-// A helper module for the module-system tests. Run standalone (as the spec
+// A helper module for the module-system tests. Exports are `pub` (v0.3); Run standalone (as the spec
 // harness does for every .fable file) it defines everything silently.
-struct Point {
+pub struct Point {
     x: Float,
     y: Float,
 }
 
 impl Point {
-    fn dist(self, other: Point) -> Float {
+    pub fn dist(self, other: Point) -> Float {
         let dx = self.x - other.x;
         let dy = self.y - other.y;
         (dx * dx + dy * dy).sqrt()
     }
 }
 
-enum Shape {
+pub enum Shape {
     Circle(Float),
     Rect(Float, Float),
     Empty,
 }
 
-fn area(s: Shape) -> Float {
+pub fn area(s: Shape) -> Float {
     match s {
         Shape.Circle(r) -> math.pi * r * r,
         Shape.Rect(w, h) -> w * h,
@@ -27,19 +27,19 @@ fn area(s: Shape) -> Float {
     }
 }
 
-fn origin() -> Point {
+pub fn origin() -> Point {
     Point { x: 0.0, y: 0.0 }
 }
 
-fn parse_coord(s: String) -> Option[Float] {
+pub fn parse_coord(s: String) -> Option[Float] {
     // Reuses this module's own names freely.
     s.parse_float()
 }
 
-let unit_square = Shape.Rect(1.0, 1.0);
-let mut bumps = 0;
+pub let unit_square = Shape.Rect(1.0, 1.0);
+pub let mut bumps = 0;
 
-fn bump() -> Int {
+pub fn bump() -> Int {
     bumps += 1;
     bumps
 }
