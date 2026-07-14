@@ -195,7 +195,10 @@ let grade = if score >= 90 { "A" } else if score >= 80 { "B" } else { "C" }
   appear where a value is required). `for` iterates over a `List[T]` (yielding `T`),
   a `Range` (yielding `Int`), or a `String` (yielding one-character `String`s, by
   Unicode scalar). The loop variable is a fresh immutable binding each iteration —
-  closures created in the body capture that iteration's value.
+  closures created in the body capture that iteration's value. A `for` loop over a
+  list iterates the **live** list by index (elements pushed during the loop are
+  visited; removed elements are skipped), whereas the callback methods (`each`,
+  `map`, ...) iterate a **snapshot** taken when the method is called.
 - `break` and `continue` are only valid inside loops. `return expr` / `return`
   exits the enclosing function (top-level `return` is a compile error).
 
@@ -364,6 +367,9 @@ negative/zero/positive), `map[U](fn(T) -> U) -> List[U]`,
 (only `List[String]`), `clone() -> List[T]` (shallow), `clear() -> Unit`.
 
 `contains`, `index_of` use structural equality. List literals: `[1, 2, 3]`, `[]`.
+The callback-taking methods (`map`, `filter`, `each`, `fold`, `any`, `all`, `find`,
+`flat_map`, `sort_by`) iterate a snapshot of the receiver taken at the call, so a
+callback that mutates the list does not disturb the iteration.
 
 ### 8.3 `String` methods
 
