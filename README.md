@@ -28,11 +28,19 @@ collector, REPL, formatter, language server, and disassembler — lives in
 about 18,000 lines of dependency-free Rust in `src/`. It is pinned down by
 262 golden spec tests (every one a runnable Fable program), a book whose 112
 snippets execute in CI, and ten demo programs whose complete output is
-golden-tested — including this spirograph, drawn by `demos/plot`:
+golden-tested. This image is Fable output too:
 
 <p align="center">
-  <img src="demos/plot/spirograph.svg" width="360"
-       alt="A 75-stroke spirograph rendered to SVG by demos/plot, written in Fable">
+  <img src="docs/assets/hero.png" width="720"
+       alt="A raytraced scene — chrome and colored spheres on a checkered
+            floor with mirror reflections and shadows — rendered by a
+            raytracer written in Fable">
+</p>
+<p align="center">
+  <sub>A Whitted raytracer in ~190 lines of Fable
+  (<a href="docs/assets/hero.fable">docs/assets/hero.fable</a>):
+  mirror reflections, shadows, specular highlights, 2×2 supersampling.
+  Reproduce it: <code>fable run docs/assets/hero.fable > hero.ppm</code></sub>
 </p>
 
 ## The language
@@ -104,9 +112,10 @@ golden-tested — including this spirograph, drawn by `demos/plot`:
 - **Ten golden-tested demos.** [`demos/`](demos/) holds a mini-Lisp, a
   spreadsheet with cycle detection, a regex engine, a dungeon generator, a
   static site generator, a CSV query language, checkers (a complete 106-ply
-  self-play game, every move and node count pinned), an SVG plotter, a
-  sudoku solver, and wave-function collapse — deterministic, byte-exact,
-  in CI.
+  self-play game, every move and node count pinned), an SVG plotter
+  (the committed [spirograph](demos/plot/spirograph.svg) is its
+  golden-tested output), a sudoku solver, and wave-function collapse —
+  deterministic, byte-exact, in CI.
 - **A field-tested design.** The demos were written with orders to report
   every papercut; ten independent authors hit the same dozen walls, and
   v0.6 is those walls removed — plus one genuine RNG bug their tests
