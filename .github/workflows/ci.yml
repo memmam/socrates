@@ -35,4 +35,5 @@ jobs:
           ./target/release/fable examples/json.fable > /dev/null
           ./target/release/fable examples/adventure.fable < /dev/null > /dev/null
           ./target/release/fable examples/orbit/main.fable > /dev/null
+          ./target/release/fable examples/loc.fable . > /dev/null
           ./target/release/fable check examples/raytracer.fable

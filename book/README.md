@@ -19,6 +19,9 @@ down; output shown is real output.
 7. [Methods, `?`, Modules, and Tail Calls](07-v02-features.md) — the v0.2
    features: `impl` blocks, error propagation with `?`, multi-file programs,
    and tail-call optimization.
+8. [The Glue Chapter](08-glue.md) — the v0.3 features: `pub` visibility,
+   operator methods, the `FABLE_PATH` search path, and the `fs`/`os`
+   namespaces that let Fable scripts touch the world.
 
 For the terse normative rules, see the [language specification](../docs/SPEC.md);
 for implementation internals, [ARCHITECTURE.md](../docs/ARCHITECTURE.md).

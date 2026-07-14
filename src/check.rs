@@ -2465,7 +2465,7 @@ impl Checker {
                 if let Type::Named(def, _) = self.uni.shallow_resolve(&lt) {
                     let mname = op_method_name(op);
                     if let Some(&idx) = self.methods.get(&(def, mname.to_string())) {
-                        return self.check_operator_method(e, op, op_span, idx, &lt, lhs, rhs);
+                        return self.check_operator_method(e, op, op_span, idx, lhs, rhs);
                     }
                 }
                 let rt = self.check_expr(rhs, Some(&lt));
@@ -2509,19 +2509,21 @@ impl Checker {
         }
     }
 
-    /// `a + b` dispatching to a user type's `add` method (etc.).
+    /// `a + b` dispatching to a user type's `add` method (etc.). The left
+    /// operand was checked by the caller; its type comes from the side table.
     fn check_operator_method(
         &mut self,
         e: &Expr,
         op: BinOp,
         op_span: Span,
         idx: u32,
-        recv_ty: &Type,
         lhs: &Expr,
         rhs: &Expr,
     ) -> Type {
         let mname = op_method_name(op);
         let info = self.fns[idx as usize].clone();
+        let recv_ty = self.types.get(&lhs.id).cloned().expect("lhs was just checked");
+        let recv_ty = &recv_ty;
         let def = match self.uni.shallow_resolve(recv_ty) {
             Type::Named(d, _) => d,
             _ => unreachable!("operator dispatch requires a Named receiver"),

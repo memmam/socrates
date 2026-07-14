@@ -143,6 +143,10 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             let path = str_arg(vm, argc, 0)?;
             Value::Bool(std::path::Path::new(&path).exists())
         }
+        FsIsDir => {
+            let path = str_arg(vm, argc, 0)?;
+            Value::Bool(std::path::Path::new(&path).is_dir())
+        }
         FsListDir => {
             let path = str_arg(vm, argc, 0)?;
             match std::fs::read_dir(&path) {

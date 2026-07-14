@@ -15,6 +15,8 @@ println(fs.read("{dir}/b.txt"));             //? expect: Ok("beta gamma")
 
 println(fs.exists("{dir}/a.txt"));           //? expect: true
 println(fs.exists("{dir}/zzz.txt"));         //? expect: false
+println(fs.is_dir(dir));                     //? expect: true
+println(fs.is_dir("{dir}/a.txt"));           //? expect: false
 
 println(fs.list_dir(dir));                   //? expect: Ok(["a.txt", "b.txt"])
 
