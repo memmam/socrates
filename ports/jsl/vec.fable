@@ -37,9 +37,13 @@ impl Vec2 {
     pub fn scale(self, k: Float) -> Vec2 { v2(self.x * k, self.y * k) }
     pub fn adds(self, k: Float) -> Vec2 { v2(self.x + k, self.y + k) }
     pub fn dot(self, o: Vec2) -> Float { self.x * o.x + self.y * o.y }
+    pub fn abs_v(self) -> Vec2 { v2(self.x.abs(), self.y.abs()) }
     pub fn norm(self) -> Vec2 {
-        let inv = 1.0 / math.sqrt(self.x * self.x + self.y * self.y);
-        v2(self.x * inv, self.y * inv)
+        // Divide by length — NOT multiply by 1/sqrt. The contract pins
+        // normalize(v) = (v.x/L, v.y/L); the reciprocal form differs by
+        // 1 ulp on full-magnitude components and cascades.
+        let len = math.sqrt(self.x * self.x + self.y * self.y);
+        v2(self.x / len, self.y / len)
     }
 }
 

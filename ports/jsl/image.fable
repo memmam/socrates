@@ -85,9 +85,11 @@ pub fn read_ppm(path: String) -> Result[Image, String] {
     let text = fs.read(path)?;
     let mut toks = [];
     for line in text.split("\n") {
-        // '#' comments are legal in PPM headers; strip whole-line ones.
-        if line.starts_with("#") { continue; }
-        for t in line.split(" ") {
+        // '#' comments are legal in PPM headers; strip whole-line ones
+        // (leading whitespace included, matching the JS reference reader).
+        if line.trim_start().starts_with("#") { continue; }
+        // arbitrary whitespace separates tokens (tabs/CR normalized to spaces)
+        for t in line.replace("\t", " ").replace("\r", " ").split(" ") {
             if t.len() > 0 { toks.push(t); }
         }
     }
@@ -109,6 +111,9 @@ pub fn read_ppm(path: String) -> Result[Image, String] {
     if maxv != 255 {
         return Err("{path}: only maxval 255 is supported");
     }
+    if w <= 0 || h <= 0 {
+        return Err("{path}: bad dimensions {w}x{h}");
+    }
     if toks.len() < 4 + w * h * 3 {
         return Err("{path}: truncated pixel data");
     }
@@ -116,9 +121,18 @@ pub fn read_ppm(path: String) -> Result[Image, String] {
     let mut t = 4;
     let mut i = 0;
     while i < w * h {
-        let r = toks[t].parse_int().unwrap_or(0).to_float() / 255.0;
-        let g = toks[t + 1].parse_int().unwrap_or(0).to_float() / 255.0;
-        let b = toks[t + 2].parse_int().unwrap_or(0).to_float() / 255.0;
+        let r = match toks[t].parse_int() {
+            Some(v) -> v.to_float() / 255.0,
+            None -> return Err("{path}: bad pixel token `{toks[t]}`"),
+        };
+        let g = match toks[t + 1].parse_int() {
+            Some(v) -> v.to_float() / 255.0,
+            None -> return Err("{path}: bad pixel token `{toks[t + 1]}`"),
+        };
+        let b = match toks[t + 2].parse_int() {
+            Some(v) -> v.to_float() / 255.0,
+            None -> return Err("{path}: bad pixel token `{toks[t + 2]}`"),
+        };
         let base = i * 4;
         img.px[base] = r;
         img.px[base + 1] = g;

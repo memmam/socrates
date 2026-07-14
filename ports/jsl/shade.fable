@@ -77,6 +77,12 @@ pub fn srgb_oetf(c: Float) -> Float {
     }
 }
 
+// componentwise sqrt — TSL's sqrt(vec3), used by ICAA's fast preset for the
+// gamma-2.0 square-approximation coverage mix.
+pub fn sqrt3(c: vec.Vec3) -> vec.Vec3 {
+    vec.v3(math.sqrt(c.x), math.sqrt(c.y), math.sqrt(c.z))
+}
+
 pub fn srgb_eotf3(c: vec.Vec3) -> vec.Vec3 {
     vec.v3(srgb_eotf(c.x), srgb_eotf(c.y), srgb_eotf(c.z))
 }
