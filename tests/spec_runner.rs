@@ -57,8 +57,9 @@ fn collect_fable_files(dir: &Path, out: &mut Vec<PathBuf>) {
 fn check_one(path: &Path) -> Result<(), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("read failed: {e}"))?;
     let d = parse_directives(&text);
-    let name = path.display().to_string();
-    let outcome = fable::run_capture(&name, &text);
+    // Path-based so `import` resolves sibling files; single-file behavior is
+    // identical to the old text-based runner.
+    let outcome = fable::run_capture_path(path);
 
     match outcome {
         RunOutcome::CompileError(diags) => {

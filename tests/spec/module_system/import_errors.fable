@@ -1,0 +1,4 @@
+// SPEC §10 (v0.2): a missing module file is a load error (E0337).
+//? error: E0337
+//? error: cannot find module `no_such_module`
+import no_such_module;

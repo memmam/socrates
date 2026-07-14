@@ -1,0 +1,8 @@
+// The other half of the cycle test; also errors when run directly.
+//? error: E0338
+//? error: circular import
+import cycle_a;
+
+fn pong() -> Int {
+    2
+}

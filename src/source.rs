@@ -4,6 +4,7 @@ use crate::span::Span;
 
 /// A loaded source file. Owns the text and a precomputed table of line-start
 /// offsets so spans can be mapped to line/column pairs in O(log n).
+#[derive(Clone)]
 pub struct Source {
     pub name: String,
     pub text: String,

@@ -258,6 +258,7 @@ impl<'a> Lexer<'a> {
             "struct" => TokenKind::Struct,
             "enum" => TokenKind::Enum,
             "impl" => TokenKind::Impl,
+            "import" => TokenKind::Import,
             "match" => TokenKind::Match,
             "if" => TokenKind::If,
             "else" => TokenKind::Else,

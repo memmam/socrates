@@ -116,6 +116,20 @@ impl Formatter {
         self.pad();
         match &s.kind {
             StmtKind::Fn(f) => self.fn_decl(f, false),
+            StmtKind::Import { path, alias } => {
+                self.out.push_str("import ");
+                for (i, seg) in path.iter().enumerate() {
+                    if i > 0 {
+                        self.out.push('.');
+                    }
+                    self.out.push_str(&seg.name);
+                }
+                if let Some(a) = alias {
+                    self.out.push_str(" as ");
+                    self.out.push_str(&a.name);
+                }
+                self.out.push_str(";\n");
+            }
             StmtKind::Impl(d) => self.impl_decl(d),
             StmtKind::Struct(d) => self.struct_decl(d),
             StmtKind::Enum(d) => self.enum_decl(d),

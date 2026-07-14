@@ -11,6 +11,7 @@ pub mod compiler;
 pub mod diag;
 pub mod dis;
 pub mod fmt;
+pub mod modules;
 pub mod natives;
 pub mod patterns;
 pub mod repl;
@@ -62,6 +63,64 @@ fn run_capture_here(name: &str, text: &str) -> RunOutcome {
     let output = String::from_utf8_lossy(&buf.lock().unwrap()).into_owned();
     match result {
         Ok(_) => RunOutcome::Ok { stdout: output, warnings: diags },
+        Err(e) => RunOutcome::Panic { stdout: output, error: e },
+    }
+}
+
+/// Run a program from a file path, loading any imported modules relative to
+/// it, capturing output. Used by the golden test harness; behavior for
+/// single-file programs matches `run_capture`.
+pub fn run_capture_path(path: &std::path::Path) -> RunOutcome {
+    let path = path.to_path_buf();
+    std::thread::Builder::new()
+        .stack_size(512 * 1024 * 1024)
+        .spawn(move || run_capture_path_here(&path))
+        .expect("failed to spawn interpreter thread")
+        .join()
+        .expect("interpreter thread panicked")
+}
+
+fn run_capture_path_here(path: &std::path::Path) -> RunOutcome {
+    let units = match modules::load_modules(path) {
+        Ok(u) => u,
+        Err((_source, diags)) => return RunOutcome::CompileError(diags),
+    };
+    let mut warnings = Vec::new();
+    let mut checker = check::Checker::new();
+    let mut builder = compiler::ProgramBuilder::new();
+    let mut entries = Vec::new();
+    let mut final_program = None;
+    for (i, unit) in units.iter().enumerate() {
+        checker.check_module(&unit.program, &unit.prefix, unit.imports.clone());
+        let diags = checker.take_diags();
+        if diag::has_errors(&diags) {
+            return RunOutcome::CompileError(diags);
+        }
+        warnings.extend(diags);
+        let compiled = builder.compile_chunk(&unit.program, &checker, i as u32);
+        entries.push(compiled.entry);
+        final_program = Some(compiled);
+    }
+    let program = final_program.expect("loader returns at least the root module");
+
+    let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+    let writer = SharedWriter(buf.clone());
+    let mut units = units;
+    let first_source = units.remove(0).source;
+    let mut vm = vm::Vm::new(program, first_source, Box::new(writer));
+    for unit in units {
+        vm.sources.push(unit.source);
+    }
+    let mut result = Ok(value::Value::Unit);
+    for entry in entries {
+        result = vm.run_entry_at(entry);
+        if result.is_err() {
+            break;
+        }
+    }
+    let output = String::from_utf8_lossy(&buf.lock().unwrap()).into_owned();
+    match result {
+        Ok(_) => RunOutcome::Ok { stdout: output, warnings },
         Err(e) => RunOutcome::Panic { stdout: output, error: e },
     }
 }

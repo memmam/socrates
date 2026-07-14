@@ -15,7 +15,7 @@ use std::io::IsTerminal;
 use std::process::ExitCode;
 
 use fable::source::Source;
-use fable::{check, compiler, diag, dis, fmt, lexer, parser, repl, vm};
+use fable::{check, compiler, diag, dis, fmt, lexer, parser, modules, repl, vm};
 
 fn main() -> ExitCode {
     // Deep-but-legal programs (nested expressions, native callback
@@ -116,41 +116,57 @@ fn real_main() -> ExitCode {
             }
         },
         "check" | "dis" | "run" => {
-            let lexed = lexer::lex(&text);
-            let parsed = parser::parse(lexed.tokens, &text);
-            let mut diags = lexed.diags;
-            diags.extend(parsed.diags);
-            if diag::has_errors(&diags) {
-                report(&diags, &source, color);
-                return ExitCode::from(65);
-            }
+            // Load the root file and everything it imports (a single-file
+            // program is just a one-module load).
+            let units = match modules::load_modules(std::path::Path::new(path)) {
+                Ok(u) => u,
+                Err((src, diags)) => {
+                    report(&diags, &src, color);
+                    return ExitCode::from(65);
+                }
+            };
             let mut checker = check::Checker::new();
-            checker.check_program(&parsed.program);
-            diags.extend(checker.take_diags());
-            report(&diags, &source, color);
-            if diag::has_errors(&diags) {
-                return ExitCode::from(65);
+            let mut builder = compiler::ProgramBuilder::new();
+            let mut entries = Vec::new();
+            let mut final_program = None;
+            let mut any_warnings = false;
+            for (i, unit) in units.iter().enumerate() {
+                checker.check_module(&unit.program, &unit.prefix, unit.imports.clone());
+                let diags = checker.take_diags();
+                report(&diags, &unit.source, color);
+                if diag::has_errors(&diags) {
+                    return ExitCode::from(65);
+                }
+                any_warnings |= !diags.is_empty();
+                let compiled = builder.compile_chunk(&unit.program, &checker, i as u32);
+                entries.push(compiled.entry);
+                final_program = Some(compiled);
             }
+            let program = final_program.expect("loader returns at least one module");
             if cmd == "check" {
-                let n_warn = diags.len();
-                if n_warn == 0 {
+                if !any_warnings {
                     eprintln!("ok: no errors");
                 }
                 return ExitCode::SUCCESS;
             }
-            let program = compiler::compile(&parsed.program, &checker);
             if cmd == "dis" {
                 print!("{}", dis::disassemble(&program));
                 return ExitCode::SUCCESS;
             }
-            let mut machine = vm::Vm::new(program, source, Box::new(std::io::stdout()));
-            match machine.run_entry() {
-                Ok(_) => ExitCode::SUCCESS,
-                Err(e) => {
+            let mut units = units;
+            let first_source = units.remove(0).source;
+            let mut machine =
+                vm::Vm::new(program, first_source, Box::new(std::io::stdout()));
+            for unit in units {
+                machine.sources.push(unit.source);
+            }
+            for entry in entries {
+                if let Err(e) = machine.run_entry_at(entry) {
                     eprint!("{}", e.render(color));
-                    ExitCode::from(70)
+                    return ExitCode::from(70);
                 }
             }
+            ExitCode::SUCCESS
         }
         _ => unreachable!(),
     }

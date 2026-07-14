@@ -441,7 +441,11 @@ impl<'a> Compiler<'a> {
 
     fn stmt(&mut self, stmt: &Stmt) {
         match &stmt.kind {
-            StmtKind::Fn(_) | StmtKind::Struct(_) | StmtKind::Enum(_) | StmtKind::Impl(_) => {}
+            StmtKind::Fn(_)
+            | StmtKind::Struct(_)
+            | StmtKind::Enum(_)
+            | StmtKind::Impl(_)
+            | StmtKind::Import { .. } => {}
             StmtKind::Let { pattern, init, .. } => self.let_stmt(pattern, init, stmt.span),
             StmtKind::Assign { target, op, value } => self.assign(target, *op, value, stmt.span),
             StmtKind::Expr { expr, tail } => {
@@ -822,6 +826,15 @@ impl<'a> Compiler<'a> {
                             e.span,
                         );
                     }
+                    Some(Res::Global(slot)) => {
+                        // A module global: `alias.value`.
+                        self.emit(Op::GetGlobal(slot as u16), e.span);
+                    }
+                    Some(Res::Fn(idx)) => {
+                        // A module function as a value: `alias.f`.
+                        let p = self.fn_proto_map[idx as usize];
+                        self.emit(Op::PushFn(p), e.span);
+                    }
                     _ => {
                         self.emit(Op::Unit, e.span);
                     }
@@ -845,6 +858,23 @@ impl<'a> Compiler<'a> {
                         }
                         let p = self.fn_proto_map[idx as usize];
                         self.emit(Op::CallFn(p, args.len() as u8 + 1), e.span);
+                    }
+                    Some(Res::ModuleFn(idx)) => {
+                        // `alias.f(args)` — the receiver is a namespace.
+                        for a in args {
+                            self.expr(a);
+                        }
+                        let p = self.fn_proto_map[idx as usize];
+                        self.emit(Op::CallFn(p, args.len() as u8), e.span);
+                    }
+                    Some(Res::Global(slot)) => {
+                        // `alias.value(args)` — a module global holding a
+                        // function value.
+                        self.emit(Op::GetGlobal(slot as u16), e.span);
+                        for a in args {
+                            self.expr(a);
+                        }
+                        self.emit(Op::Call(args.len() as u8), e.span);
                     }
                     Some(Res::NativeFn(native)) => {
                         // `math.sqrt(x)` — the receiver is a namespace.

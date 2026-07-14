@@ -1,0 +1,13 @@
+// SPEC §10 (v0.2): unknown module members, modules as values, and writes to
+// foreign module bindings are compile errors.
+//? error: E0413
+//? error: no such member `geo.nope`
+//? error: E0410
+//? error: `geo` is an imported module, not a value
+//? error: E0308
+//? error: cannot assign to a module member from outside its module
+import geo;
+
+geo.nope();
+let g = geo;
+geo.bumps = 99;

@@ -135,7 +135,12 @@ impl Vm {
     /// session (REPL) neither leaks frames into later stack traces nor burns
     /// call-depth budget.
     pub fn run_entry(&mut self) -> Result<Value, VmError> {
-        let entry = self.program.entry;
+        self.run_entry_at(self.program.entry)
+    }
+
+    /// Execute a specific proto as an entry point (multi-module programs run
+    /// each module's script proto in dependency order).
+    pub fn run_entry_at(&mut self, entry: u32) -> Result<Value, VmError> {
         let base = self.stack.len();
         let entry_frames = self.frames.len();
         self.frames.push(Frame {
