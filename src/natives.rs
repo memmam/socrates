@@ -649,13 +649,21 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             if exp < 0 {
                 return Err(vm.error("negative exponent in integer pow"));
             }
-            if exp > u32::MAX as i64 {
-                return Err(vm.error("integer overflow"));
+            // Bases with |base| <= 1 never overflow, for any exponent.
+            match base {
+                0 => Value::Int(if exp == 0 { 1 } else { 0 }),
+                1 => Value::Int(1),
+                -1 => Value::Int(if exp % 2 == 0 { 1 } else { -1 }),
+                _ => {
+                    if exp > u32::MAX as i64 {
+                        return Err(vm.error("integer overflow"));
+                    }
+                    Value::Int(
+                        base.checked_pow(exp as u32)
+                            .ok_or_else(|| vm.error("integer overflow"))?,
+                    )
+                }
             }
-            Value::Int(
-                base.checked_pow(exp as u32)
-                    .ok_or_else(|| vm.error("integer overflow"))?,
-            )
         }
         IntMin => Value::Int(int_arg(vm, argc, 0)?.min(int_arg(vm, argc, 1)?)),
         IntMax => Value::Int(int_arg(vm, argc, 0)?.max(int_arg(vm, argc, 1)?)),
@@ -790,15 +798,14 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         // ------------------------------------------------------------------
         RangeToList | RangeRev => {
             let (lo, hi, inclusive) = range_of(vm, argc)?;
-            let count = range_len(lo, hi, inclusive);
+            let count = range_count(lo, hi, inclusive);
             if count > 100_000_000 {
                 return Err(vm.error("range too large to materialize"));
             }
             let mut items: Vec<Value> = Vec::with_capacity(count as usize);
-            let mut cur = lo;
-            for _ in 0..count {
-                items.push(Value::Int(cur));
-                cur += 1;
+            for k in 0..count as i64 {
+                // lo + k <= hi, so this never overflows.
+                items.push(Value::Int(lo + k));
             }
             if matches!(n, RangeRev) {
                 items.reverse();
@@ -812,16 +819,19 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
         RangeLen => {
             let (lo, hi, inclusive) = range_of(vm, argc)?;
-            Value::Int(range_len(lo, hi, inclusive))
+            let count = range_count(lo, hi, inclusive);
+            if count > i64::MAX as i128 {
+                return Err(vm.error("integer overflow (range length does not fit in Int)"));
+            }
+            Value::Int(count as i64)
         }
         RangeMap | RangeFilter | RangeEach => {
             let f = vm.native_arg(argc, 1);
             let (lo, hi, inclusive) = range_of(vm, argc)?;
-            let count = range_len(lo, hi, inclusive);
+            let count = range_count(lo, hi, inclusive);
             let out = alloc_rooted_list(vm, Vec::new());
-            let mut cur = lo;
-            for _ in 0..count {
-                let item = Value::Int(cur);
+            for k in 0..count {
+                let item = Value::Int(lo.wrapping_add(k as i64));
                 match n {
                     RangeMap => {
                         let r = vm.call_value(f, &[item])?;
@@ -837,7 +847,6 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                         vm.call_value(f, &[item])?;
                     }
                 }
-                cur += 1;
             }
             let result = if matches!(n, RangeEach) { Value::Unit } else { Value::Obj(out) };
             finish_rooted(vm, 1, result)
@@ -846,15 +855,13 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             let init = vm.native_arg(argc, 1);
             let f = vm.native_arg(argc, 2);
             let (lo, hi, inclusive) = range_of(vm, argc)?;
-            let count = range_len(lo, hi, inclusive);
+            let count = range_count(lo, hi, inclusive);
             vm.temp_roots.push(init);
             let mut acc = init;
-            let mut cur = lo;
-            for _ in 0..count {
-                acc = vm.call_value(f, &[acc, Value::Int(cur)])?;
+            for k in 0..count {
+                acc = vm.call_value(f, &[acc, Value::Int(lo.wrapping_add(k as i64))])?;
                 let top = vm.temp_roots.len() - 1;
                 vm.temp_roots[top] = acc;
-                cur += 1;
             }
             finish_rooted(vm, 1, acc)
         }
@@ -959,9 +966,11 @@ fn range_of(vm: &Vm, argc: u8) -> Result<(i64, i64, bool), VmError> {
     }
 }
 
-fn range_len(lo: i64, hi: i64, inclusive: bool) -> i64 {
+/// Number of elements in a range, exact (may exceed i64::MAX for inclusive
+/// full-width ranges, hence i128).
+fn range_count(lo: i64, hi: i64, inclusive: bool) -> i128 {
     let end = if inclusive { hi as i128 + 1 } else { hi as i128 };
-    (end - lo as i128).max(0).min(i64::MAX as i128) as i64
+    (end - lo as i128).max(0)
 }
 
 // ---------------------------------------------------------------------------

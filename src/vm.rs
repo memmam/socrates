@@ -131,10 +131,14 @@ impl Vm {
         }
     }
 
-    /// Execute the current program's entry proto to completion.
+    /// Execute the current program's entry proto to completion. On panic the
+    /// frame and value stacks unwind to their pre-entry state, so a persistent
+    /// session (REPL) neither leaks frames into later stack traces nor burns
+    /// call-depth budget.
     pub fn run_entry(&mut self) -> Result<Value, VmError> {
         let entry = self.program.entry;
         let base = self.stack.len();
+        let entry_frames = self.frames.len();
         self.frames.push(Frame {
             proto: entry,
             closure: None,
@@ -143,8 +147,16 @@ impl Vm {
             callee_slot: false,
         });
         let min = self.frames.len();
-        self.run(min)?;
-        Ok(self.stack.pop().unwrap_or(Value::Unit))
+        match self.run(min) {
+            Ok(()) => Ok(self.stack.pop().unwrap_or(Value::Unit)),
+            Err(e) => {
+                self.close_upvalues(base);
+                self.frames.truncate(entry_frames);
+                self.stack.truncate(base);
+                self.temp_roots.clear();
+                Err(e)
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -1061,13 +1073,9 @@ impl Vm {
                 Err("cannot compare functions".into())
             }
             (Value::Obj(x), Value::Obj(y)) => {
-                if x == y {
-                    // Same object — but function comparison must still panic.
-                    if matches!(self.heap.get(x), Obj::Closure { .. }) {
-                        return Err("cannot compare functions".into());
-                    }
-                    return Ok(true);
-                }
+                // No same-handle shortcut: a container holding NaN must compare
+                // unequal even to itself (IEEE-754 deep equality). Cyclic values
+                // hit the depth limit and panic instead of looping.
                 match (self.heap.get(x), self.heap.get(y)) {
                     (Obj::Str(sx), Obj::Str(sy)) => Ok(sx == sy),
                     (Obj::List(xs), Obj::List(ys)) | (Obj::Tuple(xs), Obj::Tuple(ys)) => {

@@ -1,0 +1,8 @@
+// |base| <= 1 never overflows, for any exponent.
+let max = 9223372036854775807;
+println(1.pow(max));      //? expect: 1
+println(0.pow(max));      //? expect: 0
+println(0.pow(0));        //? expect: 1
+println((-1).pow(max));   //? expect: -1
+println((-1).pow(max - 1)); //? expect: 1
+println(2.pow(62));       //? expect: 4611686018427387904

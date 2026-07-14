@@ -1,0 +1,6 @@
+// IEEE deep equality: a container holding NaN is unequal even to itself.
+let nan = 0.0 / 0.0;
+let xs = [nan];
+let same = xs;
+println(xs == same);      //? expect: false
+println([1.0] == [1.0]);  //? expect: true

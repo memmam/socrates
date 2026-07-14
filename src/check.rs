@@ -1424,11 +1424,20 @@ impl Checker {
                 }
             }
         }
-        // Mark `panic(..)`'s result variable as defaulting to Unit.
+        // `panic(..)`'s polymorphic result defaults to Unit when nothing
+        // constrains it (e.g. a bare `panic("boom");` statement, including the
+        // REPL's hidden result binding).
         if matches!(native, Native::Panic) {
             if let Type::Var(v) = self.uni.shallow_resolve(&ret) {
                 if let Some(o) = self.var_origins.iter_mut().find(|o| o.var == v) {
                     o.default_unit = true;
+                } else {
+                    self.var_origins.push(VarOrigin {
+                        var: v,
+                        span: call_span,
+                        what: "panic result",
+                        default_unit: true,
+                    });
                 }
             }
         }
