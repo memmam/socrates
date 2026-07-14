@@ -163,4 +163,5 @@ tour.
 ---
 
 Previous: [Methods, `?`, Modules, and Tail Calls](07-v02-features.md) ·
+Next: [The Toolchain Release](09-toolchain.md) ·
 [Back to the index](README.md)

@@ -80,9 +80,19 @@ executed against the interpreter before it was written down.
   `os.args/env/run/exit/time`, all Result-based and `?`-friendly, plus a
   `FABLE_PATH` search path for your shared modules. `examples/loc.fable` is
   a working line-counting tool in ~100 lines.
-- **A whole toolchain**: `run`, `check`, a REPL with persistent incremental
-  compilation and `:type`, a comment-preserving formatter (`fmt`), and a
-  bytecode disassembler (`dis`).
+- **A standard library** (v0.4). `import std.json;` — json, flags, path,
+  strings, and lazy iterators, written in Fable and embedded in the binary.
+- **A test runner** (v0.4). `fable test dir/` — any `.fable` file with
+  `//? expect/error/panic` directives is a test; the interpreter's own
+  247-test suite uses the same command's code.
+- **A language server** (v0.4). `fable lsp` — diagnostics as you type,
+  hover types, go-to-definition across modules. JSON-RPC hand-rolled;
+  still zero dependencies.
+- **Catchable panics** (v0.4). `try(f)` turns a runtime panic into
+  `Err(message)` with the VM stack fully restored — even a stack overflow.
+- **A whole toolchain**: `run`, `check`, `test`, `lsp`, a REPL with
+  persistent incremental compilation and `:type`, a comment-preserving
+  formatter (`fmt`), and a bytecode disassembler (`dis`).
 
 ## Try it
 
@@ -100,6 +110,9 @@ cargo build --release
 
 # A glue script: count lines of code in this repository
 ./target/release/fable examples/loc.fable .
+
+# Run the golden spec suite with the built-in test runner
+./target/release/fable test tests/spec
 
 # Poke at the machinery
 ./target/release/fable dis examples/algorithms.fable
@@ -192,8 +205,13 @@ src/
   builtins.rs     their type schemes (shared with the checker)
   fmt.rs          comment-preserving formatter
   repl.rs         incremental REPL with rollback
-  modules.rs      the import loader (dedup, cycle detection)
+  modules.rs      the import loader (dedup, cycles, FABLE_PATH, std)
+  testing.rs      the golden-test runner (fable test + the spec suite)
+  lsp.rs          the language server (diagnostics, hover, definition)
+  jsonlite.rs     hand-rolled JSON for JSON-RPC
+  stdlib.rs       embeds std/*.fable into the binary
   dis.rs          disassembler
+std/              the standard library, written in Fable
 docs/SPEC.md      the normative language specification
 book/             the Fable book
 tests/spec/       golden tests (expect / error / panic directives)
@@ -225,9 +243,11 @@ v0.2 delivered everything v0.1 had declared out of scope — user-defined
 methods (`impl` blocks), multi-file modules (`import`), the `?` operator,
 and tail-call optimization. v0.3 made it a real glue language: `pub`
 visibility, operator methods, a `FABLE_PATH` module search path, and
-`fs`/`os` builtins. Still deliberately out of scope: full traits (operator
-methods cover the common case), per-field visibility, and a package
-manager.
+`fs`/`os` builtins. v0.4 built the toolchain: `fable test`, the embedded
+standard library (including lazy iterators written in Fable itself),
+`fable lsp`, and catchable panics. Still deliberately out of scope: full
+traits (operator methods cover the common case), per-field visibility, and
+a package manager.
 
 ## License
 

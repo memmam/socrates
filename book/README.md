@@ -22,6 +22,9 @@ down; output shown is real output.
 8. [The Glue Chapter](08-glue.md) — the v0.3 features: `pub` visibility,
    operator methods, the `FABLE_PATH` search path, and the `fs`/`os`
    namespaces that let Fable scripts touch the world.
+9. [The Toolchain Release](09-toolchain.md) — v0.4: `fable test`, the
+   embedded standard library, the `fable lsp` language server, catchable
+   panics with `try`, and lazy iterators built as a library.
 
 For the terse normative rules, see the [language specification](../docs/SPEC.md);
 for implementation internals, [ARCHITECTURE.md](../docs/ARCHITECTURE.md).
