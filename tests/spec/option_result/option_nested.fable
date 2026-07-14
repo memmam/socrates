@@ -1,0 +1,33 @@
+// Option[Option[Int]]: nesting, display, flattening, nested patterns.
+let nested = Some(Some(1));
+let sn: Option[Option[Int]] = Some(None);
+let outer_none: Option[Option[Int]] = None;
+
+println(nested);                        //? expect: Some(Some(1))
+println(sn);                            //? expect: Some(None)
+println(outer_none);                    //? expect: None
+
+println(nested.unwrap().unwrap());      //? expect: 1
+println(nested.is_some());              //? expect: true
+println(sn.is_some());                  //? expect: true
+println(sn.unwrap().is_none());         //? expect: true
+
+// Flatten with and_then + identity.
+println(nested.and_then(|o| o));        //? expect: Some(1)
+println(sn.and_then(|o| o));            //? expect: None
+println(outer_none.and_then(|o| o));    //? expect: None
+
+// Nested patterns distinguish all three shapes.
+fn depth(o: Option[Option[Int]]) -> String {
+    match o {
+        Some(Some(v)) -> "inner {v}",
+        Some(None) -> "inner none",
+        None -> "outer none",
+    }
+}
+println(depth(nested));                 //? expect: inner 1
+println(depth(sn));                     //? expect: inner none
+println(depth(outer_none));             //? expect: outer none
+
+println(nested.map(|o| o.unwrap_or(0))); //? expect: Some(1)
+println(sn.map(|o| o.unwrap_or(0)));     //? expect: Some(0)

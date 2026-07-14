@@ -1,0 +1,17 @@
+// A function body may reference a global whose `let` appears later in the
+// file — functions are hoisted, and the reference is fine as long as the
+// call happens after the `let` has executed.
+fn scaled(x: Int) -> Int { x * factor }
+let factor = 10;
+println(scaled(4));        //? expect: 40
+
+fn describe() -> String { "mode is {mode}" }
+let mode = "fast";
+println(describe());       //? expect: mode is fast
+
+// Mutable globals are read at call time, not capture time.
+fn current() -> Int { counter }
+let mut counter = 1;
+println(current());        //? expect: 1
+counter = 99;
+println(current());        //? expect: 99

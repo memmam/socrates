@@ -1,0 +1,28 @@
+// `let` destructures irrefutable tuple and struct patterns.
+let (a, b) = (1, 2);
+println(a + b);  //? expect: 3
+
+// Nested tuple patterns.
+let (x, (y, z)) = (10, (20, 30));
+println(x + y + z);  //? expect: 60
+
+// Wildcards are allowed in `let` patterns.
+let (keep, _) = (7, "ignored");
+println(keep);  //? expect: 7
+
+struct Point { x: Float, y: Float }
+let p = Point { x: 0.5, y: 2.5 };
+
+// Struct pattern with field renaming.
+let Point { x: px, y: py } = p;
+println(px + py);  //? expect: 3.0
+
+// Struct pattern with `..` rest.
+let Point { y: only, .. } = p;
+println(only);  //? expect: 2.5
+
+// Shorthand field bindings on a generic struct.
+struct Pair[A, B] { first: A, second: B }
+let pr = Pair { first: 4, second: "four" };
+let Pair { first, second } = pr;
+println("{first}={second}");  //? expect: 4=four

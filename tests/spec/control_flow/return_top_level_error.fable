@@ -1,0 +1,11 @@
+// SPEC 3.3: top-level `return` is a compile error (E0304) — even inside
+// top-level control flow.
+//? error: E0304
+//? error: `return` outside of a function
+return 5;
+if true {
+    return;
+}
+while false {
+    return 1;
+}

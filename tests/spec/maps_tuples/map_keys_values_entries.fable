@@ -1,0 +1,28 @@
+// SPEC 8.4: keys/values/entries reflect insertion order (deterministic).
+let m = {"a": 1, "b": 2, "c": 3};
+println(m.keys());                //? expect: ["a", "b", "c"]
+println(m.values());              //? expect: [1, 2, 3]
+println(m.entries());             //? expect: [("a", 1), ("b", 2), ("c", 3)]
+
+// entries() is a List of tuples; components are accessible with .0/.1.
+let es = m.entries();
+println(es[1].0);                 //? expect: b
+println(es[1].1);                 //? expect: 2
+
+// Overwriting an existing key keeps its original position.
+m["b"] = 20;
+println(m.keys());                //? expect: ["a", "b", "c"]
+println(m.values());              //? expect: [1, 20, 3]
+
+// Removing and re-inserting a key makes it a fresh insertion (moves to end).
+m.remove("b");
+m["b"] = 200;
+println(m.keys());                //? expect: ["a", "c", "b"]
+println(m);                       //? expect: {"a": 1, "c": 3, "b": 200}
+
+// Iterating keys via for is in the same order.
+let mut acc = "";
+for k in m.keys() {
+    acc = acc + k;
+}
+println(acc);                     //? expect: acb

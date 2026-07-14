@@ -1,0 +1,26 @@
+// SPEC §8.6: Option map / and_then, including chained and_then pipelines.
+// NOTE: the `or` method is covered by tests/spec/_pending/option_result__option_or_method.fable.pending
+// (currently uncallable: the lexer reserves `or` even in method position).
+fn half(x: Int) -> Option[Int] {
+    if x % 2 == 0 { Some(x / 2) } else { None }
+}
+
+let a = Some(10);
+let n: Option[Int] = None;
+
+println(a.map(|x| x * 2));                                //? expect: Some(20)
+println(n.map(|x| x * 2));                                //? expect: None
+println(a.map(|x| str(x) + "!"));                         //? expect: Some("10!")
+
+println(a.and_then(half));                                //? expect: Some(5)
+println(a.and_then(half).and_then(half));                 //? expect: None
+println(Some(40).and_then(half).and_then(half).and_then(half)); //? expect: Some(5)
+println(n.and_then(half));                                //? expect: None
+
+// map keeps the shape: mapping over None never calls the function.
+let mut calls = 0;
+println(n.map(|x| { calls += 1; x }));                    //? expect: None
+println(calls);                                           //? expect: 0
+
+// map over a list with a wrapped constructor (SPEC §2.4 note on bare constructors).
+println([1, 2, 3].map(|x| Some(x)));                      //? expect: [Some(1), Some(2), Some(3)]

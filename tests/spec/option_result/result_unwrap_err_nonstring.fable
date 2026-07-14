@@ -1,0 +1,6 @@
+// The panicking unwrap() shows the error value in display form: a structured
+// error (tuple with a nested string) is rendered with quotes on the string.
+//? panic: called `unwrap()` on an `Err`: (404, "not found")
+let r: Result[Int, (Int, String)] = Err((404, "not found"));
+println(r.unwrap_or(0));           //? expect: 0
+println(r.unwrap());

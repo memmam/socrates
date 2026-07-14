@@ -1,0 +1,5 @@
+// SPEC 2.3: structs must be constructed with ALL fields present.
+//? error: E0427
+//? error: missing field `y` in struct literal
+struct Point { x: Float, y: Float }
+let p = Point { x: 1.0 };

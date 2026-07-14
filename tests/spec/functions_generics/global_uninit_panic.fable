@@ -1,0 +1,7 @@
+// Referencing a later global from inside a function is allowed statically,
+// but calling the function before the `let` executes panics at runtime.
+//? panic: global `g` used before initialization
+fn show() { println(g); }
+println("before");         //? expect: before
+show();
+let g = 5;

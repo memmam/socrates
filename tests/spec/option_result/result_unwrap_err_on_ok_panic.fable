@@ -1,0 +1,6 @@
+// SPEC §8.6: `unwrap_err()` on `Ok` panics, showing the ok value.
+//? panic: called `unwrap_err()` on an `Ok`: 5
+let r: Result[Int, String] = Ok(5);
+println(r.is_ok());                //? expect: true
+println(r.unwrap_err());
+println("unreachable");

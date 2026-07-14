@@ -1,0 +1,35 @@
+// SPEC 8.4: Map methods — get, insert (returns the previous value), remove,
+// contains_key, clear, clone.
+let m = {"x": 10, "y": 20};
+
+// get: Some for present, None for absent.
+println(m.get("y"));              //? expect: Some(20)
+println(m.get("nope"));           //? expect: None
+
+// insert returns the previous value (Some on overwrite, None on new key).
+println(m.insert("x", 11));       //? expect: Some(10)
+println(m.insert("z", 30));       //? expect: None
+println(m);                       //? expect: {"x": 11, "y": 20, "z": 30}
+println(m.len());                 //? expect: 3
+
+// remove returns the removed value; removing again yields None.
+println(m.remove("y"));           //? expect: Some(20)
+println(m.remove("y"));           //? expect: None
+println(m);                       //? expect: {"x": 11, "z": 30}
+
+// contains_key
+println(m.contains_key("z"));     //? expect: true
+println(m.contains_key("y"));     //? expect: false
+
+// clone is shallow and independent of the original.
+let c = m.clone();
+c["w"] = 40;
+println(m.len());                 //? expect: 2
+println(c.len());                 //? expect: 3
+println(c);                       //? expect: {"x": 11, "z": 30, "w": 40}
+
+// clear empties the map in place.
+c.clear();
+println(c);                       //? expect: {:}
+println(c.is_empty());            //? expect: true
+println(m);                       //? expect: {"x": 11, "z": 30}

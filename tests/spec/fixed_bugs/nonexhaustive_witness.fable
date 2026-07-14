@@ -1,0 +1,29 @@
+//? error: Shape.Empty
+//? error: Some(_)
+// SPEC §4: a non-exhaustive match is a compile error "reporting an example
+// of an uncovered pattern". The implementation reports the witness only in
+// a span label only, not in the
+// diagnostic message, and the golden harness matches error directives
+// against Diagnostic.message and .code only — so the spec-required witness
+// cannot be asserted even though the CLI rendering shows it. Either the
+// witness should be part of the E0501 message or the harness should also
+// search labels/notes.
+enum Shape {
+    Circle(Float),
+    Rect(Float, Float),
+    Empty,
+}
+
+fn f(s: Shape) -> Int {
+    match s {
+        Shape.Circle(r) -> 1,
+        Shape.Rect(w, h) -> 2,
+    }
+}
+
+fn g(o: Option[Int]) -> Int {
+    match o {
+        None -> 0,
+    }
+}
+println(f(Shape.Empty));

@@ -1,0 +1,14 @@
+// Multi-parameter generics instantiated at several distinct types in one
+// program (generics are type-erased; one body serves all instantiations).
+fn pair_str[A, B](a: A, b: B) -> String { "({str(a)}, {str(b)})" }
+fn swap[A, B](t: (A, B)) -> (B, A) { let (a, b) = t; (b, a) }
+fn first[A, B](t: (A, B)) -> A { let (a, _) = t; a }
+fn wrap[T](x: T) -> List[T] { [x] }
+
+println(pair_str(1, "one"));     //? expect: (1, one)
+println(pair_str(true, 2.5));    //? expect: (true, 2.5)
+println(swap((1, "one")));       //? expect: ("one", 1)
+println(first((10, "x")));       //? expect: 10
+println(wrap(7));                //? expect: [7]
+println(wrap("s"));              //? expect: ["s"]
+println(wrap(wrap(1)));          //? expect: [[1]]

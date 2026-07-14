@@ -1,0 +1,11 @@
+// A loop body must not produce a value (E0306) — while and for bodies are Unit.
+//? error: E0306
+//? error: loop body must not produce a value
+let mut i = 0;
+while i < 3 {
+    i += 1;
+    i * 2
+}
+for x in [1, 2] {
+    x + 1
+}

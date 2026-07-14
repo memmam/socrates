@@ -1,0 +1,6 @@
+let name = "world";
+let n = 3;
+println("hello {name}!");              //? expect: hello world!
+println("{n} + {n} = {n + n}");        //? expect: 3 + 3 = 6
+println("nested {"inner {n}"} done");  //? expect: nested inner 3 done
+println("brace \{not interp}");        //? expect: brace {not interp}

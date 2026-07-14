@@ -1,0 +1,30 @@
+// SPEC 4: exhaustiveness is checked (Maranget-style); a non-exhaustive match
+// is a compile error reporting an example of an uncovered value. Bool is
+// exhaustive only with both `true` and `false`; Int literals never make a
+// match exhaustive by themselves.
+//? error: E0501
+//? error: non-exhaustive match
+//? error: the value `None` is not covered
+//? error: the value `false` is not covered
+//? error: the value `Shape.Empty` is not covered
+enum Shape { Circle(Float), Rect(Float, Float), Empty }
+let o: Option[Int] = Some(3);
+let a: Int = match o {
+    Some(x) -> x,
+};
+let b: String = match true {
+    true -> "t",
+};
+let s: Shape = Shape.Circle(1.0);
+let c: Int = match s {
+    Shape.Circle(r) -> 1,
+    Shape.Rect(w, h) -> 2,
+};
+let t: (Bool, Bool) = (true, false);
+let d: Int = match t {
+    (true, _) -> 1,
+};
+let e: String = match 5 {
+    0 -> "zero",
+    1 -> "one",
+};

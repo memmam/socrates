@@ -1,0 +1,72 @@
+// Enum variant patterns: qualified, unqualified (scrutinee type known),
+// nullary variants without parentheses, prelude variants, and the
+// binding-vs-variant reinterpretation of lone identifiers.
+enum Shape {
+    Circle(Float),
+    Rect(Float, Float),
+    Empty,
+}
+
+fn area(s: Shape) -> Float {
+    match s {
+        Shape.Circle(r) -> 3.0 * r * r,
+        Shape.Rect(w, h) -> w * h,
+        Shape.Empty -> 0.0,
+    }
+}
+println(area(Shape.Circle(2.0)));     //? expect: 12.0
+println(area(Shape.Rect(3.0, 4.0)));  //? expect: 12.0
+println(area(Shape.Empty));           //? expect: 0.0
+
+// Unqualified variant patterns work when the scrutinee's enum type is known,
+// including a bare nullary variant with no parentheses.
+fn kind(s: Shape) -> String {
+    match s {
+        Circle(_) -> "circle",
+        Rect(_, _) -> "rect",
+        Empty -> "empty",
+    }
+}
+println(kind(Shape.Circle(1.0)));     //? expect: circle
+println(kind(Shape.Rect(1.0, 2.0)));  //? expect: rect
+println(kind(Shape.Empty));           //? expect: empty
+
+// Prelude variants can also be qualified as Option.Some / Option.None.
+fn get_or(o: Option[Int]) -> Int {
+    match o {
+        Option.Some(x) -> x,
+        Option.None -> -1,
+    }
+}
+println(get_or(Some(5)));  //? expect: 5
+println(get_or(None));     //? expect: -1
+
+// Unqualified prelude variants in patterns: Some/None/Ok/Err.
+fn verdict(r: Result[Int, String]) -> String {
+    match r {
+        Ok(n) -> "ok {n}",
+        Err(e) -> "err {e}",
+    }
+}
+println(verdict(Ok(2)));        //? expect: ok 2
+println(verdict(Err("boom")));  //? expect: err boom
+
+// A lone identifier that names a variant of the scrutinee's enum is a
+// variant pattern; any other identifier binds the whole value.
+enum Coin { Heads, Tails }
+fn flip(c: Coin) -> String {
+    match c {
+        Heads -> "heads",
+        other -> "got {other}",
+    }
+}
+println(flip(Coin.Heads));  //? expect: heads
+println(flip(Coin.Tails));  //? expect: got Tails
+
+// On a non-enum scrutinee an identifier always binds.
+fn double(n: Int) -> Int {
+    match n {
+        value -> value * 2,
+    }
+}
+println(double(21));  //? expect: 42

@@ -1,0 +1,25 @@
+// Struct fields of function type (SPEC 2.2 fn types, 8.1 display of functions):
+// call via (s.f)(args), reassign the field, display as <fn name> / <fn>.
+// Ends by comparing structs that contain functions, which panics (SPEC 3.2).
+struct Op { name: String, apply: fn(Int, Int) -> Int }
+
+fn add(a: Int, b: Int) -> Int { a + b }
+
+let plus = Op { name: "plus", apply: add };
+let times = Op { name: "times", apply: |a, b| a * b };
+
+println((plus.apply)(2, 3));   //? expect: 5
+println((times.apply)(4, 5));  //? expect: 20
+println(plus);                 //? expect: Op { name: "plus", apply: <fn add> }
+println(times);                //? expect: Op { name: "times", apply: <fn> }
+
+plus.apply = |a, b| a - b;     // field assignment with a lambda
+println((plus.apply)(10, 4));  //? expect: 6
+
+// A function-typed field can be passed straight to a higher-order method.
+println([1, 2, 3].map(|n| (times.apply)(n, n)));   //? expect: [1, 4, 9]
+
+// SPEC 3.2: comparing values that contain functions panics at runtime.
+// (Equal leading fields ensure the function fields are actually compared.)
+let times2 = Op { name: "times", apply: |a, b| a * b };
+println(times == times2);      //? panic: cannot compare functions

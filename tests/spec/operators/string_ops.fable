@@ -1,0 +1,23 @@
+// SPEC 3.1: + concatenates String ++ String; <, <=, >, >= order strings;
+// SPEC 3.2: string equality is structural.
+println("foo" + "bar");            //? expect: foobar
+println("a" + "b" + "c");          //? expect: abc
+println("" + "x" + "");            //? expect: x
+let s = "ab";
+println(s + s);                    //? expect: abab
+let greeting = "hello" + " " + "world";
+println(greeting);                 //? expect: hello world
+println(greeting.len());           //? expect: 11
+
+// Lexicographic ordering (by Unicode scalar values).
+println("apple" < "banana");       //? expect: true
+println("a" < "ab");               //? expect: true
+println("B" < "a");                //? expect: true
+println("abc" <= "abc");           //? expect: true
+println("b" >= "a");               //? expect: true
+println("" < "a");                 //? expect: true
+
+// Structural equality.
+println("abc" == "abc");           //? expect: true
+println("abc" != "abd");           //? expect: true
+println("abc" == "ab" + "c");      //? expect: true

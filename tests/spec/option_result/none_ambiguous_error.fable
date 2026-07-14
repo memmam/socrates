@@ -1,0 +1,4 @@
+// SPEC §2.6: an unresolved type variable at the end of checking is a compile
+// error. A bare `None` with nothing to pin down `T` cannot be inferred.
+//? error: E0302
+let x = None;

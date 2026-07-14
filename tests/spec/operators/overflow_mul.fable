@@ -1,0 +1,4 @@
+// SPEC 2.1 / 6: Int multiplication overflow panics; the largest safe square is fine.
+//? panic: integer overflow
+println(3037000499 * 3037000499);    //? expect: 9223372030926249001
+println(3037000500 * 3037000500);

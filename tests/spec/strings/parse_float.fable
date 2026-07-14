@@ -1,0 +1,19 @@
+// SPEC 8.3: parse_float() -> Option[Float]; like parse_int it does not
+// accept surrounding spaces. Results display per SPEC 8.1 float rules.
+println("3.14".parse_float());       //? expect: Some(3.14)
+println("-0.5".parse_float());       //? expect: Some(-0.5)
+println("+2.5".parse_float());       //? expect: Some(2.5)
+println("42".parse_float());         //? expect: Some(42.0)
+println("1e3".parse_float());        //? expect: Some(1000.0)
+println("2.5e-3".parse_float());     //? expect: Some(0.0025)
+println(" 1.0".parse_float());       //? expect: None
+println("1.0 ".parse_float());       //? expect: None
+println("abc".parse_float());        //? expect: None
+println("".parse_float());           //? expect: None
+println("1.2.3".parse_float());      //? expect: None
+// the parsed value is a real Float
+println("0.5".parse_float().unwrap() * 2.0);   //? expect: 1.0
+println("2".parse_float().unwrap() + 0.5);     //? expect: 2.5
+println("-4.5".parse_float().unwrap_or(0.0));  //? expect: -4.5
+println("nope".parse_float().unwrap_or(0.0));  //? expect: 0.0
+println("3.14".parse_float().is_some());       //? expect: true

@@ -1,0 +1,24 @@
+// Closures stored in a list and called later. The list annotation supplies
+// the parameter types (SPEC § 2.6).
+let ops: List[fn(Int) -> Int] = [|x| x + 1, |x| x * 2, |x| x - 3];
+println(ops.len());   //? expect: 3
+println(ops[0](10));  //? expect: 11
+println(ops[1](10));  //? expect: 20
+println(ops[2](10));  //? expect: 7
+
+// Apply them in sequence.
+let mut acc = 5;
+for op in ops {
+    acc = op(acc);
+}
+println(acc);         //? expect: 9
+
+// Lambdas display as <fn> (SPEC § 8.1).
+println(str(ops[0])); //? expect: <fn>
+
+// Closures in a list still capture surrounding state by reference.
+let mut base = 100;
+let more = [|| base + 1, || base + 2];
+base = 200;
+println(more[0]());   //? expect: 201
+println(more[1]());   //? expect: 202

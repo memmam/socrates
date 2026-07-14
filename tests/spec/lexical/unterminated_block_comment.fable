@@ -1,0 +1,6 @@
+// SPEC 1.1: block comments nest, so `*/` closes only the innermost open
+// comment; a comment left open at EOF is a lex error.
+//? error: E0101
+//? error: unterminated block comment
+println(1);
+/* nested /* comment */ closes the inner one but never the outer

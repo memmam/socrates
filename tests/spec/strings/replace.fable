@@ -1,0 +1,17 @@
+// SPEC 8.3: replace(from, to) replaces every occurrence and returns a new
+// string; no match leaves the string unchanged; "" as `to` deletes matches.
+println("hello world".replace("o", "0"));      //? expect: hell0 w0rld
+println("aaa".replace("a", "bb"));             //? expect: bbbbbb
+println("abc".replace("x", "y"));              //? expect: abc
+println("a-b-c".replace("-", ""));             //? expect: abc
+println("banana".replace("an", "AN"));         //? expect: bANANa
+println("héllo".replace("é", "e"));            //? expect: hello
+println("🙂🙂".replace("🙂", ":)"));           //? expect: :):)
+println("aXbXc".replace("X", "λ"));            //? expect: aλbλc
+// the receiver is unchanged (strings are immutable)
+let original = "tick tock";
+let swapped = original.replace("tick", "tock");
+println(swapped);                              //? expect: tock tock
+println(original);                             //? expect: tick tock
+// chained with trim
+println("  a,b  ".trim().replace(",", " + ")); //? expect: a + b

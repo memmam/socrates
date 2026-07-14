@@ -1,0 +1,6 @@
+// Omitting `->` defaults the return type to Unit; a body of another type is
+// a type error (E0301) with a note suggesting the annotation.
+//? error: E0301
+//? error: should return `Unit`, but its body has type `Int`
+fn f(x: Int) { x + 1 }
+println(f(1));

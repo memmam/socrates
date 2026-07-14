@@ -1,0 +1,8 @@
+let xs = [5, 3, 8, 1];
+println(xs.sort());                    //? expect: [1, 3, 5, 8]
+println(xs);                           //? expect: [5, 3, 8, 1]
+println(xs.map(|x| x * x));            //? expect: [25, 9, 64, 1]
+println(xs.fold(0, |a, b| a + b));     //? expect: 17
+println(xs.enumerate());               //? expect: [(0, 5), (1, 3), (2, 8), (3, 1)]
+println(xs.zip(["a", "b"]));           //? expect: [(5, "a"), (3, "b")]
+println([[1, 2], [3]].flat_map(|r| r)); //? expect: [1, 2, 3]

@@ -1,0 +1,6 @@
+// SPEC §8.6: `unwrap()` panics on `None`.
+//? panic: called `unwrap()` on `None`
+let x: Option[Int] = None;
+println("before");                 //? expect: before
+println(x.unwrap());
+println("unreachable");

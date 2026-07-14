@@ -1,0 +1,7 @@
+// SPEC 3.5: xs[i] panics on a negative index; assignment indexing panics too.
+//? panic: index out of bounds
+let xs = [1, 2, 3];
+let i = 0 - 1;
+println("before");              //? expect: before
+xs[i] = 9;
+println("unreachable");

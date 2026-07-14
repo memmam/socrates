@@ -1,0 +1,28 @@
+// Closures created inside loops. Each `for` iteration binds a fresh loop
+// variable, so every closure captures its own value.
+let fns = [];
+for i in 0..3 {
+    fns.push(|| i);
+}
+println(fns[0]());    //? expect: 0
+println(fns[1]());    //? expect: 1
+println(fns[2]());    //? expect: 2
+
+// A `let` inside a while body is likewise a fresh binding per iteration...
+let fresh = [];
+let stale = [];
+let mut i = 0;
+while i < 3 {
+    let v = i * 10;
+    fresh.push(|| v);
+    stale.push(|| i);
+    i += 1;
+}
+println(fresh[0]());  //? expect: 0
+println(fresh[1]());  //? expect: 10
+println(fresh[2]());  //? expect: 20
+// ...but the single `let mut i` outside the loop is one shared cell
+// (capture by reference): every closure sees the final value.
+println(stale[0]());  //? expect: 3
+println(stale[1]());  //? expect: 3
+println(stale[2]());  //? expect: 3

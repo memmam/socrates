@@ -1,0 +1,41 @@
+// SPEC 3.3: for over a List[T] yields each element of type T, in order.
+let names = ["ana", "bo", "cy"];
+for n in names {
+    println(n);
+}
+//? expect: ana
+//? expect: bo
+//? expect: cy
+
+let mut total = 0;
+for v in [10, 20, 30, 40] {
+    total += v;
+}
+println(total);            //? expect: 100
+
+// an empty list: the body never runs
+let empty: List[Int] = [];
+for e in empty {
+    println("never {e}");
+}
+println("after empty");    //? expect: after empty
+
+// the loop variable shadows outer bindings and is gone after the loop
+let x = 7;
+for x in [1, 2] {
+    print(x);
+}
+println(" then {x}");      //? expect: 12 then 7
+
+// the iterable may be any expression producing a List
+for w in "a,b,c".split(",") {
+    print(w.to_upper());
+}
+println("");               //? expect: ABC
+
+// indexing through a range lets the body mutate list elements
+let ys = [1, 2, 3];
+for i in 0..ys.len() {
+    ys[i] = ys[i] * ys[i];
+}
+println(ys);               //? expect: [1, 4, 9]

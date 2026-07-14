@@ -1,0 +1,2 @@
+//? error: type mismatch
+let x: Int = "hello";

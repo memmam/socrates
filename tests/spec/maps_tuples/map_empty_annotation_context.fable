@@ -1,0 +1,29 @@
+// SPEC 8.4: the empty map literal is {:} (because {} is an empty block).
+// It needs an annotation or surrounding context to fix its type.
+
+// Annotation on the let binding.
+let a: Map[String, Int] = {:};
+println(a.len());                 //? expect: 0
+a["one"] = 1;
+println(a);                       //? expect: {"one": 1}
+
+// Context from a function parameter type.
+fn total(m: Map[String, Int]) -> Int {
+    let mut t = 0;
+    for k in m.keys() {
+        t += m[k];
+    }
+    t
+}
+println(total({:}));              //? expect: 0
+println(total({"x": 4, "y": 5})); //? expect: 9
+
+// Context from assignment to an already-typed mutable binding.
+let mut e = {"q": 1};
+e = {:};
+println(e.is_empty());            //? expect: true
+
+// Context from later use via unification.
+let b = {:};
+b[42] = "answer";
+println(b);                       //? expect: {42: "answer"}

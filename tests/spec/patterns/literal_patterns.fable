@@ -1,0 +1,46 @@
+// Literal patterns: Int (including negative), Float, String, Bool.
+// Bool is exhaustive with true and false; other literal types need a
+// catch-all/binding arm.
+fn f(x: Float) -> String {
+    match x {
+        3.14 -> "pi-ish",
+        0.0 -> "zero",
+        _ -> "other",
+    }
+}
+println(f(3.14));  //? expect: pi-ish
+println(f(0.0));   //? expect: zero
+println(f(2.0));   //? expect: other
+
+fn yn(s: String) -> Int {
+    match s {
+        "yes" -> 1,
+        "no" -> 0,
+        other -> other.len(),
+    }
+}
+println(yn("yes"));    //? expect: 1
+println(yn("no"));     //? expect: 0
+println(yn("maybe"));  //? expect: 5
+
+// Bool: true and false alone are exhaustive (no `_` needed).
+fn tf(b: Bool) -> String {
+    match b {
+        true -> "T",
+        false -> "F",
+    }
+}
+println(tf(true));   //? expect: T
+println(tf(false));  //? expect: F
+
+fn code(n: Int) -> String {
+    match n {
+        -1 -> "minus one",
+        0 -> "zero",
+        1 -> "one",
+        _ -> "many",
+    }
+}
+println(code(-1));  //? expect: minus one
+println(code(0));   //? expect: zero
+println(code(42));  //? expect: many

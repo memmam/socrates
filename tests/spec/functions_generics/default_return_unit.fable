@@ -1,0 +1,24 @@
+// A fn with no `->` annotation returns Unit (SPEC 2.6).
+fn greet(name: String) { println("hi {name}"); }
+fn noop(x: Int) { x; }     // statement-terminated body has type Unit
+
+let u = greet("bob");      //? expect: hi bob
+println(u);                //? expect: ()
+let v: Unit = noop(5);     // result checks against an explicit Unit annotation
+println(str(v));           //? expect: ()
+
+// A bare `return;` exits a Unit function early.
+fn side(n: Int) {
+    if n == 0 { return; }
+    println("n = {n}");
+}
+side(0);
+side(7);                   //? expect: n = 7
+
+// `return expr;` works mid-body when the annotation is present.
+fn early(n: Int) -> String {
+    if n < 0 { return "negative"; }
+    "non-negative"
+}
+println(early(-1));        //? expect: negative
+println(early(3));         //? expect: non-negative

@@ -1,0 +1,24 @@
+// SPEC 8.2: get/first/last return Option[T]; get returns None out of bounds.
+let xs = [10, 20, 30];
+println(xs.get(0));             //? expect: Some(10)
+println(xs.get(2));             //? expect: Some(30)
+println(xs.get(3));             //? expect: None
+let neg = 0 - 1;
+println(xs.get(neg));           //? expect: None
+println(xs.first());            //? expect: Some(10)
+println(xs.last());             //? expect: Some(30)
+
+let e: List[String] = [];
+println(e.get(0));              //? expect: None
+println(e.first());             //? expect: None
+println(e.last());              //? expect: None
+
+// One-element list: first and last agree.
+let one = [42];
+println(one.first());           //? expect: Some(42)
+println(one.last());            //? expect: Some(42)
+
+// Option results compose with Option methods.
+println(xs.get(1).unwrap());        //? expect: 20
+println(xs.get(9).unwrap_or(0));    //? expect: 0
+println(xs.first().map(|x| x * 2)); //? expect: Some(20)

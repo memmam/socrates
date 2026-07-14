@@ -1,0 +1,6 @@
+// SPEC 2.2 / E0312: a map literal whose key type is a function type is
+// rejected at compile time.
+//? error: E0312
+//? error: functions cannot be used as map keys
+fn f(x: Int) -> Int { x }
+let m = {f: 1};

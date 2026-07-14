@@ -1,0 +1,19 @@
+// SPEC §4: an or-pattern of payload-carrying variant alternatives simply
+// fails to match a value of a different (nullary) variant; later arms apply.
+// BUG: matching `None` against the arm `Some(0) | Some(1)` crashes the VM:
+//   - with a `None` arm present: runtime panic "internal: bad enum value (VM bug)"
+//   - with a `_` arm instead: Rust-level abort, index out of bounds at
+//     src/vm.rs:409 (reads field 0 of a fieldless variant)
+// Also reproduces with user enums: `match E.B { E.A(0) | E.A(1) -> .., _ -> .. }`.
+fn bucket(o: Option[Int]) -> String {
+    match o {
+        Some(0) | Some(1) -> "tiny",
+        Some(n) if n < 0 -> "negative",
+        Some(n) -> "big {n}",
+        None -> "missing",
+    }
+}
+println(bucket(Some(1)));           //? expect: tiny
+println(bucket(Some(-3)));          //? expect: negative
+println(bucket(Some(12)));          //? expect: big 12
+println(bucket(None));              //? expect: missing

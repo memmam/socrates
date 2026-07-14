@@ -1,0 +1,26 @@
+// SPEC §8.6 Result methods: is_ok / is_err / unwrap / unwrap_or / unwrap_err,
+// and §8.1 display format (`Ok("hi")` with quoted inner string).
+let ok: Result[Int, String] = Ok(3);
+let er: Result[Int, String] = Err("boom");
+
+println(ok.is_ok());               //? expect: true
+println(ok.is_err());              //? expect: false
+println(er.is_ok());               //? expect: false
+println(er.is_err());              //? expect: true
+
+println(ok.unwrap());              //? expect: 3
+println(ok.unwrap_or(-1));         //? expect: 3
+println(er.unwrap_or(-1));         //? expect: -1
+// unwrap_err returns the error; str() of a bare String is unquoted (SPEC §8.1).
+println(er.unwrap_err());          //? expect: boom
+
+println(ok);                       //? expect: Ok(3)
+println(er);                       //? expect: Err("boom")
+
+let hi: Result[String, Int] = Ok("hi");
+println(hi);                       //? expect: Ok("hi")
+println(hi.unwrap());              //? expect: hi
+
+// Structural equality across independently built values.
+println(er == Err("boom"));        //? expect: true
+println(ok == Ok(4));              //? expect: false

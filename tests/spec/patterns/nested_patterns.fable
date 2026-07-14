@@ -1,0 +1,47 @@
+// Patterns nest arbitrarily: variants inside variants, tuples inside
+// variant payloads, and or-patterns inside variant patterns.
+enum Shape {
+    Circle(Float),
+    Rect(Float, Float),
+    Empty,
+}
+
+fn describe(o: Option[Shape]) -> String {
+    match o {
+        Some(Shape.Circle(r)) if r > 10.0 -> "big circle",
+        Some(Shape.Circle(r)) -> "circle {r}",
+        Some(Shape.Rect(w, h)) -> "rect {w} by {h}",
+        Some(Shape.Empty) -> "empty shape",
+        None -> "nothing",
+    }
+}
+println(describe(Some(Shape.Circle(11.0))));    //? expect: big circle
+println(describe(Some(Shape.Circle(2.5))));     //? expect: circle 2.5
+println(describe(Some(Shape.Rect(1.0, 2.0))));  //? expect: rect 1.0 by 2.0
+println(describe(Some(Shape.Empty)));           //? expect: empty shape
+println(describe(None));                        //? expect: nothing
+
+// Or-patterns nest inside variant patterns.
+fn tiny(o: Option[Int]) -> String {
+    match o {
+        Some(0 | 1) -> "tiny",
+        Some(n) -> "n={n}",
+        None -> "none",
+    }
+}
+println(tiny(Some(0)));  //? expect: tiny
+println(tiny(Some(1)));  //? expect: tiny
+println(tiny(Some(7)));  //? expect: n=7
+println(tiny(None));     //? expect: none
+
+// Tuples nest inside enum payloads, with enums nested inside the tuple again.
+fn deep(r: Result[(Int, Option[String]), String]) -> String {
+    match r {
+        Ok((n, Some(s))) -> "{n}:{s}",
+        Ok((n, None)) -> "{n}:-",
+        Err(e) -> "error {e}",
+    }
+}
+println(deep(Ok((1, Some("a")))));  //? expect: 1:a
+println(deep(Ok((2, None))));       //? expect: 2:-
+println(deep(Err("nope")));         //? expect: error nope

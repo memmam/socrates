@@ -1,0 +1,5 @@
+// SPEC 2.2: tuples are immutable — assigning to a component is a compile error.
+//? error: E0309
+//? error: tuples are immutable
+let t = (1, 2);
+t.0 = 5;

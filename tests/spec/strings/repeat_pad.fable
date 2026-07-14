@@ -1,0 +1,22 @@
+// SPEC 8.3: repeat(n) with n <= 0 gives ""; pad_left/pad_right(width, pad)
+// cycle a multi-char pad string and measure width in chars; a string already
+// at least `width` chars long is returned unchanged.
+println("ab".repeat(3));                 //? expect: ababab
+println("[" + "ab".repeat(1) + "]");     //? expect: [ab]
+println("[" + "ab".repeat(0) + "]");     //? expect: []
+println("[" + "ab".repeat(-5) + "]");    //? expect: []
+println("[" + "".repeat(10) + "]");      //? expect: []
+println("🙂".repeat(2));                 //? expect: 🙂🙂
+println("-".repeat(5));                  //? expect: -----
+println("ab".repeat(2).len());           //? expect: 4
+println("7".pad_left(3, "0"));           //? expect: 007
+println("7".pad_right(3, "0"));          //? expect: 700
+println("hi".pad_left(7, "ab"));         //? expect: ababahi
+println("hi".pad_right(7, "ab"));        //? expect: hiababa
+println("42".pad_left(6, "-="));         //? expect: -=-=42
+println("hello".pad_left(3, "x"));       //? expect: hello
+println("hello".pad_right(5, "x"));      //? expect: hello
+println("hi".pad_left(-1, "x"));         //? expect: hi
+println("é".pad_left(4, "λ"));           //? expect: λλλé
+println("é".pad_right(4, "🙂"));         //? expect: é🙂🙂🙂
+println("é".pad_left(4, "λ").len());     //? expect: 4

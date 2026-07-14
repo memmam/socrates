@@ -1,0 +1,16 @@
+// E0408: wrong number of type arguments — for builtin generics, prelude
+// enums, user-defined generic types, and non-generic types given arguments.
+//? error: E0408
+//? error: wrong number of type arguments for `List`: expected 1, found 2
+//? error: wrong number of type arguments for `Map`: expected 2, found 1
+//? error: wrong number of type arguments for `Option`: expected 1, found 2
+//? error: wrong number of type arguments for `Pair`: expected 2, found 1
+//? error: wrong number of type arguments for `Int`: expected 0, found 1
+//? error: wrong number of type arguments for `Range`: expected 0, found 1
+struct Pair[A, B] { first: A, second: B }
+let a: List[Int, Int] = [];
+let b: Map[Int] = {:};
+let c: Option[Int, String] = None;
+let d: Pair[Int] = Pair { first: 1, second: 2 };
+let e: Int[Int] = 1;
+let r: Range[Int] = 0..3;

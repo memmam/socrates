@@ -1,0 +1,18 @@
+// E0402: builtin type names (Int, List, ...) cannot be redefined.
+// E0403: duplicate type name. E0405: duplicate struct field.
+// E0406: duplicate enum variant.
+//? error: E0402
+//? error: cannot redefine builtin type `Int`
+//? error: cannot redefine builtin type `List`
+//? error: E0403
+//? error: duplicate type name `Point`
+//? error: E0405
+//? error: duplicate field `a`
+//? error: E0406
+//? error: duplicate variant `V`
+struct Int { x: Float }
+enum List { A, B }
+struct Point { x: Float, y: Float }
+struct Point { z: Float }
+struct Dup { a: Int, a: Float }
+enum E { V, V, W(Int) }

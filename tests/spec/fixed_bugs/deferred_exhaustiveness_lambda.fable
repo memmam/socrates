@@ -1,0 +1,7 @@
+//? error: E0501
+// The scrutinee's type is only pinned by the call AFTER the lambda body is
+// checked; exhaustiveness must still run (deferred to end of checking).
+let f = |o| match o {
+    Some(x) -> x,
+};
+println(f(Some(1)));

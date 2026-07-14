@@ -1,0 +1,27 @@
+// SPEC §8.6: Result map / map_err / and_then, with chained pipelines.
+// Err short-circuits: the first Err flows through unchanged.
+fn parse_pos(s: String) -> Result[Int, String] {
+    match s.parse_int() {
+        Some(n) if n > 0 -> Ok(n),
+        Some(n) -> Err("not positive: {n}"),
+        None -> Err("not a number: {s}"),
+    }
+}
+fn halve(n: Int) -> Result[Int, String] {
+    if n % 2 == 0 { Ok(n / 2) } else { Err("{n} is odd") }
+}
+
+println(parse_pos("12").and_then(halve));                  //? expect: Ok(6)
+println(parse_pos("12").and_then(halve).and_then(halve));  //? expect: Ok(3)
+println(parse_pos("12").and_then(halve).and_then(halve).and_then(halve)); //? expect: Err("3 is odd")
+println(parse_pos("-4").and_then(halve));                  //? expect: Err("not positive: -4")
+println(parse_pos("x").and_then(halve));                   //? expect: Err("not a number: x")
+
+println(parse_pos("5").map(|n| n * 10));                   //? expect: Ok(50)
+println(parse_pos("nope").map(|n| n * 10));                //? expect: Err("not a number: nope")
+
+// map_err transforms only the error side (and may change its type).
+println(parse_pos("nope").map_err(|e| e.len()));           //? expect: Err(18)
+println(parse_pos("7").map_err(|e| e.len()));              //? expect: Ok(7)
+println(parse_pos("8").map(|n| "n={n}").map_err(|e| "<{e}>")); //? expect: Ok("n=8")
+println(parse_pos("0").map(|n| "n={n}").map_err(|e| "<{e}>")); //? expect: Err("<not positive: 0>")

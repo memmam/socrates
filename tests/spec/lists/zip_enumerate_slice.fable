@@ -1,0 +1,38 @@
+// SPEC 8.2: zip (length = shorter), enumerate, slice (clamped, new list).
+let xs = [5, 3, 8, 1, 4];
+
+// zip pairs up to the shorter list, from either side.
+println([1, 2, 3].zip(["a", "b", "c"]));    //? expect: [(1, "a"), (2, "b"), (3, "c")]
+println([1, 2, 3].zip(["a"]));              //? expect: [(1, "a")]
+println([1].zip([true, false]));            //? expect: [(1, true)]
+let e: List[Int] = [];
+println(e.zip([1, 2]));                     //? expect: []
+println([1, 2].zip(e));                     //? expect: []
+// zip a list with itself.
+println([1, 2].zip([1, 2]));                //? expect: [(1, 1), (2, 2)]
+
+// enumerate yields (index, element) tuples.
+println(["a", "b"].enumerate());            //? expect: [(0, "a"), (1, "b")]
+println(e.enumerate());                     //? expect: []
+
+// slice: start inclusive, end exclusive.
+println(xs.slice(1, 3));                    //? expect: [3, 8]
+println(xs.slice(0, xs.len()));             //? expect: [5, 3, 8, 1, 4]
+// Clamping: negative start clamps to 0.
+let n2 = 0 - 2;
+println(xs.slice(n2, 2));                   //? expect: [5, 3]
+// Clamping: end beyond len clamps to len.
+println(xs.slice(3, 99));                   //? expect: [1, 4]
+// start > end gives the empty list.
+println(xs.slice(4, 2));                    //? expect: []
+// start at or past len gives the empty list.
+println(xs.slice(5, 5));                    //? expect: []
+println(xs.slice(99, 100));                 //? expect: []
+// Both bounds negative: everything clamps to 0.
+println(xs.slice(n2, 0 - 1));               //? expect: []
+
+// slice returns a NEW list: mutating it leaves the source alone.
+let s = xs.slice(0, 2);
+s.push(77);
+println(xs);                                //? expect: [5, 3, 8, 1, 4]
+println(s);                                 //? expect: [5, 3, 77]

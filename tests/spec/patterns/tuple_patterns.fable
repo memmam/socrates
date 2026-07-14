@@ -1,0 +1,31 @@
+// Tuple patterns: literal elements, bindings, wildcards, and nesting.
+fn point_kind(t: (Int, Int)) -> String {
+    match t {
+        (0, 0) -> "origin",
+        (x, 0) -> "on x-axis at {x}",
+        (0, y) -> "on y-axis at {y}",
+        (x, y) -> "point ({x}, {y})",
+    }
+}
+println(point_kind((0, 0)));   //? expect: origin
+println(point_kind((3, 0)));   //? expect: on x-axis at 3
+println(point_kind((0, -2)));  //? expect: on y-axis at -2
+println(point_kind((4, 5)));   //? expect: point (4, 5)
+
+// Tuples nest inside tuples; wildcards skip elements at any depth.
+fn nested(t: (Int, (String, Bool))) -> String {
+    match t {
+        (_, (s, true)) -> "yes:{s}",
+        (n, (_, false)) -> "no:{n}",
+    }
+}
+println(nested((1, ("a", true))));   //? expect: yes:a
+println(nested((9, ("b", false))));  //? expect: no:9
+
+// Three-element tuple; an all-wildcard/binding row is exhaustive by itself.
+fn third(t: (Int, Int, Int)) -> Int {
+    match t {
+        (_, _, z) -> z,
+    }
+}
+println(third((1, 2, 3)));  //? expect: 3

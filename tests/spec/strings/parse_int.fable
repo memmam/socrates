@@ -1,0 +1,26 @@
+// SPEC 8.3: parse_int() — optional +/- sign, decimal digits only, no
+// surrounding spaces, no hex/binary/underscores. Returns Option[Int].
+println("42".parse_int());         //? expect: Some(42)
+println("+42".parse_int());        //? expect: Some(42)
+println("-7".parse_int());         //? expect: Some(-7)
+println("0".parse_int());          //? expect: Some(0)
+println("-0".parse_int());         //? expect: Some(0)
+println("007".parse_int());        //? expect: Some(7)
+println(" 42".parse_int());        //? expect: None
+println("42 ".parse_int());        //? expect: None
+println("4 2".parse_int());        //? expect: None
+println("0x2A".parse_int());       //? expect: None
+println("0b101".parse_int());      //? expect: None
+println("1_000".parse_int());      //? expect: None
+println("12.5".parse_int());       //? expect: None
+println("".parse_int());           //? expect: None
+println("+".parse_int());          //? expect: None
+println("+-5".parse_int());        //? expect: None
+println("abc".parse_int());        //? expect: None
+// Int is 64-bit signed: the extremes parse, one past them does not
+println("9223372036854775807".parse_int());   //? expect: Some(9223372036854775807)
+println("-9223372036854775808".parse_int());  //? expect: Some(-9223372036854775808)
+println("9223372036854775808".parse_int());   //? expect: None
+// trim first to accept padded input
+println("  42  ".trim().parse_int().unwrap() + 1);  //? expect: 43
+println("nope".parse_int().unwrap_or(-1));          //? expect: -1

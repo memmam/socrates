@@ -1,0 +1,4 @@
+//? panic: integer overflow
+let max = 9223372036854775807;
+let min = -9223372036854775807 - 1;
+println((min..=max).len());

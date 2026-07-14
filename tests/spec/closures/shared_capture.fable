@@ -1,0 +1,34 @@
+// SPEC § 3.4: closures capture by reference — a captured `let mut` is a
+// single cell shared by every closure that captures it.
+let mut total = 0;
+let add = |n: Int| { total += n; };
+let reset = || { total = 0; };
+add(5);
+add(7);
+println(total);    //? expect: 12
+reset();
+println(total);    //? expect: 0
+add(1);
+println(total);    //? expect: 1
+
+// The closure observes mutations made after it was created...
+let mut x = 1;
+let get = || x;
+x = 42;
+println(get());    //? expect: 42
+// ...and mutations made by the closure are visible outside.
+let bump = || { x += 1; };
+bump();
+bump();
+println(x);        //? expect: 44
+
+// Same sharing for a *local* `let mut` returned inside two closures.
+fn make_pair() -> (fn() -> Int, fn() -> Int) {
+    let mut shared = 0;
+    let inc = || { shared += 1; shared };
+    let dec = || { shared -= 1; shared };
+    (inc, dec)
+}
+let (inc, dec) = make_pair();
+inc(); inc(); inc();
+println(dec());    //? expect: 2

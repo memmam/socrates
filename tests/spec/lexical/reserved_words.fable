@@ -1,0 +1,6 @@
+// SPEC 1.2: `and`, `or`, `not` are ordinary identifiers (the operators are
+// spelled `&&`, `||`, `!`), but `and`/`or` in infix position get a targeted
+// E0106 error pointing at the symbolic spelling.
+//? error: E0106
+//? error: `and` is not an operator; logical and is spelled `&&`
+let a = true and false;

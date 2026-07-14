@@ -1,0 +1,38 @@
+// SPEC 8.2: contains / index_of use structural (deep) equality — SPEC 3.2.
+struct P { x: Int, y: Int }
+
+let ns = [5, 3, 8];
+println(ns.contains(8));                    //? expect: true
+println(ns.contains(4));                    //? expect: false
+println(ns.index_of(3));                    //? expect: Some(1)
+println(ns.index_of(4));                    //? expect: None
+// index_of returns the FIRST match.
+println([7, 9, 7].index_of(7));             //? expect: Some(0)
+
+// Tuples compare structurally.
+let pairs = [(1, "one"), (2, "two")];
+println(pairs.contains((2, "two")));        //? expect: true
+println(pairs.contains((2, "three")));      //? expect: false
+println(pairs.index_of((1, "one")));        //? expect: Some(0)
+
+// Structs compare structurally (deep), not by identity.
+let ps = [P { x: 1, y: 2 }, P { x: 3, y: 4 }];
+println(ps.contains(P { x: 3, y: 4 }));     //? expect: true
+println(ps.contains(P { x: 3, y: 5 }));     //? expect: false
+println(ps.index_of(P { x: 1, y: 2 }));     //? expect: Some(0)
+
+// Nested lists compare deeply.
+let nested = [[1, 2], [3], []];
+println(nested.contains([3]));              //? expect: true
+println(nested.contains([1]));              //? expect: false
+println(nested.index_of([]));               //? expect: Some(2)
+println(nested.index_of([9]));              //? expect: None
+
+// Strings and floats as elements.
+println(["a", "b"].contains("b"));          //? expect: true
+println([1.5, 2.5].index_of(2.5));          //? expect: Some(1)
+
+// Empty list contains nothing.
+let e: List[Int] = [];
+println(e.contains(1));                     //? expect: false
+println(e.index_of(1));                     //? expect: None

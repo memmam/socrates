@@ -1,0 +1,28 @@
+// SPEC 1.3 + 8.3: escape sequences produce real characters that round-trip
+// through string methods; SPEC 3.3: for over a String yields one-char
+// Strings by Unicode scalar.
+println("\u{e9}" == "é");                    //? expect: true
+println("\u{48}\u{69}");                     //? expect: Hi
+println("a\nb".split("\n"));                 //? expect: ["a", "b"]
+println("a\nb\nc".split("\n").join("\n") == "a\nb\nc");  //? expect: true
+println("x\ty".split("\t").join("|"));       //? expect: x|y
+println("q\"q".chars());                     //? expect: ["q", "\"", "q"]
+println("\\".len());                         //? expect: 1
+println("\{".len());                         //? expect: 1
+println("\{" == "\u{7b}");                   //? expect: true
+println("a\r\nb".split("\r\n"));             //? expect: ["a", "b"]
+// chars -> join round-trips, and split("") is chars
+println("héλ🙂".chars().join("-"));          //? expect: h-é-λ-🙂
+println("héλ🙂".split("").join("") == "héλ🙂");  //? expect: true
+// for-loop over a unicode string reassembles it scalar by scalar
+let mut rebuilt = "";
+for c in "cœur🙂" {
+    rebuilt = rebuilt + c;
+}
+println(rebuilt == "cœur🙂");                //? expect: true
+println(rebuilt.len());                      //? expect: 5
+let mut upper_count = 0;
+for c in "AbCdE" {
+    if c == c.to_upper() { upper_count += 1; }
+}
+println(upper_count);                        //? expect: 3

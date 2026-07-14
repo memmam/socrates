@@ -1,0 +1,5 @@
+// SPEC 3.5: s[i] on a String is not allowed — compile error E0313
+// (use .chars(), .char_at(i), or .slice(a, b) instead).
+//? error: E0313
+let s = "hello";
+println(s[0]);

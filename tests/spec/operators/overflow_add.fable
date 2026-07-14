@@ -1,0 +1,6 @@
+// SPEC 2.1 / 6: Int addition overflow panics. The boundary value itself is fine.
+//? panic: integer overflow
+let max = 9223372036854775807;
+println(max);                //? expect: 9223372036854775807
+println(max - 1 + 1);        //? expect: 9223372036854775807
+println(max + 1);

@@ -1,0 +1,7 @@
+// SPEC §4: a non-exhaustive match over Option is a compile error (E05xx).
+//? error: E05
+let o: Option[Int] = Some(1);
+let v = match o {
+    Some(x) -> x,
+};
+println(v);

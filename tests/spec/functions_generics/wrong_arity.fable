@@ -1,0 +1,8 @@
+// Calling with the wrong number of arguments is E0317; both too-few and
+// too-many are reported.
+//? error: E0317
+//? error: takes 2 arguments, found 1
+//? error: takes 2 arguments, found 3
+fn add(a: Int, b: Int) -> Int { a + b }
+println(add(1));
+println(add(1, 2, 3));

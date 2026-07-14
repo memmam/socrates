@@ -1,0 +1,10 @@
+// SPEC §8.6: Option has `or(Option[T]) -> Option[T]`.
+// BUG: the lexer reserves `or` (error E0106: "`or` is a reserved word; the
+// operator is spelled `||`") even in method position after `.`, so the
+// spec-mandated method cannot be called at all.
+let a = Some(10);
+let n: Option[Int] = None;
+println(a.or(Some(3)));               //? expect: Some(10)
+println(n.or(Some(3)));               //? expect: Some(3)
+println(n.or(None));                  //? expect: None
+println(n.or(Some(3)).or(Some(4)));   //? expect: Some(3)

@@ -1,0 +1,8 @@
+// `and`, `or`, `not` are usable as plain identifiers (SPEC 1.2), which is
+// what makes the Option method `.or(..)` callable.
+let and = 1;
+let or = 2;
+let not = 3;
+println(and + or + not);     //? expect: 6
+let opt: Option[Int] = None;
+println(opt.or(Some(9)));    //? expect: Some(9)

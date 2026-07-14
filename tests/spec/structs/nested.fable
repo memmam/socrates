@@ -1,0 +1,25 @@
+// Nested structs: chained field access/assignment, replacing an inner struct,
+// and a shared inner object seen through two outers (reference semantics).
+struct Inner { v: Int }
+struct Outer { name: String, inner: Inner }
+
+let o = Outer { name: "box", inner: Inner { v: 1 } };
+println(o);                    //? expect: Outer { name: "box", inner: Inner { v: 1 } }
+println(o.inner.v);            //? expect: 1
+
+o.inner.v = 5;
+println(o.inner.v);            //? expect: 5
+o.inner.v += 2;
+println(o.inner.v);            //? expect: 7
+
+o.inner = Inner { v: 10 };     // replace the whole inner struct
+println(o);                    //? expect: Outer { name: "box", inner: Inner { v: 10 } }
+
+let shared = Inner { v: 0 };
+let a = Outer { name: "a", inner: shared };
+let b = Outer { name: "b", inner: shared };
+shared.v = 3;
+println(a.inner.v);            //? expect: 3
+println(b.inner.v);            //? expect: 3
+b.inner.v = 8;                 // mutation through b is visible through a
+println(a.inner.v);            //? expect: 8

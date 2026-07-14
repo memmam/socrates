@@ -1,0 +1,14 @@
+// SPEC 8.3: trim() strips surrounding whitespace only; to_upper()/to_lower()
+// apply ASCII-only case mapping — non-ASCII letters pass through unchanged.
+println("[" + "  spaced out  ".trim() + "]");    //? expect: [spaced out]
+println("[" + " \t\r\n x \t\r\n ".trim() + "]"); //? expect: [x]
+println("[" + "".trim() + "]");                  //? expect: []
+println("[" + "   ".trim() + "]");               //? expect: []
+println("[" + "inner  space".trim() + "]");      //? expect: [inner  space]
+println("Hello, World! 123".to_upper());         //? expect: HELLO, WORLD! 123
+println("Hello, World! 123".to_lower());         //? expect: hello, world! 123
+println("ünïcode".to_upper());                   //? expect: üNïCODE
+println("ÜNÏCODE".to_lower());                   //? expect: ÜnÏcode
+println("λx".to_upper());                        //? expect: λX
+println("abc".to_upper().to_lower());            //? expect: abc
+println("MiXeD".to_lower() == "mixed");          //? expect: true

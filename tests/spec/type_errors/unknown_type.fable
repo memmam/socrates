@@ -1,0 +1,16 @@
+// E0401: unknown type names, with "did you mean" suggestions for builtin and
+// user-defined types; an unknown enum in a qualified variant pattern is also
+// E0401.
+//? error: E0401
+//? error: unknown type `Strng`
+//? error: unknown type `Booll`
+//? error: unknown type `Colour`
+//? error: unknown enum `Foo`
+enum Color { Red, Green }
+let s: Strng = "hi";                 // note: did you mean `String`?
+fn takes(x: Int) -> Booll { true }   // note: did you mean `Bool`?
+let c: Colour = Color.Red;           // note: did you mean `Color`?
+let z: Int = match 1 {
+    Foo.Bar -> 1,
+    _ -> 0,
+};

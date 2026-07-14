@@ -1,0 +1,646 @@
+//! The native (builtin) function registry: names, receivers, and type schemes.
+//!
+//! This module is pure data — the VM implements execution in `vm::call_native`
+//! with a `match` over [`Native`]. The type checker uses [`method`], [`free_fn`],
+//! and [`math_member`] to resolve names and [`Native::sig`] for typing.
+//!
+//! Scheme convention (see `NativeSig`): `Param(0)`/`Param(1)` are the receiver's
+//! type arguments (`List[T]` → P0; `Map[K, V]` → P0, P1; `Option[T]` → P0;
+//! `Result[T, E]` → P0, P1). Method-own generics start at `Param(4)` (e.g. the
+//! `U` in `List[T].map[U]`).
+
+use crate::types::Type;
+
+/// Every native function and method in the language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Native {
+    // Free functions
+    Print,
+    Println,
+    Str,
+    Panic,
+    Assert,
+    AssertEq,
+    Clock,
+    Input,
+    // math namespace
+    MathSqrt,
+    MathSin,
+    MathCos,
+    MathTan,
+    MathAtan,
+    MathAtan2,
+    MathLog,
+    MathLog2,
+    MathExp,
+    MathPow,
+    MathFloor,
+    MathCeil,
+    MathRound,
+    MathAbsInt,
+    MathAbs,
+    MathMin,
+    MathMax,
+    MathMinFloat,
+    MathMaxFloat,
+    MathRandom,
+    MathSeed,
+    // List methods
+    ListLen,
+    ListIsEmpty,
+    ListPush,
+    ListPop,
+    ListInsert,
+    ListRemove,
+    ListGet,
+    ListFirst,
+    ListLast,
+    ListContains,
+    ListIndexOf,
+    ListReverse,
+    ListSort,
+    ListSortBy,
+    ListMap,
+    ListFilter,
+    ListEach,
+    ListFold,
+    ListAny,
+    ListAll,
+    ListFind,
+    ListFlatMap,
+    ListZip,
+    ListEnumerate,
+    ListSlice,
+    ListConcat,
+    ListJoin,
+    ListClone,
+    ListClear,
+    // String methods
+    StrLen,
+    StrByteLen,
+    StrIsEmpty,
+    StrChars,
+    StrSplit,
+    StrTrim,
+    StrToUpper,
+    StrToLower,
+    StrContains,
+    StrStartsWith,
+    StrEndsWith,
+    StrReplace,
+    StrSlice,
+    StrCharAt,
+    StrIndexOf,
+    StrRepeat,
+    StrPadLeft,
+    StrPadRight,
+    StrParseInt,
+    StrParseFloat,
+    StrToString,
+    // Map methods
+    MapLen,
+    MapIsEmpty,
+    MapGet,
+    MapInsert,
+    MapRemove,
+    MapContainsKey,
+    MapKeys,
+    MapValues,
+    MapEntries,
+    MapClear,
+    MapClone,
+    // Int methods
+    IntToFloat,
+    IntToString,
+    IntAbs,
+    IntPow,
+    IntMin,
+    IntMax,
+    // Float methods
+    FloatToInt,
+    FloatToString,
+    FloatAbs,
+    FloatFloor,
+    FloatCeil,
+    FloatRound,
+    FloatSqrt,
+    FloatIsNan,
+    // Option methods
+    OptIsSome,
+    OptIsNone,
+    OptUnwrap,
+    OptUnwrapOr,
+    OptMap,
+    OptAndThen,
+    OptOr,
+    // Result methods
+    ResIsOk,
+    ResIsErr,
+    ResUnwrap,
+    ResUnwrapOr,
+    ResUnwrapErr,
+    ResMap,
+    ResMapErr,
+    ResAndThen,
+    // Range methods
+    RangeToList,
+    RangeContains,
+    RangeLen,
+    RangeMap,
+    RangeFilter,
+    RangeEach,
+    RangeFold,
+    RangeRev,
+}
+
+/// The type scheme of a native. `params` excludes the receiver for methods.
+/// `generics` is how many scheme parameters are used in total (receiver args
+/// and method-own); the checker instantiates `Param(0)..Param(generics)` — with
+/// method-own params living at indices 4+ — as fresh inference variables.
+pub struct NativeSig {
+    pub params: Vec<Type>,
+    pub ret: Type,
+    /// Highest `Param` index used, plus one (0 for fully monomorphic).
+    pub max_param: u32,
+}
+
+/// Receiver kind for method lookup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Recv {
+    Int,
+    Float,
+    Str,
+    List,
+    Map,
+    Range,
+    Option_,
+    Result_,
+}
+
+impl Recv {
+    pub fn describe(self) -> &'static str {
+        match self {
+            Recv::Int => "Int",
+            Recv::Float => "Float",
+            Recv::Str => "String",
+            Recv::List => "List",
+            Recv::Map => "Map",
+            Recv::Range => "Range",
+            Recv::Option_ => "Option",
+            Recv::Result_ => "Result",
+        }
+    }
+}
+
+// Scheme parameter shorthands.
+fn p0() -> Type {
+    Type::Param(0)
+}
+fn p1() -> Type {
+    Type::Param(1)
+}
+fn p4() -> Type {
+    Type::Param(4)
+}
+fn list(t: Type) -> Type {
+    Type::List(Box::new(t))
+}
+fn map_(k: Type, v: Type) -> Type {
+    Type::Map(Box::new(k), Box::new(v))
+}
+fn opt(t: Type) -> Type {
+    Type::Named(crate::types::OPTION_DEF, vec![t])
+}
+fn res(t: Type, e: Type) -> Type {
+    Type::Named(crate::types::RESULT_DEF, vec![t, e])
+}
+fn func(params: Vec<Type>, ret: Type) -> Type {
+    Type::Fn(params, Box::new(ret))
+}
+fn tup(ts: Vec<Type>) -> Type {
+    Type::Tuple(ts)
+}
+
+use Type::{Bool, Float, Int, Str as TStr, Unit};
+
+impl Native {
+    /// Resolve a method by receiver kind and name.
+    pub fn method(recv: Recv, name: &str) -> Option<Native> {
+        use Native::*;
+        Some(match (recv, name) {
+            (Recv::List, "len") => ListLen,
+            (Recv::List, "is_empty") => ListIsEmpty,
+            (Recv::List, "push") => ListPush,
+            (Recv::List, "pop") => ListPop,
+            (Recv::List, "insert") => ListInsert,
+            (Recv::List, "remove") => ListRemove,
+            (Recv::List, "get") => ListGet,
+            (Recv::List, "first") => ListFirst,
+            (Recv::List, "last") => ListLast,
+            (Recv::List, "contains") => ListContains,
+            (Recv::List, "index_of") => ListIndexOf,
+            (Recv::List, "reverse") => ListReverse,
+            (Recv::List, "sort") => ListSort,
+            (Recv::List, "sort_by") => ListSortBy,
+            (Recv::List, "map") => ListMap,
+            (Recv::List, "filter") => ListFilter,
+            (Recv::List, "each") => ListEach,
+            (Recv::List, "fold") => ListFold,
+            (Recv::List, "any") => ListAny,
+            (Recv::List, "all") => ListAll,
+            (Recv::List, "find") => ListFind,
+            (Recv::List, "flat_map") => ListFlatMap,
+            (Recv::List, "zip") => ListZip,
+            (Recv::List, "enumerate") => ListEnumerate,
+            (Recv::List, "slice") => ListSlice,
+            (Recv::List, "concat") => ListConcat,
+            (Recv::List, "join") => ListJoin,
+            (Recv::List, "clone") => ListClone,
+            (Recv::List, "clear") => ListClear,
+
+            (Recv::Str, "len") => StrLen,
+            (Recv::Str, "byte_len") => StrByteLen,
+            (Recv::Str, "is_empty") => StrIsEmpty,
+            (Recv::Str, "chars") => StrChars,
+            (Recv::Str, "split") => StrSplit,
+            (Recv::Str, "trim") => StrTrim,
+            (Recv::Str, "to_upper") => StrToUpper,
+            (Recv::Str, "to_lower") => StrToLower,
+            (Recv::Str, "contains") => StrContains,
+            (Recv::Str, "starts_with") => StrStartsWith,
+            (Recv::Str, "ends_with") => StrEndsWith,
+            (Recv::Str, "replace") => StrReplace,
+            (Recv::Str, "slice") => StrSlice,
+            (Recv::Str, "char_at") => StrCharAt,
+            (Recv::Str, "index_of") => StrIndexOf,
+            (Recv::Str, "repeat") => StrRepeat,
+            (Recv::Str, "pad_left") => StrPadLeft,
+            (Recv::Str, "pad_right") => StrPadRight,
+            (Recv::Str, "parse_int") => StrParseInt,
+            (Recv::Str, "parse_float") => StrParseFloat,
+            (Recv::Str, "to_string") => StrToString,
+
+            (Recv::Map, "len") => MapLen,
+            (Recv::Map, "is_empty") => MapIsEmpty,
+            (Recv::Map, "get") => MapGet,
+            (Recv::Map, "insert") => MapInsert,
+            (Recv::Map, "remove") => MapRemove,
+            (Recv::Map, "contains_key") => MapContainsKey,
+            (Recv::Map, "keys") => MapKeys,
+            (Recv::Map, "values") => MapValues,
+            (Recv::Map, "entries") => MapEntries,
+            (Recv::Map, "clear") => MapClear,
+            (Recv::Map, "clone") => MapClone,
+
+            (Recv::Int, "to_float") => IntToFloat,
+            (Recv::Int, "to_string") => IntToString,
+            (Recv::Int, "abs") => IntAbs,
+            (Recv::Int, "pow") => IntPow,
+            (Recv::Int, "min") => IntMin,
+            (Recv::Int, "max") => IntMax,
+
+            (Recv::Float, "to_int") => FloatToInt,
+            (Recv::Float, "to_string") => FloatToString,
+            (Recv::Float, "abs") => FloatAbs,
+            (Recv::Float, "floor") => FloatFloor,
+            (Recv::Float, "ceil") => FloatCeil,
+            (Recv::Float, "round") => FloatRound,
+            (Recv::Float, "sqrt") => FloatSqrt,
+            (Recv::Float, "is_nan") => FloatIsNan,
+
+            (Recv::Option_, "is_some") => OptIsSome,
+            (Recv::Option_, "is_none") => OptIsNone,
+            (Recv::Option_, "unwrap") => OptUnwrap,
+            (Recv::Option_, "unwrap_or") => OptUnwrapOr,
+            (Recv::Option_, "map") => OptMap,
+            (Recv::Option_, "and_then") => OptAndThen,
+            (Recv::Option_, "or") => OptOr,
+
+            (Recv::Result_, "is_ok") => ResIsOk,
+            (Recv::Result_, "is_err") => ResIsErr,
+            (Recv::Result_, "unwrap") => ResUnwrap,
+            (Recv::Result_, "unwrap_or") => ResUnwrapOr,
+            (Recv::Result_, "unwrap_err") => ResUnwrapErr,
+            (Recv::Result_, "map") => ResMap,
+            (Recv::Result_, "map_err") => ResMapErr,
+            (Recv::Result_, "and_then") => ResAndThen,
+
+            (Recv::Range, "to_list") => RangeToList,
+            (Recv::Range, "contains") => RangeContains,
+            (Recv::Range, "len") => RangeLen,
+            (Recv::Range, "map") => RangeMap,
+            (Recv::Range, "filter") => RangeFilter,
+            (Recv::Range, "each") => RangeEach,
+            (Recv::Range, "fold") => RangeFold,
+            (Recv::Range, "rev") => RangeRev,
+
+            _ => return None,
+        })
+    }
+
+    /// Resolve a free (prelude) function by name.
+    pub fn free_fn(name: &str) -> Option<Native> {
+        use Native::*;
+        Some(match name {
+            "print" => Print,
+            "println" => Println,
+            "str" => Str,
+            "panic" => Panic,
+            "assert" => Assert,
+            "assert_eq" => AssertEq,
+            "clock" => Clock,
+            "input" => Input,
+            _ => return None,
+        })
+    }
+
+    /// Resolve a `math.<name>` member. Returns either a function or a constant.
+    pub fn math_member(name: &str) -> Option<MathMember> {
+        use Native::*;
+        Some(match name {
+            "pi" => MathMember::Const(std::f64::consts::PI),
+            "e" => MathMember::Const(std::f64::consts::E),
+            "sqrt" => MathMember::Fn(MathSqrt),
+            "sin" => MathMember::Fn(MathSin),
+            "cos" => MathMember::Fn(MathCos),
+            "tan" => MathMember::Fn(MathTan),
+            "atan" => MathMember::Fn(MathAtan),
+            "atan2" => MathMember::Fn(MathAtan2),
+            "log" => MathMember::Fn(MathLog),
+            "log2" => MathMember::Fn(MathLog2),
+            "exp" => MathMember::Fn(MathExp),
+            "pow" => MathMember::Fn(MathPow),
+            "floor" => MathMember::Fn(MathFloor),
+            "ceil" => MathMember::Fn(MathCeil),
+            "round" => MathMember::Fn(MathRound),
+            "abs_int" => MathMember::Fn(MathAbsInt),
+            "abs" => MathMember::Fn(MathAbs),
+            "min" => MathMember::Fn(MathMin),
+            "max" => MathMember::Fn(MathMax),
+            "min_float" => MathMember::Fn(MathMinFloat),
+            "max_float" => MathMember::Fn(MathMaxFloat),
+            "random" => MathMember::Fn(MathRandom),
+            "seed" => MathMember::Fn(MathSeed),
+            _ => return None,
+        })
+    }
+
+    pub fn name(self) -> &'static str {
+        use Native::*;
+        match self {
+            Print => "print",
+            Println => "println",
+            Str => "str",
+            Panic => "panic",
+            Assert => "assert",
+            AssertEq => "assert_eq",
+            Clock => "clock",
+            Input => "input",
+            MathSqrt => "math.sqrt",
+            MathSin => "math.sin",
+            MathCos => "math.cos",
+            MathTan => "math.tan",
+            MathAtan => "math.atan",
+            MathAtan2 => "math.atan2",
+            MathLog => "math.log",
+            MathLog2 => "math.log2",
+            MathExp => "math.exp",
+            MathPow => "math.pow",
+            MathFloor => "math.floor",
+            MathCeil => "math.ceil",
+            MathRound => "math.round",
+            MathAbsInt => "math.abs_int",
+            MathAbs => "math.abs",
+            MathMin => "math.min",
+            MathMax => "math.max",
+            MathMinFloat => "math.min_float",
+            MathMaxFloat => "math.max_float",
+            MathRandom => "math.random",
+            MathSeed => "math.seed",
+            ListLen => "len",
+            ListIsEmpty => "is_empty",
+            ListPush => "push",
+            ListPop => "pop",
+            ListInsert => "insert",
+            ListRemove => "remove",
+            ListGet => "get",
+            ListFirst => "first",
+            ListLast => "last",
+            ListContains => "contains",
+            ListIndexOf => "index_of",
+            ListReverse => "reverse",
+            ListSort => "sort",
+            ListSortBy => "sort_by",
+            ListMap => "map",
+            ListFilter => "filter",
+            ListEach => "each",
+            ListFold => "fold",
+            ListAny => "any",
+            ListAll => "all",
+            ListFind => "find",
+            ListFlatMap => "flat_map",
+            ListZip => "zip",
+            ListEnumerate => "enumerate",
+            ListSlice => "slice",
+            ListConcat => "concat",
+            ListJoin => "join",
+            ListClone => "clone",
+            ListClear => "clear",
+            StrLen => "len",
+            StrByteLen => "byte_len",
+            StrIsEmpty => "is_empty",
+            StrChars => "chars",
+            StrSplit => "split",
+            StrTrim => "trim",
+            StrToUpper => "to_upper",
+            StrToLower => "to_lower",
+            StrContains => "contains",
+            StrStartsWith => "starts_with",
+            StrEndsWith => "ends_with",
+            StrReplace => "replace",
+            StrSlice => "slice",
+            StrCharAt => "char_at",
+            StrIndexOf => "index_of",
+            StrRepeat => "repeat",
+            StrPadLeft => "pad_left",
+            StrPadRight => "pad_right",
+            StrParseInt => "parse_int",
+            StrParseFloat => "parse_float",
+            StrToString => "to_string",
+            MapLen => "len",
+            MapIsEmpty => "is_empty",
+            MapGet => "get",
+            MapInsert => "insert",
+            MapRemove => "remove",
+            MapContainsKey => "contains_key",
+            MapKeys => "keys",
+            MapValues => "values",
+            MapEntries => "entries",
+            MapClear => "clear",
+            MapClone => "clone",
+            IntToFloat => "to_float",
+            IntToString => "to_string",
+            IntAbs => "abs",
+            IntPow => "pow",
+            IntMin => "min",
+            IntMax => "max",
+            FloatToInt => "to_int",
+            FloatToString => "to_string",
+            FloatAbs => "abs",
+            FloatFloor => "floor",
+            FloatCeil => "ceil",
+            FloatRound => "round",
+            FloatSqrt => "sqrt",
+            FloatIsNan => "is_nan",
+            OptIsSome => "is_some",
+            OptIsNone => "is_none",
+            OptUnwrap => "unwrap",
+            OptUnwrapOr => "unwrap_or",
+            OptMap => "map",
+            OptAndThen => "and_then",
+            OptOr => "or",
+            ResIsOk => "is_ok",
+            ResIsErr => "is_err",
+            ResUnwrap => "unwrap",
+            ResUnwrapOr => "unwrap_or",
+            ResUnwrapErr => "unwrap_err",
+            ResMap => "map",
+            ResMapErr => "map_err",
+            ResAndThen => "and_then",
+            RangeToList => "to_list",
+            RangeContains => "contains",
+            RangeLen => "len",
+            RangeMap => "map",
+            RangeFilter => "filter",
+            RangeEach => "each",
+            RangeFold => "fold",
+            RangeRev => "rev",
+        }
+    }
+
+    /// The type scheme. For methods, `params` excludes the receiver.
+    pub fn sig(self) -> NativeSig {
+        use Native::*;
+        // (params, ret, max_param)
+        let (params, ret, max_param): (Vec<Type>, Type, u32) = match self {
+            Print | Println => (vec![p0()], Unit, 1),
+            Str => (vec![p0()], TStr, 1),
+            // `panic` returns a scheme variable so it typechecks anywhere.
+            Panic => (vec![TStr], p0(), 1),
+            Assert => (vec![Bool], Unit, 0),
+            AssertEq => (vec![p0(), p0()], Unit, 1),
+            Clock => (vec![], Float, 0),
+            Input => (vec![], opt(TStr), 0),
+
+            MathSqrt | MathSin | MathCos | MathTan | MathAtan | MathLog | MathLog2 | MathExp
+            | MathFloor | MathCeil | MathRound | MathAbs => (vec![Float], Float, 0),
+            MathAtan2 | MathPow | MathMinFloat | MathMaxFloat => (vec![Float, Float], Float, 0),
+            MathAbsInt => (vec![Int], Int, 0),
+            MathMin | MathMax => (vec![Int, Int], Int, 0),
+            MathRandom => (vec![], Float, 0),
+            MathSeed => (vec![Int], Unit, 0),
+
+            // List[T] — receiver args at P0.
+            ListLen => (vec![], Int, 1),
+            ListIsEmpty => (vec![], Bool, 1),
+            ListPush => (vec![p0()], Unit, 1),
+            ListPop => (vec![], opt(p0()), 1),
+            ListInsert => (vec![Int, p0()], Unit, 1),
+            ListRemove => (vec![Int], p0(), 1),
+            ListGet => (vec![Int], opt(p0()), 1),
+            ListFirst | ListLast => (vec![], opt(p0()), 1),
+            ListContains => (vec![p0()], Bool, 1),
+            ListIndexOf => (vec![p0()], opt(Int), 1),
+            ListReverse => (vec![], list(p0()), 1),
+            ListSort => (vec![], list(p0()), 1),
+            ListSortBy => (vec![func(vec![p0(), p0()], Int)], list(p0()), 1),
+            ListMap => (vec![func(vec![p0()], p4())], list(p4()), 5),
+            ListFilter => (vec![func(vec![p0()], Bool)], list(p0()), 1),
+            ListEach => (vec![func(vec![p0()], Unit)], Unit, 1),
+            ListFold => (vec![p4(), func(vec![p4(), p0()], p4())], p4(), 5),
+            ListAny | ListAll => (vec![func(vec![p0()], Bool)], Bool, 1),
+            ListFind => (vec![func(vec![p0()], Bool)], opt(p0()), 1),
+            ListFlatMap => (vec![func(vec![p0()], list(p4()))], list(p4()), 5),
+            ListZip => (vec![list(p4())], list(tup(vec![p0(), p4()])), 5),
+            ListEnumerate => (vec![], list(tup(vec![Int, p0()])), 1),
+            ListSlice => (vec![Int, Int], list(p0()), 1),
+            ListConcat => (vec![list(p0())], list(p0()), 1),
+            ListJoin => (vec![TStr], TStr, 1), // receiver constrained to List[String] at check time
+            ListClone => (vec![], list(p0()), 1),
+            ListClear => (vec![], Unit, 1),
+
+            StrLen | StrByteLen => (vec![], Int, 0),
+            StrIsEmpty => (vec![], Bool, 0),
+            StrChars => (vec![], list(TStr), 0),
+            StrSplit => (vec![TStr], list(TStr), 0),
+            StrTrim | StrToUpper | StrToLower => (vec![], TStr, 0),
+            StrContains | StrStartsWith | StrEndsWith => (vec![TStr], Bool, 0),
+            StrReplace => (vec![TStr, TStr], TStr, 0),
+            StrSlice => (vec![Int, Int], TStr, 0),
+            StrCharAt => (vec![Int], opt(TStr), 0),
+            StrIndexOf => (vec![TStr], opt(Int), 0),
+            StrRepeat => (vec![Int], TStr, 0),
+            StrPadLeft | StrPadRight => (vec![Int, TStr], TStr, 0),
+            StrParseInt => (vec![], opt(Int), 0),
+            StrParseFloat => (vec![], opt(Float), 0),
+            StrToString => (vec![], TStr, 0),
+
+            // Map[K, V] — receiver args at P0 (K), P1 (V).
+            MapLen => (vec![], Int, 2),
+            MapIsEmpty => (vec![], Bool, 2),
+            MapGet => (vec![p0()], opt(p1()), 2),
+            MapInsert => (vec![p0(), p1()], opt(p1()), 2),
+            MapRemove => (vec![p0()], opt(p1()), 2),
+            MapContainsKey => (vec![p0()], Bool, 2),
+            MapKeys => (vec![], list(p0()), 2),
+            MapValues => (vec![], list(p1()), 2),
+            MapEntries => (vec![], list(tup(vec![p0(), p1()])), 2),
+            MapClear => (vec![], Unit, 2),
+            MapClone => (vec![], map_(p0(), p1()), 2),
+
+            IntToFloat => (vec![], Float, 0),
+            IntToString => (vec![], TStr, 0),
+            IntAbs => (vec![], Int, 0),
+            IntPow => (vec![Int], Int, 0),
+            IntMin | IntMax => (vec![Int], Int, 0),
+
+            FloatToInt => (vec![], Int, 0),
+            FloatToString => (vec![], TStr, 0),
+            FloatAbs | FloatFloor | FloatCeil | FloatRound | FloatSqrt => (vec![], Float, 0),
+            FloatIsNan => (vec![], Bool, 0),
+
+            // Option[T] — receiver arg at P0.
+            OptIsSome | OptIsNone => (vec![], Bool, 1),
+            OptUnwrap => (vec![], p0(), 1),
+            OptUnwrapOr => (vec![p0()], p0(), 1),
+            OptMap => (vec![func(vec![p0()], p4())], opt(p4()), 5),
+            OptAndThen => (vec![func(vec![p0()], opt(p4()))], opt(p4()), 5),
+            OptOr => (vec![opt(p0())], opt(p0()), 1),
+
+            // Result[T, E] — receiver args at P0 (T), P1 (E).
+            ResIsOk | ResIsErr => (vec![], Bool, 2),
+            ResUnwrap => (vec![], p0(), 2),
+            ResUnwrapOr => (vec![p0()], p0(), 2),
+            ResUnwrapErr => (vec![], p1(), 2),
+            ResMap => (vec![func(vec![p0()], p4())], res(p4(), p1()), 5),
+            ResMapErr => (vec![func(vec![p1()], p4())], res(p0(), p4()), 5),
+            ResAndThen => (vec![func(vec![p0()], res(p4(), p1()))], res(p4(), p1()), 5),
+
+            RangeToList => (vec![], list(Int), 0),
+            RangeContains => (vec![Int], Bool, 0),
+            RangeLen => (vec![], Int, 0),
+            RangeMap => (vec![func(vec![Int], p4())], list(p4()), 5),
+            RangeFilter => (vec![func(vec![Int], Bool)], list(Int), 0),
+            RangeEach => (vec![func(vec![Int], Unit)], Unit, 0),
+            RangeFold => (vec![p4(), func(vec![p4(), Int], p4())], p4(), 5),
+            RangeRev => (vec![], list(Int), 0),
+        };
+        NativeSig { params, ret, max_param }
+    }
+}
+
+/// A `math.<name>` member: either a native function or a float constant.
+pub enum MathMember {
+    Fn(Native),
+    Const(f64),
+}

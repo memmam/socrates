@@ -1,0 +1,5 @@
+// SPEC §2.4 / diagnostics: a payload-carrying constructor used as a bare value
+// (not called) is an error; wrap it in a lambda to pass it as a function.
+//? error: E0409
+//? error: must be called
+let f = Some;

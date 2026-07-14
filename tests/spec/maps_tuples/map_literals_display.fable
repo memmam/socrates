@@ -1,0 +1,50 @@
+// SPEC 8.1 / 8.4: Map display is {k: v, ...} in insertion order; strings nested
+// inside containers are quoted; the empty map displays as {:}.
+let m = {"a": 1, "b": 2, "c": 3};
+println(m);                       //? expect: {"a": 1, "b": 2, "c": 3}
+println(m.len());                 //? expect: 3
+println(m.is_empty());            //? expect: false
+
+// Insertion order is the literal's order, not sorted order.
+let unsorted = {"z": 26, "a": 1, "m": 13};
+println(unsorted);                //? expect: {"z": 26, "a": 1, "m": 13}
+
+// String values are quoted inside the container; escapes are shown.
+let sv = {"greet": "hi\n", "tab": "a\tb"};
+println(sv);                      //? expect: {"greet": "hi\n", "tab": "a\tb"}
+
+// Non-string keys display in str() form, unquoted.
+let ik = {1: "one", 2: "two"};
+println(ik);                      //? expect: {1: "one", 2: "two"}
+
+// Nested containers.
+let nested = {"in": {1: true}, "out": {2: false}};
+println(nested);                  //? expect: {"in": {1: true}, "out": {2: false}}
+
+// The empty map displays as {:}.
+let e: Map[String, Int] = {:};
+println(e);                       //? expect: {:}
+println(e.len());                 //? expect: 0
+println(e.is_empty());            //? expect: true
+
+// Interpolation uses the same conversion as str().
+println("m = {m}");               //? expect: m = {"a": 1, "b": 2, "c": 3}
+println(str(ik));                 //? expect: {1: "one", 2: "two"}
+
+// Duplicate keys in a literal: the later value wins; the entry keeps the
+// position of the key's first occurrence.
+let dup = {"a": 1, "b": 2, "a": 3};
+println(dup);                     //? expect: {"a": 3, "b": 2}
+println(dup.len());               //? expect: 2
+println(dup["a"]);                //? expect: 3
+
+// Same rule for structurally-equal non-literal duplicate keys.
+let k1 = "du" + "p";
+let m2 = {k1: 10, "dup": 20, "other": 0};
+println(m2.len());                //? expect: 2
+println(m2["dup"]);               //? expect: 20
+
+// Triple duplicates: the last one still wins.
+let m3 = {0: "x", 0: "y", 0: "z"};
+println(m3);                      //? expect: {0: "z"}
+println(m3.len());                //? expect: 1

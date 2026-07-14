@@ -1,0 +1,30 @@
+// SPEC 3.2: == / != are structural (deep) for all types, including through
+// struct fields, nested structs, and reference-typed fields like lists.
+struct Pt { x: Int, y: Int }
+struct Line { a: Pt, b: Pt }
+struct Bag { items: List[Int], label: String }
+struct Pair[A, B] { first: A, second: B }
+
+let l1 = Line { a: Pt { x: 0, y: 0 }, b: Pt { x: 3, y: 4 } };
+let l2 = Line { a: Pt { x: 0, y: 0 }, b: Pt { x: 3, y: 4 } };
+println(l1 == l2);             //? expect: true
+
+l2.b.y = 9;
+println(l1 == l2);             //? expect: false
+println(l1 != l2);             //? expect: true
+
+// Equality is by value, not identity: two distinct objects compare equal...
+let g1 = Bag { items: [1, 2, 3], label: "nums" };
+let g2 = Bag { items: [1, 2, 3], label: "nums" };
+println(g1 == g2);             //? expect: true
+// ...and diverge once one list mutates.
+g2.items.push(4);
+println(g1 == g2);             //? expect: false
+println(g1.label == g2.label); //? expect: true
+
+// Generic struct equality is deep too.
+let p1 = Pair { first: "a", second: 1.5 };
+let p2 = Pair { first: "a", second: 1.5 };
+println(p1 == p2);             //? expect: true
+p2.first = "b";
+println(p1 == p2);             //? expect: false

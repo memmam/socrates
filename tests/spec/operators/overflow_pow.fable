@@ -1,0 +1,4 @@
+// SPEC 8.5 / 6: Int.pow panics on overflow; 2^62 still fits in 64-bit signed.
+//? panic: integer overflow
+println(2.pow(62));          //? expect: 4611686018427387904
+println(2.pow(63));

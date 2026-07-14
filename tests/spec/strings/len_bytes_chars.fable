@@ -1,0 +1,16 @@
+// SPEC 8.3: len() counts Unicode scalars (not bytes); byte_len() counts UTF-8
+// bytes; chars() yields one-character Strings; to_string() is the identity.
+let s = "héλ🙂";
+println(s.len());                      //? expect: 4
+println(s.byte_len());                 //? expect: 9
+println("hello".len());                //? expect: 5
+println("hello".byte_len());           //? expect: 5
+println("".len());                     //? expect: 0
+println("".byte_len());                //? expect: 0
+println("".is_empty());                //? expect: true
+println(" ".is_empty());               //? expect: false
+println(s.chars());                    //? expect: ["h", "é", "λ", "🙂"]
+println("".chars());                   //? expect: []
+println(s.chars().len() == s.len());   //? expect: true
+println(s.to_string());                //? expect: héλ🙂
+println(s.to_string() == s);           //? expect: true

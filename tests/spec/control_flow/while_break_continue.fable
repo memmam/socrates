@@ -1,0 +1,32 @@
+// SPEC 3.3: break and continue inside while loops.
+// `while true` terminated by break
+let mut n = 0;
+while true {
+    n += 1;
+    if n == 4 { break; }
+}
+println(n);              //? expect: 4
+
+// continue skips the rest of the body
+let mut i = 0;
+let mut odds = 0;
+while i < 10 {
+    i += 1;
+    if i % 2 == 0 { continue; }
+    odds += 1;
+}
+println("{i} {odds}");   //? expect: 10 5
+
+// break exits immediately: code after it in the body does not run
+let mut log = "";
+let mut k = 0;
+while k < 100 {
+    k += 1;
+    log = log + "a";
+    if k == 2 {
+        break;
+    }
+    log = log + "b";
+}
+println(log);            //? expect: aba
+println(k);              //? expect: 2

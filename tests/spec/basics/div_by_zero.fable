@@ -1,0 +1,3 @@
+//? panic: division by zero
+let x = 10;
+println(x / 0);

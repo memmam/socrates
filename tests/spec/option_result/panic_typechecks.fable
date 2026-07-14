@@ -1,0 +1,29 @@
+// SPEC §7: `panic(msg)` typechecks at any expected type, so it can sit in
+// value positions (if/else arms, match arms, function tails) of any type.
+fn pick(c: Bool) -> Int {
+    if c { 1 } else { panic("no") }
+}
+println(pick(true));                //? expect: 1
+
+let x: Int = if true { 2 } else { panic("no") };
+println(x);                         //? expect: 2
+
+let s: String = match Some(3) {
+    Some(n) -> "n={n}",
+    None -> panic("unreachable"),
+};
+println(s);                         //? expect: n=3
+
+fn get(o: Option[Int]) -> Int {
+    match o {
+        Some(v) -> v,
+        None -> panic("empty"),
+    }
+}
+println(get(Some(9)));              //? expect: 9
+
+// panic() where an Option is expected also typechecks.
+fn find_even(xs: List[Int]) -> Option[Int] {
+    if xs.len() == 0 { panic("empty input") } else { xs.find(|x| x % 2 == 0) }
+}
+println(find_even([3, 4, 5]));      //? expect: Some(4)

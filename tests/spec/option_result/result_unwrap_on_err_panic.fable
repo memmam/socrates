@@ -1,0 +1,6 @@
+// SPEC §8.6: `unwrap()` on `Err` panics, showing the error value.
+//? panic: called `unwrap()` on an `Err`: boom
+let r: Result[Int, String] = Err("boom");
+println(r.is_err());               //? expect: true
+println(r.unwrap());
+println("unreachable");

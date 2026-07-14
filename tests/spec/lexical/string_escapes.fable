@@ -1,0 +1,17 @@
+// SPEC 1.3: string escapes \n \t \r \\ \" \0 \{ and \u{...}.
+// A literal `{` is written `\{`; `}` outside an interpolation is a plain char.
+println("a\nb");                    //? expect: a
+                                    //? expect: b
+println("back\\slash");             //? expect: back\slash
+println("say \"hi\"");              //? expect: say "hi"
+println("brace\{not interp}");      //? expect: brace{not interp}
+println("closing } is plain");      //? expect: closing } is plain
+println("\u{41}\u{0041}");          //? expect: AA
+println("\u{41}\u{1F600}\u{7a}");   //? expect: A😀z
+// \0, \r, \t produce single characters (checked by length, not display).
+println("\0".len());                //? expect: 1
+println("a\rb".len());              //? expect: 3
+println("a\tb".len());              //? expect: 3
+println("\u{10FFFF}".len());        //? expect: 1
+// SPEC 8.1: strings nested in containers are quoted, escaping \n \t \" \\.
+println(["a\tb", "c\"d", "e\nf", "g\\h"]);  //? expect: ["a\tb", "c\"d", "e\nf", "g\\h"]

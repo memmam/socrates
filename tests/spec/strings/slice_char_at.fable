@@ -1,0 +1,22 @@
+// SPEC 8.3: slice(start, end) works by CHAR index (not bytes), start
+// inclusive / end exclusive, out-of-range indices clamped; char_at(i)
+// returns Option[String].
+let s = "héλ🙂!";
+println(s.slice(1, 3));                //? expect: éλ
+println(s.slice(0, 5));                //? expect: héλ🙂!
+println(s.slice(2, 100));              //? expect: λ🙂!
+println(s.slice(-3, 2));               //? expect: hé
+println("[" + s.slice(3, 2) + "]");    //? expect: []
+println("[" + s.slice(5, 5) + "]");    //? expect: []
+println("[" + s.slice(9, 12) + "]");   //? expect: []
+println("hello".slice(1, 4));          //? expect: ell
+println("cœur🙂".slice(1, 4));         //? expect: œur
+println(s.char_at(0));                 //? expect: Some("h")
+println(s.char_at(1));                 //? expect: Some("é")
+println(s.char_at(3));                 //? expect: Some("🙂")
+println(s.char_at(4));                 //? expect: Some("!")
+println(s.char_at(5));                 //? expect: None
+println(s.char_at(-1));                //? expect: None
+println("".char_at(0));                //? expect: None
+println(s.char_at(1).unwrap());        //? expect: é
+println(s.char_at(2).unwrap().byte_len()); //? expect: 2

@@ -1,0 +1,16 @@
+// break/continue inside a block-expression operand must unwind expression
+// temporaries, not just declared locals.
+let mut total = 0;
+let mut i = 0;
+while i < 5 {
+    i += 1;
+    if i == 4 { break; }
+    // The `100 +` temp is live when continue/break fire inside the block.
+    total = 100 + {
+        if i == 2 { continue; }
+        let bonus = i * 10;
+        bonus
+    };
+}
+println(total);      //? expect: 130
+println(i);          //? expect: 4

@@ -1,0 +1,7 @@
+//? error: E0302
+//? error: cannot infer
+// SPEC § 2.6: parameter types still unknown after checking are a compile error.
+// `a + b` could be Int, Float, or String — nothing pins it down.
+let g = |a, b| a + b;
+// A generic native used as a value with no context is equally ambiguous.
+let p = println;

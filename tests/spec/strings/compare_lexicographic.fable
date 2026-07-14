@@ -1,0 +1,20 @@
+// SPEC 3.1: < <= > >= on Strings compare lexicographically by byte order
+// (for UTF-8 this equals Unicode scalar order); == is structural (SPEC 3.2).
+println("apple" < "banana");        //? expect: true
+println("a" < "ab");                //? expect: true
+println("Z" < "a");                 //? expect: true
+println("" < "a");                  //? expect: true
+println("" <= "");                  //? expect: true
+println("a" < "a");                 //? expect: false
+println("abc" < "abd");             //? expect: true
+println("ab" > "aB");               //? expect: true
+println("b" >= "a");                //? expect: true
+// multibyte scalars sort after all ASCII
+println("é" > "z");                 //? expect: true
+println("🙂" > "é");                //? expect: true
+println("a🙂" < "ab");              //? expect: false
+println(("m" < "n") && ("n" <= "n")); //? expect: true
+// sort() on List[String] uses the same ordering
+println(["pear", "Fig", "apple", "é"].sort());  //? expect: ["Fig", "apple", "pear", "é"]
+println("abc" == "ab" + "c");       //? expect: true
+println("abc" != "abd");            //? expect: true

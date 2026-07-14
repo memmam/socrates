@@ -1,0 +1,21 @@
+// An arm covered by earlier arms is an unreachable-arm warning (W0101),
+// not an error: the program still compiles and runs, and the first
+// matching arm wins.
+fn f(n: Int) -> String {
+    match n {
+        _ -> "wild",
+        0 -> "zero",
+    }
+}
+println(f(0));  //? expect: wild
+println(f(7));  //? expect: wild
+
+fn g(o: Option[Int]) -> Int {
+    match o {
+        Some(x) -> x,
+        None -> 0,
+        Some(9) -> 99,
+    }
+}
+println(g(Some(9)));  //? expect: 9
+println(g(None));     //? expect: 0

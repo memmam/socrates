@@ -1,0 +1,29 @@
+// Returning closures from functions; each call site gets independent state.
+fn make_counter() -> fn() -> Int {
+    let mut n = 0;
+    || { n += 1; n }
+}
+let c1 = make_counter();
+let c2 = make_counter();
+println(c1());            //? expect: 1
+println(c1());            //? expect: 2
+println(c2());            //? expect: 1
+println(c1());            //? expect: 3
+
+// The returned closure captures the function's parameters too.
+fn compose(f: fn(Int) -> Int, g: fn(Int) -> Int) -> fn(Int) -> Int {
+    |x| f(g(x))
+}
+let h = compose(|x| x + 1, |x| x * 10);
+println(h(4));            //? expect: 41
+
+// Curried form: nested lambdas, parameter types inferred from the
+// declared return type.
+fn adder3(a: Int) -> fn(Int) -> fn(Int) -> Int {
+    |b| |c| a + b + c
+}
+println(adder3(1)(2)(3)); //? expect: 6
+
+// Nested lambdas without a named function.
+let make = |a: Int| |b: Int| a + b;
+println(make(3)(4));      //? expect: 7

@@ -1,0 +1,13 @@
+// SPEC 2.1: Float is an IEEE-754 double. IEEE-754 requires every ordered
+// comparison involving NaN to be false (NaN is unordered).
+// BUG: the implementation returns true for `nan > x`, `nan >= x`,
+// `x > nan`, and `x >= nan` (apparently computed as the negation of <=/<).
+let n = 0.0 / 0.0;
+println(n < 1.0);      //? expect: false
+println(n <= 1.0);     //? expect: false
+println(n > 1.0);      //? expect: false
+println(n >= 1.0);     //? expect: false
+println(1.0 < n);      //? expect: false
+println(1.0 <= n);     //? expect: false
+println(1.0 > n);      //? expect: false
+println(1.0 >= n);     //? expect: false

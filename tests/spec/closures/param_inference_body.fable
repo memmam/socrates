@@ -1,0 +1,17 @@
+// SPEC § 2.6 / § 3.4: lambda parameter types may be inferred by unification
+// with the lambda's body (`|x| x + 1` infers `fn(Int) -> Int`).
+let inc = |x| x + 1;
+println(inc(41));          //? expect: 42
+
+let shout = |s| s + "!";
+println(shout("hey"));     //? expect: hey!
+
+let halve = |y| y * 0.5;
+println(halve(5.0));       //? expect: 2.5
+
+let negate = |b| !b;
+println(negate(false));    //? expect: true
+
+// `|x| x` alone is ambiguous, but an annotation on the binding resolves it.
+let id: fn(Int) -> Int = |x| x;
+println(id(7));            //? expect: 7

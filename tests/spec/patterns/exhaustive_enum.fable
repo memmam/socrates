@@ -1,0 +1,8 @@
+//? error: non-exhaustive
+enum Coin { Heads, Tails, Edge }
+fn flip(c: Coin) -> Int {
+    match c {
+        Coin.Heads -> 1,
+        Coin.Tails -> 0,
+    }
+}

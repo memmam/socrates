@@ -1,0 +1,6 @@
+// SPEC 8.1: Float display is the "shortest round-trip repr, but always with a
+// decimal point or exponent (`3.0`, `0.1`, `1e300`)" — the spec's own example
+// says 1e300 must display as `1e300`.
+// BUG: the implementation prints the full positional expansion
+// (1000...000.0, ~300 digits followed by ".0") instead of `1e300`.
+println(1e300);     //? expect: 1e300

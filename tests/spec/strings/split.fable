@@ -1,0 +1,16 @@
+// SPEC 8.3: split(sep). Empty separator splits into chars; adjacent
+// separators produce empty strings (like Rust); splitting "" on a non-empty
+// separator yields [""], while "".split("") yields [] (chars of "").
+println("a,b,c".split(","));           //? expect: ["a", "b", "c"]
+println("a,,b".split(","));            //? expect: ["a", "", "b"]
+println(",a,".split(","));             //? expect: ["", "a", ""]
+println("aaa".split("a"));             //? expect: ["", "", "", ""]
+println("".split(","));                //? expect: [""]
+println("abc".split(""));              //? expect: ["a", "b", "c"]
+println("".split(""));                 //? expect: []
+println("aXXbXXc".split("XX"));        //? expect: ["a", "b", "c"]
+println("héλ".split(""));              //? expect: ["h", "é", "λ"]
+println("no separator".split("|"));    //? expect: ["no separator"]
+println("π->τ->e".split("->"));        //? expect: ["π", "τ", "e"]
+println("a,b,c".split(",").len());     //? expect: 3
+println(",,".split(",").len());        //? expect: 3

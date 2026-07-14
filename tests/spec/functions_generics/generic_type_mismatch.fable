@@ -1,0 +1,6 @@
+// Two parameters sharing one type variable must unify: T is fixed to Int by
+// the first argument, so a String second argument is a type mismatch.
+//? error: E0301
+//? error: type mismatch
+fn bad[T](a: T, b: T) -> T { a }
+println(bad(1, "s"));

@@ -1,0 +1,24 @@
+// E0409: a data-carrying constructor must be called (bare `Some` or
+// `Shape.Circle` is not a value). E0410: `math` is a namespace, not a value.
+// E0411: an enum/struct type name is not a value. E0424 (SPEC 2.4): nullary
+// variants are written WITHOUT parentheses.
+//? error: E0409
+//? error: the constructor `Some` must be called
+//? error: the constructor `Shape.Circle` must be called
+//? error: E0410
+//? error: `math` is a namespace, not a value
+//? error: E0411
+//? error: `Shape` is a enum type, not a value
+//? error: `Point` is a struct type, not a value
+//? error: E0424
+//? error: variant `Empty` takes no arguments; write it without `(..)`
+//? error: variant `None` takes no arguments; write it without `(..)`
+enum Shape { Circle(Float), Empty }
+struct Point { x: Float, y: Float }
+let f: Option[Int] = Some;
+let g: Shape = Shape.Circle;
+let m: Float = math;
+let s: Int = Shape;
+let p: Int = Point;
+let e: Shape = Shape.Empty();
+let n: Option[Int] = None();

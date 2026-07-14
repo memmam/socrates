@@ -1,0 +1,21 @@
+// SPEC 8.3: contains / starts_with / ends_with take String needles.
+// The empty string is contained in, a prefix of, and a suffix of everything.
+println("hello world".contains("lo w"));       //? expect: true
+println("hello world".contains("world"));      //? expect: true
+println("hello world".contains("worlds"));     //? expect: false
+println("hello".contains(""));                 //? expect: true
+println("".contains(""));                      //? expect: true
+println("".contains("a"));                     //? expect: false
+println("héλ🙂".contains("λ"));                //? expect: true
+println("héλ🙂".contains("é" + "λ"));          //? expect: true
+println("hello".starts_with("he"));            //? expect: true
+println("hello".starts_with("el"));            //? expect: false
+println("hello".starts_with(""));              //? expect: true
+println("hello".starts_with("hello"));         //? expect: true
+println("hello".starts_with("hello world"));   //? expect: false
+println("héλ".starts_with("hé"));              //? expect: true
+println("hello".ends_with("llo"));             //? expect: true
+println("hello".ends_with("ll"));              //? expect: false
+println("hello".ends_with(""));                //? expect: true
+println("héλ🙂".ends_with("λ🙂"));             //? expect: true
+println("".starts_with("") && "".ends_with("")); //? expect: true

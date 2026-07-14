@@ -1,0 +1,16 @@
+// SPEC 1.3: integer literal forms — decimal, hex (0x), binary (0b),
+// underscores between digits. Also: `1..5` lexes as a range, not a float.
+println(0);                     //? expect: 0
+println(42);                    //? expect: 42
+println(0x2A);                  //? expect: 42
+println(0x2a);                  //? expect: 42
+println(0xff);                  //? expect: 255
+println(0b1010);                //? expect: 10
+println(0b0);                   //? expect: 0
+println(1_000_000);             //? expect: 1000000
+println(1_2_3);                 //? expect: 123
+println(0xFF_FF);               //? expect: 65535
+println(0b1010_1010);           //? expect: 170
+// A `.` not followed by a digit does not start a float: `1..5` is Int .. Int.
+println((1..5).to_list());      //? expect: [1, 2, 3, 4]
+println((1..=5).to_list());     //? expect: [1, 2, 3, 4, 5]

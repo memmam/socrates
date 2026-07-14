@@ -1,0 +1,7 @@
+//? error: E0323
+// All arms of a match expression must have the same type.
+let v = match 3 {
+    0 -> "zero",
+    _ -> 42,
+};
+println(v);

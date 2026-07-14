@@ -1,0 +1,7 @@
+// Strings may not contain a raw newline and must be closed before EOF.
+//? error: E0102
+//? error: unterminated string literal
+//? error: E0103
+//? error: unterminated string interpolation
+let s = "runs off the end of the line
+let t = "interpolation hole never closed {1 + 2

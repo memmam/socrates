@@ -1,0 +1,21 @@
+// SPEC §8.6 Option methods: is_some / is_none / unwrap / unwrap_or,
+// and §8.1 display format for enum values.
+let a = Some(5);
+let b: Option[Int] = None;
+println(a.is_some());              //? expect: true
+println(a.is_none());              //? expect: false
+println(b.is_some());              //? expect: false
+println(b.is_none());              //? expect: true
+println(a.unwrap());               //? expect: 5
+println(a.unwrap_or(0));           //? expect: 5
+println(b.unwrap_or(0));           //? expect: 0
+println(a);                        //? expect: Some(5)
+println(b);                        //? expect: None
+// Strings nested inside a variant are quoted (SPEC §8.1).
+println(Some("hi"));               //? expect: Some("hi")
+println(Some("a\nb"));             //? expect: Some("a\nb")
+println(Some([1, 2]));             //? expect: Some([1, 2])
+// Structural equality on enum values (SPEC §3.2).
+println(Some(1) == Some(1));       //? expect: true
+println(Some(1) == None);          //? expect: false
+println(Some("x").unwrap_or("y")); //? expect: x

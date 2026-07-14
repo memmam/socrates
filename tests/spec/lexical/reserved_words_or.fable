@@ -1,0 +1,2 @@
+//? error: `or` is not an operator; logical or is spelled `||`
+let b = true or false;

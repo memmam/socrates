@@ -1,0 +1,17 @@
+// Generic functions taking function-typed parameters; lambda parameter types
+// are inferred from the expected function type (SPEC 2.6, 3.4).
+fn apply[T, U](x: T, f: fn(T) -> U) -> U { f(x) }
+fn my_map[T, U](xs: List[T], f: fn(T) -> U) -> List[U] {
+    let out = [];
+    for x in xs { out.push(f(x)); }
+    out
+}
+
+println(apply(3, |n| n * n));               //? expect: 9
+println(apply("ab", |s| s.len()));          //? expect: 2
+println(my_map([1, 2, 3], |n| n * 10));     //? expect: [10, 20, 30]
+println(my_map(["a", "bb"], |s| s.len()));  //? expect: [1, 2]
+
+// Named functions are fine where a fn type is expected, too.
+fn shout(s: String) -> String { s.to_upper() }
+println(my_map(["hi", "yo"], shout));       //? expect: ["HI", "YO"]

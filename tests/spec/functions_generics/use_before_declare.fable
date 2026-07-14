@@ -1,0 +1,6 @@
+// Top-level statements run in order; using a global before its `let`
+// declaration line is a compile error (E0412).
+//? error: E0412
+//? error: used before its `let` declaration
+println(g);
+let g = 5;

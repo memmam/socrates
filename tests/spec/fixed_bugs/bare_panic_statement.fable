@@ -1,0 +1,4 @@
+//? panic: boom
+//? expect: before
+println("before");
+panic("boom");

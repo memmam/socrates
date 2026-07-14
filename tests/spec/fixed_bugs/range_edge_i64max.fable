@@ -1,0 +1,6 @@
+// Iterating Range methods must not crash the interpreter at i64::MAX.
+let max = 9223372036854775807;
+println(((max - 2)..=max).to_list());   //? expect: [9223372036854775805, 9223372036854775806, 9223372036854775807]
+println(((max - 1)..=max).rev());       //? expect: [9223372036854775807, 9223372036854775806]
+println(((max - 2)..=max).map(|x| x - max)); //? expect: [-2, -1, 0]
+println(((max - 2)..=max).fold(0, |a, x| a + (x - max))); //? expect: -3

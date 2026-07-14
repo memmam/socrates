@@ -1,0 +1,39 @@
+// SPEC 3.3: for over a String yields one-character Strings, by Unicode scalar.
+for c in "héλ🙂" {
+    println(c);
+}
+//? expect: h
+//? expect: é
+//? expect: λ
+//? expect: 🙂
+
+// a combining mark is its own scalar: "e" + U+0301 iterates as two chars
+let s = "e\u{0301}";
+println(s.len());          //? expect: 2
+let mut lens = [];
+for c in s {
+    lens.push(c.len());
+}
+println(lens);             //? expect: [1, 1]
+
+// counting scalars by loop matches len()
+let word = "παλίμψηστο";
+let mut count = 0;
+for c in word { count += 1; }
+println(count);            //? expect: 10
+println(word.len());       //? expect: 10
+
+// the empty string: body never runs
+for c in "" {
+    println("never");
+}
+println("empty done");     //? expect: empty done
+
+// break/continue work while iterating a string
+let mut acc = "";
+for c in "abcdef" {
+    if c == "b" { continue; }
+    if c == "e" { break; }
+    acc = acc + c;
+}
+println(acc);              //? expect: acd

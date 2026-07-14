@@ -1,0 +1,29 @@
+// SPEC 8.2: any / all / find / flat_map.
+let xs = [1, 2, 3];
+println(xs.any(|x| x > 2));                 //? expect: true
+println(xs.any(|x| x > 3));                 //? expect: false
+println(xs.all(|x| x > 0));                 //? expect: true
+println(xs.all(|x| x > 1));                 //? expect: false
+
+// find returns the FIRST matching element.
+println([1, 2, 3, 4].find(|x| x % 2 == 0)); //? expect: Some(2)
+println(xs.find(|x| x > 99));               //? expect: None
+println([(1, "a"), (2, "b")].find(|p| p.0 == 2)); //? expect: Some((2, "b"))
+
+// Vacuous truth on the empty list: any -> false, all -> true, find -> None.
+let e: List[Int] = [];
+println(e.any(|x| x > 0));                  //? expect: false
+println(e.all(|x| x > 0));                  //? expect: true
+println(e.find(|x| x > 0));                 //? expect: None
+
+// flat_map concatenates the callback's lists in order.
+println([[1, 2], [3]].flat_map(|r| r));     //? expect: [1, 2, 3]
+println([1, 2, 3].flat_map(|x| [x, x * 10])); //? expect: [1, 10, 2, 20, 3, 30]
+// Empty inner lists just vanish.
+println([1, 2, 3, 4].flat_map(|x| if x % 2 == 0 { [x, x] } else { [] })); //? expect: [2, 2, 4, 4]
+println(xs.flat_map(|x| { let l: List[Int] = []; l })); //? expect: []
+// flat_map may change the element type.
+println(["ab", "c"].flat_map(|s| s.chars())); //? expect: ["a", "b", "c"]
+println(e.flat_map(|x| [x]));               //? expect: []
+// The receiver is unchanged.
+println(xs);                                //? expect: [1, 2, 3]

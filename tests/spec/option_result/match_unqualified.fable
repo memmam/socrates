@@ -1,0 +1,37 @@
+// SPEC §2.4 / §4: Ok/Err and Some/None match unqualified; literal patterns
+// inside variant patterns; exhaustiveness over both enums.
+fn describe(r: Result[Int, String]) -> String {
+    match r {
+        Ok(0) -> "zero",
+        Ok(n) -> "ok {n}",
+        Err(e) -> "err {e}",
+    }
+}
+println(describe(Ok(0)));           //? expect: zero
+println(describe(Ok(42)));          //? expect: ok 42
+println(describe(Err("bad")));      //? expect: err bad
+
+fn opt_name(o: Option[String]) -> String {
+    match o {
+        Some(s) -> s,
+        None -> "(none)",
+    }
+}
+println(opt_name(Some("ada")));     //? expect: ada
+println(opt_name(None));            //? expect: (none)
+
+// Or-patterns and guards over Option (SPEC §4).
+// NOTE: calling bucket(None) is covered by
+// tests/spec/_pending/option_result__or_pattern_variant_none.fable.pending
+// (matching None against `Some(0) | Some(1)` currently crashes the VM).
+fn bucket(o: Option[Int]) -> String {
+    match o {
+        Some(0) | Some(1) -> "tiny",
+        Some(n) if n < 0 -> "negative",
+        Some(n) -> "big {n}",
+        None -> "missing",
+    }
+}
+println(bucket(Some(1)));           //? expect: tiny
+println(bucket(Some(-3)));          //? expect: negative
+println(bucket(Some(12)));          //? expect: big 12

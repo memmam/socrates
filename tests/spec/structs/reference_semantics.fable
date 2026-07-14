@@ -1,0 +1,25 @@
+// SPEC 2.3: structs have reference semantics — aliases (bindings, parameters,
+// list elements) all see mutations to the shared heap object.
+struct Counter { n: Int }
+
+let c = Counter { n: 0 };
+let alias = c;
+alias.n = 41;
+println(c.n);                              //? expect: 41
+
+fn bump(k: Counter) { k.n += 1; }          // parameter aliases the argument
+bump(c);
+println(alias.n);                          //? expect: 42
+
+// Storing a struct in a list stores a reference, not a copy.
+let list = [c, c];
+list[0].n = 100;
+println(c.n);                              //? expect: 100
+println(list[1].n);                        //? expect: 100
+
+// Replacing a list slot rebinds the slot; mutation then hits the new object only.
+let fresh = Counter { n: 0 };
+list[1] = fresh;
+list[1].n = 7;
+println(fresh.n);                          //? expect: 7
+println(c.n);                              //? expect: 100

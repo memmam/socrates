@@ -1,0 +1,16 @@
+// Functions are hoisted: top-level code may call a function declared later
+// in the file, and functions may be mutually recursive regardless of order.
+println(compute());        //? expect: 42
+fn compute() -> Int { helper() * 2 }
+fn helper() -> Int { 21 }
+
+// Mutual recursion across a three-function cycle.
+fn is_even(n: Int) -> Bool { if n == 0 { true } else { is_odd(n - 1) } }
+fn is_odd(n: Int) -> Bool { if n == 0 { false } else { is_even(n - 1) } }
+println(is_even(10));      //? expect: true
+println(is_odd(10));       //? expect: false
+println(is_even(0));       //? expect: true
+
+// Bounded deep recursion completes fine.
+fn sum_to(n: Int) -> Int { if n == 0 { 0 } else { n + sum_to(n - 1) } }
+println(sum_to(1000));     //? expect: 500500

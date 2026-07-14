@@ -1,0 +1,5 @@
+// SPEC 2.6 / 8.4: {:} with no annotation and no constraining use leaves an
+// unresolved type variable -> compile error "cannot infer".
+//? error: E0302
+//? error: cannot infer
+let m = {:};

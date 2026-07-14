@@ -1,0 +1,27 @@
+// SPEC 2.3 / 5: field access and assignment. Field assignment does not require
+// the binding to be `mut` (the binding still points at the same object), and
+// compound assignment operators work on fields.
+struct Cell { n: Int, f: Float, s: String }
+
+let c = Cell { n: 10, f: 2.0, s: "hi" };   // plain `let`, not `let mut`
+println(c.n);                              //? expect: 10
+println(c.n + 5);                          //? expect: 15
+
+c.n = 42;
+println(c.n);                              //? expect: 42
+c.n += 8;
+println(c.n);                              //? expect: 50
+c.n -= 20;
+println(c.n);                              //? expect: 30
+c.n *= 3;
+println(c.n);                              //? expect: 90
+c.n /= 4;
+println(c.n);                              //? expect: 22
+c.n %= 5;
+println(c.n);                              //? expect: 2
+
+c.f = c.f * 2.5;
+println(c.f);                              //? expect: 5.0
+c.s = c.s + " there";
+println(c.s);                              //? expect: hi there
+println(c);                                //? expect: Cell { n: 2, f: 5.0, s: "hi there" }

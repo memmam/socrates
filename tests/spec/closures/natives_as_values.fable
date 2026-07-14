@@ -1,0 +1,19 @@
+// Builtin (native) functions are first-class values.
+[1, 2, 3].each(println);
+//? expect: 1
+//? expect: 2
+//? expect: 3
+["ada", "grace"].each(println);
+//? expect: ada
+//? expect: grace
+
+// Bound to a name via an annotation, then called through the binding.
+let p: fn(Int) -> Unit = println;
+p(7);                             //? expect: 7
+
+// `str` passed as an ordinary function argument.
+println([1, 2, 3].map(str).join("-"));  //? expect: 1-2-3
+fn show(f: fn(Int) -> String, v: Int) -> String { f(v) }
+println(show(str, 5));            //? expect: 5
+let stringify: fn(Bool) -> String = str;
+println(stringify(true));         //? expect: true

@@ -1,0 +1,17 @@
+// SPEC § 2.6: lambda parameters may omit annotations when the lambda appears
+// where a function type is expected (argument position, annotated binding).
+fn apply(f: fn(Int) -> Int, x: Int) -> Int { f(x) }
+
+let nums = [1, 2, 3, 4];
+println(nums.map(|n| n * n));             //? expect: [1, 4, 9, 16]
+println(nums.filter(|n| n % 2 == 0));     //? expect: [2, 4]
+println(nums.fold(0, |acc, n| acc + n));  //? expect: 10
+println(nums.find(|n| n > 2));            //? expect: Some(3)
+println(nums.any(|n| n > 3));             //? expect: true
+
+// Argument to a user-declared function.
+println(apply(|v| v - 1, 10));            //? expect: 9
+
+// Multi-parameter lambda typed entirely from the annotation.
+let add: fn(Int, Int) -> Int = |a, b| a + b;
+println(add(2, 3));                       //? expect: 5

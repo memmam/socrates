@@ -1,0 +1,36 @@
+// E0502: a data-carrying variant pattern must spell out its parentheses.
+// E0504: a name may be bound only once per pattern (in `match` and in `let`
+// destructuring). E0508: a pattern whose type cannot match the scrutinee.
+// E0400: an unqualified variant pattern that names nothing.
+//? error: E0502
+//? error: variant `Some` has 1 field; the pattern needs `(_)`
+//? error: E0504
+//? error: `a` is bound more than once in this pattern
+//? error: `w` is bound more than once in this pattern
+//? error: E0508
+//? error: pattern of type `String` cannot match a value of type `Int`
+//? error: pattern of type `Int` cannot match a value of type `Bool`
+//? error: E0400
+//? error: unknown variant `Bogus`; qualify it as `Enum.Bogus`
+let o: Option[Int] = Some(3);
+let r1: Int = match o {
+    Some -> 1,
+    None -> 0,
+};
+let r2: Int = match (1, 2) {
+    (a, a) -> a,
+    _ -> 0,
+};
+let (w, w) = (1, 2);
+let r3: String = match 1 {
+    "one" -> "s",
+    _ -> "other",
+};
+let r4: Int = match true {
+    5 -> 5,
+    _ -> 0,
+};
+let r5: Int = match 9 {
+    Bogus(x) -> 1,
+    _ -> 0,
+};

@@ -1,0 +1,37 @@
+// SPEC 3.2: == is structural for all types. Map equality is order-insensitive:
+// two maps are equal if they hold the same key/value pairs, regardless of
+// insertion order.
+println({"a": 1, "b": 2} == {"b": 2, "a": 1});    //? expect: true
+println({"a": 1, "b": 2} == {"a": 1, "b": 2});    //? expect: true
+println({"a": 1, "b": 2} != {"b": 2, "a": 1});    //? expect: false
+
+// Different values, different keys, different sizes.
+println({"a": 1} == {"a": 2});                    //? expect: false
+println({"a": 1} == {"b": 1});                    //? expect: false
+println({"a": 1} == {"a": 1, "b": 2});            //? expect: false
+println({"a": 1, "b": 2} == {"a": 1});            //? expect: false
+
+// Empty maps are equal.
+let e1: Map[String, Int] = {:};
+let e2: Map[String, Int] = {:};
+println(e1 == e2);                                //? expect: true
+println(e1 == {"a": 1});                          //? expect: false
+
+// Deep equality of nested values, order-insensitive at every level.
+let n1 = {"m": {1: "one", 2: "two"}};
+let n2 = {"m": {2: "two", 1: "one"}};
+println(n1 == n2);                                //? expect: true
+println(n1 == {"m": {1: "one", 2: "TWO"}});       //? expect: false
+
+// A clone is equal to (but distinct from) its source.
+let m = {"k": [1, 2]};
+let c = m.clone();
+println(m == c);                                  //? expect: true
+c["k2"] = [3];
+println(m == c);                                  //? expect: false
+println(m);                                       //? expect: {"k": [1, 2]}
+
+// Equality after mutation through indexing.
+let x = {"a": 1};
+x["a"] = 2;
+println(x == {"a": 2});                           //? expect: true

@@ -1,0 +1,12 @@
+fn classify(n: Int) -> String {
+    match n {
+        0 | 1 -> "small",
+        x if x < 0 -> "negative",
+        x if x < 100 -> "medium",
+        _ -> "large",
+    }
+}
+println(classify(0));     //? expect: small
+println(classify(-5));    //? expect: negative
+println(classify(50));    //? expect: medium
+println(classify(1000));  //? expect: large

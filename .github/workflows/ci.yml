@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test (stable)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Build
+        run: cargo build --all-targets
+      - name: Unit + golden spec tests
+        run: cargo test
+      - name: Golden spec tests under GC stress
+        run: FABLE_GC_STRESS=1 cargo test --test spec_runner
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Examples smoke test
+        run: |
+          cargo build --release
+          ./target/release/fable examples/mandelbrot.fable > /dev/null
+          ./target/release/fable examples/algorithms.fable > /dev/null
+          ./target/release/fable examples/life.fable > /dev/null
+          ./target/release/fable examples/brainfuck.fable > /dev/null
+          ./target/release/fable examples/json.fable > /dev/null
+          ./target/release/fable examples/adventure.fable < /dev/null > /dev/null
+          ./target/release/fable check examples/raytracer.fable

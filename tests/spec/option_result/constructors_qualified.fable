@@ -1,0 +1,28 @@
+// SPEC §2.4: prelude variants may be used unqualified; `Option.Some(x)` (and
+// the other qualified forms) also work. Nullary variants take no parentheses.
+let a = Some(7);
+let b = Option.Some(7);
+println(a == b);                    //? expect: true
+println(b);                         //? expect: Some(7)
+
+let n = Option.None;
+println(n == a);                    //? expect: false
+println(n);                         //? expect: None
+
+let ok: Result[Int, String] = Result.Ok(1);
+let er: Result[Int, String] = Result.Err("bad");
+println(ok);                        //? expect: Ok(1)
+println(er);                        //? expect: Err("bad")
+println(ok == Ok(1));               //? expect: true
+
+// Qualified variant paths work in patterns too (SPEC §9 base_pat path form).
+let msg = match b {
+    Option.Some(v) -> "got {v}",
+    Option.None -> "none",
+};
+println(msg);                       //? expect: got 7
+let rmsg = match er {
+    Result.Ok(v) -> "ok {v}",
+    Result.Err(e) -> "err {e}",
+};
+println(rmsg);                      //? expect: err bad

@@ -1,0 +1,20 @@
+// SPEC 1.2: identifiers match [A-Za-z_][A-Za-z0-9_]*. Keywords are reserved,
+// but identifiers that merely start with (or contain) a keyword are fine.
+let android = 1;
+let orchid = 2;
+let nothing = 3;
+let letter = 4;
+let iffy = 5;
+let matches = 6;
+let fnord = 7;
+let truely = 8;
+let formula = 9;
+let insider = 10;
+println(android + orchid + nothing + letter + iffy);    //? expect: 15
+println(matches + fnord + truely + formula + insider);  //? expect: 40
+let _leading = 100;
+let trailing_ = 200;
+let mid_dle = 300;
+let x1y2 = 400;
+let __double = 500;
+println(_leading + trailing_ + mid_dle + x1y2 + __double);  //? expect: 1500

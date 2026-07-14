@@ -1,0 +1,21 @@
+// SPEC 2.3: struct literals may list fields in any order; all must be present.
+// SPEC 8.1: display is `Name { f: v }` in *declaration* order; nested strings quoted.
+struct Point { x: Float, y: Float }
+struct Person { name: String, age: Int }
+
+let p = Point { y: 4.0, x: 3.0 };          // reversed literal order
+println(p);                                //? expect: Point { x: 3.0, y: 4.0 }
+
+let x = 1.5;
+let y = 2.5;
+let q = Point { x, y };                    // field shorthand
+println(q);                                //? expect: Point { x: 1.5, y: 2.5 }
+
+let r = Point { y, x: 0.0 };               // shorthand mixed with explicit, any order
+println(r);                                //? expect: Point { x: 0.0, y: 2.5 }
+
+let age = 30;
+let alice = Person { age, name: "Alice" };
+println(alice);                            //? expect: Person { name: "Alice", age: 30 }
+println(str(alice));                       //? expect: Person { name: "Alice", age: 30 }
+println("got {q}");                        //? expect: got Point { x: 1.5, y: 2.5 }

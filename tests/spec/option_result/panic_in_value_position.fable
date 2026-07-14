@@ -1,0 +1,6 @@
+// SPEC §7: panic() in a value position aborts with the message at runtime.
+//? panic: gave up
+let c = false;
+println("start");                  //? expect: start
+let x: Int = if c { 1 } else { panic("gave up") };
+println(x);

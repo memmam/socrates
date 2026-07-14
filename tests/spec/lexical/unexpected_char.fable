@@ -1,0 +1,7 @@
+// SPEC 1.4: `&` alone is not an operator (logical and is `&&`), and `@` is
+// not part of the language at all.
+//? error: E0100
+//? error: unexpected character `&`; logical and is `&&`
+//? error: unexpected character `@`
+let x = 1 & 2;
+let y = @;

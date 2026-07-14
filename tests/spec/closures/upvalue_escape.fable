@@ -1,0 +1,18 @@
+// SPEC § 3.4: captures keep values alive past the defining scope (closure
+// upvalues). Here the captured local's block has ended by the time we call.
+let f = {
+    let mut secret = 10;
+    |n: Int| { secret += n; secret }
+};
+println(f(1));     //? expect: 11
+println(f(2));     //? expect: 13
+
+// Two closures created in the same block share the same escaped cell.
+let pair = {
+    let mut cell = 100;
+    (|| { cell += 1; cell }, || cell)
+};
+let (bump, peek) = pair;
+println(peek());   //? expect: 100
+println(bump());   //? expect: 101
+println(peek());   //? expect: 101

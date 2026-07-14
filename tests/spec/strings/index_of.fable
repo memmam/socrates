@@ -1,0 +1,17 @@
+// SPEC 8.3: index_of(needle) returns Option[Int] holding the CHAR index of
+// the first match — multibyte characters before the match count as one.
+println("héllo".index_of("llo"));      //? expect: Some(2)
+println("héllo".index_of("h"));        //? expect: Some(0)
+println("héllo".index_of("zzz"));      //? expect: None
+println("héllo".index_of(""));         //? expect: Some(0)
+println("🙂🙂x".index_of("x"));        //? expect: Some(2)
+println("abcabc".index_of("bc"));      //? expect: Some(1)
+println("αβγδ".index_of("γδ"));        //? expect: Some(2)
+println("abc".index_of("abcd"));       //? expect: None
+println("".index_of("a"));             //? expect: None
+// the returned char index composes with slice / char_at
+let hay = "π = 3.14";
+let i = hay.index_of("3").unwrap();
+println(i);                            //? expect: 4
+println(hay.slice(i, hay.len()));      //? expect: 3.14
+println(hay.char_at(i).unwrap());      //? expect: 3
