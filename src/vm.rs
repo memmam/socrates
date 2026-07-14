@@ -874,7 +874,7 @@ impl Vm {
 
                 Op::MatchFail => {
                     return Err(self.error(
-                        "internal: match fell through all arms (this is a compiler bug — please report it)",
+                        "match did not cover the scrutinee value (all arms failed)",
                     ));
                 }
             }
@@ -1065,6 +1065,23 @@ impl Vm {
     /// compare equal and the walk always terminates. NaN follows IEEE-754
     /// (a container holding NaN is unequal even to itself).
     pub fn value_eq(&self, a: Value, b: Value, _depth: u32) -> Result<bool, String> {
+        // Scalar fast path: no worklist allocation for the common cases
+        // (Int==Int in hot loops, literal pattern tests).
+        match (a, b) {
+            (Value::Unit, Value::Unit) => return Ok(true),
+            (Value::Bool(x), Value::Bool(y)) => return Ok(x == y),
+            (Value::Int(x), Value::Int(y)) => return Ok(x == y),
+            (Value::Float(x), Value::Float(y)) => return Ok(x == y),
+            (Value::Native(_), _) | (_, Value::Native(_)) => {
+                return Err("cannot compare functions".into())
+            }
+            (Value::Obj(x), Value::Obj(y)) => {
+                if let (Obj::Str(sx), Obj::Str(sy)) = (self.heap.get(x), self.heap.get(y)) {
+                    return Ok(sx == sy);
+                }
+            }
+            _ => return Ok(false),
+        }
         self.value_eq_impl(a, b, 0)
     }
 

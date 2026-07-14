@@ -1,0 +1,11 @@
+// -0.0 == 0.0 per IEEE, so a -0.0 pattern makes a later 0.0 arm unreachable
+// (W0101 warning, not an error) and matching picks the first.
+fn f(x: Float) -> String {
+    match x {
+        -0.0 -> "zero",
+        _ -> "other",
+    }
+}
+println(f(0.0));      //? expect: zero
+println(f(-0.0));     //? expect: zero
+println(f(1.0));      //? expect: other

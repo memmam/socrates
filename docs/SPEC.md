@@ -503,3 +503,20 @@ error[E0301]: type mismatch
 
 Error code ranges: E01xx lexing, E02xx parsing, E03xx types, E04xx name resolution,
 E05xx pattern matching, E06xx other semantic errors. Warnings: W01xx.
+
+## 11. Implementation limits
+
+Programs exceeding these limits get a clean diagnostic (never silent
+misbehavior): 255 parameters per function/lambda, 255 fields per enum variant,
+60,000 fields per struct, 60,000 elements per list/map/tuple literal or string
+interpolation, 60,000 local variables per function, 65,000 global bindings,
+2,000 levels of syntactic nesting (E0207), 20,000 nested operations per
+expression (E0324). At runtime: 4,096 call frames ("stack overflow" panic),
+display nesting deeper than 10,000 levels renders as `...`, and equality on
+values whose *map* nesting exceeds 64 levels panics.
+
+One behavioral caveat: map keys are hashed at insertion. **Mutating a list,
+map, or struct after using it as a key strands the entry** — it still counts
+toward `len()` and appears in `keys()`, but no lookup can reach it. Don't
+mutate values used as keys (most languages ban mutable keys outright; Fable
+trusts you instead).

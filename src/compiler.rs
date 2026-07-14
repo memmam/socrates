@@ -153,10 +153,11 @@ struct LoopCtx {
     /// Jump target for `continue`.
     continue_to: usize,
     break_jumps: Vec<usize>,
-    /// `locals.len()` before the loop's own temporaries (break unwinds to here).
-    locals_at_entry: usize,
-    /// `locals.len()` at loop-body start (continue unwinds to here).
-    locals_at_body: usize,
+    /// Virtual stack depth at loop entry / body start: break/continue emit a
+    /// PopScope down to these, which also unwinds expression TEMPORARIES a
+    /// break inside a block-expression operand would otherwise leak.
+    depth_at_entry: u16,
+    depth_at_body: u16,
 }
 
 struct FnCtx {
@@ -444,13 +445,13 @@ impl<'a> Compiler<'a> {
                 }
             }
             StmtKind::While { cond, body } => {
-                let locals_at_entry = self.ctx().locals.len();
+                let d = self.depth();
                 let start = self.here();
                 self.ctx().loops.push(LoopCtx {
                     continue_to: start,
                     break_jumps: Vec::new(),
-                    locals_at_entry,
-                    locals_at_body: locals_at_entry,
+                    depth_at_entry: d,
+                    depth_at_body: d,
                 });
                 self.expr(cond);
                 let exit = self.emit_jump(Op::JumpIfFalse(0), cond.span);
@@ -464,14 +465,15 @@ impl<'a> Compiler<'a> {
             }
             StmtKind::For { var_id, iter, body, var } => {
                 let locals_at_entry = self.ctx().locals.len();
+                let depth_at_entry = self.depth();
                 self.expr(iter);
                 self.emit(Op::ForPrep, iter.span);
                 // The iterator + its state occupy two anonymous local slots.
                 let d = self.depth();
                 self.ctx().locals.push(LocalSlot { local_id: ANON, slot: d - 2, captured: false });
                 self.ctx().locals.push(LocalSlot { local_id: ANON, slot: d - 1, captured: false });
-                let locals_at_body = self.ctx().locals.len();
 
+                let depth_at_body = self.depth(); // [.., iter, state]
                 let next = self.here();
                 let done = self.emit(Op::ForNext(0), var.span);
                 // ForNext pushed the element on the fall-through path.
@@ -480,8 +482,8 @@ impl<'a> Compiler<'a> {
                 self.ctx().loops.push(LoopCtx {
                     continue_to: next,
                     break_jumps: Vec::new(),
-                    locals_at_entry,
-                    locals_at_body,
+                    depth_at_entry,
+                    depth_at_body,
                 });
 
                 self.begin_scope();
@@ -521,14 +523,17 @@ impl<'a> Compiler<'a> {
             }
             StmtKind::Break => {
                 let Some(lp) = self.ctx().loops.last() else { return };
-                let entry = lp.locals_at_entry;
-                let unwind = self.ctx().locals.len() - entry;
+                let target_depth = lp.depth_at_entry;
+                // Unwind by DEPTH, not by declared-local count: a break inside
+                // a block-expression operand also has expression temporaries
+                // on the stack (e.g. the `1` in `1 + { ... break; ... }`).
+                let unwind = self.depth() - target_depth;
                 if unwind > 0 {
-                    self.emit(Op::PopScope(unwind as u16), stmt.span);
+                    self.emit(Op::PopScope(unwind), stmt.span);
                     // Compile-time locals stay (later code in this block may
                     // still reference them on other paths); only depth moves.
                     let d = self.depth();
-                    self.set_depth(d + unwind as u16); // PopScope adjusted; restore
+                    self.set_depth(d + unwind); // PopScope adjusted; restore
                 }
                 let j = self.emit_jump(Op::Jump(0), stmt.span);
                 self.ctx().loops.last_mut().unwrap().break_jumps.push(j);
@@ -536,12 +541,12 @@ impl<'a> Compiler<'a> {
             StmtKind::Continue => {
                 let Some(lp) = self.ctx().loops.last() else { return };
                 let target = lp.continue_to;
-                let at_body = lp.locals_at_body;
-                let unwind = self.ctx().locals.len() - at_body;
+                let target_depth = lp.depth_at_body;
+                let unwind = self.depth() - target_depth;
                 if unwind > 0 {
-                    self.emit(Op::PopScope(unwind as u16), stmt.span);
+                    self.emit(Op::PopScope(unwind), stmt.span);
                     let d = self.depth();
-                    self.set_depth(d + unwind as u16);
+                    self.set_depth(d + unwind);
                 }
                 self.emit_loop(target, stmt.span);
             }

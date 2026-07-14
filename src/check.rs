@@ -123,6 +123,9 @@ pub struct Checker {
     /// parser recursion).
     expr_depth: u32,
     depth_error: bool,
+    deferred_matches: Vec<DeferredMatch>,
+    /// Locals allocated in the current function (slot-width guard).
+    cur_fn_locals: u32,
     /// Names of all top-level `let`s in the current program (for better
     /// "used before declaration" errors).
     pending_globals: HashSet<String>,
@@ -155,6 +158,8 @@ impl Checker {
             reported_vars: HashSet::new(),
             expr_depth: 0,
             depth_error: false,
+            deferred_matches: Vec::new(),
+            cur_fn_locals: 0,
             pending_globals: HashSet::new(),
         }
     }
@@ -263,6 +268,19 @@ impl Checker {
                         continue;
                     }
                     self.generic_scope = s.generics.iter().map(|g| g.name.clone()).collect();
+                    if s.fields.len() > 60_000 {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "E0325",
+                                format!(
+                                    "struct `{}` has {} fields; the limit is 60,000",
+                                    s.name.name,
+                                    s.fields.len()
+                                ),
+                            )
+                            .with_label(s.name.span, ""),
+                        );
+                    }
                     let mut fields = Vec::new();
                     let mut seen = HashSet::new();
                     for f in &s.fields {
@@ -302,6 +320,19 @@ impl Checker {
                                 .with_label(v.name.span, ""),
                             );
                             continue;
+                        }
+                        if v.fields.len() > 255 {
+                            self.diags.push(
+                                Diagnostic::error(
+                                    "E0325",
+                                    format!(
+                                        "variant `{}` has {} fields; the limit is 255",
+                                        v.name.name,
+                                        v.fields.len()
+                                    ),
+                                )
+                                .with_label(v.name.span, ""),
+                            );
                         }
                         let fields: Vec<Type> =
                             v.fields.iter().map(|t| self.resolve_type_expr(t)).collect();
@@ -346,6 +377,19 @@ impl Checker {
                         .with_label(g.span, ""),
                     );
                 }
+            }
+            if f.params.len() > 255 {
+                self.diags.push(
+                    Diagnostic::error(
+                        "E0325",
+                        format!(
+                            "function `{}` has {} parameters; the limit is 255",
+                            f.name.name,
+                            f.params.len()
+                        ),
+                    )
+                    .with_label(f.name.span, ""),
+                );
             }
             self.generic_scope = f.generics.iter().map(|g| g.name.clone()).collect();
             let params: Vec<Type> = f.params.iter().map(|p| self.resolve_type_expr(&p.ty)).collect();
@@ -765,6 +809,7 @@ impl Checker {
             ExprKind::Str(_) => Type::Str,
             ExprKind::Unit => Type::Unit,
             ExprKind::StringInterp { exprs, .. } => {
+                self.check_literal_len(exprs.len(), "string interpolation", e.span);
                 for ex in exprs {
                     self.check_expr(ex, None);
                 }
@@ -852,6 +897,7 @@ impl Checker {
                 }
             }
             ExprKind::List(items) => {
+                self.check_literal_len(items.len(), "list literal", e.span);
                 let elem = match expected.map(|t| self.uni.shallow_resolve(t)) {
                     Some(Type::List(t)) => *t,
                     _ => self.fresh(e.span, "list element"),
@@ -863,6 +909,7 @@ impl Checker {
                 Type::List(Box::new(elem))
             }
             ExprKind::MapLit(entries) => {
+                self.check_literal_len(entries.len(), "map literal", e.span);
                 let (k, v) = match expected.map(|t| self.uni.shallow_resolve(t)) {
                     Some(Type::Map(k, v)) => (*k, *v),
                     _ => (
@@ -886,6 +933,7 @@ impl Checker {
                 Type::Map(Box::new(k), Box::new(v))
             }
             ExprKind::Tuple(items) => {
+                self.check_literal_len(items.len(), "tuple", e.span);
                 let expected_items: Vec<Option<Type>> =
                     match expected.map(|t| self.uni.shallow_resolve(t)) {
                         Some(Type::Tuple(ts)) if ts.len() == items.len() => {
@@ -1927,6 +1975,15 @@ impl Checker {
             None
         });
 
+        if params.len() > 255 {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0325",
+                    format!("lambda has {} parameters; the limit is 255", params.len()),
+                )
+                .with_label(e.span, ""),
+            );
+        }
         let mut param_tys = Vec::new();
         for (i, p) in params.iter().enumerate() {
             let ty = match &p.ty {
@@ -1952,6 +2009,8 @@ impl Checker {
             },
         };
 
+        let saved_fn_locals = self.cur_fn_locals;
+        self.cur_fn_locals = 0;
         self.scopes.push(HashMap::new());
         for (p, ty) in params.iter().zip(&param_tys) {
             let id = self.alloc_local(&p.name.name, false, ty.clone(), p.name.span);
@@ -1965,6 +2024,7 @@ impl Checker {
         self.loop_depth.pop();
         self.fn_stack.pop();
         self.scopes.pop();
+        self.cur_fn_locals = saved_fn_locals;
 
         Type::Fn(param_tys, Box::new(ret_ty))
     }
@@ -2007,14 +2067,53 @@ impl Checker {
             self.scopes.pop();
         }
 
-        // Exhaustiveness & reachability (skip if the scrutinee type is unknown —
-        // a "cannot infer" error will already be reported).
-        let scrut_ty = self.uni.zonk(&st);
-        if self.uni.is_fully_resolved(&st) {
+        // Exhaustiveness & reachability are DEFERRED to finalize(): the
+        // scrutinee's type may only resolve after this match is checked
+        // (e.g. a lambda parameter pinned by a later call). Patterns are
+        // lowered now, while their resolutions are fresh.
+        let mut lowered = Vec::with_capacity(arms.len());
+        for arm in arms {
+            let mut truncated = false;
+            let rows = self.lower_pattern(&arm.pattern, &mut truncated);
+            if truncated {
+                self.diags.push(
+                    Diagnostic::warning(
+                        "W0103",
+                        "pattern is too large for exhaustiveness analysis",
+                    )
+                    .with_label(
+                        arm.pattern.span,
+                        "treated as covering everything; missing cases panic at runtime",
+                    ),
+                );
+            }
+            lowered.push(DeferredArm {
+                rows,
+                guarded: arm.guard.is_some(),
+                pattern_span: arm.pattern.span,
+            });
+        }
+        self.deferred_matches.push(DeferredMatch {
+            scrut_ty: st.clone(),
+            scrut_span: scrutinee.span,
+            arms: lowered,
+        });
+        result
+    }
+
+    /// Run the deferred per-match exhaustiveness/reachability analyses, now
+    /// that inference has fixed every scrutinee type it is going to fix.
+    fn analyze_matches(&mut self) {
+        let deferred = std::mem::take(&mut self.deferred_matches);
+        for dm in deferred {
+            if !self.uni.is_fully_resolved(&dm.scrut_ty) {
+                // A cannot-infer error is reported elsewhere.
+                continue;
+            }
+            let scrut_ty = self.uni.zonk(&dm.scrut_ty);
             let mut matrix: Vec<Vec<DPat>> = Vec::new();
-            for arm in arms {
-                let rows = self.lower_pattern(&arm.pattern);
-                let reachable = rows.iter().any(|row| {
+            for arm in &dm.arms {
+                let reachable = arm.rows.iter().any(|row| {
                     patterns::usefulness(
                         &matrix,
                         std::slice::from_ref(row),
@@ -2026,11 +2125,11 @@ impl Checker {
                 if !reachable {
                     self.diags.push(
                         Diagnostic::warning("W0101", "unreachable match arm")
-                            .with_label(arm.pattern.span, "this pattern is covered by earlier arms"),
+                            .with_label(arm.pattern_span, "this pattern is covered by earlier arms"),
                     );
                 }
-                if arm.guard.is_none() {
-                    matrix.extend(rows.into_iter().map(|p| vec![p]));
+                if !arm.guarded {
+                    matrix.extend(arm.rows.iter().cloned().map(|p| vec![p]));
                 }
             }
             if let Some(witness) = patterns::usefulness(
@@ -2045,12 +2144,11 @@ impl Checker {
                         "E0501",
                         format!("non-exhaustive match: the value `{shown}` is not covered"),
                     )
-                    .with_label(scrutinee.span, format!("`{shown}` is not covered"))
+                    .with_label(dm.scrut_span, format!("`{shown}` is not covered"))
                     .with_note("add an arm for it, or a catch-all `_ ->` arm"),
                 );
             }
         }
-        result
     }
 
     // ------------------------------------------------------------------
@@ -2408,7 +2506,14 @@ impl Checker {
     fn materialize_binds(&mut self, binds: PatBinds, mutable: bool) {
         for group in binds.groups {
             if self.scopes.is_empty() {
-                // Top level: a global slot.
+                // Top level: a global slot (bytecode operands are u16-wide).
+                if self.globals.len() >= 65_000 {
+                    self.diags.push(
+                        Diagnostic::error("E0327", "too many global bindings (limit 65,000)")
+                            .with_label(group.span, ""),
+                    );
+                    continue;
+                }
                 let slot = self.globals.len() as u32;
                 self.globals.push(GlobalInfo {
                     name: group.name.clone(),
@@ -2478,7 +2583,9 @@ impl Checker {
     }
 
     /// Lower a checked pattern into decision rows (or-patterns expanded).
-    fn lower_pattern(&self, pat: &Pattern) -> Vec<DPat> {
+    /// Sets `truncated` when the expansion exceeded the cap and fell back to
+    /// a wildcard (over-approximating coverage — reported as W0103).
+    fn lower_pattern(&self, pat: &Pattern, truncated: &mut bool) -> Vec<DPat> {
         const CAP: usize = 4096;
         match &pat.kind {
             PatternKind::Wildcard => vec![DPat::wild()],
@@ -2489,13 +2596,18 @@ impl Checker {
                 _ => vec![DPat::wild()],
             },
             PatternKind::Int(i) => vec![DPat::ctor(Ctor::Int(*i), Vec::new())],
-            PatternKind::Float(f) => vec![DPat::ctor(Ctor::FloatBits(f.to_bits()), Vec::new())],
+            PatternKind::Float(f) => {
+                // Canonicalize -0.0 to +0.0 so analysis agrees with the
+                // runtime's IEEE `==` (0.0 == -0.0).
+                let f = if *f == 0.0 { 0.0 } else { *f };
+                vec![DPat::ctor(Ctor::FloatBits(f.to_bits()), Vec::new())]
+            }
             PatternKind::Bool(b) => vec![DPat::ctor(Ctor::Bool(*b), Vec::new())],
             PatternKind::Str(s) => vec![DPat::ctor(Ctor::Str(s.clone()), Vec::new())],
             PatternKind::Unit => vec![DPat::ctor(Ctor::Unit, Vec::new())],
             PatternKind::Tuple(items) => {
-                let parts: Vec<Vec<DPat>> = items.iter().map(|p| self.lower_pattern(p)).collect();
-                cartesian(&parts, CAP)
+                let parts: Vec<Vec<DPat>> = items.iter().map(|p| self.lower_pattern(p, truncated)).collect();
+                cartesian(&parts, CAP, truncated)
                     .into_iter()
                     .map(|args| DPat::ctor(Ctor::Tuple(items.len()), args))
                     .collect()
@@ -2503,8 +2615,8 @@ impl Checker {
             PatternKind::Variant { fields, .. } => match self.res.get(&pat.id) {
                 Some(Res::Variant { def, variant }) => {
                     let parts: Vec<Vec<DPat>> =
-                        fields.iter().map(|p| self.lower_pattern(p)).collect();
-                    cartesian(&parts, CAP)
+                        fields.iter().map(|p| self.lower_pattern(p, truncated)).collect();
+                    cartesian(&parts, CAP, truncated)
                         .into_iter()
                         .map(|args| DPat::ctor(Ctor::Variant(*def, *variant), args))
                         .collect()
@@ -2521,10 +2633,10 @@ impl Checker {
                     let mut slot_pats: Vec<Vec<DPat>> = vec![vec![DPat::wild()]; nfields];
                     for ((_, fpat), &idx) in fields.iter().zip(field_order) {
                         if (idx as usize) < nfields {
-                            slot_pats[idx as usize] = self.lower_pattern(fpat);
+                            slot_pats[idx as usize] = self.lower_pattern(fpat, truncated);
                         }
                     }
-                    cartesian(&slot_pats, CAP)
+                    cartesian(&slot_pats, CAP, truncated)
                         .into_iter()
                         .map(|args| DPat::ctor(Ctor::Struct(*def), args))
                         .collect()
@@ -2534,8 +2646,9 @@ impl Checker {
             PatternKind::Or(alts) => {
                 let mut out = Vec::new();
                 for alt in alts {
-                    out.extend(self.lower_pattern(alt));
+                    out.extend(self.lower_pattern(alt, truncated));
                     if out.len() > CAP {
+                        *truncated = true;
                         return vec![DPat::wild()];
                     }
                 }
@@ -2553,6 +2666,7 @@ impl Checker {
         let info = self.fns[idx as usize].clone();
         self.generic_scope = info.generics.clone();
 
+        self.cur_fn_locals = 0;
         self.scopes.push(HashMap::new());
         for (p, ty) in f.params.iter().zip(&info.params) {
             let id = self.alloc_local(&p.name.name, false, ty.clone(), p.name.span);
@@ -2595,6 +2709,16 @@ impl Checker {
     // ------------------------------------------------------------------
 
     fn alloc_local(&mut self, name: &str, mutable: bool, ty: Type, span: Span) -> u32 {
+        self.cur_fn_locals += 1;
+        if self.cur_fn_locals == 60_001 {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0326",
+                    "too many local variables in one function (limit 60,000)",
+                )
+                .with_label(span, ""),
+            );
+        }
         let id = self.locals.len() as u32;
         self.locals.push(LocalInfo { name: name.to_string(), mutable, ty, span });
         self.scopes
@@ -2602,6 +2726,20 @@ impl Checker {
             .expect("alloc_local outside scope")
             .insert(name.to_string(), id);
         id
+    }
+
+    /// Bytecode aggregate-length operands are u16-wide; enforce a limit well
+    /// under 65,535 with headroom for the compiler's virtual-depth tracking.
+    fn check_literal_len(&mut self, len: usize, what: &str, span: Span) {
+        if len > 60_000 {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0325",
+                    format!("{what} has {len} elements; the limit is 60,000"),
+                )
+                .with_label(span, ""),
+            );
+        }
     }
 
     fn fresh(&mut self, _span: Span, _what: &'static str) -> Type {
@@ -2658,6 +2796,7 @@ impl Checker {
     /// Report leftover unsolved inference variables ("cannot infer"), and apply
     /// Unit defaulting where marked.
     fn finalize(&mut self) {
+        self.analyze_matches();
         let origins = std::mem::take(&mut self.var_origins);
         for origin in origins {
             let t = self.uni.shallow_resolve(&Type::Var(origin.var));
@@ -2745,6 +2884,20 @@ impl Checker {
 // ---------------------------------------------------------------------------
 // Pattern binding collection
 // ---------------------------------------------------------------------------
+
+#[derive(Clone)]
+struct DeferredArm {
+    rows: Vec<DPat>,
+    guarded: bool,
+    pattern_span: Span,
+}
+
+#[derive(Clone)]
+struct DeferredMatch {
+    scrut_ty: Type,
+    scrut_span: Span,
+    arms: Vec<DeferredArm>,
+}
 
 #[derive(Default)]
 struct PatBinds {
@@ -2839,7 +2992,7 @@ fn collect_pattern_names(pat: &Pattern, out: &mut HashSet<String>) {
     }
 }
 
-fn cartesian(parts: &[Vec<DPat>], cap: usize) -> Vec<Vec<DPat>> {
+fn cartesian(parts: &[Vec<DPat>], cap: usize, truncated: &mut bool) -> Vec<Vec<DPat>> {
     let mut rows: Vec<Vec<DPat>> = vec![Vec::new()];
     for part in parts {
         let mut next = Vec::new();
@@ -2849,7 +3002,9 @@ fn cartesian(parts: &[Vec<DPat>], cap: usize) -> Vec<Vec<DPat>> {
                 r.push(p.clone());
                 next.push(r);
                 if next.len() > cap {
-                    // Give up on precision: a single all-wildcards row.
+                    // Give up on precision: a single all-wildcards row
+                    // (reported to the user as W0103 by the caller).
+                    *truncated = true;
                     return vec![vec![DPat::wild(); parts.len()]];
                 }
             }

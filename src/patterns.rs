@@ -137,6 +137,11 @@ pub fn usefulness(
     if row.is_empty() {
         return if matrix.is_empty() { Some(Vec::new()) } else { None };
     }
+    if types.len() < row.len() {
+        // Misaligned after an upstream type error (e.g. a pattern whose ctor
+        // doesn't fit the column type): bail out conservatively.
+        return None;
+    }
     let head = &row[0];
     let col_ty = &types[0];
 
@@ -405,7 +410,7 @@ mod tests {
                 vec![DPat::ctor(Ctor::Bool(false), vec![]), DPat::ctor(Ctor::Bool(false), vec![])],
             )],
         ];
-        assert!(usefulness(&matrix, &[DPat::wild()], &[ty.clone()], &defs).is_none());
+        assert!(usefulness(&matrix, &[DPat::wild()], std::slice::from_ref(&ty), &defs).is_none());
 
         // remove the last row: witness (false, false)
         let w = usefulness(&matrix[..2], &[DPat::wild()], &[ty], &defs).unwrap();

@@ -178,9 +178,10 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         },
         ListContains => {
             let needle = vm.native_arg(argc, 1);
-            let items = list_ref(vm, argc)?.clone();
+            let len = list_ref(vm, argc)?.len();
             let mut found = false;
-            for it in items {
+            for i in 0..len {
+                let it = list_ref(vm, argc)?[i];
                 if vm.value_eq(it, needle, 0).map_err(|m| vm.error(m))? {
                     found = true;
                     break;
@@ -190,9 +191,10 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
         ListIndexOf => {
             let needle = vm.native_arg(argc, 1);
-            let items = list_ref(vm, argc)?.clone();
+            let len = list_ref(vm, argc)?.len();
             let mut found = None;
-            for (i, it) in items.into_iter().enumerate() {
+            for i in 0..len {
+                let it = list_ref(vm, argc)?[i];
                 if vm.value_eq(it, needle, 0).map_err(|m| vm.error(m))? {
                     found = Some(i as i64);
                     break;

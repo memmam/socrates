@@ -162,19 +162,6 @@ impl Defs {
         self.by_name.get(name).copied()
     }
 
-    pub fn as_struct(&self, id: DefId) -> Option<&StructDef> {
-        match self.get(id) {
-            TypeDef::Struct(s) => Some(s),
-            _ => None,
-        }
-    }
-
-    pub fn as_enum(&self, id: DefId) -> Option<&EnumDef> {
-        match self.get(id) {
-            TypeDef::Enum(e) => Some(e),
-            _ => None,
-        }
-    }
 }
 
 /// Substitute `Param(i)` with `args[i]` throughout `t`.

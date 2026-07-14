@@ -233,7 +233,4 @@ impl Heap {
         }
     }
 
-    pub fn live_count(&self) -> usize {
-        self.live
-    }
 }

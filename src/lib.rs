@@ -25,28 +25,6 @@ pub mod vm;
 
 use diag::Diagnostic;
 
-/// Convenience pipeline: source text → compiled program + checker (or
-/// diagnostics on any error). Used by the CLI, tests, and tools.
-pub fn build(name: &str, text: &str) -> Result<(bytecode::CompiledProgram, check::Checker), Vec<Diagnostic>> {
-    let lexed = lexer::lex(text);
-    let parsed = parser::parse(lexed.tokens, text);
-    let mut diags = lexed.diags;
-    diags.extend(parsed.diags);
-    if diag::has_errors(&diags) {
-        return Err(diags);
-    }
-    let mut checker = check::Checker::new();
-    checker.check_program(&parsed.program);
-    let check_diags = checker.take_diags();
-    diags.extend(check_diags);
-    if diag::has_errors(&diags) {
-        return Err(diags);
-    }
-    let program = compiler::compile(&parsed.program, &checker);
-    let _ = name;
-    Ok((program, checker))
-}
-
 /// Run source to completion, capturing output. Returns (stdout, Result).
 /// Intended for the golden test harness. Runs on a dedicated large-stack
 /// thread, mirroring the CLI (deep programs need Rust stack headroom).

@@ -409,11 +409,18 @@ impl Formatter {
             }
             ExprKind::Binary { op, lhs, rhs, .. } => {
                 let p = bin_prec(*op);
-                self.expr(lhs, p);
+                // Comparison/equality operators are NON-associative in the
+                // grammar: `(a == b) == c` must keep its parens or it will
+                // re-parse as a rejected chain.
+                let non_assoc = matches!(
+                    op,
+                    BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge
+                );
+                self.expr(lhs, if non_assoc { p + 1 } else { p });
                 self.out.push(' ');
                 self.out.push_str(op.symbol());
                 self.out.push(' ');
-                // Left-associative: the right operand needs one level tighter.
+                // Right operand binds one level tighter in both cases.
                 self.expr(rhs, p + 1);
             }
             ExprKind::Index { base, index } => {
@@ -519,10 +526,16 @@ impl Formatter {
                 self.expr(cond, 0);
                 self.out.push(' ');
                 // Inline single-expression branches, block otherwise.
+                let inline_e = els.as_ref().and_then(|els_e| match &els_e.kind {
+                    // Reuse inline_block so its comment guard applies: an
+                    // else-block containing comments must stay multi-line.
+                    ExprKind::Block(b) => self.inline_block(b),
+                    _ => None,
+                });
                 match (self.inline_block(then), els) {
-                    (Some(t), Some(els_e)) if inline_else(els_e).is_some() => {
+                    (Some(t), Some(_)) if inline_e.is_some() => {
                         let t = t.clone();
-                        let e = inline_else(els_e).unwrap().clone();
+                        let e = inline_e.unwrap().clone();
                         self.out.push_str("{ ");
                         self.expr(&t, 0);
                         self.out.push_str(" } else { ");
@@ -698,20 +711,6 @@ impl Formatter {
                 }
             }
         }
-    }
-}
-
-fn inline_else(e: &Expr) -> Option<&Expr> {
-    match &e.kind {
-        ExprKind::Block(b) => {
-            if b.stmts.len() == 1 {
-                if let StmtKind::Expr { expr, tail: true } = &b.stmts[0].kind {
-                    return Some(expr);
-                }
-            }
-            None
-        }
-        _ => None,
     }
 }
 
