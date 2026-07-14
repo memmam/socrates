@@ -118,6 +118,11 @@ pub struct Checker {
     generic_scope: Vec<String>,
     var_origins: Vec<VarOrigin>,
     reported_vars: HashSet<u32>,
+    /// Expression nesting depth (recursion guard; the parser caps syntactic
+    /// nesting, but left-associative operator chains build deep ASTs without
+    /// parser recursion).
+    expr_depth: u32,
+    depth_error: bool,
     /// Names of all top-level `let`s in the current program (for better
     /// "used before declaration" errors).
     pending_globals: HashSet<String>,
@@ -148,6 +153,8 @@ impl Checker {
             generic_scope: Vec::new(),
             var_origins: Vec::new(),
             reported_vars: HashSet::new(),
+            expr_depth: 0,
+            depth_error: false,
             pending_globals: HashSet::new(),
         }
     }
@@ -723,8 +730,30 @@ impl Checker {
         ty
     }
 
+    const MAX_EXPR_DEPTH: u32 = 20_000;
+
     fn check_expr(&mut self, e: &Expr, expected: Option<&Type>) -> Type {
+        self.expr_depth += 1;
+        if self.expr_depth > Self::MAX_EXPR_DEPTH {
+            if !self.depth_error {
+                self.depth_error = true;
+                self.diags.push(
+                    Diagnostic::error(
+                        "E0324",
+                        format!(
+                            "expression exceeds {} nested operations",
+                            Self::MAX_EXPR_DEPTH
+                        ),
+                    )
+                    .with_label(e.span, "split this expression up"),
+                );
+            }
+            self.expr_depth -= 1;
+            let t = self.uni.fresh();
+            return self.record(e.id, t);
+        }
         let ty = self.check_expr_inner(e, expected);
+        self.expr_depth -= 1;
         self.record(e.id, ty)
     }
 

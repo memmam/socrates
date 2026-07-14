@@ -1,0 +1,12 @@
+// Isomorphic cyclic structures compare equal (coinductive equality) and the
+// comparison always terminates.
+struct C { id: Int, next: Option[C] }
+let a = C { id: 1, next: None };
+a.next = Some(a);
+let b = C { id: 1, next: None };
+b.next = Some(b);
+println(a == a);     //? expect: true
+println(a == b);     //? expect: true
+let d = C { id: 2, next: None };
+d.next = Some(d);
+println(a == d);     //? expect: false

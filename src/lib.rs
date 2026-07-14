@@ -48,8 +48,20 @@ pub fn build(name: &str, text: &str) -> Result<(bytecode::CompiledProgram, check
 }
 
 /// Run source to completion, capturing output. Returns (stdout, Result).
-/// Intended for the golden test harness.
+/// Intended for the golden test harness. Runs on a dedicated large-stack
+/// thread, mirroring the CLI (deep programs need Rust stack headroom).
 pub fn run_capture(name: &str, text: &str) -> RunOutcome {
+    let name = name.to_string();
+    let text = text.to_string();
+    std::thread::Builder::new()
+        .stack_size(512 * 1024 * 1024)
+        .spawn(move || run_capture_here(&name, &text))
+        .expect("failed to spawn interpreter thread")
+        .join()
+        .expect("interpreter thread panicked")
+}
+
+fn run_capture_here(name: &str, text: &str) -> RunOutcome {
     let lexed = lexer::lex(text);
     let parsed = parser::parse(lexed.tokens, text);
     let mut diags = lexed.diags;

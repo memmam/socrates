@@ -108,13 +108,23 @@ impl Style {
 }
 
 /// Render a batch of diagnostics against a source file into a string.
+/// Error cascades are capped: at most 50 diagnostics render, followed by a
+/// one-line summary of how many were suppressed.
 pub fn render(diags: &[Diagnostic], source: &Source, color: bool) -> String {
+    const MAX_RENDERED: usize = 50;
     let mut out = String::new();
-    for (i, d) in diags.iter().enumerate() {
+    for (i, d) in diags.iter().take(MAX_RENDERED).enumerate() {
         if i > 0 {
             out.push('\n');
         }
         render_one(&mut out, d, source, color);
+    }
+    if diags.len() > MAX_RENDERED {
+        let n_err = diags.iter().skip(MAX_RENDERED).filter(|d| d.is_error()).count();
+        let n_warn = diags.len() - MAX_RENDERED - n_err;
+        out.push_str(&format!(
+            "\n... and {n_err} more error(s) and {n_warn} more warning(s) not shown\n"
+        ));
     }
     out
 }
@@ -165,7 +175,17 @@ fn render_one(out: &mut String, d: &Diagnostic, source: &Source, color: bool) {
                     let _ = writeln!(out, "{:w$}{}", "", st.blue_bold("..."), w = gutter_w);
                 }
             }
-            let text = source.line_text(line);
+            let full_text = source.line_text(line);
+            // Pathological single-line programs shouldn't produce megabyte
+            // diagnostics: render a bounded window of very long lines.
+            const MAX_LINE: usize = 240;
+            let truncated = full_text.chars().count() > MAX_LINE;
+            let text: String = if truncated {
+                let head: String = full_text.chars().take(MAX_LINE).collect();
+                format!("{head}…")
+            } else {
+                full_text.to_string()
+            };
             let _ = writeln!(
                 out,
                 "{:>w$} {} {}",
@@ -203,6 +223,12 @@ fn render_one(out: &mut String, d: &Diagnostic, source: &Source, color: bool) {
                 };
                 if start < cursor_col {
                     continue; // overlapping labels: keep the first
+                }
+                // Clamp labels into the rendered window of truncated lines.
+                let start = start.min(MAX_LINE);
+                let end = end.min(MAX_LINE + 1).max(start + 1);
+                if start < cursor_col {
+                    continue;
                 }
                 underline.push_str(&" ".repeat(start - cursor_col));
                 let ch = if l.primary { "^" } else { "-" };

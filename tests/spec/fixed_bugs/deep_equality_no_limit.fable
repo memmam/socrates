@@ -1,0 +1,18 @@
+// Structural equality works on deep acyclic values (no arbitrary depth cap).
+struct Node { val: Int, next: Option[Node] }
+let mut a = Node { val: 0, next: None };
+let mut b = Node { val: 0, next: None };
+let mut i = 0;
+while i < 500 {
+    a = Node { val: i, next: Some(a) };
+    b = Node { val: i, next: Some(b) };
+    i += 1;
+}
+println(a == b);       //? expect: true
+b.val = -1;
+println(a == b);       //? expect: false
+
+// Deep values also work as map keys.
+let m: Map[Option[Node], Int] = {:};
+m[Some(a)] = 7;
+println(m.contains_key(Some(a)));  //? expect: true

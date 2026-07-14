@@ -1,0 +1,6 @@
+// Recursion through higher-order native callbacks reaches real depth without
+// crashing the host process.
+fn go(n: Int) -> Int {
+    if n == 0 { 0 } else { [n].map(|x| go(x - 1))[0] }
+}
+println(go(1000));    //? expect: 0

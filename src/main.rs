@@ -18,6 +18,20 @@ use fable::source::Source;
 use fable::{check, compiler, diag, dis, fmt, lexer, parser, repl, vm};
 
 fn main() -> ExitCode {
+    // Deep-but-legal programs (nested expressions, native callback
+    // re-entrancy, deep value display) consume Rust stack proportional to
+    // their depth; a large virtual stack keeps Fable's own limits (4096
+    // frames, parser/checker nesting caps) the binding ones.
+    std::thread::Builder::new()
+        .name("fable".into())
+        .stack_size(512 * 1024 * 1024)
+        .spawn(real_main)
+        .expect("failed to spawn interpreter thread")
+        .join()
+        .expect("interpreter thread panicked")
+}
+
+fn real_main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (cmd, rest) = match args.first().map(|s| s.as_str()) {
         None => {

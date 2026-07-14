@@ -1,0 +1,7 @@
+// Displaying a deep value must not crash the interpreter; str() of a
+// 5000-deep chain works (truncation only beyond 10k levels).
+enum Nest { End, More(Nest) }
+let mut v = Nest.End;
+let mut i = 0;
+while i < 5000 { v = Nest.More(v); i += 1; }
+println(str(v).len());   //? expect: 30003

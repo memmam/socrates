@@ -14,7 +14,6 @@ use crate::source::Source;
 use crate::value::{FMap, Handle, Heap, Obj, Upval, Value};
 
 const MAX_FRAMES: usize = 4096;
-const EQ_DEPTH_LIMIT: u32 = 256;
 
 pub struct TraceFrame {
     pub fn_name: String,
@@ -1060,188 +1059,224 @@ impl Vm {
     // Structural equality / hashing / display
     // ------------------------------------------------------------------
 
-    pub fn value_eq(&self, a: Value, b: Value, depth: u32) -> Result<bool, String> {
-        if depth > EQ_DEPTH_LIMIT {
-            return Err("comparison exceeded depth limit (cyclic value?)".into());
-        }
-        match (a, b) {
-            (Value::Unit, Value::Unit) => Ok(true),
-            (Value::Bool(x), Value::Bool(y)) => Ok(x == y),
-            (Value::Int(x), Value::Int(y)) => Ok(x == y),
-            (Value::Float(x), Value::Float(y)) => Ok(x == y),
-            (Value::Native(_), _) | (_, Value::Native(_)) => {
-                Err("cannot compare functions".into())
-            }
-            (Value::Obj(x), Value::Obj(y)) => {
-                // No same-handle shortcut: a container holding NaN must compare
-                // unequal even to itself (IEEE-754 deep equality). Cyclic values
-                // hit the depth limit and panic instead of looping.
-                match (self.heap.get(x), self.heap.get(y)) {
-                    (Obj::Str(sx), Obj::Str(sy)) => Ok(sx == sy),
-                    (Obj::List(xs), Obj::List(ys)) | (Obj::Tuple(xs), Obj::Tuple(ys)) => {
-                        if xs.len() != ys.len() {
-                            return Ok(false);
-                        }
-                        for (ex, ey) in xs.iter().zip(ys) {
-                            if !self.value_eq(*ex, *ey, depth + 1)? {
-                                return Ok(false);
-                            }
-                        }
-                        Ok(true)
-                    }
-                    (Obj::Map(mx), Obj::Map(my)) => {
-                        if mx.len() != my.len() {
-                            return Ok(false);
-                        }
-                        for (hash, k, v) in &mx.entries {
-                            let Some(i) = ({
-                                let mut found = None;
-                                for &cand in my.candidates(*hash) {
-                                    let (_, k2, _) = my.entries[cand as usize];
-                                    if self.value_eq(*k, k2, depth + 1)? {
-                                        found = Some(cand);
-                                        break;
-                                    }
-                                }
-                                found
-                            }) else {
-                                return Ok(false);
-                            };
-                            let (_, _, v2) = my.entries[i as usize];
-                            if !self.value_eq(*v, v2, depth + 1)? {
-                                return Ok(false);
-                            }
-                        }
-                        Ok(true)
-                    }
-                    (
-                        Obj::Struct { def: d1, fields: f1 },
-                        Obj::Struct { def: d2, fields: f2 },
-                    ) => {
-                        if d1 != d2 {
-                            return Ok(false);
-                        }
-                        for (ex, ey) in f1.iter().zip(f2) {
-                            if !self.value_eq(*ex, *ey, depth + 1)? {
-                                return Ok(false);
-                            }
-                        }
-                        Ok(true)
-                    }
-                    (
-                        Obj::Variant { def: d1, variant: v1, fields: f1 },
-                        Obj::Variant { def: d2, variant: v2, fields: f2 },
-                    ) => {
-                        if d1 != d2 || v1 != v2 {
-                            return Ok(false);
-                        }
-                        for (ex, ey) in f1.iter().zip(f2) {
-                            if !self.value_eq(*ex, *ey, depth + 1)? {
-                                return Ok(false);
-                            }
-                        }
-                        Ok(true)
-                    }
-                    (
-                        Obj::Range { lo: l1, hi: h1, inclusive: i1 },
-                        Obj::Range { lo: l2, hi: h2, inclusive: i2 },
-                    ) => Ok(l1 == l2 && h1 == h2 && i1 == i2),
-                    (Obj::Closure { .. }, _) | (_, Obj::Closure { .. }) => {
-                        Err("cannot compare functions".into())
-                    }
-                    _ => Ok(false),
-                }
-            }
-            _ => Ok(false),
-        }
+    /// Deep structural equality, iterative (no Rust-stack recursion in the
+    /// spine). Cycles are handled coinductively: a pair of objects already
+    /// under comparison is assumed equal, so isomorphic cyclic structures
+    /// compare equal and the walk always terminates. NaN follows IEEE-754
+    /// (a container holding NaN is unequal even to itself).
+    pub fn value_eq(&self, a: Value, b: Value, _depth: u32) -> Result<bool, String> {
+        self.value_eq_impl(a, b, 0)
     }
 
-    pub fn hash_value(&self, v: Value, depth: u32) -> Result<u64, String> {
-        if depth > EQ_DEPTH_LIMIT {
-            return Err("map key exceeded depth limit (cyclic value?)".into());
+    fn value_eq_impl(&self, a: Value, b: Value, map_depth: u32) -> Result<bool, String> {
+        // Rust recursion happens only per *map* nesting level (map keys need
+        // an immediate equality decision); everything else is a worklist.
+        if map_depth > 64 {
+            return Err("map nesting exceeds 64 levels in comparison".into());
+        }
+        let mut in_progress: std::collections::HashSet<(Handle, Handle)> =
+            std::collections::HashSet::new();
+        let mut work: Vec<(Value, Value)> = vec![(a, b)];
+        while let Some((a, b)) = work.pop() {
+            match (a, b) {
+                (Value::Unit, Value::Unit) => {}
+                (Value::Bool(x), Value::Bool(y)) => {
+                    if x != y {
+                        return Ok(false);
+                    }
+                }
+                (Value::Int(x), Value::Int(y)) => {
+                    if x != y {
+                        return Ok(false);
+                    }
+                }
+                (Value::Float(x), Value::Float(y)) => {
+                    if x != y {
+                        return Ok(false);
+                    }
+                }
+                (Value::Native(_), _) | (_, Value::Native(_)) => {
+                    return Err("cannot compare functions".into())
+                }
+                (Value::Obj(x), Value::Obj(y)) => {
+                    match (self.heap.get(x), self.heap.get(y)) {
+                        (Obj::Closure { .. }, _) | (_, Obj::Closure { .. }) => {
+                            return Err("cannot compare functions".into())
+                        }
+                        (Obj::Str(sx), Obj::Str(sy)) => {
+                            if sx != sy {
+                                return Ok(false);
+                            }
+                        }
+                        (
+                            Obj::Range { lo: l1, hi: h1, inclusive: i1 },
+                            Obj::Range { lo: l2, hi: h2, inclusive: i2 },
+                        ) => {
+                            if !(l1 == l2 && h1 == h2 && i1 == i2) {
+                                return Ok(false);
+                            }
+                        }
+                        (Obj::List(xs), Obj::List(ys)) | (Obj::Tuple(xs), Obj::Tuple(ys)) => {
+                            if xs.len() != ys.len() {
+                                return Ok(false);
+                            }
+                            if in_progress.insert((x, y)) {
+                                work.extend(xs.iter().copied().zip(ys.iter().copied()));
+                            }
+                        }
+                        (
+                            Obj::Struct { def: d1, fields: f1 },
+                            Obj::Struct { def: d2, fields: f2 },
+                        ) => {
+                            if d1 != d2 {
+                                return Ok(false);
+                            }
+                            if in_progress.insert((x, y)) {
+                                work.extend(f1.iter().copied().zip(f2.iter().copied()));
+                            }
+                        }
+                        (
+                            Obj::Variant { def: d1, variant: v1, fields: f1 },
+                            Obj::Variant { def: d2, variant: v2, fields: f2 },
+                        ) => {
+                            if d1 != d2 || v1 != v2 {
+                                return Ok(false);
+                            }
+                            if in_progress.insert((x, y)) {
+                                work.extend(f1.iter().copied().zip(f2.iter().copied()));
+                            }
+                        }
+                        (Obj::Map(mx), Obj::Map(my)) => {
+                            if mx.len() != my.len() {
+                                return Ok(false);
+                            }
+                            if in_progress.insert((x, y)) {
+                                for (hash, k, v) in &mx.entries {
+                                    let mut found = None;
+                                    for &cand in my.candidates(*hash) {
+                                        let (_, k2, _) = my.entries[cand as usize];
+                                        if self.value_eq_impl(*k, k2, map_depth + 1)? {
+                                            found = Some(cand);
+                                            break;
+                                        }
+                                    }
+                                    let Some(i) = found else { return Ok(false) };
+                                    let (_, _, v2) = my.entries[i as usize];
+                                    work.push((*v, v2));
+                                }
+                            }
+                        }
+                        _ => return Ok(false),
+                    }
+                }
+                _ => return Ok(false),
+            }
+        }
+        Ok(true)
+    }
+
+    /// Structural hash, iterative over a DFS of the value (so equal-by-
+    /// structure values hash equally even when one shares subobjects and the
+    /// other doesn't). Cyclic or absurdly large keys exhaust the node budget
+    /// and error; map entries combine order-insensitively via nested calls.
+    pub fn hash_value(&self, v: Value, _depth: u32) -> Result<u64, String> {
+        let mut budget: u32 = 4_000_000;
+        self.hash_value_impl(v, 0, &mut budget)
+    }
+
+    fn hash_value_impl(
+        &self,
+        v: Value,
+        map_depth: u32,
+        budget: &mut u32,
+    ) -> Result<u64, String> {
+        if map_depth > 64 {
+            return Err("map nesting exceeds 64 levels in key".into());
         }
         const FNV_OFFSET: u64 = 0xcbf29ce484222325;
         const FNV_PRIME: u64 = 0x100000001b3;
         fn mix(h: u64, x: u64) -> u64 {
             (h ^ x).wrapping_mul(FNV_PRIME)
         }
-        Ok(match v {
-            Value::Unit => mix(FNV_OFFSET, 1),
-            Value::Bool(b) => mix(FNV_OFFSET, 2 + b as u64),
-            Value::Int(i) => mix(mix(FNV_OFFSET, 4), i as u64),
-            Value::Float(f) => {
-                let bits = if f == 0.0 { 0u64 } else { f.to_bits() };
-                mix(mix(FNV_OFFSET, 5), bits)
+        let mut acc = FNV_OFFSET;
+        let mut work: Vec<Value> = vec![v];
+        while let Some(v) = work.pop() {
+            if *budget == 0 {
+                return Err("map key is too large or cyclic".into());
             }
-            Value::Undefined => mix(FNV_OFFSET, 6),
-            Value::Native(_) => return Err("functions cannot be used as map keys".into()),
-            Value::Obj(h) => match self.heap.get(h) {
-                Obj::Str(s) => {
-                    let mut acc = mix(FNV_OFFSET, 7);
-                    for b in s.bytes() {
-                        acc = mix(acc, b as u64);
-                    }
-                    acc
+            *budget -= 1;
+            match v {
+                Value::Unit => acc = mix(acc, 1),
+                Value::Bool(b) => acc = mix(acc, 2 + b as u64),
+                Value::Int(i) => acc = mix(mix(acc, 4), i as u64),
+                Value::Float(f) => {
+                    let bits = if f == 0.0 { 0u64 } else { f.to_bits() };
+                    acc = mix(mix(acc, 5), bits);
                 }
-                Obj::List(items) => {
-                    let mut acc = mix(FNV_OFFSET, 8);
-                    for it in items {
-                        acc = mix(acc, self.hash_value(*it, depth + 1)?);
-                    }
-                    acc
-                }
-                Obj::Tuple(items) => {
-                    let mut acc = mix(FNV_OFFSET, 9);
-                    for it in items {
-                        acc = mix(acc, self.hash_value(*it, depth + 1)?);
-                    }
-                    acc
-                }
-                Obj::Map(m) => {
-                    // Order-insensitive combine to match set-like map equality.
-                    let mut acc: u64 = 0;
-                    for (_, k, v) in &m.entries {
-                        let e = mix(
-                            mix(FNV_OFFSET, self.hash_value(*k, depth + 1)?),
-                            self.hash_value(*v, depth + 1)?,
-                        );
-                        acc = acc.wrapping_add(e);
-                    }
-                    mix(mix(FNV_OFFSET, 10), acc)
-                }
-                Obj::Struct { def, fields } => {
-                    let mut acc = mix(mix(FNV_OFFSET, 11), *def as u64);
-                    for f in fields {
-                        acc = mix(acc, self.hash_value(*f, depth + 1)?);
-                    }
-                    acc
-                }
-                Obj::Variant { def, variant, fields } => {
-                    let mut acc = mix(mix(mix(FNV_OFFSET, 12), *def as u64), *variant as u64);
-                    for f in fields {
-                        acc = mix(acc, self.hash_value(*f, depth + 1)?);
-                    }
-                    acc
-                }
-                Obj::Range { lo, hi, inclusive } => mix(
-                    mix(mix(mix(FNV_OFFSET, 13), *lo as u64), *hi as u64),
-                    *inclusive as u64,
-                ),
-                Obj::Closure { .. } => {
+                Value::Undefined => acc = mix(acc, 6),
+                Value::Native(_) => {
                     return Err("functions cannot be used as map keys".into())
                 }
-                Obj::Upvalue(_) | Obj::Free => {
-                    return Err("internal: bad map key (VM bug)".into())
-                }
-            },
-        })
+                Value::Obj(h) => match self.heap.get(h) {
+                    Obj::Str(s) => {
+                        acc = mix(acc, 7);
+                        for b in s.bytes() {
+                            acc = mix(acc, b as u64);
+                        }
+                    }
+                    Obj::List(items) => {
+                        acc = mix(mix(acc, 8), items.len() as u64);
+                        work.extend(items.iter().rev().copied());
+                    }
+                    Obj::Tuple(items) => {
+                        acc = mix(mix(acc, 9), items.len() as u64);
+                        work.extend(items.iter().rev().copied());
+                    }
+                    Obj::Map(m) => {
+                        // Order-insensitive combine, matching set-like map
+                        // equality: sum the entry hashes.
+                        let mut sum: u64 = 0;
+                        for (_, k, v) in &m.entries {
+                            let e = mix(
+                                mix(FNV_OFFSET, self.hash_value_impl(*k, map_depth + 1, budget)?),
+                                self.hash_value_impl(*v, map_depth + 1, budget)?,
+                            );
+                            sum = sum.wrapping_add(e);
+                        }
+                        acc = mix(mix(acc, 10), sum);
+                    }
+                    Obj::Struct { def, fields } => {
+                        acc = mix(mix(acc, 11), *def as u64);
+                        work.extend(fields.iter().rev().copied());
+                    }
+                    Obj::Variant { def, variant, fields } => {
+                        acc = mix(mix(mix(acc, 12), *def as u64), *variant as u64);
+                        work.extend(fields.iter().rev().copied());
+                    }
+                    Obj::Range { lo, hi, inclusive } => {
+                        acc = mix(
+                            mix(mix(mix(acc, 13), *lo as u64), *hi as u64),
+                            *inclusive as u64,
+                        );
+                    }
+                    Obj::Closure { .. } => {
+                        return Err("functions cannot be used as map keys".into())
+                    }
+                    Obj::Upvalue(_) | Obj::Free => {
+                        return Err("internal: bad map key (VM bug)".into())
+                    }
+                },
+            }
+        }
+        Ok(acc)
     }
 
     /// `str(x)` semantics: bare strings at the top level, quoted in containers.
+    /// Nesting deeper than 10,000 levels renders as `...` (as do cycles).
     pub fn display_value(&self, v: Value) -> Result<String, VmError> {
         let mut out = String::new();
         let mut seen = Vec::new();
-        self.display_inner(v, true, &mut seen, &mut out)
+        self.display_inner(v, true, &mut seen, &mut out, 0)
             .map_err(|m| self.error(m))?;
         Ok(out)
     }
@@ -1252,8 +1287,13 @@ impl Vm {
         top: bool,
         seen: &mut Vec<Handle>,
         out: &mut String,
+        depth: u32,
     ) -> Result<(), String> {
         use std::fmt::Write;
+        if depth > 10_000 {
+            out.push_str("...");
+            return Ok(());
+        }
         match v {
             Value::Unit => out.push_str("()"),
             Value::Bool(b) => {
@@ -1298,7 +1338,7 @@ impl Vm {
                             if i > 0 {
                                 out.push_str(", ");
                             }
-                            self.display_inner(*it, false, seen, out)?;
+                            self.display_inner(*it, false, seen, out, depth + 1)?;
                         }
                         out.push(']');
                         seen.pop();
@@ -1310,7 +1350,7 @@ impl Vm {
                             if i > 0 {
                                 out.push_str(", ");
                             }
-                            self.display_inner(*it, false, seen, out)?;
+                            self.display_inner(*it, false, seen, out, depth + 1)?;
                         }
                         out.push(')');
                         seen.pop();
@@ -1325,9 +1365,9 @@ impl Vm {
                                 if i > 0 {
                                     out.push_str(", ");
                                 }
-                                self.display_inner(*k, false, seen, out)?;
+                                self.display_inner(*k, false, seen, out, depth + 1)?;
                                 out.push_str(": ");
-                                self.display_inner(*v, false, seen, out)?;
+                                self.display_inner(*v, false, seen, out, depth + 1)?;
                             }
                             out.push('}');
                         }
@@ -1346,7 +1386,7 @@ impl Vm {
                                 out.push_str(", ");
                             }
                             let _ = write!(out, "{fname}: ");
-                            self.display_inner(*fv, false, seen, out)?;
+                            self.display_inner(*fv, false, seen, out, depth + 1)?;
                         }
                         out.push_str(" }");
                         seen.pop();
@@ -1364,7 +1404,7 @@ impl Vm {
                                 if i > 0 {
                                     out.push_str(", ");
                                 }
-                                self.display_inner(*fv, false, seen, out)?;
+                                self.display_inner(*fv, false, seen, out, depth + 1)?;
                             }
                             out.push(')');
                         }

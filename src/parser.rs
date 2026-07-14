@@ -30,7 +30,17 @@ pub fn parse(tokens: Vec<Token>, src: &str) -> ParseOutput {
 /// Parse with a starting NodeId offset (used by the REPL so ids never collide
 /// across snippets sharing one session).
 pub fn parse_with_ids(tokens: Vec<Token>, src: &str, first_id: u32) -> ParseOutput {
-    let mut p = Parser { tokens, pos: 0, src, diags: Vec::new(), next_id: first_id, no_struct: false };
+    let mut p = Parser {
+        tokens,
+        pos: 0,
+        src,
+        diags: Vec::new(),
+        next_id: first_id,
+        no_struct: false,
+        depth: 0,
+        depth_error: false,
+        brace_memo: std::collections::HashMap::new(),
+    };
     let program = p.program();
     ParseOutput { program, diags: p.diags, node_count: p.next_id }
 }
@@ -43,7 +53,18 @@ struct Parser<'a> {
     next_id: u32,
     /// True while parsing a context where `Ident {` must not be a struct literal.
     no_struct: bool,
+    /// Current expression/pattern/type nesting depth (recursion guard).
+    depth: u32,
+    depth_error: bool,
+    /// `{` token index → "is a map literal", so the speculative map-vs-block
+    /// parse is decided once per brace (otherwise nested blocks re-speculate
+    /// exponentially).
+    brace_memo: std::collections::HashMap<usize, bool>,
 }
+
+/// Nesting deeper than this gets a clean diagnostic instead of exhausting the
+/// (large, but finite) parser stack.
+const MAX_NESTING: u32 = 2000;
 
 type PResult<T> = Result<T, ()>;
 
@@ -815,7 +836,34 @@ impl<'a> Parser<'a> {
         Ok((args, end))
     }
 
+    fn enter_nesting(&mut self) -> PResult<()> {
+        self.depth += 1;
+        if self.depth > MAX_NESTING {
+            if !self.depth_error {
+                self.depth_error = true;
+                let span = self.span();
+                self.diags.push(
+                    Diagnostic::error(
+                        "E0207",
+                        format!("program nesting exceeds {MAX_NESTING} levels"),
+                    )
+                    .with_label(span, "too deeply nested here"),
+                );
+            }
+            self.depth -= 1;
+            return Err(());
+        }
+        Ok(())
+    }
+
     fn primary_expr(&mut self) -> PResult<Expr> {
+        self.enter_nesting()?;
+        let r = self.primary_expr_inner();
+        self.depth -= 1;
+        r
+    }
+
+    fn primary_expr_inner(&mut self) -> PResult<Expr> {
         let tok_span = self.span();
         match self.peek().clone() {
             TokenKind::Int(v) => {
@@ -991,19 +1039,31 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Speculative map-literal parse: `{ expr :` commits to a map.
-        let save_pos = self.pos;
-        let save_diags = self.diags.len();
-        let save_ids = self.next_id;
-        self.advance(); // `{`
-        let is_map = match self.expr() {
-            Ok(_key) => self.at(&TokenKind::Colon),
-            Err(()) => false,
+        // Speculative map-literal parse: `{ expr :` commits to a map. The
+        // decision is memoized per `{` token — without this, speculation over
+        // nested blocks re-parses subtrees exponentially.
+        let brace_pos = self.pos;
+        let is_map = match self.brace_memo.get(&brace_pos) {
+            Some(&v) => v,
+            None => {
+                let save_pos = self.pos;
+                let save_diags = self.diags.len();
+                let save_ids = self.next_id;
+                let save_depth_err = self.depth_error;
+                self.advance(); // `{`
+                let is_map = match self.expr() {
+                    Ok(_key) => self.at(&TokenKind::Colon),
+                    Err(()) => false,
+                };
+                // Roll back regardless; re-parse cleanly on the chosen branch.
+                self.pos = save_pos;
+                self.diags.truncate(save_diags);
+                self.next_id = save_ids;
+                self.depth_error = save_depth_err;
+                self.brace_memo.insert(brace_pos, is_map);
+                is_map
+            }
         };
-        // Roll back regardless; re-parse cleanly on the chosen branch.
-        self.pos = save_pos;
-        self.diags.truncate(save_diags);
-        self.next_id = save_ids;
 
         if is_map {
             self.advance(); // `{`
@@ -1140,6 +1200,13 @@ impl<'a> Parser<'a> {
     }
 
     fn base_pattern(&mut self) -> PResult<Pattern> {
+        self.enter_nesting()?;
+        let r = self.base_pattern_inner();
+        self.depth -= 1;
+        r
+    }
+
+    fn base_pattern_inner(&mut self) -> PResult<Pattern> {
         let tok_span = self.span();
         match self.peek().clone() {
             TokenKind::Underscore => {
@@ -1315,6 +1382,13 @@ impl<'a> Parser<'a> {
     // ---- types ----
 
     fn type_expr(&mut self) -> PResult<TypeExpr> {
+        self.enter_nesting()?;
+        let r = self.type_expr_inner();
+        self.depth -= 1;
+        r
+    }
+
+    fn type_expr_inner(&mut self) -> PResult<TypeExpr> {
         let tok_span = self.span();
         match self.peek().clone() {
             TokenKind::Ident(name) => {
