@@ -1,0 +1,22 @@
+// SPEC §5.4 (v0.2): method call checking — wrong argument count (E0317),
+// wrong argument type (E0301), unknown method on a user type (E0421).
+//? error: E0317
+//? error: `shifted` takes 1 argument, found 2
+//? error: E0301
+//? error: E0421
+//? error: no method `stretch` on a value of type `Point`
+struct Point {
+    x: Float,
+    y: Float,
+}
+
+impl Point {
+    fn shifted(self, dx: Float) -> Point {
+        Point { x: self.x + dx, y: self.y }
+    }
+}
+
+let p = Point { x: 1.0, y: 2.0 };
+p.shifted(1.0, 2.0);
+p.shifted("far");
+p.stretch();

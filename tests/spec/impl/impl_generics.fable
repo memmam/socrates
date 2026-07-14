@@ -1,0 +1,75 @@
+// SPEC §5.4 (v0.2): impl blocks on generic types re-bind the declaration's
+// type parameters (`impl Pair[A, B]`); methods may add their own generics,
+// which follow the impl's in the combined scheme.
+struct Pair[A, B] {
+    first: A,
+    second: B,
+}
+
+impl Pair[A, B] {
+    fn swap(self) -> Pair[B, A] {
+        Pair { first: self.second, second: self.first }
+    }
+
+    fn replace_first[C](self, c: C) -> Pair[C, B] {
+        Pair { first: c, second: self.second }
+    }
+
+    fn firsts(self, other: Pair[A, B]) -> List[A] {
+        [self.first, other.first]
+    }
+}
+
+let p = Pair { first: 1, second: "one" };
+let q = p.swap();
+println(q.first);                 //? expect: one
+println(q.second);                //? expect: 1
+
+let r = p.replace_first(true);
+println(r.first);                 //? expect: true
+println(r.second);                //? expect: one
+
+println(p.firsts(Pair { first: 2, second: "two" })); //? expect: [1, 2]
+
+// The impl's binder names are local to the block: a second block may pick
+// different names.
+impl Pair[X, Y] {
+    fn second_of(self) -> Y {
+        self.second
+    }
+}
+println(p.second_of());           //? expect: one
+
+// Generic enums take methods the same way.
+enum Box[T] {
+    Full(T),
+    Empty,
+}
+
+impl Box[T] {
+    fn unwrap_or(self, fallback: T) -> T {
+        match self {
+            Box.Full(v) -> v,
+            Box.Empty -> fallback,
+        }
+    }
+}
+
+println(Box.Full(3).unwrap_or(0));      //? expect: 3
+let e: Box[Int] = Box.Empty;
+println(e.unwrap_or(0));                //? expect: 0
+
+// Methods returning Option compose with `?` (v0.2) inside other methods.
+impl Box[T] {
+    fn get(self) -> Option[T] {
+        match self {
+            Box.Full(v) -> Some(v),
+            Box.Empty -> None,
+        }
+    }
+}
+fn add_boxes(a: Box[Int], b: Box[Int]) -> Option[Int] {
+    Some(a.get()? + b.get()?)
+}
+println(add_boxes(Box.Full(20), Box.Full(22)));  //? expect: Some(42)
+println(add_boxes(Box.Full(20), Box.Empty));     //? expect: None

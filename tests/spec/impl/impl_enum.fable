@@ -1,0 +1,34 @@
+// SPEC §5.4 (v0.2): impl blocks work on user enums; methods can match on
+// `self` and recurse.
+enum Tree {
+    Leaf(Int),
+    Node(Tree, Tree),
+}
+
+impl Tree {
+    fn sum(self) -> Int {
+        match self {
+            Tree.Leaf(v) -> v,
+            Tree.Node(l, r) -> l.sum() + r.sum(),
+        }
+    }
+
+    fn depth(self) -> Int {
+        match self {
+            Tree.Leaf(_) -> 1,
+            Tree.Node(l, r) -> {
+                let dl = l.depth();
+                let dr = r.depth();
+                1 + if dl > dr { dl } else { dr }
+            }
+        }
+    }
+}
+
+let t = Tree.Node(Tree.Node(Tree.Leaf(1), Tree.Leaf(2)), Tree.Leaf(4));
+println(t.sum());        //? expect: 7
+println(t.depth());      //? expect: 3
+
+// Variant construction (`Tree.Leaf(9)`) and method calls (`value.sum()`)
+// stay distinct: one takes the type name, the other a value.
+println(Tree.Leaf(9).sum());  //? expect: 9

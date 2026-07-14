@@ -1,0 +1,56 @@
+// SPEC §5.4 (v0.2): impl blocks define methods on user structs. `self` is the
+// receiver; methods are called with dot syntax and may call each other, call
+// free functions, and be defined across multiple impl blocks.
+struct Point {
+    x: Float,
+    y: Float,
+}
+
+fn hypot(a: Float, b: Float) -> Float {
+    (a * a + b * b).sqrt()
+}
+
+impl Point {
+    fn len(self) -> Float {
+        hypot(self.x, self.y)
+    }
+
+    fn scaled(self, k: Float) -> Point {
+        Point { x: self.x * k, y: self.y * k }
+    }
+
+    fn manhattan(self) -> Float {
+        self.x.abs() + self.y.abs()
+    }
+}
+
+// A second impl block for the same type is allowed.
+impl Point {
+    fn double_len(self) -> Float {
+        self.scaled(2.0).len()
+    }
+}
+
+let p = Point { x: 3.0, y: 4.0 };
+println(p.len());                    //? expect: 5.0
+println(p.scaled(2.0).len());        //? expect: 10.0
+println(p.double_len());             //? expect: 10.0
+println(Point { x: -1.5, y: 2.5 }.manhattan()); //? expect: 4.0
+
+// Methods are declaration-order independent: defined below, used above via
+// double_len; and usable before their impl block in source order is fine
+// because signatures are collected up front.
+fn use_before_decl(q: Point) -> Float {
+    q.late()
+}
+impl Point {
+    fn late(self) -> Float {
+        self.x
+    }
+}
+println(use_before_decl(p));         //? expect: 3.0
+
+// A method result feeds ordinary expressions and comparisons.
+if p.len() > 4.9 {
+    println("long");                 //? expect: long
+}

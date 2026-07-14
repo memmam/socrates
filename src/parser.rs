@@ -268,6 +268,20 @@ impl<'a> Parser<'a> {
                 let span = e.span;
                 Ok(Some(Stmt { span, id: self.id(), kind: StmtKind::Enum(e) }))
             }
+            TokenKind::Impl => {
+                let i = self.impl_decl()?;
+                if !top_level {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "E0201",
+                            "impl blocks are only allowed at the top level",
+                        )
+                        .with_label(i.span, "declared here"),
+                    );
+                }
+                let span = i.span;
+                Ok(Some(Stmt { span, id: self.id(), kind: StmtKind::Impl(i) }))
+            }
             TokenKind::Let => self.let_stmt().map(Some),
             TokenKind::While => self.while_stmt().map(Some),
             TokenKind::For => self.for_stmt().map(Some),
@@ -423,6 +437,98 @@ impl<'a> Parser<'a> {
         let generics = self.generics()?;
         self.expect(&TokenKind::LParen, "`(`")?;
         let mut params = Vec::new();
+        while !self.at(&TokenKind::RParen) {
+            let pname = self.ident("parameter name")?;
+            self.expect(&TokenKind::Colon, "`:` (parameter types are required)")?;
+            let ty = self.type_expr()?;
+            params.push(Param { name: pname, ty, id: self.id() });
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(&TokenKind::RParen, "`)`")?;
+        let ret = if self.eat(&TokenKind::Arrow) { Some(self.type_expr()?) } else { None };
+        let body = self.block()?;
+        Ok(FnDecl {
+            span: start.to(body.span),
+            id: self.id(),
+            name,
+            generics,
+            params,
+            ret,
+            body,
+        })
+    }
+
+    fn impl_decl(&mut self) -> PResult<ImplDecl> {
+        let start = self.advance().span; // `impl`
+        let ty_name = self.ident("type name")?;
+        let generics = self.generics()?;
+        self.expect(&TokenKind::LBrace, "`{`")?;
+        let mut methods = Vec::new();
+        while !self.at(&TokenKind::RBrace) {
+            if !self.at(&TokenKind::Fn) {
+                self.error_here(format!(
+                    "expected `fn` or `}}` in an impl block, found {}",
+                    self.peek().describe()
+                ));
+                return Err(());
+            }
+            methods.push(self.method_decl(&ty_name, &generics)?);
+        }
+        let end = self.expect(&TokenKind::RBrace, "`}`")?.span;
+        Ok(ImplDecl { span: start.to(end), id: self.id(), ty_name, generics, methods })
+    }
+
+    /// A method inside an impl block: like `fn_decl`, but the first parameter
+    /// must be a bare `self`, whose type (`TypeName[G, ...]`) is synthesized
+    /// here so methods run through the ordinary function machinery.
+    fn method_decl(&mut self, ty_name: &Ident, impl_generics: &[Ident]) -> PResult<FnDecl> {
+        let start = self.advance().span; // `fn`
+        let name = self.ident("method name")?;
+        let generics = self.generics()?;
+        self.expect(&TokenKind::LParen, "`(`")?;
+        let mut params = Vec::new();
+        match self.peek() {
+            TokenKind::Ident(n) if n == "self" => {
+                let pname = self.ident("parameter name")?;
+                if self.at(&TokenKind::Colon) {
+                    self.error_here(
+                        "`self` takes no type annotation; it always has the impl type",
+                    );
+                    return Err(());
+                }
+                let span = pname.span;
+                let args = impl_generics
+                    .iter()
+                    .map(|g| TypeExpr {
+                        span,
+                        id: self.id(),
+                        kind: TypeExprKind::Named {
+                            name: Ident { name: g.name.clone(), span },
+                            args: Vec::new(),
+                        },
+                    })
+                    .collect();
+                let ty = TypeExpr {
+                    span,
+                    id: self.id(),
+                    kind: TypeExprKind::Named {
+                        name: Ident { name: ty_name.name.clone(), span },
+                        args,
+                    },
+                };
+                params.push(Param { name: pname, ty, id: self.id() });
+                self.eat(&TokenKind::Comma);
+            }
+            _ => {
+                self.error_here(format!(
+                    "the first parameter of a method must be `self`, found {}",
+                    self.peek().describe()
+                ));
+                return Err(());
+            }
+        }
         while !self.at(&TokenKind::RParen) {
             let pname = self.ident("parameter name")?;
             self.expect(&TokenKind::Colon, "`:` (parameter types are required)")?;
@@ -816,6 +922,11 @@ impl<'a> Parser<'a> {
                         id: self.id(),
                         kind: ExprKind::Index { base: Box::new(expr), index: Box::new(index) },
                     };
+                }
+                TokenKind::Question => {
+                    let q = self.advance().span;
+                    let span = expr.span.to(q);
+                    expr = Expr { span, id: self.id(), kind: ExprKind::Try(Box::new(expr)) };
                 }
                 _ => break,
             }

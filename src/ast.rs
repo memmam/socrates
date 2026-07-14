@@ -65,6 +65,21 @@ pub struct VariantDef {
     pub span: Span,
 }
 
+/// `impl TypeName[T, ...] { fn method(self, ...) { ... } ... }`
+///
+/// The bracketed names re-bind the type's declared generics for the whole
+/// block (arity must match the declaration). Each method's first parameter is
+/// `self`; the parser synthesizes its `TypeExpr` (`TypeName[T, ...]`) so that
+/// methods flow through the ordinary function machinery.
+#[derive(Debug, Clone)]
+pub struct ImplDecl {
+    pub ty_name: Ident,
+    pub generics: Vec<Ident>,
+    pub methods: Vec<FnDecl>,
+    pub span: Span,
+    pub id: NodeId,
+}
+
 #[derive(Debug, Clone)]
 pub struct Ident {
     pub name: String,
@@ -87,6 +102,7 @@ pub enum StmtKind {
     Fn(FnDecl),
     Struct(StructDecl),
     Enum(EnumDecl),
+    Impl(ImplDecl),
     /// `let [mut] pattern [: ty] = expr;`
     Let {
         mutable: bool,
@@ -177,6 +193,9 @@ pub enum ExprKind {
         op: UnOp,
         expr: Box<Expr>,
     },
+    /// `expr?` — unwrap `Some`/`Ok` or return the `None`/`Err` from the
+    /// enclosing function.
+    Try(Box<Expr>),
     Binary {
         op: BinOp,
         op_span: Span,

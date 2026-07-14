@@ -103,6 +103,8 @@ pub struct Checker {
     pub uni: Unifier,
     pub fns: Vec<FnInfo>,
     fn_by_name: HashMap<String, u32>,
+    /// User-defined methods: `(type def, method name)` → index into `fns`.
+    methods: HashMap<(DefId, String), u32>,
     pub globals: Vec<GlobalInfo>,
     global_by_name: HashMap<String, u32>,
     pub res: HashMap<NodeId, Res>,
@@ -144,6 +146,7 @@ impl Checker {
             uni: Unifier::new(),
             fns: Vec::new(),
             fn_by_name: HashMap::new(),
+            methods: HashMap::new(),
             globals: Vec::new(),
             global_by_name: HashMap::new(),
             res: HashMap::new(),
@@ -183,8 +186,14 @@ impl Checker {
             self.check_stmt(stmt, false);
         }
         for stmt in &program.stmts {
-            if let StmtKind::Fn(f) = &stmt.kind {
-                self.check_fn_body(f);
+            match &stmt.kind {
+                StmtKind::Fn(f) => self.check_fn_body(f),
+                StmtKind::Impl(im) => {
+                    for m in &im.methods {
+                        self.check_fn_body(m);
+                    }
+                }
+                _ => {}
             }
         }
         self.finalize();
@@ -354,61 +363,135 @@ impl Checker {
 
     fn collect_fns(&mut self, program: &Program) {
         for stmt in &program.stmts {
-            let StmtKind::Fn(f) = &stmt.kind else { continue };
-            if self.fn_by_name.contains_key(&f.name.name) {
-                self.diags.push(
-                    Diagnostic::error(
-                        "E0407",
-                        format!("duplicate function `{}`", f.name.name),
-                    )
-                    .with_label(f.name.span, "redefined here"),
-                );
-                // Fall through: register anyway so the body still checks (the
-                // later definition wins for name lookup).
-            }
-            let mut seen = HashSet::new();
-            for g in &f.generics {
-                if !seen.insert(g.name.clone()) {
-                    self.diags.push(
-                        Diagnostic::error(
-                            "E0404",
-                            format!("duplicate type parameter `{}`", g.name),
-                        )
-                        .with_label(g.span, ""),
-                    );
+            match &stmt.kind {
+                StmtKind::Fn(f) => {
+                    if self.fn_by_name.contains_key(&f.name.name) {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "E0407",
+                                format!("duplicate function `{}`", f.name.name),
+                            )
+                            .with_label(f.name.span, "redefined here"),
+                        );
+                        // Fall through: register anyway so the body still
+                        // checks (the later definition wins for name lookup).
+                    }
+                    let idx = self.register_fn(f, &[], f.name.name.clone());
+                    self.fn_by_name.insert(f.name.name.clone(), idx);
                 }
+                StmtKind::Impl(im) => self.collect_impl(im),
+                _ => {}
             }
-            if f.params.len() > 255 {
+        }
+    }
+
+    /// Validate and register one function (or method) signature. `outer`
+    /// holds enclosing generic binders (an impl block's); the function's own
+    /// generics are appended after them, matching `Param` indices.
+    fn register_fn(&mut self, f: &FnDecl, outer: &[String], name: String) -> u32 {
+        let mut seen: HashSet<String> = outer.iter().cloned().collect();
+        for g in &f.generics {
+            if !seen.insert(g.name.clone()) {
                 self.diags.push(
                     Diagnostic::error(
-                        "E0325",
-                        format!(
-                            "function `{}` has {} parameters; the limit is 255",
-                            f.name.name,
-                            f.params.len()
-                        ),
+                        "E0404",
+                        format!("duplicate type parameter `{}`", g.name),
                     )
-                    .with_label(f.name.span, ""),
+                    .with_label(g.span, ""),
                 );
             }
-            self.generic_scope = f.generics.iter().map(|g| g.name.clone()).collect();
-            let params: Vec<Type> = f.params.iter().map(|p| self.resolve_type_expr(&p.ty)).collect();
-            let ret = match &f.ret {
-                Some(t) => self.resolve_type_expr(t),
-                None => Type::Unit,
-            };
-            self.generic_scope.clear();
+        }
+        if f.params.len() > 255 {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0325",
+                    format!(
+                        "function `{}` has {} parameters; the limit is 255",
+                        name,
+                        f.params.len()
+                    ),
+                )
+                .with_label(f.name.span, ""),
+            );
+        }
+        let generics: Vec<String> = outer
+            .iter()
+            .cloned()
+            .chain(f.generics.iter().map(|g| g.name.clone()))
+            .collect();
+        self.generic_scope = generics.clone();
+        let params: Vec<Type> = f.params.iter().map(|p| self.resolve_type_expr(&p.ty)).collect();
+        let ret = match &f.ret {
+            Some(t) => self.resolve_type_expr(t),
+            None => Type::Unit,
+        };
+        self.generic_scope.clear();
 
-            let idx = self.fns.len() as u32;
-            self.fns.push(FnInfo {
-                name: f.name.name.clone(),
-                generics: f.generics.iter().map(|g| g.name.clone()).collect(),
-                params,
-                ret,
-                span: f.name.span,
-            });
-            self.fn_by_name.insert(f.name.name.clone(), idx);
-            self.res.insert(f.id, Res::Fn(idx));
+        let idx = self.fns.len() as u32;
+        self.fns.push(FnInfo {
+            name,
+            generics,
+            params,
+            ret,
+            span: f.name.span,
+        });
+        self.res.insert(f.id, Res::Fn(idx));
+        idx
+    }
+
+    fn collect_impl(&mut self, im: &ImplDecl) {
+        let tname = im.ty_name.name.as_str();
+        let def = match self.defs.lookup(tname) {
+            Some(d) if d != OPTION_DEF && d != RESULT_DEF => d,
+            _ => {
+                let msg = if matches!(
+                    tname,
+                    "Int" | "Float" | "Bool" | "String" | "Unit" | "Range" | "List" | "Map"
+                        | "Option" | "Result"
+                ) {
+                    format!("cannot define methods on the built-in type `{tname}`")
+                } else {
+                    format!("cannot `impl` unknown type `{tname}`")
+                };
+                self.diags.push(
+                    Diagnostic::error("E0331", msg)
+                        .with_label(im.ty_name.span, "not a user-defined struct or enum"),
+                );
+                return;
+            }
+        };
+        let want = self.defs.get(def).generics().len();
+        if im.generics.len() != want {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0332",
+                    format!(
+                        "`{tname}` has {want} type parameter{}, but this impl binds {}",
+                        if want == 1 { "" } else { "s" },
+                        im.generics.len()
+                    ),
+                )
+                .with_label(im.ty_name.span, "type parameter count must match the declaration"),
+            );
+            return;
+        }
+        let outer: Vec<String> = im.generics.iter().map(|g| g.name.clone()).collect();
+        for m in &im.methods {
+            let key = (def, m.name.name.clone());
+            if let Some(&prev) = self.methods.get(&key) {
+                let prev_span = self.fns[prev as usize].span;
+                self.diags.push(
+                    Diagnostic::error(
+                        "E0333",
+                        format!("duplicate method `{}` on `{tname}`", m.name.name),
+                    )
+                    .with_label(m.name.span, "redefined here")
+                    .with_secondary(prev_span, "first defined here"),
+                );
+                continue;
+            }
+            let idx = self.register_fn(m, &outer, format!("{tname}.{}", m.name.name));
+            self.methods.insert(key, idx);
         }
     }
 
@@ -527,7 +610,7 @@ impl Checker {
 
     fn check_stmt(&mut self, stmt: &Stmt, in_fn: bool) {
         match &stmt.kind {
-            StmtKind::Fn(_) | StmtKind::Struct(_) | StmtKind::Enum(_) => {}
+            StmtKind::Fn(_) | StmtKind::Struct(_) | StmtKind::Enum(_) | StmtKind::Impl(_) => {}
             StmtKind::Let { mutable, pattern, ty, init } => {
                 let annotated = ty.as_ref().map(|t| self.resolve_type_expr(t));
                 let init_ty = self.check_expr(init, annotated.as_ref());
@@ -853,6 +936,7 @@ impl Checker {
                     }
                 }
             }
+            ExprKind::Try(inner) => self.check_try(e, inner),
             ExprKind::Binary { op, op_span, lhs, rhs } => {
                 self.check_binary(*op, *op_span, lhs, rhs)
             }
@@ -1338,6 +1422,16 @@ impl Checker {
 
         let rt = self.check_expr(recv, None);
         let resolved = self.uni.shallow_resolve(&rt);
+
+        // User-defined methods (impl blocks) on structs and enums. Prelude
+        // Option/Result defs never appear in the map (impls on them are
+        // rejected), so builtin method dispatch below is unaffected.
+        if let Type::Named(def, _) = &resolved {
+            if let Some(&idx) = self.methods.get(&(*def, method.name.clone())) {
+                return self.check_user_method_call(e, recv, &rt, method, args, idx);
+            }
+        }
+
         let (kind, recv_args): (Recv, Vec<Type>) = match &resolved {
             Type::Int => (Recv::Int, vec![]),
             Type::Float => (Recv::Float, vec![]),
@@ -1604,6 +1698,52 @@ impl Checker {
         Type::Named(def, inst)
     }
 
+    /// A call of a user-defined method: instantiate the registered fn's
+    /// scheme and unify parameter 0 with the receiver.
+    fn check_user_method_call(
+        &mut self,
+        e: &Expr,
+        recv: &Expr,
+        recv_ty: &Type,
+        method: &Ident,
+        args: &[Expr],
+        idx: u32,
+    ) -> Type {
+        self.res.insert(e.id, Res::Fn(idx));
+        let info = self.fns[idx as usize].clone();
+        let inst: Vec<Type> = (0..info.generics.len())
+            .map(|_| self.fresh(e.span, "type argument"))
+            .collect();
+        let params: Vec<Type> = info.params.iter().map(|p| substitute(p, &inst)).collect();
+        let ret = substitute(&info.ret, &inst);
+        self.expect_type(&params[0], recv_ty, recv.span, None);
+        if args.len() != params.len() - 1 {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0317",
+                    format!(
+                        "`{}` takes {} argument{}, found {}",
+                        method.name,
+                        params.len() - 1,
+                        if params.len() == 2 { "" } else { "s" },
+                        args.len()
+                    ),
+                )
+                .with_label(e.span, "")
+                .with_secondary(info.span, "method declared here"),
+            );
+            for a in args {
+                self.check_expr(a, None);
+            }
+            return ret;
+        }
+        for (a, p) in args.iter().zip(&params[1..]) {
+            let at = self.check_expr(a, Some(p));
+            self.expect_type(p, &at, a.span, None);
+        }
+        ret
+    }
+
     fn check_call(
         &mut self,
         e: &Expr,
@@ -1712,6 +1852,99 @@ impl Checker {
                     self.check_expr(a, None);
                 }
                 self.fresh(e.span, "call result")
+            }
+        }
+    }
+
+    /// `expr?` — unwrap `Some`/`Ok`, or return the `None`/`Err` from the
+    /// enclosing function. The enclosing return type must be an `Option` (for
+    /// an Option operand) or a `Result` with the same error type (for a Result
+    /// operand); its success type is unconstrained by the `?` itself.
+    fn check_try(&mut self, e: &Expr, inner: &Expr) -> Type {
+        let t = self.check_expr(inner, None);
+        let ret = match self.fn_stack.last() {
+            Some(FnCtx::Fn { ret } | FnCtx::Lambda { ret }) => Some(ret.clone()),
+            None => {
+                self.diags.push(
+                    Diagnostic::error("E0328", "`?` outside of a function")
+                        .with_label(e.span, "`?` propagates failure by returning early")
+                        .with_note(
+                            "on `None`/`Err`, `?` returns from the enclosing function; \
+                             there is none here",
+                        ),
+                );
+                None
+            }
+        };
+        match self.uni.shallow_resolve(&t) {
+            Type::Named(d, args) if d == OPTION_DEF => {
+                if let Some(ret) = ret {
+                    let some = self.fresh(e.span, "try result");
+                    let want = Type::Named(OPTION_DEF, vec![some]);
+                    if self.uni.unify(&want, &ret).is_err() {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "E0329",
+                                "`?` on an `Option` requires the enclosing function to \
+                                 return `Option`",
+                            )
+                            .with_label(
+                                e.span,
+                                format!(
+                                    "the `None` case would return `None`, but the function \
+                                     returns `{}`",
+                                    self.show(&ret)
+                                ),
+                            ),
+                        );
+                    }
+                }
+                args[0].clone()
+            }
+            Type::Named(d, args) if d == RESULT_DEF => {
+                if let Some(ret) = ret {
+                    let ok = self.fresh(e.span, "try result");
+                    let want = Type::Named(RESULT_DEF, vec![ok, args[1].clone()]);
+                    if self.uni.unify(&want, &ret).is_err() {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "E0329",
+                                format!(
+                                    "`?` on a `{}` requires the enclosing function to \
+                                     return `Result` with error type `{}`",
+                                    self.show(&Type::Named(RESULT_DEF, args.clone())),
+                                    self.show(&args[1])
+                                ),
+                            )
+                            .with_label(
+                                e.span,
+                                format!(
+                                    "the `Err` case would return the error, but the \
+                                     function returns `{}`",
+                                    self.show(&ret)
+                                ),
+                            ),
+                        );
+                    }
+                }
+                args[0].clone()
+            }
+            Type::Var(_) => {
+                self.cannot_infer_here(inner.span, "operand of `?`");
+                self.fresh(e.span, "try result")
+            }
+            other => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "E0330",
+                        format!(
+                            "`?` requires an `Option` or `Result`, found `{}`",
+                            self.show(&other)
+                        ),
+                    )
+                    .with_label(inner.span, "only `Option` and `Result` can be unwrapped with `?`"),
+                );
+                self.fresh(e.span, "try result")
             }
         }
     }

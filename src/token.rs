@@ -24,6 +24,7 @@ pub enum TokenKind {
     Fn,
     Struct,
     Enum,
+    Impl,
     Match,
     If,
     Else,
@@ -73,6 +74,8 @@ pub enum TokenKind {
     RBrace,
     Pipe,
     Underscore,
+    /// `?` — the try operator.
+    Question,
     /// `{:}` empty-map literal is lexed as LBrace, Colon, RBrace by the parser;
     /// no dedicated token needed.
     Eof,
@@ -93,6 +96,7 @@ impl TokenKind {
             Fn => "`fn`".into(),
             Struct => "`struct`".into(),
             Enum => "`enum`".into(),
+            Impl => "`impl`".into(),
             Match => "`match`".into(),
             If => "`if`".into(),
             Else => "`else`".into(),
@@ -140,6 +144,7 @@ impl TokenKind {
             RBrace => "`}`".into(),
             Pipe => "`|`".into(),
             Underscore => "`_`".into(),
+            Question => "`?`".into(),
             Eof => "end of file".into(),
         }
     }

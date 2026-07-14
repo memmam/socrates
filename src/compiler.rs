@@ -65,10 +65,16 @@ impl ProgramBuilder {
             c.fn_proto_map.push(idx);
         }
 
-        // Compile declared function bodies.
+        // Compile declared function and method bodies.
         for stmt in &program.stmts {
-            if let StmtKind::Fn(f) = &stmt.kind {
-                c.compile_fn_decl(f);
+            match &stmt.kind {
+                StmtKind::Fn(f) => c.compile_fn_decl(f),
+                StmtKind::Impl(im) => {
+                    for m in &im.methods {
+                        c.compile_fn_decl(m);
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -435,7 +441,7 @@ impl<'a> Compiler<'a> {
 
     fn stmt(&mut self, stmt: &Stmt) {
         match &stmt.kind {
-            StmtKind::Fn(_) | StmtKind::Struct(_) | StmtKind::Enum(_) => {}
+            StmtKind::Fn(_) | StmtKind::Struct(_) | StmtKind::Enum(_) | StmtKind::Impl(_) => {}
             StmtKind::Let { pattern, init, .. } => self.let_stmt(pattern, init, stmt.span),
             StmtKind::Assign { target, op, value } => self.assign(target, *op, value, stmt.span),
             StmtKind::Expr { expr, tail } => {
@@ -831,6 +837,15 @@ impl<'a> Compiler<'a> {
                         }
                         self.emit(Op::CallNative(native, args.len() as u8 + 1), e.span);
                     }
+                    Some(Res::Fn(idx)) => {
+                        // User-defined method: the receiver is argument 0.
+                        self.expr(recv);
+                        for a in args {
+                            self.expr(a);
+                        }
+                        let p = self.fn_proto_map[idx as usize];
+                        self.emit(Op::CallFn(p, args.len() as u8 + 1), e.span);
+                    }
                     Some(Res::NativeFn(native)) => {
                         // `math.sqrt(x)` — the receiver is a namespace.
                         for a in args {
@@ -916,6 +931,24 @@ impl<'a> Compiler<'a> {
                     UnOp::Neg => self.emit(Op::Neg, e.span),
                     UnOp::Not => self.emit(Op::Not, e.span),
                 };
+            }
+            ExprKind::Try(inner) => {
+                // `Some`/`Ok` are both variant 0 of their prelude enums, and
+                // `None`/`Err` are variant 1 — the failure value on the stack
+                // IS the propagated return value, so no re-wrapping is needed.
+                self.expr(inner);
+                self.emit(Op::TestVariant(0), e.span);
+                let fail = self.emit_jump(Op::JumpIfFalse(0), e.span);
+                self.emit(Op::GetVariantField(0), e.span);
+                let end = self.emit_jump(Op::Jump(0), e.span);
+                let depth_after = self.depth();
+                self.patch_jump(fail);
+                // Fail path: the None/Err value is on top; return it as-is.
+                self.emit(Op::Return, e.span);
+                self.patch_jump(end);
+                // Both paths leave one value; the tracked depth followed the
+                // fail path's Return, so restore the success-path depth.
+                self.set_depth(depth_after);
             }
             ExprKind::Binary { op, op_span, lhs, rhs } => match op {
                 BinOp::And => {
