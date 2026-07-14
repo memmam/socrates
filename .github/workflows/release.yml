@@ -1,16 +1,22 @@
 name: Release
 
-# Two ways in, same result — a DRAFT release to publish by hand:
-#   * push a tag like v0.6.0, or
+# Three ways in, same result — a DRAFT release to publish by hand:
+#   * push a tag like v0.6.0,
 #   * run this workflow manually (Actions -> Release -> Run workflow)
-#     with the tag name as input; `gh release create` then creates the
-#     tag at the dispatched commit as part of drafting the release.
-# Either way the release binary is rebuilt and the full validation
-# suite re-runs against the exact released revision first.
+#     with the tag name as input, or
+#   * land a change to .github/RELEASE_TAG on main containing the tag
+#     name — the release-by-pull-request path, for actors whose access
+#     is branch-scoped (a PR is the only ref they can move).
+# In the latter two, `gh release create` mints the tag at the built
+# commit as part of drafting the release. Every path rebuilds the
+# release binary and re-runs the full validation suite against the
+# exact released revision first.
 
 on:
   push:
     tags: ["v*"]
+    branches: [main]
+    paths: [".github/RELEASE_TAG"]
   workflow_dispatch:
     inputs:
       tag:
@@ -24,10 +30,22 @@ jobs:
   draft-release:
     name: Draft release
     runs-on: ubuntu-latest
-    env:
-      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve tag
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            TAG="$INPUT_TAG"
+          elif [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            TAG="$(head -1 .github/RELEASE_TAG | tr -d '[:space:]')"
+          else
+            TAG="$GITHUB_REF_NAME"
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "releasing $TAG"
       - uses: dtolnay/rust-toolchain@stable
       - name: Build and validate
         run: |
