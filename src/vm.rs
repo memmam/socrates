@@ -393,6 +393,27 @@ impl Vm {
         Ok(())
     }
 
+    /// Call a zero-argument callable, catching runtime panics: on failure
+    /// the frame and value stacks (and open upvalues and temp roots) are
+    /// restored to their pre-call state and the panic message is returned.
+    /// Side effects performed before the panic are kept — `try` is a
+    /// recovery boundary, not a transaction.
+    pub fn call_value_caught(&mut self, callee: Value) -> Result<Value, String> {
+        let frames_at = self.frames.len();
+        let stack_at = self.stack.len();
+        let roots_at = self.temp_roots.len();
+        match self.call_value(callee, &[]) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                self.close_upvalues(stack_at);
+                self.frames.truncate(frames_at);
+                self.stack.truncate(stack_at);
+                self.temp_roots.truncate(roots_at);
+                Err(e.msg)
+            }
+        }
+    }
+
     /// Call any callable value with the given arguments (used by natives).
     pub fn call_value(&mut self, callee: Value, args: &[Value]) -> Result<Value, VmError> {
         match callee {

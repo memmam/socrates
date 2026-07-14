@@ -1,0 +1,58 @@
+// SPEC §7 (v0.4): try(f) runs a zero-argument function and catches runtime
+// panics as Err(message). Side effects before the panic persist — try is a
+// recovery boundary, not a transaction. (os.exit is not catchable: it ends
+// the process, not the computation.)
+println(try(|| 21 * 2));                       //? expect: Ok(42)
+
+// Panics become Err with the panic message.
+println(try(|| -> Int { panic("boom") }));     //? expect: Err("boom")
+println(try(|| [1, 2][9]));                    //? expect: Err("list index out of bounds: index 9, length 2")
+println(try(|| 1 / 0));                        //? expect: Err("division by zero")
+
+// The VM carries on cleanly afterwards.
+let after = 1 + 1;
+println(after);                                //? expect: 2
+
+// Nested: an inner try catches first; an uncaught inner panic reaches the
+// outer one.
+println(try(|| {
+    let inner = try(|| -> Int { panic("inner") });
+    match inner {
+        Ok(v) -> v,
+        Err(_) -> 7,
+    }
+}));                                           //? expect: Ok(7)
+println(try(|| -> Int {
+    let x: Int = try(|| 3).unwrap_or(0);
+    panic("outer {x}")
+}));                                           //? expect: Err("outer 3")
+
+// Side effects before the panic are kept.
+let log = [];
+let r = try(|| {
+    log.push("started");
+    panic("halted");
+});
+println(log);                                  //? expect: ["started"]
+match r {
+    Ok(_) -> println("ok?!"),
+    Err(e) -> println("caught: {e}"),          //? expect: caught: halted
+}
+
+// Even a stack overflow is caught, and the stack recovers fully.
+fn deep(n: Int) -> Int {
+    1 + deep(n + 1)
+}
+println(try(|| deep(0)));                      //? expect: Err("stack overflow")
+fn fib(n: Int) -> Int {
+    if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
+}
+println(fib(12));                              //? expect: 144
+
+// try composes with `?` like any other Result.
+fn checked(i: Int) -> Result[Int, String] {
+    let v = try(|| [10, 20, 30][i])?;
+    Ok(v * 2)
+}
+println(checked(1));                           //? expect: Ok(40)
+println(checked(9));                           //? expect: Err("list index out of bounds: index 9, length 3")
