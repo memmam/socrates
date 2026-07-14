@@ -49,6 +49,17 @@ pub fn load_modules_with(
     root: &Path,
     search: &[PathBuf],
 ) -> Result<Vec<ModuleUnit>, (Source, Vec<Diagnostic>)> {
+    load_modules_overlay(root, search, &HashMap::new())
+}
+
+/// `load_modules_with`, reading some files from an in-memory overlay instead
+/// of disk (keyed by canonical path). The language server uses this to check
+/// unsaved editor buffers.
+pub fn load_modules_overlay(
+    root: &Path,
+    search: &[PathBuf],
+    overlay: &HashMap<PathBuf, String>,
+) -> Result<Vec<ModuleUnit>, (Source, Vec<Diagnostic>)> {
     let mut loader = Loader {
         units: Vec::new(),
         key_by_path: HashMap::new(),
@@ -56,12 +67,13 @@ pub fn load_modules_with(
         loading: Vec::new(),
         next_id: 0,
         search: search.to_vec(),
+        overlay,
     };
     loader.load(root, String::new())?;
     Ok(loader.units)
 }
 
-struct Loader {
+struct Loader<'a> {
     units: Vec<ModuleUnit>,
     /// Canonical path → module key, for diamond dedup.
     key_by_path: HashMap<PathBuf, String>,
@@ -74,9 +86,11 @@ struct Loader {
     /// Extra directories imports resolve against, after the importing file's
     /// own directory (`FABLE_PATH`).
     search: Vec<PathBuf>,
+    /// In-memory file contents that shadow the disk (canonical path → text).
+    overlay: &'a HashMap<PathBuf, String>,
 }
 
-impl Loader {
+impl Loader<'_> {
     fn load(
         &mut self,
         path: &Path,
@@ -84,17 +98,21 @@ impl Loader {
     ) -> Result<(), (Source, Vec<Diagnostic>)> {
         let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let display = path.display().to_string();
-        let text = match std::fs::read_to_string(path) {
-            Ok(t) => t,
-            Err(e) => {
-                let source = Source::new(display.clone(), String::new());
-                return Err((
-                    source,
-                    vec![Diagnostic::error(
-                        "E0335",
-                        format!("cannot read `{display}`: {e}"),
-                    )],
-                ));
+        let text = if let Some(t) = self.overlay.get(&canon) {
+            t.clone()
+        } else {
+            match std::fs::read_to_string(path) {
+                Ok(t) => t,
+                Err(e) => {
+                    let source = Source::new(display.clone(), String::new());
+                    return Err((
+                        source,
+                        vec![Diagnostic::error(
+                            "E0335",
+                            format!("cannot read `{display}`: {e}"),
+                        )],
+                    ));
+                }
             }
         };
         let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();

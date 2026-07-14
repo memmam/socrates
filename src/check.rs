@@ -3543,6 +3543,12 @@ impl Checker {
         Type::Var(v)
     }
 
+    /// Zonked display of a type against this checker's defs (for tooling —
+    /// the language server's hover).
+    pub fn display_type_public(&self, t: &Type) -> String {
+        display_type(&self.uni.zonk(t), &self.defs, &[])
+    }
+
     fn show(&self, t: &Type) -> String {
         display_type(&self.uni.zonk(t), &self.defs, &self.generic_scope)
     }

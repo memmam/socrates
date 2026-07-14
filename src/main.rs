@@ -42,6 +42,7 @@ fn real_main() -> ExitCode {
             return ExitCode::from(64);
         }
         Some("repl") => return ExitCode::from(repl::run_repl() as u8),
+        Some("lsp") => return ExitCode::from(fable::lsp::run_lsp() as u8),
         Some("run") | Some("check") | Some("dis") | Some("fmt") | Some("tokens")
         | Some("ast") => (args[0].as_str(), &args[1..]),
         Some("test") => {
@@ -245,6 +246,7 @@ USAGE:
     fable tokens <file.fable>     dump tokens (debug)
     fable ast <file.fable>        dump the AST (debug)
     fable repl                    interactive session
+    fable lsp                     language server (JSON-RPC over stdio)
 
 ENVIRONMENT:
     FABLE_GC_STRESS=1    collect garbage before every allocation

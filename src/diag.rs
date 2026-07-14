@@ -40,6 +40,11 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
+    /// The primary label's span, if any (the first label attached).
+    pub fn primary_span(&self) -> Option<crate::span::Span> {
+        self.labels.first().map(|l| l.span)
+    }
+
     pub fn error(code: &'static str, message: impl Into<String>) -> Diagnostic {
         Diagnostic {
             severity: Severity::Error,

@@ -11,6 +11,8 @@ pub mod compiler;
 pub mod diag;
 pub mod dis;
 pub mod fmt;
+pub mod jsonlite;
+pub mod lsp;
 pub mod modules;
 pub mod natives;
 pub mod patterns;

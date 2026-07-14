@@ -6,7 +6,7 @@ use std::path::Path;
 #[test]
 fn spec_suite() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/spec");
-    let report = fable::testing::run_test_paths(&[root.clone()]);
+    let report = fable::testing::run_test_paths(std::slice::from_ref(&root));
     assert!(report.total > 0, "no spec tests found under {}", root.display());
     if !report.failures.is_empty() {
         let mut msg = String::new();
