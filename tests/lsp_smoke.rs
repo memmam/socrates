@@ -160,5 +160,65 @@ fn diagnostics_hover_definition() {
     assert!(def.contains(r#""line":0"#), "definition: {def}");
     assert!(def.contains(r#""character":3"#), "definition: {def}");
 
+    // Completion after a dot on a struct value: methods and fields.
+    let (path3, uri3) = uri_for("complete.fable");
+    std::fs::write(&path3, "").unwrap();
+    let src3 = r#"struct Point { x: Float, y: Float }\nimpl Point {\n    fn len(self) -> Float { (self.x * self.x + self.y * self.y).sqrt() }\n}\nlet p = Point { x: 3.0, y: 4.0 };\nlet d = p.len();\n"#;
+    c.notify(
+        "textDocument/didOpen",
+        &format!(
+            r#"{{"textDocument":{{"uri":"{uri3}","languageId":"fable","version":1,"text":"{src3}"}}}}"#
+        ),
+    );
+    let _ = c.read_until("publishDiagnostics");
+    // Simulate typing `p.` at the end (buffer no longer parses; completion
+    // answers from the last good analysis).
+    let src4 = format!("{src3}p.");
+    c.notify(
+        "textDocument/didChange",
+        &format!(
+            r#"{{"textDocument":{{"uri":"{uri3}","version":2}},"contentChanges":[{{"text":"{src4}"}}]}}"#
+        ),
+    );
+    let _ = c.read_until("publishDiagnostics");
+    c.request(
+        "textDocument/completion",
+        &format!(
+            r#"{{"textDocument":{{"uri":"{uri3}"}},"position":{{"line":6,"character":2}}}}"#
+        ),
+    );
+    let comp = c.read_until("label");
+    assert!(comp.contains(r#""label":"len""#), "completion: {comp}");
+    assert!(comp.contains(r#""label":"x""#), "completion: {comp}");
+
+    // Completion after a module alias dot: std.json's pub members.
+    let (path5, uri5) = uri_for("complete_mod.fable");
+    std::fs::write(&path5, "").unwrap();
+    let src5 = r#"import std.json;\nlet x = 1;\n"#;
+    c.notify(
+        "textDocument/didOpen",
+        &format!(
+            r#"{{"textDocument":{{"uri":"{uri5}","languageId":"fable","version":1,"text":"{src5}"}}}}"#
+        ),
+    );
+    let _ = c.read_until("publishDiagnostics");
+    let src6 = r#"import std.json;\nlet x = 1;\njson."#;
+    c.notify(
+        "textDocument/didChange",
+        &format!(
+            r#"{{"textDocument":{{"uri":"{uri5}","version":2}},"contentChanges":[{{"text":"{src6}"}}]}}"#
+        ),
+    );
+    let _ = c.read_until("publishDiagnostics");
+    c.request(
+        "textDocument/completion",
+        &format!(
+            r#"{{"textDocument":{{"uri":"{uri5}"}},"position":{{"line":2,"character":5}}}}"#
+        ),
+    );
+    let comp = c.read_until("label");
+    assert!(comp.contains(r#""label":"parse""#), "completion: {comp}");
+    assert!(comp.contains(r#""label":"stringify""#), "completion: {comp}");
+
     c.shutdown();
 }

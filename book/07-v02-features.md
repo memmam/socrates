@@ -121,7 +121,7 @@ returns from the lambda.
 
 The JSON parser in `examples/json.fable` is the before/after story: every
 
-```fable
+```fable skip
 match parse_value(p) {
     Ok(v) -> items.push(v),
     Err(e) -> { return Err(e); }
@@ -130,7 +130,7 @@ match parse_value(p) {
 
 became
 
-```fable
+```fable skip
 items.push(parse_value(p)?);
 ```
 

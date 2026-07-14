@@ -41,7 +41,7 @@ only for their effects. The default bites when you *meant* to return
 something: a body whose tail expression has a non-`Unit` type won't typecheck
 against the implicit `Unit`, and the compiler guesses both likely causes:
 
-```fable
+```fable errors
 fn double(x: Int) {
     x * 2
 }
@@ -113,7 +113,7 @@ false
 One restriction: `fn` declarations live at the top level only. There are no
 nested named functions — the compiler points you at the alternative:
 
-```fable
+```fable errors
 fn outer() -> Int {
     fn helper() -> Int { 1 }
     helper() + 1
@@ -192,7 +192,7 @@ The body alone can be enough, too: `x + 1` only works at one type, so
 The identity lambda has nothing to constrain its parameter — not the body
 (`x` works at any type) and, below, not the context either:
 
-```fable
+```fable errors
 let id = |x| x;
 ```
 
@@ -395,7 +395,7 @@ Recursion is the natural way to write many functions in Fable, but the VM's
 call stack is finite: 4096 frames in the current implementation. Blow past it
 and the program panics:
 
-```fable
+```fable panics
 fn sum_to(n: Int) -> Int {
     if n == 0 { 0 } else { n + sum_to(n - 1) }
 }

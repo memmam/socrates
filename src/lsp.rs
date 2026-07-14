@@ -12,6 +12,7 @@ use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use crate::ast::*;
+use crate::builtins::{Native, Recv};
 use crate::check::{Checker, Res};
 use crate::diag::Diagnostic;
 use crate::jsonlite::{parse as jparse, J};
@@ -89,6 +90,10 @@ struct Analysis {
 struct Doc {
     text: String,
     analysis: Option<Analysis>,
+    /// The most recent analysis whose load succeeded (its tree and side
+    /// tables back completion while the buffer is mid-edit), with the text
+    /// it was computed from (span math must use that text).
+    last_good: Option<(Analysis, String)>,
 }
 
 struct Server<'a> {
@@ -126,6 +131,10 @@ impl Server<'_> {
                     ("textDocumentSync", J::Num(1.0)), // full
                     ("hoverProvider", J::Bool(true)),
                     ("definitionProvider", J::Bool(true)),
+                    (
+                        "completionProvider",
+                        J::obj(vec![("triggerCharacters", J::Arr(vec![J::str(".")]))]),
+                    ),
                 ]);
                 let result = J::obj(vec![
                     ("capabilities", caps),
@@ -203,6 +212,14 @@ impl Server<'_> {
                     self.respond(id, result);
                 }
             }
+            "textDocument/completion" => {
+                let result = self
+                    .completion(&params)
+                    .unwrap_or_else(|| J::Arr(vec![]));
+                if let Some(id) = &id {
+                    self.respond(id, result);
+                }
+            }
             _ => {
                 // Unknown request: answer null so clients don't hang.
                 if let Some(id) = &id {
@@ -218,7 +235,21 @@ impl Server<'_> {
             .as_ref()
             .map(|a| diagnostics_json(a, &text))
             .unwrap_or_default();
-        self.docs.insert(uri.to_string(), Doc { text, analysis });
+        let mut last_good = self.docs.remove(uri).and_then(|d| d.last_good);
+        if let Some(a) = &analysis {
+            if !a.units.is_empty() {
+                last_good = Some((
+                    Analysis {
+                        units: a.units.clone(),
+                        checker: a.checker.clone(),
+                        diags: Vec::new(),
+                        load_error: None,
+                    },
+                    text.clone(),
+                ));
+            }
+        }
+        self.docs.insert(uri.to_string(), Doc { text, analysis, last_good });
         self.notify(
             "textDocument/publishDiagnostics",
             J::obj(vec![
@@ -308,6 +339,231 @@ impl Server<'_> {
             ("range", range_json(&target_text, span)),
         ]))
     }
+}
+
+impl Server<'_> {
+    /// textDocument/completion: identify the context from the CURRENT text
+    /// (an identifier stem, possibly after a `.`), then answer from the last
+    /// analysis that produced a tree.
+    fn completion(&self, params: &J) -> Option<J> {
+        let uri = params
+            .get("textDocument")
+            .and_then(|t| t.get("uri"))
+            .and_then(J::as_str)?;
+        let doc = self.docs.get(uri)?;
+        let pos = params.get("position")?;
+        let line = pos.get("line")?.as_f64()? as usize;
+        let character = pos.get("character")?.as_f64()? as usize;
+        let byte = lsp_pos_to_byte(&doc.text, line, character)? as usize;
+
+        // Scan back over the identifier being typed, then check for a dot.
+        let bytes = doc.text.as_bytes();
+        let mut stem_start = byte;
+        while stem_start > 0
+            && (bytes[stem_start - 1].is_ascii_alphanumeric() || bytes[stem_start - 1] == b'_')
+        {
+            stem_start -= 1;
+        }
+        let dot = stem_start > 0 && bytes[stem_start - 1] == b'.';
+
+        let (a, a_text) = match &doc.last_good {
+            Some((a, t)) => (a, t.as_str()),
+            None => return Some(J::Arr(completion_top_level(None))),
+        };
+
+        let mut items = Vec::new();
+        if dot {
+            // The receiver chain is the maximal ident/dot/() run before the dot.
+            let recv_end = stem_start - 1;
+            let mut recv_start = recv_end;
+            while recv_start > 0 {
+                let b = bytes[recv_start - 1];
+                if b.is_ascii_alphanumeric() || b == b'_' || b == b'.' || b == b')' || b == b'(' {
+                    recv_start -= 1;
+                } else {
+                    break;
+                }
+            }
+            let chain = &doc.text[recv_start..recv_end];
+
+            // Import alias → module members.
+            let root = a.units.last()?;
+            if let Some(key) = root.imports.get(chain) {
+                items.extend(completion_module_members(a, key));
+            } else if Native::is_namespace(chain) {
+                for name in Native::namespace_members(chain) {
+                    items.push(completion_item(name, 3, ""));
+                }
+            } else {
+                // An expression receiver: find a node in the last good tree
+                // whose source text matches the chain, and use its type.
+                if let Some(ty) = type_of_source_chain(a, a_text, chain) {
+                    items.extend(completion_for_type(a, &ty));
+                }
+            }
+        } else {
+            items = completion_top_level(Some(a));
+        }
+        Some(J::Arr(items))
+    }
+}
+
+fn completion_item(label: &str, kind: u32, detail: &str) -> J {
+    let mut fields = vec![("label", J::str(label)), ("kind", J::Num(kind as f64))];
+    if !detail.is_empty() {
+        fields.push(("detail", J::str(detail)));
+    }
+    J::obj(fields)
+}
+
+/// Members of an imported module: pub fns, globals, and types.
+fn completion_module_members(a: &Analysis, key: &str) -> Vec<J> {
+    let prefix = format!("{key}.");
+    let mut items = Vec::new();
+    for f in &a.checker.fns {
+        if f.is_pub && f.name.starts_with(&prefix) {
+            let bare = &f.name[prefix.len()..];
+            if !bare.contains('.') {
+                items.push(completion_item(bare, 3, "fn"));
+            }
+        }
+    }
+    for g in &a.checker.globals {
+        if g.is_pub && g.name.starts_with(&prefix) {
+            let bare = &g.name[prefix.len()..];
+            if !bare.contains('.') {
+                items.push(completion_item(bare, 6, &a.checker.display_type_public(&g.ty)));
+            }
+        }
+    }
+    for def in 0..a.checker.defs.types.len() as u32 {
+        let td = a.checker.defs.get(def);
+        let (name, is_pub) = match td {
+            crate::types::TypeDef::Struct(s) => (&s.name, s.is_pub),
+            crate::types::TypeDef::Enum(e) => (&e.name, e.is_pub),
+        };
+        if is_pub && name.starts_with(&prefix) {
+            let bare = &name[prefix.len()..];
+            if !bare.contains('.') {
+                items.push(completion_item(bare, 7, "type"));
+            }
+        }
+    }
+    items
+}
+
+/// Find the type of an expression in the last good tree whose SOURCE TEXT
+/// equals `chain` (e.g. "self.pos", "xs"). Prefers the smallest such node.
+fn type_of_source_chain(a: &Analysis, text: &str, chain: &str) -> Option<crate::types::Type> {
+    if chain.is_empty() {
+        return None;
+    }
+    let root = a.units.last()?;
+    let mut found: Option<(u32, crate::types::Type)> = None;
+    let mut consider = |id: NodeId, span: Span| {
+        let slice = text.get(span.start as usize..span.end as usize);
+        if slice == Some(chain) {
+            if let Some(ty) = a.checker.types.get(&id) {
+                let size = span.end - span.start;
+                if found.as_ref().is_none_or(|(s, _)| size <= *s) {
+                    found = Some((size, ty.clone()));
+                }
+            }
+        }
+    };
+    for stmt in &root.program.stmts {
+        walk_stmt(stmt, &mut consider);
+    }
+    found.map(|(_, t)| t)
+}
+
+/// Completions for a value of a known type: builtin methods, user methods,
+/// struct fields, tuple indices.
+fn completion_for_type(a: &Analysis, ty: &crate::types::Type) -> Vec<J> {
+    use crate::types::{Type, TypeDef, OPTION_DEF, RESULT_DEF};
+    let mut items = Vec::new();
+    let resolved = a.checker.uni.zonk(ty);
+    let recv = match &resolved {
+        Type::Int => Some(Recv::Int),
+        Type::Float => Some(Recv::Float),
+        Type::Str => Some(Recv::Str),
+        Type::Range => Some(Recv::Range),
+        Type::List(_) => Some(Recv::List),
+        Type::Map(_, _) => Some(Recv::Map),
+        Type::Named(d, _) if *d == OPTION_DEF => Some(Recv::Option_),
+        Type::Named(d, _) if *d == RESULT_DEF => Some(Recv::Result_),
+        _ => None,
+    };
+    if let Some(recv) = recv {
+        for name in Native::methods_of(recv) {
+            items.push(completion_item(name, 2, "method"));
+        }
+    }
+    if let Type::Named(def, _) = &resolved {
+        for (name, is_pub) in a.checker.methods_on(*def) {
+            let detail = if is_pub { "method" } else { "method (private)" };
+            items.push(completion_item(&name, 2, detail));
+        }
+        if let TypeDef::Struct(s) = a.checker.defs.get(*def) {
+            for (fname, fty) in &s.fields {
+                items.push(completion_item(fname, 5, &a.checker.display_type_public(fty)));
+            }
+        }
+    }
+    if let Type::Tuple(ts) = &resolved {
+        for (i, t) in ts.iter().enumerate() {
+            items.push(completion_item(
+                &i.to_string(),
+                5,
+                &a.checker.display_type_public(t),
+            ));
+        }
+    }
+    // The universal method.
+    items.push(completion_item("to_string", 2, "method"));
+    items
+}
+
+/// Bare-identifier completions: top-level names, aliases, namespaces,
+/// prelude constructors, keywords.
+fn completion_top_level(a: Option<&Analysis>) -> Vec<J> {
+    let mut items = Vec::new();
+    if let Some(a) = a {
+        if let Some(root) = a.units.last() {
+            for f in &a.checker.fns {
+                if !f.name.contains('.') {
+                    items.push(completion_item(&f.name, 3, "fn"));
+                }
+            }
+            for g in &a.checker.globals {
+                if !g.name.contains('.') {
+                    items.push(completion_item(&g.name, 6, &a.checker.display_type_public(&g.ty)));
+                }
+            }
+            for def in 0..a.checker.defs.types.len() as u32 {
+                let name = a.checker.defs.get(def).name();
+                if !name.contains('.') {
+                    items.push(completion_item(name, 7, "type"));
+                }
+            }
+            for alias in root.imports.keys() {
+                items.push(completion_item(alias, 9, "module"));
+            }
+        }
+    }
+    for ns in ["math", "fs", "os"] {
+        items.push(completion_item(ns, 9, "namespace"));
+    }
+    for ctor in ["Some", "None", "Ok", "Err", "true", "false"] {
+        items.push(completion_item(ctor, 4, ""));
+    }
+    for kw in [
+        "let", "mut", "pub", "fn", "struct", "enum", "impl", "import", "match", "if",
+        "else", "while", "for", "in", "return", "break", "continue",
+    ] {
+        items.push(completion_item(kw, 14, ""));
+    }
+    items
 }
 
 // ---------------------------------------------------------------------------

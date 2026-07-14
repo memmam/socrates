@@ -35,7 +35,7 @@ need a digit on both sides of the dot: `0.5` and `1.0` are valid, `.5` and
 Fable never converts numbers behind your back. Mixing `Int` and `Float` is a
 compile error:
 
-```fable
+```fable errors
 println(1 + 2.0);
 ```
 
@@ -88,7 +88,7 @@ println(count);
 The compound assignments `+=`, `-=`, `*=`, `/=`, `%=` are sugar for the
 spelled-out form. Assigning to a plain `let` is a compile error:
 
-```fable
+```fable errors
 let limit = 100;
 limit = 200;
 ```
@@ -279,7 +279,7 @@ Both branches must have the same type. An `if` *without* an `else` has type
 `Unit` — there would be no value when the condition is false — so using one
 for its value is a compile error:
 
-```fable
+```fable errors
 let x = if true { 1 };
 ```
 
@@ -382,7 +382,7 @@ println(double(21));
 Add a semicolon after `x * 2` and the block's value becomes `()` — and the
 compiler tells you exactly that:
 
-```fable
+```fable errors
 fn double(x: Int) -> Int {
     x * 2;
 }
@@ -410,7 +410,7 @@ mutually recursive functions just work. But top-level `let` bindings and
 statements run in order, and top-level code may only refer to globals
 declared above it:
 
-```fable
+```fable errors
 println(greeting);
 let greeting = "hello";
 ```
@@ -430,7 +430,7 @@ is fine as long as the function isn't *called* until the global's `let` has
 run. Call it too early, though, and the compiler can't save you — the
 global's initializer simply hasn't run yet, and you get a panic at runtime:
 
-```fable
+```fable panics
 fn shout() -> String {
     greeting.to_upper()
 }

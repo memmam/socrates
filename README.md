@@ -86,13 +86,17 @@ executed against the interpreter before it was written down.
   `//? expect/error/panic` directives is a test; the interpreter's own
   247-test suite uses the same command's code.
 - **A language server** (v0.4). `fable lsp` — diagnostics as you type,
-  hover types, go-to-definition across modules. JSON-RPC hand-rolled;
-  still zero dependencies.
+  hover types, go-to-definition across modules, and completion (v0.5)
+  that works mid-edit. JSON-RPC hand-rolled; still zero dependencies.
 - **Catchable panics** (v0.4). `try(f)` turns a runtime panic into
   `Err(message)` with the VM stack fully restored — even a stack overflow.
 - **A whole toolchain**: `run`, `check`, `test`, `lsp`, a REPL with
-  persistent incremental compilation and `:type`, a comment-preserving
-  formatter (`fmt`), and a bytecode disassembler (`dis`).
+  persistent incremental compilation, `:type`, and working imports
+  (v0.5), a comment-preserving formatter (`fmt`), and a bytecode
+  disassembler (`dis`).
+- **An executable book** (v0.5). All 106 runnable snippets in `book/`
+  execute in CI — including the deliberate-error demos, verified to fail
+  the way the prose says they do.
 
 ## Try it
 
@@ -245,9 +249,13 @@ and tail-call optimization. v0.3 made it a real glue language: `pub`
 visibility, operator methods, a `FABLE_PATH` module search path, and
 `fs`/`os` builtins. v0.4 built the toolchain: `fable test`, the embedded
 standard library (including lazy iterators written in Fable itself),
-`fable lsp`, and catchable panics. Still deliberately out of scope: full
-traits (operator methods cover the common case), per-field visibility, and
-a package manager.
+`fable lsp`, and catchable panics. v0.5 closed the loop: the REPL
+imports, the language server completes, and the book runs in CI.
+
+Fable is **feature-complete as designed**. What remains out of scope —
+full traits, per-field visibility, a package manager, a debugger, Windows
+paths — stays out until real programs demand it; a language grows better
+from the pull of its users than the push of its builder.
 
 ## License
 

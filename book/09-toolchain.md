@@ -72,6 +72,10 @@ editor can ask. `fable lsp` speaks the Language Server Protocol over stdio:
 - **Hover** — the checked type of the expression under the cursor.
 - **Go to definition** — locals, globals, functions, and methods, across
   module files.
+- **Completion** (v0.5) — methods, fields, and tuple indices after a dot
+  (answered from the last analysis that parsed, so it works mid-edit),
+  module members after an import alias, `math`/`fs`/`os` namespaces, and
+  top-level names.
 
 Point any LSP client at the binary. For VS Code-compatible editors, that's
 a config entry naming the command (`fable lsp`) and the file pattern

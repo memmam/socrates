@@ -242,7 +242,7 @@ Fable's compile errors follow one format, so it pays to dissect one
 specimen thoroughly. This program mixes an `Int` and a `Float`, which Fable
 never converts implicitly:
 
-```fable
+```fable errors
 let price = 3;
 let tax = 0.2;
 println(price + tax);
@@ -279,7 +279,7 @@ Anatomy, top to bottom:
 Not every error carries every part. Some have a single label and no note;
 some, like an undefined-name error, add a did-you-mean note:
 
-```fable
+```fable errors
 let count = 3;
 println(count + conut);
 ```
@@ -310,7 +310,7 @@ A panic is a runtime abort — index out of bounds, integer overflow,
 `unwrap()` on `None`, a failed `assert`, and friends. It prints a message
 and a stack trace to stderr:
 
-```fable
+```fable panics
 let xs = [1, 2, 3];
 println(xs[7]);
 ```

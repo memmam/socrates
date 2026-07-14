@@ -16,6 +16,11 @@ use crate::source::Source;
 use crate::span::Span;
 use crate::{diag, lexer, parser};
 
+/// What `ModuleSession::load_imports` returns: the newly loaded units in
+/// dependency order, the chunk's alias → key map, and the next free NodeId.
+pub type LoadedImports = (Vec<ModuleUnit>, HashMap<String, String>, u32);
+
+#[derive(Clone)]
 pub struct ModuleUnit {
     /// Name-mangling prefix: "" for the root module, the module key otherwise.
     pub prefix: String,
@@ -71,6 +76,56 @@ pub fn load_modules_overlay(
     };
     loader.load(root, String::new())?;
     Ok(loader.units)
+}
+
+/// Persistent module-loading state for an interactive session: modules
+/// already loaded in earlier chunks are never loaded twice, and NodeId
+/// space is threaded across loads.
+#[derive(Default, Clone)]
+pub struct ModuleSession {
+    key_by_path: HashMap<PathBuf, String>,
+    keys_taken: HashMap<String, u32>,
+    search: Vec<PathBuf>,
+}
+
+impl ModuleSession {
+    pub fn new() -> ModuleSession {
+        let search: Vec<PathBuf> = std::env::var("FABLE_PATH")
+            .ok()
+            .map(|v| v.split(':').filter(|s| !s.is_empty()).map(PathBuf::from).collect())
+            .unwrap_or_default();
+        ModuleSession { key_by_path: HashMap::new(), keys_taken: HashMap::new(), search }
+    }
+
+    /// Load the import targets of an interactive chunk. Paths resolve against
+    /// `base_dir` (the session's working directory), then the search path;
+    /// `std.*` resolves embedded. Returns the newly loaded units (dependency
+    /// order), the chunk's alias map, and the next free NodeId.
+    pub fn load_imports(
+        &mut self,
+        program: &Program,
+        base_dir: &Path,
+        importer: &Source,
+        next_id: u32,
+        overlay: &HashMap<PathBuf, String>,
+    ) -> Result<LoadedImports, (Source, Vec<Diagnostic>)> {
+        let mut loader = Loader {
+            units: Vec::new(),
+            key_by_path: std::mem::take(&mut self.key_by_path),
+            keys_taken: std::mem::take(&mut self.keys_taken),
+            loading: Vec::new(),
+            next_id,
+            search: self.search.clone(),
+            overlay,
+        };
+        let result = loader.scan_imports(program, base_dir, importer, false);
+        self.key_by_path = loader.key_by_path;
+        self.keys_taken = loader.keys_taken;
+        match result {
+            Ok(imports) => Ok((loader.units, imports, loader.next_id)),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 struct Loader<'a> {
@@ -152,36 +207,7 @@ impl Loader<'_> {
         self.key_by_path.insert(canon.clone(), key.clone());
         self.loading.push((canon, display));
 
-        let mut imports: HashMap<String, String> = HashMap::new();
-        for stmt in &parsed.program.stmts {
-            let StmtKind::Import { path: segs, alias } = &stmt.kind else { continue };
-            if is_std && segs[0].name != "std" {
-                return Err((
-                    source,
-                    vec![Diagnostic::error(
-                        "E0337",
-                        "standard-library modules may only import other `std` modules",
-                    )
-                    .with_label(stmt.span, "")],
-                ));
-            }
-            let target_key = self.resolve_import(&dir, segs, stmt.span, &source)?;
-            let alias_name = alias
-                .as_ref()
-                .map(|a| a.name.clone())
-                .unwrap_or_else(|| segs.last().unwrap().name.clone());
-            if imports.insert(alias_name.clone(), target_key).is_some() {
-                return Err((
-                    source,
-                    vec![Diagnostic::error(
-                        "E0336",
-                        format!("duplicate import alias `{alias_name}`"),
-                    )
-                    .with_label(stmt.span, "already imported under this name")
-                    .with_note("use `as` to give one of them a different alias")],
-                ));
-            }
-        }
+        let imports = self.scan_imports(&parsed.program, &dir, &source, is_std)?;
 
         self.loading.pop();
         self.units.push(ModuleUnit {
@@ -191,6 +217,48 @@ impl Loader<'_> {
             imports,
         });
         Ok(())
+    }
+
+    /// Resolve and load every import statement in `program`, returning the
+    /// alias → module key map for the importing scope.
+    fn scan_imports(
+        &mut self,
+        program: &Program,
+        dir: &Path,
+        source: &Source,
+        is_std: bool,
+    ) -> Result<HashMap<String, String>, (Source, Vec<Diagnostic>)> {
+        let mut imports: HashMap<String, String> = HashMap::new();
+        for stmt in &program.stmts {
+            let StmtKind::Import { path: segs, alias } = &stmt.kind else { continue };
+            if is_std && segs[0].name != "std" {
+                return Err((
+                    source.clone(),
+                    vec![Diagnostic::error(
+                        "E0337",
+                        "standard-library modules may only import other `std` modules",
+                    )
+                    .with_label(stmt.span, "")],
+                ));
+            }
+            let target_key = self.resolve_import(dir, segs, stmt.span, source)?;
+            let alias_name = alias
+                .as_ref()
+                .map(|a| a.name.clone())
+                .unwrap_or_else(|| segs.last().unwrap().name.clone());
+            if imports.insert(alias_name.clone(), target_key).is_some() {
+                return Err((
+                    source.clone(),
+                    vec![Diagnostic::error(
+                        "E0336",
+                        format!("duplicate import alias `{alias_name}`"),
+                    )
+                    .with_label(stmt.span, "already imported under this name")
+                    .with_note("use `as` to give one of them a different alias")],
+                ));
+            }
+        }
+        Ok(imports)
     }
 
     /// Resolve (and if necessary load) one import; returns the module key.

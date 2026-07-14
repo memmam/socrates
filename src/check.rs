@@ -746,7 +746,7 @@ impl Checker {
                     self.diags.push(
                         Diagnostic::error(
                             "E0334",
-                            "imports are only available when running a file",
+                            "imports are not available in one-shot evaluation",
                         )
                         .with_label(stmt.span, "cannot import here"),
                     );
@@ -3541,6 +3541,16 @@ impl Checker {
         let v = self.uni.fresh_id();
         self.var_origins.push(VarOrigin { var: v, span, what, default_unit: true });
         Type::Var(v)
+    }
+
+    /// The methods defined on a type, as (name, is_pub) pairs (for tooling —
+    /// the language server's completion).
+    pub fn methods_on(&self, def: DefId) -> Vec<(String, bool)> {
+        self.methods
+            .iter()
+            .filter(|((d, _), _)| *d == def)
+            .map(|((_, name), &idx)| (name.clone(), self.fns[idx as usize].is_pub))
+            .collect()
     }
 
     /// Zonked display of a type against this checker's defs (for tooling —

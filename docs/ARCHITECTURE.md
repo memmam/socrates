@@ -276,6 +276,23 @@ benchmark ran 1,604 collections (161ms), now 98 (38ms), with allocation
 also cheapened by an early-out in `close_upvalues` and a clone-free
 `Op::Closure` path.
 
+## v0.5 additions
+
+**REPL imports**: a `ModuleSession` persists the loader's dedup and key
+state across chunks; each chunk's imports load against the working
+directory / `FABLE_PATH` / `std.`, the new units check and run before the
+chunk, and both the checker and the session roll back together on failure.
+
+**Completion** reads the receiver chain from the *current* buffer text and
+resolves it against the last analysis whose load succeeded — so it works
+while the buffer doesn't parse. The builtin method registry became one
+const table serving lookup and enumeration.
+
+**The executable book** (tests/book_snippets.rs): fence tags classify the
+deliberate-failure demos (`errors`/`panics`), support-file blocks are
+written into a per-chapter directory for real multi-file imports, and
+directive-bearing blocks run under `fable test` semantics.
+
 ## Testing strategy
 
 - Unit tests per module (lexer shapes, parser precedence, checker

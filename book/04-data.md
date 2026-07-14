@@ -254,7 +254,7 @@ A `match` must cover every possible value of its scrutinee. If it doesn't,
 that's a compile error — and Fable reports a concrete value you missed, not
 just "add more arms":
 
-```fable
+```fable errors
 enum Shape { Circle(Float), Rect(Float, Float), Empty }
 
 fn area(s: Shape) -> Float {
@@ -278,7 +278,7 @@ This is the payoff of enums: add a variant to `Shape` next month and every
 gap. The checker is deliberately conservative about guards — a guard might
 be `false`, so a guarded arm never counts toward coverage:
 
-```fable
+```fable errors
 fn sign(n: Int) -> String {
     match n {
         0 -> "zero",
@@ -356,7 +356,7 @@ println(x + y);
 
 A variant pattern can fail, so it is rejected in `let` at compile time:
 
-```fable
+```fable errors
 let opt = Some(5);
 let Some(n) = opt;
 println(n);

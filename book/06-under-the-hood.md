@@ -303,7 +303,7 @@ A panic aborts the program with exit code 70, a message, and a stack trace.
 Traces are real: every compiled instruction remembers its source span, and
 every proto knows which file it came from.
 
-```fable
+```fable panics
 fn third(xs: List[Int]) -> Int {
     xs[2]
 }
@@ -328,7 +328,7 @@ Note the middle frame: the panic happened inside a string interpolation, and
 the trace points at the exact column of the `third(xs)` call. Builtins add
 no frames of their own — a lambda passed to `map` panics like this:
 
-```fable
+```fable panics
 let inverses = [4, 2, 0].map(|n| 100 / n);
 println(inverses);
 ```

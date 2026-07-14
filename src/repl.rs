@@ -12,6 +12,7 @@ use std::io::{IsTerminal, Write};
 use crate::ast::{Pattern, PatternKind, Stmt, StmtKind};
 use crate::check::Checker;
 use crate::compiler::ProgramBuilder;
+use crate::modules::ModuleSession;
 use crate::diag;
 use crate::source::Source;
 use crate::span::NodeId;
@@ -29,6 +30,12 @@ pub fn run_repl() -> i32 {
     let mut vm: Option<Vm> = None;
     let mut node_offset: u32 = 0;
     let mut chunk_no: u32 = 0;
+    // Imports work in the REPL (v0.5): loaded modules and the session's
+    // alias map persist across chunks.
+    let mut modsession = ModuleSession::new();
+    let mut session_imports: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let base_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
     let stdin = std::io::stdin();
     let mut pending = String::new();
@@ -53,6 +60,7 @@ pub fn run_repl() -> i32 {
                 ":help" => {
                     println!(
                         "Enter Fable code (multi-line input continues while delimiters are open).\n\
+                         Imports work: `import std.json;` or files relative to the working directory.\n\
                          Commands: :help  :type <expr>  :q"
                     );
                     continue;
@@ -118,7 +126,7 @@ pub fn run_repl() -> i32 {
             if let Some(Stmt { kind: StmtKind::Expr { expr, .. }, .. }) = program.stmts.last() {
                 let expr_id = expr.id;
                 let mut probe = checker.clone();
-                probe.check_program(&program);
+                probe.check_module(&program, "", session_imports.clone());
                 let d = probe.take_diags();
                 if diag::has_errors(&d) {
                     print!("{}", diag::render(&d, &source, color));
@@ -132,16 +140,65 @@ pub fn run_repl() -> i32 {
             continue;
         }
 
-        // Check with rollback on error.
+        // Resolve any imports in the chunk (rolling the session back if
+        // loading fails), then check the new units and the chunk itself.
         let saved_checker = checker.clone();
-        checker.check_program(&program);
+        let saved_session = modsession.clone();
+        let overlay = std::collections::HashMap::new();
+        let (new_units, chunk_imports, after_id) =
+            match modsession.load_imports(&program, &base_dir, &source, next_id, &overlay) {
+                Ok(r) => r,
+                Err((err_source, diags)) => {
+                    print!("{}", diag::render(&diags, &err_source, color));
+                    modsession = saved_session;
+                    continue;
+                }
+            };
+        let next_id = after_id;
+
+        let mut unit_check_failed = false;
+        for unit in &new_units {
+            checker.check_module(&unit.program, &unit.prefix, unit.imports.clone());
+            let unit_diags = checker.take_diags();
+            if diag::has_errors(&unit_diags) {
+                print!("{}", diag::render(&unit_diags, &unit.source, color));
+                unit_check_failed = true;
+                break;
+            }
+        }
+        if unit_check_failed {
+            checker = saved_checker;
+            modsession = saved_session;
+            continue;
+        }
+
+        let mut merged_imports = session_imports.clone();
+        merged_imports.extend(chunk_imports.clone());
+        checker.check_module(&program, "", merged_imports.clone());
         let check_diags = checker.take_diags();
         print!("{}", diag::render(&check_diags, &source, color));
         if diag::has_errors(&check_diags) {
             checker = saved_checker;
+            modsession = saved_session;
             continue;
         }
         node_offset = next_id;
+        session_imports = merged_imports;
+
+        // Compile and run the new modules' top-level code, then the chunk.
+        for unit in new_units {
+            let source_idx = vm.as_ref().map(|v| v.sources.len() as u32).unwrap_or(0);
+            let compiled = builder.compile_chunk(&unit.program, &checker, source_idx);
+            match &mut vm {
+                None => {
+                    vm = Some(Vm::new(compiled, unit.source, Box::new(std::io::stdout())));
+                }
+                Some(vm) => vm.update_program(compiled, unit.source),
+            }
+            if let Err(e) = vm.as_mut().unwrap().run_entry() {
+                print!("{}", e.render(color));
+            }
+        }
 
         let source_idx = vm.as_ref().map(|v| v.sources.len() as u32).unwrap_or(0);
         let compiled = builder.compile_chunk(&program, &checker, source_idx);

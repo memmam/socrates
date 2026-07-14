@@ -407,7 +407,10 @@ match shape {
 - The `std.` prefix is **reserved** (v0.4): `import std.json;` resolves to a
   module embedded in the interpreter binary, never to a file. Embedded
   modules may import only other `std` modules. See § 7.1 for the catalog.
-- The REPL and one-shot string evaluation cannot import (E0334).
+- The REPL imports like a file (v0.5): paths resolve against the working
+  directory, then `FABLE_PATH`, then `std.`; loaded modules and aliases
+  persist across inputs, and re-importing never reloads. Only one-shot
+  string evaluation cannot import (E0334).
 
 ---
 
@@ -662,9 +665,12 @@ operator at level 9, and struct-literal names may be module-qualified.)
   interpreter's own spec suite runs through the same code.
 - `fable lsp` (v0.4) — a language server over stdio: diagnostics on
   open/change (identical to `fable check`, imports included), hover with
-  checked types, and go-to-definition across module files.
+  checked types, go-to-definition across module files, and completion
+  (v0.5) for methods, fields, module members, namespaces, and top-level
+  names — answered from the last good analysis, so it works mid-edit.
 - `fable repl` — interactive REPL; expressions print their value (in `str` form,
-  except `String` values print quoted) unless the value is `()`.
+  except `String` values print quoted) unless the value is `()`. Imports
+  work (v0.5) and persist across inputs.
 - `fable tokens file.fable` / `fable ast file.fable` — debugging dumps.
 
 Diagnostics use the format:

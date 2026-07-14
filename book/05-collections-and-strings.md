@@ -38,7 +38,7 @@ Indexing past the end is not an `Option` — it's a panic, the runtime error
 that aborts the program (exit code 70). Negative indices panic too; there
 is no Python-style `xs[-1]`:
 
-```fable
+```fable panics
 let xs = [1, 2, 3];
 println(xs[3]);
 ```
@@ -228,7 +228,7 @@ already means an empty block — `let m: Map[String, Int] = {};` is a type
 error (`expected Map[String, Int], found Unit`). And since `{:}` has no
 entries to infer types from, it needs an annotation or other context:
 
-```fable
+```fable errors
 let tally = {:};
 ```
 
@@ -249,7 +249,7 @@ the same `[]`-versus-`get` split: `[]` panics on a missing key, while
 `ages.get("zed")` is `None` and `ages.get("zed").unwrap_or(0)` supplies a
 default:
 
-```fable
+```fable panics
 let ages = {"amy": 34};
 println(ages["zed"]);
 ```
