@@ -61,7 +61,14 @@ jobs:
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
+        # Publishing a draft creates the tag as a real user, which re-fires
+        # the tag-push trigger — without this guard that mints a duplicate
+        # draft for a release that already shipped.
         run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "release $TAG already exists; skipping"
+            exit 0
+          fi
           gh release create "$TAG" \
             --draft \
             --target "$GITHUB_SHA" \
