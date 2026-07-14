@@ -308,21 +308,28 @@ impl Vm {
     }
 
     fn close_upvalues(&mut self, from: usize) {
-        let mut kept = Vec::with_capacity(self.open_upvalues.len());
-        for &h in &self.open_upvalues {
+        // Hot path: block exits and returns land here, and open upvalues are
+        // rare — bail without touching anything when there are none, and
+        // close in place (order is irrelevant; this is a search list).
+        if self.open_upvalues.is_empty() {
+            return;
+        }
+        let mut i = 0;
+        while i < self.open_upvalues.len() {
+            let h = self.open_upvalues[i];
             let close = match self.heap.get(h) {
-                Obj::Upvalue(Upval::Open(i)) if *i >= from => Some(*i),
+                Obj::Upvalue(Upval::Open(idx)) if *idx >= from => Some(*idx),
                 _ => None,
             };
             match close {
-                Some(i) => {
-                    let v = self.stack[i];
+                Some(idx) => {
+                    let v = self.stack[idx];
                     *self.heap.get_mut(h) = Obj::Upvalue(Upval::Closed(v));
+                    self.open_upvalues.swap_remove(i);
                 }
-                None => kept.push(h),
+                None => i += 1,
             }
         }
-        self.open_upvalues = kept;
     }
 
     // ------------------------------------------------------------------
@@ -555,10 +562,11 @@ impl Vm {
                 Op::PushNative(n) => self.stack.push(Value::Native(n)),
                 Op::Closure(p) => {
                     self.gc_checkpoint();
-                    let descs = self.program.protos[p as usize].upvals.clone();
                     let parent_closure = self.frames.last().unwrap().closure;
-                    let mut upvals = Vec::with_capacity(descs.len());
-                    for d in descs {
+                    let n_upvals = self.program.protos[p as usize].upvals.len();
+                    let mut upvals = Vec::with_capacity(n_upvals);
+                    for k in 0..n_upvals {
+                        let d = self.program.protos[p as usize].upvals[k];
                         if d.from_local {
                             upvals.push(self.capture_upvalue(base + d.index as usize));
                         } else {

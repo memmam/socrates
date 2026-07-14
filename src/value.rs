@@ -131,7 +131,7 @@ impl Heap {
             slots: Vec::new(),
             free: Vec::new(),
             live: 0,
-            next_gc: 256,
+            next_gc: 4096,
             stress,
             log,
             collections: 0,
@@ -221,7 +221,10 @@ impl Heap {
             }
         }
         self.collections += 1;
-        self.next_gc = (self.live * 2).max(256);
+        // A low floor makes small working sets collect every few hundred
+        // allocations, and every sweep walks the whole slot table — so keep
+        // a healthy minimum headroom (a few hundred KB at worst).
+        self.next_gc = (self.live * 2).max(4096);
         if self.log {
             eprintln!(
                 "[gc] collected {} of {} objects ({} live, next at {})",
