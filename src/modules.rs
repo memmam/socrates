@@ -94,25 +94,21 @@ impl Loader {
         let mut imports: HashMap<String, String> = HashMap::new();
         for stmt in &parsed.program.stmts {
             let StmtKind::Import { path: segs, alias } = &stmt.kind else { continue };
-            match self.resolve_import(&dir, segs, stmt.span, &source) {
-                Ok(target_key) => {
-                    let alias_name = alias
-                        .as_ref()
-                        .map(|a| a.name.clone())
-                        .unwrap_or_else(|| segs.last().unwrap().name.clone());
-                    if imports.insert(alias_name.clone(), target_key).is_some() {
-                        return Err((
-                            source,
-                            vec![Diagnostic::error(
-                                "E0336",
-                                format!("duplicate import alias `{alias_name}`"),
-                            )
-                            .with_label(stmt.span, "already imported under this name")
-                            .with_note("use `as` to give one of them a different alias")],
-                        ));
-                    }
-                }
-                Err(e) => return Err(e),
+            let target_key = self.resolve_import(&dir, segs, stmt.span, &source)?;
+            let alias_name = alias
+                .as_ref()
+                .map(|a| a.name.clone())
+                .unwrap_or_else(|| segs.last().unwrap().name.clone());
+            if imports.insert(alias_name.clone(), target_key).is_some() {
+                return Err((
+                    source,
+                    vec![Diagnostic::error(
+                        "E0336",
+                        format!("duplicate import alias `{alias_name}`"),
+                    )
+                    .with_label(stmt.span, "already imported under this name")
+                    .with_note("use `as` to give one of them a different alias")],
+                ));
             }
         }
 
