@@ -746,7 +746,7 @@ impl Checker {
                     self.diags.push(
                         Diagnostic::error(
                             "E0334",
-                            "imports are only available when running a file",
+                            "imports are not available in one-shot evaluation",
                         )
                         .with_label(stmt.span, "cannot import here"),
                     );
