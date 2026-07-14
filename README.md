@@ -289,4 +289,6 @@ its builder.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Copyright (c) 2026 Roxy Alessandra Williams-Lalonde, pending formal
+registration of Alterna Systems LLC.

@@ -3,7 +3,7 @@ name = "fable"
 version = "0.6.0"
 edition = "2021"
 description = "The Fable programming language: statically typed, garbage collected, implemented from scratch with zero dependencies"
-license = "MIT"
+license = "Apache-2.0"
 repository = "https://github.com/memmam/fable"
 
 [[bin]]
