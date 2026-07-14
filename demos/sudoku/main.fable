@@ -94,8 +94,7 @@ let puzzles = [
     ("minimal (from Gordon Royle's 17-clue list)", minimal),
 ];
 
-for p in puzzles {
-    let (name, clues) = p;
+for (name, clues) in puzzles {
     match run_puzzle(name, clues, timed) {
         Ok(_) -> {}
         Err(e) -> {

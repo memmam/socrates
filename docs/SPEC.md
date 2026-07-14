@@ -717,8 +717,9 @@ A struct-literal field is `IDENT ":" expr` or the shorthand `IDENT` — § 2.3.)
   `//? panic:` directives in its comments (a file with no directives must
   merely run silently). Exit 0 when all pass, 1 otherwise. The
   interpreter's own spec suite runs through the same code. Two precision
-  rules (v0.6): a directive counts only when `//?` **begins the line's
-  comment** — prose or string literals that merely mention `//?` are inert —
+  rules (v0.6): a directive counts only when `//?` **begins a line
+  comment** — prose in `//` or `/* */` comments and string literals (even
+  nested in interpolation holes) that merely mention `//?` are inert —
   and expected/actual lines are compared ignoring trailing whitespace
   (trailing spaces in a directive are invisible in an editor, so they can't
   be pinned reliably). Unknown flags are rejected with a usage message.
@@ -755,8 +756,13 @@ interpolation, 60,000 local variables per function, 65,000 global bindings,
 2,000 levels of syntactic nesting (E0207), 20,000 nested operations per
 expression (E0324). At runtime: 4,096 call frames ("stack overflow" panic) —
 the cap is configurable via the `FABLE_MAX_DEPTH` environment variable
-(v0.6; floor 64), for recursive tree-walking workloads whose depth is
-data-dependent — display nesting deeper than 10,000 levels renders as `...`,
+(v0.6; floor 64; malformed values warn and keep the default), for recursive
+tree-walking workloads whose depth is data-dependent. One honest caveat:
+recursion that passes *through native callbacks* (`map`/`sort_by`
+comparators, `try`) also consumes the interpreter's own native stack, so a
+very large cap can turn the graceful, catchable panic into a hard process
+abort in such programs — raise it generously but not astronomically.
+Display nesting deeper than 10,000 levels renders as `...`,
 and equality on values whose *map* nesting exceeds 64 levels panics.
 
 One behavioral caveat: map keys are hashed at insertion. **Mutating a list,

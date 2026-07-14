@@ -43,9 +43,8 @@ pub fn learn(sample: List[String]) -> Rules {
     let tiles: List[String] = [];
     let weights: Map[String, Int] = {:};
     let allow: Map[String, Bool] = {:};
-    for y in 0..h {
-        for x in 0..w {
-            let a = grid[y][x];
+    for (y, row) in grid.enumerate() {
+        for (x, a) in row.enumerate() {
             if !weights.contains_key(a) {
                 tiles.push(a);
                 weights[a] = 0;

@@ -33,101 +33,73 @@ fn escape_char(c: String) -> String {
 
 // ------------------------------------------------------------ inline spans
 
-// Render one line's worth of inline markup. A single left-to-right scan:
+// Render one line's worth of inline markup. A single left-to-right scan
+// over character indices (`slice` and `index_of_from` both count chars):
 // a recognized delimiter must find its closing partner, otherwise it is
 // treated as literal text (so a stray `*` never eats the rest of a line).
 pub fn render_inline(s: String) -> String {
-    let cs = s.chars();
     let out: List[String] = [];
     let mut i = 0;
-    while i < cs.len() {
-        if matches_at(cs, i, "**") {
-            match find_at(cs, "**", i + 2) {
+    while i < s.len() {
+        let c = s.slice(i, i + 1);
+        if c == "*" && s.slice(i, i + 2) == "**" {
+            match s.index_of_from("**", i + 2) {
                 Some(close) -> {
-                    out.push("<strong>{render_inline(join_range(cs, i + 2, close))}</strong>");
+                    out.push("<strong>{render_inline(s.slice(i + 2, close))}</strong>");
                     i = close + 2;
                 }
-                None -> { i = push_literal(out, cs, i); }
+                None -> { i = push_literal(out, c, i); }
             }
-        } else if cs[i] == "*" {
-            match find_at(cs, "*", i + 1) {
+        } else if c == "*" {
+            match s.index_of_from("*", i + 1) {
                 Some(close) -> {
-                    out.push("<em>{render_inline(join_range(cs, i + 1, close))}</em>");
+                    out.push("<em>{render_inline(s.slice(i + 1, close))}</em>");
                     i = close + 1;
                 }
-                None -> { i = push_literal(out, cs, i); }
+                None -> { i = push_literal(out, c, i); }
             }
-        } else if cs[i] == "`" {
-            match find_at(cs, "`", i + 1) {
+        } else if c == "`" {
+            match s.index_of_from("`", i + 1) {
                 Some(close) -> {
                     // Code spans are opaque: no nested markup, just escaping.
-                    out.push("<code>{escape(join_range(cs, i + 1, close))}</code>");
+                    out.push("<code>{escape(s.slice(i + 1, close))}</code>");
                     i = close + 1;
                 }
-                None -> { i = push_literal(out, cs, i); }
+                None -> { i = push_literal(out, c, i); }
             }
-        } else if cs[i] == "[" {
-            match parse_link(cs, i) {
+        } else if c == "[" {
+            match parse_link(s, i) {
                 Some((html, next)) -> {
                     out.push(html);
                     i = next;
                 }
-                None -> { i = push_literal(out, cs, i); }
+                None -> { i = push_literal(out, c, i); }
             }
         } else {
-            i = push_literal(out, cs, i);
+            i = push_literal(out, c, i);
         }
     }
     out.join("")
 }
 
-// Emit the character at `i` as escaped text; returns the next index.
-fn push_literal(out: List[String], cs: List[String], i: Int) -> Int {
-    out.push(escape_char(cs[i]));
+// Emit the character `c` (found at index `i`) as escaped text; returns
+// the next index.
+fn push_literal(out: List[String], c: String, i: Int) -> Int {
+    out.push(escape_char(c));
     i + 1
 }
 
 // Parse `[text](url)` starting at the `[`; None means "not a link here",
 // and the `?`s propagate any missing delimiter into that None.
-fn parse_link(cs: List[String], i: Int) -> Option[(String, Int)] {
-    let end_text = find_at(cs, "]", i + 1)?;
-    if !matches_at(cs, end_text + 1, "(") {
+fn parse_link(s: String, i: Int) -> Option[(String, Int)] {
+    let end_text = s.index_of_from("]", i + 1)?;
+    if s.slice(end_text + 1, end_text + 2) != "(" {
         return None;
     }
-    let end_url = find_at(cs, ")", end_text + 2)?;
-    let text = join_range(cs, i + 1, end_text);
-    let url = join_range(cs, end_text + 2, end_url);
+    let end_url = s.index_of_from(")", end_text + 2)?;
+    let text = s.slice(i + 1, end_text);
+    let url = s.slice(end_text + 2, end_url);
     Some(("<a href=\"{escape(url)}\">{render_inline(text)}</a>", end_url + 1))
-}
-
-// True when the characters of `pat` appear at index `i` of `cs`.
-fn matches_at(cs: List[String], i: Int, pat: String) -> Bool {
-    let ps = pat.chars();
-    if i < 0 || i + ps.len() > cs.len() {
-        return false;
-    }
-    for k in 0..ps.len() {
-        if cs[i + k] != ps[k] {
-            return false;
-        }
-    }
-    true
-}
-
-// The first index >= `from` where `pat` occurs in `cs`.
-fn find_at(cs: List[String], pat: String, from: Int) -> Option[Int] {
-    let mut i = from;
-    while i + pat.len() <= cs.len() {
-        if matches_at(cs, i, pat) {
-            return Some(i);
-        }
-        i += 1;
-    }
-    None
-}
-
-fn join_range(cs: List[String], a: Int, b: Int) -> String {
-    cs.slice(a, b).join("")
 }
 
 // ------------------------------------------------------------ block level
@@ -204,13 +176,13 @@ pub fn first_heading(src: String) -> Option[String] {
 }
 
 // 1..6 for a heading line ("## x" -> 2), 0 for anything else.
+// (`slice` clamps past the end, so no explicit bounds checks needed.)
 fn heading_level(line: String) -> Int {
-    let cs = line.chars();
     let mut n = 0;
-    while n < cs.len() && cs[n] == "#" {
+    while line.slice(n, n + 1) == "#" {
         n += 1;
     }
-    if n >= 1 && n <= 6 && n < cs.len() && cs[n] == " " {
+    if n >= 1 && n <= 6 && line.slice(n, n + 1) == " " {
         n
     } else {
         0

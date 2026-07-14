@@ -84,7 +84,7 @@ executed against the interpreter before it was written down.
   strings, and lazy iterators, written in Fable and embedded in the binary.
 - **A test runner** (v0.4). `fable test dir/` — any `.fable` file with
   `//? expect/error/panic` directives is a test; the interpreter's own
-  261-test suite uses the same command's code.
+  262-test suite uses the same command's code.
 - **A language server** (v0.4). `fable lsp` — diagnostics as you type,
   hover types, go-to-definition across modules, and completion (v0.5)
   that works mid-edit. JSON-RPC hand-rolled; still zero dependencies.

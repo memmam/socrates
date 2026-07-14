@@ -51,5 +51,8 @@ wrote demos/plot/spirograph.svg (22839 bytes, 901 points)
 - closures as data: `chart.sample` takes any `fn(Float) -> Float`
 - string interpolation building the whole SVG document (`join`, `map`)
 - `Result` + the `?` operator plumbing `fs.write` failures to one handler
-- tuples for points, `zip`/`enumerate`/`fold`/`sort_by` on lists
+- tuples for points, `zip`/`enumerate`/`fold`/`sort_by` on lists, destructured
+  right in the loop header (`for (i, s) in …`, v0.6)
+- v0.6 stdlib: `math.log10` picks tick magnitudes, `to_fixed(3)` prints the
+  sparkline caption
 - golden tests via `//? expect:` directives (`fable test demos/plot`)

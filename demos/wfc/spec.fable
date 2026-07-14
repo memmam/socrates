@@ -27,13 +27,13 @@ println("a below a   : {tiny.allowed("a", 2, "a")}");   // columns alternate too
 fn violations(grid: List[String], r: rules.Rules) -> Int {
     let rows = grid.map(|s| s.chars());
     let mut bad = 0;
-    for y in 0..rows.len() {
-        for x in 0..rows[y].len() {
+    for (y, row) in rows.enumerate() {
+        for (x, t) in row.enumerate() {
             for d in 0..4 {
                 let nx = x + rules.dir_dx[d];
                 let ny = y + rules.dir_dy[d];
-                if ny >= 0 && ny < rows.len() && nx >= 0 && nx < rows[y].len() {
-                    if !r.allowed(rows[y][x], d, rows[ny][nx]) {
+                if ny >= 0 && ny < rows.len() && nx >= 0 && nx < row.len() {
+                    if !r.allowed(t, d, rows[ny][nx]) {
                         bad += 1;
                     }
                 }

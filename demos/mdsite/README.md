@@ -4,7 +4,7 @@ A small, complete static site generator: it reads Markdown pages from
 `content/`, converts them to HTML with a hand-written line-based
 converter, wraps each page in a shared template whose navigation bar is
 generated from the page list, writes the finished site to `out/`, and
-prints a build report. About 480 lines of Fable across four files.
+prints a build report. About 450 lines of Fable across four files.
 
 ## Run it
 
@@ -66,7 +66,7 @@ And an excerpt of the HTML it produces (`out/about.html`):
 | error plumbing | `Result[T, String]` + the `?` operator; one `match` at the bottom of `main.fable` handles every I/O failure |
 | slugs and extensions | `std.path` (`ext`, `strip_ext`, `join`) |
 | line splitting, word counts | `std.strings` (`lines`, `words`) |
-| inline-markup scanning | a cursor over `chars()` with `Option[Int]` finders; missing delimiters propagate via `?` inside `parse_link` |
+| inline-markup scanning | a char-index cursor over the string itself: `index_of_from` / `slice` (before v0.6 this needed hand-rolled `matches_at`/`find_at` helpers over an exploded char list); missing delimiters propagate via `?` inside `parse_link` |
 | HTML assembly | `List[String]` + `join` — string building without quadratic concatenation |
 | page ordering / nav | `sort_by` with a key function that pins `index` first |
 

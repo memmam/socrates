@@ -18,12 +18,22 @@ const DEFAULT_MAX_FRAMES: usize = 4096;
 /// The call-depth cap. `FABLE_MAX_DEPTH` overrides the default (floor 64 —
 /// below that the prelude itself couldn't run); recursive tree-walking
 /// workloads on deep data legitimately want more headroom than the default.
+/// A malformed value warns rather than being silently ignored — the variable
+/// is usually set by someone actively chasing a stack-overflow panic.
 fn max_frames() -> usize {
-    std::env::var("FABLE_MAX_DEPTH")
-        .ok()
-        .and_then(|v| v.parse::<usize>().ok())
-        .map(|n| n.max(64))
-        .unwrap_or(DEFAULT_MAX_FRAMES)
+    let Ok(raw) = std::env::var("FABLE_MAX_DEPTH") else {
+        return DEFAULT_MAX_FRAMES;
+    };
+    match raw.trim().parse::<usize>() {
+        Ok(n) => n.max(64),
+        Err(_) => {
+            eprintln!(
+                "warning: ignoring FABLE_MAX_DEPTH={raw:?} (not a number); \
+                 using the default of {DEFAULT_MAX_FRAMES}"
+            );
+            DEFAULT_MAX_FRAMES
+        }
+    }
 }
 
 pub struct TraceFrame {
@@ -1590,12 +1600,22 @@ impl Vm {
     }
 
     /// A uniform integer in `[lo, hi]` (inclusive). Callers must check
-    /// `lo <= hi`. Uses the widening-multiply reduction, whose bias over a
-    /// 64-bit source is unmeasurable for any real span.
+    /// `lo <= hi`. Lemire's widening-multiply method **with rejection**, so
+    /// the distribution is exactly uniform even for spans near 2^64 (the
+    /// rejection probability is `(2^64 mod span) / 2^64` per draw).
     pub fn rng_range(&mut self, lo: i64, hi: i64) -> i64 {
-        let span = (hi as i128 - lo as i128 + 1) as u128;
-        let r = self.rng_next_u64() as u128;
-        lo.wrapping_add(((r * span) >> 64) as i64)
+        // `span == 0` encodes the full 2^64 range (lo = i64::MIN, hi = i64::MAX).
+        let span = hi.wrapping_sub(lo).wrapping_add(1) as u64;
+        if span == 0 {
+            return self.rng_next_u64() as i64;
+        }
+        let threshold = span.wrapping_neg() % span;
+        loop {
+            let m = (self.rng_next_u64() as u128) * (span as u128);
+            if (m as u64) >= threshold {
+                return lo.wrapping_add((m >> 64) as i64);
+            }
+        }
     }
 
     pub fn rng_seed(&mut self, seed: i64) {

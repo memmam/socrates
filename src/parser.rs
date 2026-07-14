@@ -1384,13 +1384,13 @@ impl<'a> Parser<'a> {
             let pattern = self.pattern()?;
             let guard = if self.eat(&TokenKind::If) { Some(self.no_struct_expr()?) } else { None };
             self.expect(&TokenKind::Arrow, "`->` after match pattern")?;
-            let body = self.arm_body()?;
+            let (body, sugar) = self.arm_body()?;
             let arm_span = pat_start.to(body.span);
             let body_is_block = matches!(
                 body.kind,
                 ExprKind::Block(_) | ExprKind::If { .. } | ExprKind::Match { .. }
             );
-            arms.push(MatchArm { pattern, guard, body, span: arm_span });
+            arms.push(MatchArm { pattern, guard, body, span: arm_span, sugar });
             if !self.eat(&TokenKind::Comma) {
                 // Allow omitting the comma after a block-bodied arm.
                 if !body_is_block {
@@ -1414,8 +1414,9 @@ impl<'a> Parser<'a> {
 
     /// A match-arm body: an expression, or — as sugar for the block form —
     /// a bare `return [expr]`, `break`, or `continue`, which parses as if
-    /// written `{ return expr; }`.
-    fn arm_body(&mut self) -> PResult<Expr> {
+    /// written `{ return expr; }`. The `bool` reports whether the sugar was
+    /// used, so the formatter can print it back.
+    fn arm_body(&mut self) -> PResult<(Expr, bool)> {
         let start = self.span();
         let stmt = match self.peek() {
             TokenKind::Return => {
@@ -1423,7 +1424,24 @@ impl<'a> Parser<'a> {
                 let value = if self.at(&TokenKind::Comma) || self.at(&TokenKind::RBrace) {
                     None
                 } else {
-                    Some(self.expr()?)
+                    let v = self.expr()?;
+                    // A valueless bare `return` with the comma omitted would
+                    // have swallowed the NEXT arm's pattern as its value; the
+                    // `->` right after the "value" gives it away.
+                    if self.at(&TokenKind::Arrow) {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "E0200",
+                                "this parsed as the `return` value, but it looks like the next arm",
+                            )
+                            .with_label(v.span, "consumed as the returned value")
+                            .with_note(
+                                "a bare `return` with no value needs a comma before the next arm: `-> return,`",
+                            ),
+                        );
+                        return Err(());
+                    }
+                    Some(v)
                 };
                 let end = value.as_ref().map_or(start, |v| v.span);
                 Some(Stmt { span: start.to(end), id: self.id(), kind: StmtKind::Return(value) })
@@ -1441,12 +1459,20 @@ impl<'a> Parser<'a> {
         if let Some(stmt) = stmt {
             let span = stmt.span;
             let block = Block { stmts: vec![stmt], span, id: self.id() };
-            return Ok(Expr { span, id: self.id(), kind: ExprKind::Block(block) });
+            return Ok((Expr { span, id: self.id(), kind: ExprKind::Block(block) }, true));
         }
         let body = self.expr()?;
-        // A statement-shaped arm (`Some(v) -> x = v`) is a common trip-up;
-        // point at the fix instead of a bare "expected `,`".
-        if self.at(&TokenKind::Eq) {
+        // A statement-shaped arm (`Some(v) -> x = v`, `.. -> n += v`) is a
+        // common trip-up; point at the fix instead of a bare "expected `,`".
+        if matches!(
+            self.peek(),
+            TokenKind::Eq
+                | TokenKind::PlusEq
+                | TokenKind::MinusEq
+                | TokenKind::StarEq
+                | TokenKind::SlashEq
+                | TokenKind::PercentEq
+        ) {
             let span = self.span();
             self.diags.push(
                 Diagnostic::error("E0200", "assignment cannot be a match-arm body")
@@ -1455,7 +1481,7 @@ impl<'a> Parser<'a> {
             );
             return Err(());
         }
-        Ok(body)
+        Ok((body, false))
     }
 
     // ---- patterns ----

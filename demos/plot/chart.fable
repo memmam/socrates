@@ -52,7 +52,7 @@ impl Frame {
 
 // Round a raw step up to 1, 2, or 5 times a power of ten.
 fn nice_step(raw: Float) -> Float {
-    let mag = math.pow(10.0, math.floor(math.log(raw) / math.log(10.0)));
+    let mag = math.pow(10.0, math.floor(math.log10(raw)));
     let n = raw / mag;
     if n <= 1.0 { mag } else if n <= 2.0 { 2.0 * mag } else if n <= 5.0 { 5.0 * mag } else { 10.0 * mag }
 }
@@ -96,8 +96,7 @@ fn dodge(ys: List[Float], gap: Float) -> List[Float] {
     let order = ys.enumerate().sort_by(|a, b| if a.1 < b.1 { -1 } else { 1 });
     let out = ys.clone();
     let mut prev = -1.0e18;
-    for pair in order {
-        let (i, y) = pair;
+    for (i, y) in order {
         let placed = math.max_float(y, prev + gap);
         out[i] = placed;
         prev = placed;
@@ -169,8 +168,7 @@ impl Chart {
         // line's end (positions dodged apart so labels never collide).
         let ends = self.series.map(|s| fr.sy(s.ys[s.ys.len() - 1]));
         let labels = dodge(ends, 14.0);
-        for pair in self.series.enumerate() {
-            let (i, s) = pair;
+        for (i, s) in self.series.enumerate() {
             d.polyline(s.xs.zip(s.ys).map(|p| fr.map(p.0, p.1)), s.color, 2.0);
             d.circle(fr.px + fr.pw, ends[i], 3.0, s.color);
             d.text(fr.px + fr.pw + 7.0, labels[i] + 4.0, 11, "start", ink_soft, s.name);

@@ -630,7 +630,13 @@ impl Formatter {
                         self.expr(g, 0);
                     }
                     self.out.push_str(" -> ");
-                    self.expr(&arm.body, 0);
+                    if arm.sugar {
+                        // Print the bare-statement sugar back instead of the
+                        // desugared one-statement block.
+                        self.sugar_arm_body(&arm.body);
+                    } else {
+                        self.expr(&arm.body, 0);
+                    }
                     self.out.push_str(",\n");
                     self.last_line = self.line_of(arm.span.end.saturating_sub(1));
                 }
@@ -639,6 +645,27 @@ impl Formatter {
                 self.pad();
                 self.out.push('}');
             }
+        }
+    }
+
+    /// The body of a `sugar` match arm is a synthesized one-statement block
+    /// holding a `return`/`break`/`continue`; print the statement bare.
+    fn sugar_arm_body(&mut self, body: &Expr) {
+        let ExprKind::Block(b) = &body.kind else {
+            self.expr(body, 0);
+            return;
+        };
+        match b.stmts.first().map(|s| &s.kind) {
+            Some(StmtKind::Return(v)) => {
+                self.out.push_str("return");
+                if let Some(v) = v {
+                    self.out.push(' ');
+                    self.expr(v, 0);
+                }
+            }
+            Some(StmtKind::Break) => self.out.push_str("break"),
+            Some(StmtKind::Continue) => self.out.push_str("continue"),
+            _ => self.expr(body, 0),
         }
     }
 

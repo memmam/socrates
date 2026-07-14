@@ -7,6 +7,9 @@
 
 // Format a coordinate: round to 2 decimals and drop a trailing ".0" so
 // the generated file stays compact ("12.5" and "40", never "40.0").
+// (Deliberately not v0.6's to_fixed(2): that keeps trailing zeros —
+// "12.50" — and breaks .x25-style ties toward even where round() goes
+// away from zero, so switching would change the output bytes.)
 pub fn num(v: Float) -> String {
     let r = (v * 100.0).round() / 100.0;
     let s = str(r);

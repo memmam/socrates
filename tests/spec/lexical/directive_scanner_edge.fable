@@ -1,0 +1,18 @@
+/* A block comment that talks about the harness: writing //? expect: hello
+   pins a line of output. None of this is a directive — block comments are
+   skipped entirely, across lines, including nested /* //? panic: nope */
+   ones. */
+
+// A real directive on the same line as a string nested inside an
+// interpolation hole (the hole's inner quotes and `//` must not derail
+// the scanner in either direction):
+let s = "{"a//b"}";             //? expect: interpolated: a//b
+println("interpolated: {s}");
+
+// A phantom directive inside a nested-in-hole string must stay inert
+// (if it registered, this file would demand a compile error and fail):
+let t = "{"a //? error: phantom"}";
+assert(t.len() > 15);
+
+/* a same-line block comment with a stray " quote */ println("after");
+//? expect: after

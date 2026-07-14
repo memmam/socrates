@@ -27,7 +27,7 @@ pub fn generate(r: rules.Rules, w: Int, h: Int, seed: Int, max_tries: Int) -> Op
         math.seed(seed + attempt);
         attempt += 1;
         match run(r, w, h) {
-            Some(g) -> { return Some(Outcome { grid: g, attempts: attempt }); }
+            Some(g) -> return Some(Outcome { grid: g, attempts: attempt }),
             None -> {}  // contradiction — reroll with the next seed
         }
     }
@@ -38,7 +38,7 @@ pub fn generate(r: rules.Rules, w: Int, h: Int, seed: Int, max_tries: Int) -> Op
 fn run(r: rules.Rules, w: Int, h: Int) -> Option[List[String]] {
     // Start every cell with the full candidate set.
     let cells: List[Map[String, Bool]] = [];
-    for cell in 0..w * h {
+    for _ in 0..w * h {
         let all: Map[String, Bool] = {:};
         for t in r.tiles {
             all[t] = true;
@@ -48,7 +48,7 @@ fn run(r: rules.Rules, w: Int, h: Int) -> Option[List[String]] {
 
     while true {
         match lowest_entropy(cells, r) {
-            None -> { return Some(render(cells, w, h)); }  // all cells decided
+            None -> return Some(render(cells, w, h)),  // all cells decided
             Some(i) -> {
                 let choice: Map[String, Bool] = {:};
                 choice[pick(cells[i], r)] = true;
@@ -59,7 +59,6 @@ fn run(r: rules.Rules, w: Int, h: Int) -> Option[List[String]] {
             }
         }
     }
-    None  // unreachable: the loop only exits via return
 }
 
 // Index of the undecided cell with the smallest entropy, or None when every
@@ -67,9 +66,9 @@ fn run(r: rules.Rules, w: Int, h: Int) -> Option[List[String]] {
 fn lowest_entropy(cells: List[Map[String, Bool]], r: rules.Rules) -> Option[Int] {
     let mut best = -1;
     let mut best_h = 0.0;
-    for i in 0..cells.len() {
-        if cells[i].len() > 1 {
-            let h = entropy(cells[i], r) + math.random() * 0.001;
+    for (i, cands) in cells.enumerate() {
+        if cands.len() > 1 {
+            let h = entropy(cands, r) + math.random() * 0.001;
             if best < 0 || h < best_h {
                 best = i;
                 best_h = h;
@@ -105,7 +104,7 @@ fn pick(cands: Map[String, Bool], r: rules.Rules) -> String {
             total += r.weights[t];
         }
     }
-    let mut roll = (math.random() * total.to_float()).to_int();
+    let mut roll = math.rand_int(0, total - 1);
     for t in r.tiles {
         if cands.contains_key(t) {
             roll -= r.weights[t];

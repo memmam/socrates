@@ -21,6 +21,8 @@ println(str(chart.ticks(-1.05, 1.15, 5)));
 //? expect: [-1.0, -0.5, 0.0, 0.5, 1.0]
 println(str(chart.ticks(0.0, 137.0, 5)));
 //? expect: [0.0, 50.0, 100.0]
+println(str(chart.ticks(0.0, 5000.0, 5)));   // raw step exactly a power of ten
+//? expect: [0.0, 1000.0, 2000.0, 3000.0, 4000.0, 5000.0]
 
 // --- the data -> pixel frame (sy flips, because SVG y grows downward) --------
 

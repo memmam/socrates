@@ -166,14 +166,13 @@ pub fn parse(src: String) -> Result[Query, String] {
         // The key may span words ("order by avg pop desc"): gather words
         // until a direction / 'limit' / end of query.
         let parts: List[String] = [];
-        let mut more = true;
-        while more {
+        while true {
             match p.peek_word() {
                 Some(w) if w != "asc" && w != "desc" && w != "limit" -> {
                     p.pos += 1;
                     parts.push(w);
                 }
-                _ -> { more = false; }
+                _ -> break,
             }
         }
         if parts.is_empty() { return Err("expected a column after 'order by'"); }
@@ -341,7 +340,7 @@ fn run_grouped(t: table.Table, rows: List[List[table.Val]], q: Query) -> Result[
         Sel.All -> "*",
     });
     let out_rows: List[List[table.Val]] = [];
-    for key in buckets.keys() { out_rows.push(agg_row(t, q.sels, key, buckets[key])?); }
+    for (key, bucket) in buckets.entries() { out_rows.push(agg_row(t, q.sels, key, bucket)?); }
 
     let mut out = out_rows;
     match q.order {
@@ -370,7 +369,7 @@ fn agg_row(t: table.Table, sels: List[Sel], key: table.Val, bucket: List[List[ta
                 for r in bucket {
                     match r[i] {
                         Num(x) -> nums.push(x),
-                        Str(_) -> { return Err("'{f} {c}': column '{c}' has text values"); }
+                        Str(_) -> return Err("'{f} {c}': column '{c}' has text values"),
                     }
                 }
                 row.push(table.num(aggregate(f, nums)?));

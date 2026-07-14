@@ -71,14 +71,10 @@ fn spirograph() -> String {
 fn arg_min(s: chart.Series) -> (Float, Float) {
     let mut bx = s.xs[0];
     let mut by = s.ys[0];
-    for p in s.xs.zip(s.ys) {
-        if p.1 < by { bx = p.0; by = p.1; }
+    for (x, y) in s.xs.zip(s.ys) {
+        if y < by { bx = x; by = y; }
     }
     (bx, by)
-}
-
-fn fmt3(v: Float) -> String {
-    str((v * 1000.0).round() / 1000.0)
 }
 
 // --- glue ------------------------------------------------------------------------
@@ -102,7 +98,7 @@ println("");
 let spark = chart.sample("sin(x)·e^(-x/4)", "", damped_sin, 0.0, 10.0, 48);
 let (mx, my) = arg_min(spark);
 println("sin(x)·e^(-x/4)  {chart.sparkline(spark.ys)}");
-println("                 48 samples on [0, 10], minimum {fmt3(my)} near x = {fmt3(mx)}");
+println("                 48 samples on [0, 10], minimum {my.to_fixed(3)} near x = {mx.to_fixed(3)}");
 println("");
 
 let out_dir = match os.args().first() {

@@ -139,8 +139,8 @@ pub enum StmtKind {
         cond: Expr,
         body: Block,
     },
-    /// `for pattern in iter { .. }` — the pattern must be irrefutable
-    /// (a name, `_`, or a tuple of such).
+    /// `for pattern in iter { .. }` — any irrefutable pattern (a name, `_`,
+    /// or nested tuple/struct patterns), enforced by the checker like `let`.
     For {
         pattern: Pattern,
         iter: Expr,
@@ -271,6 +271,10 @@ pub struct MatchArm {
     pub guard: Option<Expr>,
     pub body: Expr,
     pub span: Span,
+    /// The body was written as a bare `return`/`break`/`continue` and
+    /// desugared to a one-statement block; the formatter prints it back
+    /// in the sugar form.
+    pub sugar: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

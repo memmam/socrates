@@ -72,7 +72,7 @@ pub struct Board {
 }
 
 pub fn empty() -> Board {
-    Board { cells: (0..64).map(|_i| 0) }
+    Board { cells: (0..64).map(|_| 0) }
 }
 
 pub fn initial() -> Board {
@@ -88,10 +88,9 @@ pub fn initial() -> Board {
 // 'b'/'B'/'w'/'W' are pieces, anything else is empty. Handy for tests.
 pub fn from_rows(rows: List[String]) -> Board {
     let b = empty();
-    for r in 0..8 {
-        let chars = rows[r].chars();
-        for c in 0..8 {
-            b.cells[r * 8 + c] = match chars[c] {
+    for (r, row) in rows.enumerate() {
+        for (c, ch) in row.chars().enumerate() {
+            b.cells[r * 8 + c] = match ch {
                 "b" -> 1,
                 "B" -> 2,
                 "w" -> -1,
@@ -111,13 +110,6 @@ fn glyph(p: Int) -> String {
         -2 -> "W",
         _ -> ".",
     }
-}
-
-// The stdlib `trim` strips both ends; board rows need their indentation.
-fn rtrim(s: String) -> String {
-    let mut end = s.len();
-    while end > 0 && s.slice(end - 1, end) == " " { end -= 1; }
-    s.slice(0, end)
 }
 
 impl Board {
@@ -144,7 +136,7 @@ impl Board {
                 let cell = if (r + c) % 2 == 0 { " " } else { glyph(self.cells[r * 8 + c]) };
                 line += " {cell}";
             }
-            out += rtrim(line) + "\n";
+            out += line.trim_end() + "\n";
         }
         out + "     a b c d e f g h"
     }
@@ -166,8 +158,7 @@ impl Board {
         for sq in squares {
             let p = self.cells[sq];
             if side_of(p) == side {
-                for d in dirs_of(p) {
-                    let (dr, dc) = d;
+                for (dr, dc) in dirs_of(p) {
                     let r = sq / 8 + dr;
                     let c = sq % 8 + dc;
                     if r >= 0 && r < 8 && c >= 0 && c < 8 && self.cells[r * 8 + c] == 0 {
@@ -185,8 +176,7 @@ impl Board {
     // or immediately when a man crowns, which ends the move by rule.
     fn extend_jumps(self, sq: Int, p: Int, path: List[Int], taken: List[Int], out: List[Move]) {
         let mut extended = false;
-        for d in dirs_of(p) {
-            let (dr, dc) = d;
+        for (dr, dc) in dirs_of(p) {
             let lr = sq / 8 + 2 * dr;
             let lc = sq % 8 + 2 * dc;
             if lr >= 0 && lr < 8 && lc >= 0 && lc < 8 {
@@ -231,8 +221,8 @@ impl Board {
     pub fn undo_move(self, u: Undo) {
         self.cells[u.to] = 0;
         self.cells[u.from] = u.moved;
-        for i in 0..u.caps.len() {
-            self.cells[u.caps[i]] = u.codes[i];
+        for (i, sq) in u.caps.enumerate() {
+            self.cells[sq] = u.codes[i];
         }
     }
 }

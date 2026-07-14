@@ -82,6 +82,33 @@ strongest possible signal. Those walls became **v0.6**.
 - **`os.exit(0)` after a failed load in a demo** (spreadsheet's verifier
   nit): demo-level choice, left to the demo.
 
+## The review round
+
+Before shipping, four adversarial reviewers attacked the v0.6 interpreter
+diff itself. Confirmed findings, all fixed in the same release:
+
+- The first directive-scanner fix mis-tracked strings nested inside
+  interpolation holes (a boolean toggle), which could make a **real
+  directive silently vanish** — a false *pass* — and wasn't
+  block-comment-aware either. The scanner now models strings, holes (to
+  arbitrary depth), and nested `/* */` comments across lines, and the edge
+  cases are pinned in `tests/spec/lexical/directive_scanner_edge.fable`.
+- Typing `os.exit` like `panic` regressed the REPL: a bare `os.exit(0)`
+  produced "cannot infer the type of `__repl_1`" instead of exiting. The
+  panic-result Unit-defaulting rule now covers it.
+- `math.rand_int` used a widening-multiply reduction without rejection —
+  measurably non-uniform for spans above 2^32. Now Lemire's method *with*
+  rejection: exactly uniform.
+- A valueless bare `return` arm with the comma omitted swallowed the next
+  arm's pattern as its "value" and produced misleading cascades (never a
+  silent misparse); it now gets a targeted diagnostic. Compound
+  assignments (`+=`) in arm bodies get the same hint plain `=` does.
+- `fable fmt` erased the new arm sugar back to block form; arms remember
+  they were written bare and round-trip. `fable test --` ends flag
+  parsing; malformed `FABLE_MAX_DEPTH` warns instead of silently using
+  the default (and the SPEC documents the native-callback caveat of huge
+  caps).
+
 ## Performance notes (informational, no action)
 
 - lisp: double interpretation runs ~40–50k evals/sec in the release build;

@@ -54,12 +54,12 @@ learned 4 tiles (weight = frequency in sample)
 
 generated 48x16 (seed 2026, attempt 1)
 --------------------------------------
-|  |       | | |    | |    |   |   |   | | |
-+--+-------+-+-+----+-+----+---+---+---+-+-+----
-|  |       | | |    | |    |   |   |   | | |
-|  |       | | |    | |    |   |   |   | | |
-|  |       | | |    | |    |   |   |   | | |
-+--+-------+-+-+----+-+----+---+---+---+-+-+----
+  |          |      | |  | |   |  |  | | |    |
+  |          |      | |  | |   |  |  | | |    |
+  |          |      | |  | |   |  |  | | |    |
+--+----------+------+-+--+-+---+--+--+-+-+----+-
+  |          |      | |  | |   |  |  | | |    |
+  |          |      | |  | |   |  |  | | |    |
 ...
 ```
 
@@ -87,4 +87,7 @@ Notes on the algorithm:
 - `generate(rules, w, h, seed, max_tries)` reseeds with `seed + attempt`
   on each contradiction and returns `None` only when the budget runs out —
   `spec.fable` exercises that path with rules learned from the single row
-  `"ab"`, under which a 3-wide strip is unsatisfiable.
+  `"ab"`, under which a 3-wide strip is unsatisfiable. (Since Fable v0.6
+  `math.seed` scrambles its argument, so the adjacent seeds these retries
+  use produce genuinely independent streams — under v0.5 they collided,
+  which made a retry mostly replay the failed attempt.)

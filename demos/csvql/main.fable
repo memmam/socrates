@@ -39,8 +39,7 @@ let t = match load() {
     Ok(loaded) -> loaded,
     Err(e) -> {
         println("csvql: {e}");
-        os.exit(66);
-        panic("unreachable")
+        os.exit(66) // since v0.6, os.exit typechecks in a value position
     }
 };
 

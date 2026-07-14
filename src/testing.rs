@@ -9,9 +9,11 @@
 //!   //? panic: <substring> — the program must panic at runtime; the panic
 //!                            message must contain <substring>.
 //!
-//! A directive must begin the line's comment: `//?` inside a string literal,
-//! or later in the text of an ordinary `//` comment, is not a directive (so
-//! prose *about* directives can't inject phantom expectations). Expected and
+//! A directive must begin the line's comment: `//?` inside a string literal
+//! (even one nested in an interpolation hole), inside a `/* */` block
+//! comment, or later in the text of an ordinary `//` comment, is not a
+//! directive (so prose *about* directives can't inject phantom
+//! expectations). Expected and
 //! actual lines are compared ignoring trailing whitespace — trailing spaces
 //! in a directive are invisible in an editor and can't be pinned reliably.
 //!
@@ -31,27 +33,84 @@ pub struct Directives {
     pub panics: Vec<String>,
 }
 
-/// Where the line's comment starts, if that comment is a directive.
+/// Per-line lexical mode for the directive scanner. Strings (and their
+/// interpolation holes) cannot span lines in Fable, so only the block-comment
+/// depth carries across lines.
+enum ScanMode {
+    /// Inside a string literal.
+    Str,
+    /// Inside a `{ .. }` interpolation hole; the payload is the brace depth
+    /// (holes contain arbitrary expressions, including `{..}` literals).
+    Hole(u32),
+}
+
+/// Where the line's directive comment starts, if any.
 ///
-/// Scans left-to-right with just enough string-literal awareness to skip a
-/// `//` inside quotes (`"http://.."`). The first real comment decides: if it
-/// starts with `//?` it's a directive, otherwise the rest of the line is
-/// prose and cannot contain one.
-fn directive_start(line: &str) -> Option<usize> {
+/// Tracks just enough of Fable's lexical structure to be truthful: string
+/// literals (with `\` escapes), strings nested inside `{ .. }` interpolation
+/// holes (to arbitrary depth), and nested `/* */` block comments — whose
+/// depth persists across lines via `block_depth`. A directive is a **line**
+/// comment that starts with `//?`, found outside all of the above; the first
+/// non-directive line comment ends the scan (the rest of the line is prose).
+fn directive_start(line: &str, block_depth: &mut u32) -> Option<usize> {
     let b = line.as_bytes();
     let mut i = 0;
-    let mut in_str = false;
+    let mut stack: Vec<ScanMode> = Vec::new();
     while i < b.len() {
-        match b[i] {
-            b'\\' if in_str => {
-                i += 2;
-                continue;
+        if *block_depth > 0 {
+            // Inside a block comment nothing else is lexical structure.
+            match b[i] {
+                b'/' if b.get(i + 1) == Some(&b'*') => {
+                    *block_depth += 1;
+                    i += 2;
+                    continue;
+                }
+                b'*' if b.get(i + 1) == Some(&b'/') => {
+                    *block_depth -= 1;
+                    i += 2;
+                    continue;
+                }
+                _ => {
+                    i += 1;
+                    continue;
+                }
             }
-            b'"' => in_str = !in_str,
-            b'/' if !in_str && b.get(i + 1) == Some(&b'/') => {
-                return if b.get(i + 2) == Some(&b'?') { Some(i) } else { None };
-            }
-            _ => {}
+        }
+        match stack.last_mut() {
+            Some(ScanMode::Str) => match b[i] {
+                b'\\' => {
+                    i += 2;
+                    continue;
+                }
+                b'{' => stack.push(ScanMode::Hole(1)),
+                b'"' => {
+                    stack.pop();
+                }
+                _ => {}
+            },
+            Some(ScanMode::Hole(depth)) => match b[i] {
+                b'"' => stack.push(ScanMode::Str),
+                b'{' => *depth += 1,
+                b'}' => {
+                    *depth -= 1;
+                    if *depth == 0 {
+                        stack.pop();
+                    }
+                }
+                _ => {}
+            },
+            None => match b[i] {
+                b'"' => stack.push(ScanMode::Str),
+                b'/' if b.get(i + 1) == Some(&b'*') => {
+                    *block_depth = 1;
+                    i += 2;
+                    continue;
+                }
+                b'/' if b.get(i + 1) == Some(&b'/') => {
+                    return if b.get(i + 2) == Some(&b'?') { Some(i) } else { None };
+                }
+                _ => {}
+            },
         }
         i += 1;
     }
@@ -60,8 +119,9 @@ fn directive_start(line: &str) -> Option<usize> {
 
 pub fn parse_directives(text: &str) -> Directives {
     let mut d = Directives::default();
+    let mut block_depth = 0u32;
     for line in text.lines() {
-        let Some(idx) = directive_start(line) else { continue };
+        let Some(idx) = directive_start(line, &mut block_depth) else { continue };
         let rest = line[idx + 3..].trim_start();
         if let Some(v) = rest.strip_prefix("expect:") {
             d.expect.push(v.strip_prefix(' ').unwrap_or(v).to_string());

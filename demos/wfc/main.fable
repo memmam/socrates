@@ -18,22 +18,14 @@ fn banner(title: String) {
     println("-".repeat(title.len()));
 }
 
-// Strip trailing spaces (the pipes tile set contains a blank tile, and the
-// golden-test runner compares output lines exactly).
-fn rtrim(s: String) -> String {
-    let mut end = s.len();
-    while end > 0 && s.slice(end - 1, end) == " " {
-        end -= 1;
-    }
-    s.slice(0, end)
-}
-
 fn show(r: rules.Rules, w: Int, h: Int, seed: Int) {
     match wfc.generate(r, w, h, seed, 50) {
         Some(out) -> {
             banner("generated {w}x{h} (seed {seed}, attempt {out.attempts})");
+            // trim_end: the pipes tile set contains a blank tile, and rows of
+            // trailing spaces are noise in a terminal.
             for row in out.grid {
-                println(rtrim(row));
+                println(row.trim_end());
             }
         }
         None -> println("wfc: no texture after 50 seeds"),
@@ -44,7 +36,7 @@ fn show(r: rules.Rules, w: Int, h: Int, seed: Int) {
 fn demo(name: String, sample: List[String], w: Int, h: Int, seed: Int) {
     banner("{name} sample {sample[0].len()}x{sample.len()}");
     for row in sample {
-        println(rtrim(row));
+        println(row.trim_end());
     }
     let r = rules.learn(sample);
     banner("learned {r.tiles.len()} tiles (weight = frequency in sample)");
@@ -81,18 +73,18 @@ demo("pipes", samples.pipes, 48, 16, 2026);
 //? expect:
 //? expect: generated 30x12 (seed 7, attempt 1)
 //? expect: -----------------------------------
-//? expect: ~#~~~~~~~~##.#~#~#~#~~~###~~~#
-//? expect: ~~##~###~~~###~#~~~~~##~~#~~~~
-//? expect: ~~##~~~##~#~~#~~#~~~~~~~~##~~#
-//? expect: ~##~~~~~##~~~~~~~###~~#~~~~~#~
-//? expect: ~~~#~#~~~~~~~~~##~~~#~~~~#~~##
-//? expect: ~##~#~##~##~#~~#~~~#~~~##~##..
-//? expect: ~~~~#~#~~~##~~~~~#~~###.###.T.
-//? expect: ~~~~~#~~~#.##~~~~~~~##....#.T.
-//? expect: ~~#~~~~#~#..###~~~~#.##..#.#.#
-//? expect: ##~#~~~~##.#~~#~~#~~#..#.#...#
-//? expect: ~~~~~~~#...###~#~~~~##..T.##.#
-//? expect: ###~~##~#.T..#~~~~~~~~#...##.#
+//? expect: ...#.#..#~~~~~###~##~#~#~#~~~~
+//? expect: ##......#~~#~~~#~~#~~#~~~#~##~
+//? expect: ...T.###~~#~~~~~~~~#~#~~~~~~#~
+//? expect: ##..T.####~~~#~~~~~~#~~~~#~~~~
+//? expect: #..#.#~#.#~~~#~~##~~~~~~~#~#~~
+//? expect: #...T.##.#~~~~#~~##~~~#~##~~~~
+//? expect: ..##..#...#~#~~~~~~~#~~#~~~~~~
+//? expect: #.####..#.##.#~~~~~~~#~~#~~~~#
+//? expect: #...#..#......##~~#~~~~#~~~~~~
+//? expect: ##.#.T.#.T.#.T.#~~~~##~~~~~#~#
+//? expect: #~###..#..#.T.#~~~~~~~~~~~~~~#
+//? expect: #~~#..#~##.#.#~#~~~#~~###~~~~~
 //? expect:
 //? expect: pipes sample 6x8
 //? expect: ----------------
@@ -114,19 +106,19 @@ demo("pipes", samples.pipes, 48, 16, 2026);
 //? expect:
 //? expect: generated 48x16 (seed 2026, attempt 1)
 //? expect: --------------------------------------
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: +--+-------+-+-+----+-+----+---+---+---+-+-+----
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: +--+-------+-+-+----+-+----+---+---+---+-+-+----
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: +--+-------+-+-+----+-+----+---+---+---+-+-+----
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: |  |       | | |    | |    |   |   |   | | |
-//? expect: |  |       | | |    | |    |   |   |   | | |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect: --+----------+------+-+--+-+---+--+--+-+-+----+-
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |

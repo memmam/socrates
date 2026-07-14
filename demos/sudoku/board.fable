@@ -16,12 +16,12 @@ pub struct Board {
 
 // 9 units x digits 1..9 (index 0 unused), all free.
 fn used_table() -> List[List[Bool]] {
-    (0..9).map(|_u| (0..10).map(|_d| false))
+    (0..9).map(|_| (0..10).map(|_| false))
 }
 
 pub fn empty() -> Board {
     Board {
-        cells: (0..81).map(|_i| 0),
+        cells: (0..81).map(|_| 0),
         row_used: used_table(),
         col_used: used_table(),
         box_used: used_table(),
@@ -106,8 +106,7 @@ pub fn parse(text: String) -> Result[Board, String] {
         return Err("expected 81 cells, got {chars.len()}");
     }
     let b = empty();
-    for i in 0..81 {
-        let ch = chars[i];
+    for (i, ch) in chars.enumerate() {
         if ch == "." || ch == "0" {
             continue;
         }
@@ -127,9 +126,8 @@ pub fn parse(text: String) -> Result[Board, String] {
 
 // Does this unit (a list of 9 cells) contain each digit exactly once?
 fn unit_ok(b: Board, cells: List[(Int, Int)]) -> Bool {
-    let seen = (0..10).map(|_d| false);
-    for rc in cells {
-        let (r, c) = rc;
+    let seen = (0..10).map(|_| false);
+    for (r, c) in cells {
         let d = b.get(r, c);
         if d < 1 || d > 9 || seen[d] {
             return false;
@@ -144,8 +142,7 @@ fn unit_ok(b: Board, cells: List[(Int, Int)]) -> Bool {
 // Deliberately ignores the solver's bookkeeping — it re-derives everything
 // from the cells alone.
 pub fn verify(solved: Board, givens: Board) -> Result[Unit, String] {
-    for i in 0..81 {
-        let g = givens.cells[i];
+    for (i, g) in givens.cells.enumerate() {
         if g != 0 && solved.cells[i] != g {
             return Err("given at r{i / 9 + 1}c{i % 9 + 1} was changed");
         }

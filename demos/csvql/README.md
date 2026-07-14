@@ -70,4 +70,11 @@ and tokens, `Result` with `?` for error plumbing, a `Map` keyed by *enum
 values* (structural hashing, insertion-order iteration) for `group by`,
 generic `sort_by` comparators for `order by`, closures over module
 functions, struct methods with in-place mutation for the parser cursor,
-and multi-file modules with `pub` visibility.
+and multi-file modules with `pub` visibility. v0.6 additions in use:
+tuple-destructuring loops (`for (key, bucket) in buckets.entries()`,
+`for (c, cell) in cells.enumerate()`), bare `return Err(..)` / `break`
+match arms on the parser's error paths, `index_of_from` to find the
+lexer's closing quote, and `os.exit` in a value position (main.fable no
+longer needs a dead `panic("unreachable")` after it). `Val.show`
+deliberately skips v0.6's `to_fixed`, which would keep trailing zeros
+("7.00") that csvql's tables drop ("7").
