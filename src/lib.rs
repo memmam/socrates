@@ -18,6 +18,7 @@ pub mod repl;
 pub mod lexer;
 pub mod parser;
 pub mod source;
+pub mod stdlib;
 pub mod testing;
 pub mod span;
 pub mod token;

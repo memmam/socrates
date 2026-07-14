@@ -1,0 +1,75 @@
+// std.path — slash-separated path helpers (purely textual; nothing here
+// touches the filesystem).
+
+// Join two segments with exactly one `/`; an absolute `b` replaces `a`.
+pub fn join(a: String, b: String) -> String {
+    if a == "" {
+        return b;
+    }
+    if b.starts_with("/") {
+        return b;
+    }
+    if a.ends_with("/") {
+        a + b
+    } else {
+        "{a}/{b}"
+    }
+}
+
+// The final path segment ("file.txt" of "a/b/file.txt"); trailing slashes
+// are ignored. The base name of "/" is "".
+pub fn base_name(p: String) -> String {
+    let t = trim_slashes(p);
+    match t.split("/").last() {
+        Some(s) -> s,
+        None -> "",
+    }
+}
+
+// Everything before the final segment ("a/b" of "a/b/file.txt"); "" when
+// there is no directory part.
+pub fn dir_name(p: String) -> String {
+    let t = trim_slashes(p);
+    let b = base_name(t);
+    if b.len() == t.len() {
+        return "";
+    }
+    trim_slashes(t.slice(0, t.len() - b.len()))
+}
+
+// The extension of the base name, without the dot ("txt" of "a/file.txt";
+// "" when there is none). A leading dot is not an extension (".gitignore").
+pub fn ext(p: String) -> String {
+    let b = base_name(p);
+    match b.index_of(".") {
+        None -> "",
+        Some(first) -> {
+            let parts = b.split(".");
+            if first == 0 && parts.len() == 2 {
+                return "";
+            }
+            match parts.last() {
+                Some(e) -> e,
+                None -> "",
+            }
+        }
+    }
+}
+
+// The path without its extension ("a/file" of "a/file.txt").
+pub fn strip_ext(p: String) -> String {
+    let e = ext(p);
+    if e == "" {
+        p
+    } else {
+        p.slice(0, p.len() - e.len() - 1)
+    }
+}
+
+fn trim_slashes(p: String) -> String {
+    let mut t = p;
+    while t.len() > 1 && t.ends_with("/") {
+        t = t.slice(0, t.len() - 1);
+    }
+    t
+}

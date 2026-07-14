@@ -97,6 +97,29 @@ impl Loader {
                 ));
             }
         };
+        let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
+        self.load_source(canon, display, text, key, dir, false)
+    }
+
+    /// Load an embedded standard-library module (`import std.x;`). The
+    /// pseudo-path `<std.x>` keys the dedup and cycle maps.
+    fn load_std(&mut self, key: &str) -> Result<(), (Source, Vec<Diagnostic>)> {
+        let text = crate::stdlib::std_module(key)
+            .expect("caller checked the std module exists")
+            .to_string();
+        let canon = PathBuf::from(format!("<{key}>"));
+        self.load_source(canon, format!("<{key}>"), text, key.to_string(), PathBuf::new(), true)
+    }
+
+    fn load_source(
+        &mut self,
+        canon: PathBuf,
+        display: String,
+        text: String,
+        key: String,
+        dir: PathBuf,
+        is_std: bool,
+    ) -> Result<(), (Source, Vec<Diagnostic>)> {
         let source = Source::new(display.clone(), text.clone());
 
         let lexed = lexer::lex(&text);
@@ -111,10 +134,19 @@ impl Loader {
         self.key_by_path.insert(canon.clone(), key.clone());
         self.loading.push((canon, display));
 
-        let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
         let mut imports: HashMap<String, String> = HashMap::new();
         for stmt in &parsed.program.stmts {
             let StmtKind::Import { path: segs, alias } = &stmt.kind else { continue };
+            if is_std && segs[0].name != "std" {
+                return Err((
+                    source,
+                    vec![Diagnostic::error(
+                        "E0337",
+                        "standard-library modules may only import other `std` modules",
+                    )
+                    .with_label(stmt.span, "")],
+                ));
+            }
             let target_key = self.resolve_import(&dir, segs, stmt.span, &source)?;
             let alias_name = alias
                 .as_ref()
@@ -153,6 +185,41 @@ impl Loader {
     ) -> Result<String, (Source, Vec<Diagnostic>)> {
         let dotted: Vec<&str> = segs.iter().map(|s| s.name.as_str()).collect();
         let dotted = dotted.join(".");
+
+        // `std.*` is reserved for the embedded standard library.
+        if segs[0].name == "std" {
+            let pseudo = PathBuf::from(format!("<{dotted}>"));
+            if self.loading.iter().any(|(p, _)| *p == pseudo) {
+                return Err((
+                    importer.clone(),
+                    vec![Diagnostic::error(
+                        "E0338",
+                        format!("circular import of `{dotted}`"),
+                    )
+                    .with_label(span, "this import completes a cycle")],
+                ));
+            }
+            if let Some(k) = self.key_by_path.get(&pseudo) {
+                return Ok(k.clone());
+            }
+            if crate::stdlib::std_module(&dotted).is_none() {
+                return Err((
+                    importer.clone(),
+                    vec![Diagnostic::error(
+                        "E0337",
+                        format!("no standard-library module `{dotted}`"),
+                    )
+                    .with_label(span, "not part of the embedded std")
+                    .with_note(format!(
+                        "available: {}",
+                        crate::stdlib::std_module_names().join(", ")
+                    ))],
+                ));
+            }
+            self.load_std(&dotted)?;
+            return Ok(dotted);
+        }
+
         let mut rel = PathBuf::new();
         for s in segs {
             rel.push(&s.name);
