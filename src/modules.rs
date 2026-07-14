@@ -16,6 +16,11 @@ use crate::source::Source;
 use crate::span::Span;
 use crate::{diag, lexer, parser};
 
+/// What `ModuleSession::load_imports` returns: the newly loaded units in
+/// dependency order, the chunk's alias → key map, and the next free NodeId.
+pub type LoadedImports = (Vec<ModuleUnit>, HashMap<String, String>, u32);
+
+#[derive(Clone)]
 pub struct ModuleUnit {
     /// Name-mangling prefix: "" for the root module, the module key otherwise.
     pub prefix: String,
@@ -103,7 +108,7 @@ impl ModuleSession {
         importer: &Source,
         next_id: u32,
         overlay: &HashMap<PathBuf, String>,
-    ) -> Result<(Vec<ModuleUnit>, HashMap<String, String>, u32), (Source, Vec<Diagnostic>)> {
+    ) -> Result<LoadedImports, (Source, Vec<Diagnostic>)> {
         let mut loader = Loader {
             units: Vec::new(),
             key_by_path: std::mem::take(&mut self.key_by_path),

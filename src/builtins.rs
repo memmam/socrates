@@ -245,116 +245,19 @@ use Type::{Bool, Float, Int, Str as TStr, Unit};
 impl Native {
     /// Resolve a method by receiver kind and name.
     pub fn method(recv: Recv, name: &str) -> Option<Native> {
-        use Native::*;
-        Some(match (recv, name) {
-            (Recv::List, "len") => ListLen,
-            (Recv::List, "is_empty") => ListIsEmpty,
-            (Recv::List, "push") => ListPush,
-            (Recv::List, "pop") => ListPop,
-            (Recv::List, "insert") => ListInsert,
-            (Recv::List, "remove") => ListRemove,
-            (Recv::List, "get") => ListGet,
-            (Recv::List, "first") => ListFirst,
-            (Recv::List, "last") => ListLast,
-            (Recv::List, "contains") => ListContains,
-            (Recv::List, "index_of") => ListIndexOf,
-            (Recv::List, "reverse") => ListReverse,
-            (Recv::List, "sort") => ListSort,
-            (Recv::List, "sort_by") => ListSortBy,
-            (Recv::List, "map") => ListMap,
-            (Recv::List, "filter") => ListFilter,
-            (Recv::List, "each") => ListEach,
-            (Recv::List, "fold") => ListFold,
-            (Recv::List, "any") => ListAny,
-            (Recv::List, "all") => ListAll,
-            (Recv::List, "find") => ListFind,
-            (Recv::List, "flat_map") => ListFlatMap,
-            (Recv::List, "zip") => ListZip,
-            (Recv::List, "enumerate") => ListEnumerate,
-            (Recv::List, "slice") => ListSlice,
-            (Recv::List, "concat") => ListConcat,
-            (Recv::List, "join") => ListJoin,
-            (Recv::List, "clone") => ListClone,
-            (Recv::List, "clear") => ListClear,
+        METHOD_TABLE
+            .iter()
+            .find(|(r, n, _)| *r == recv && *n == name)
+            .map(|(_, _, v)| *v)
+    }
 
-            (Recv::Str, "len") => StrLen,
-            (Recv::Str, "byte_len") => StrByteLen,
-            (Recv::Str, "is_empty") => StrIsEmpty,
-            (Recv::Str, "chars") => StrChars,
-            (Recv::Str, "split") => StrSplit,
-            (Recv::Str, "trim") => StrTrim,
-            (Recv::Str, "to_upper") => StrToUpper,
-            (Recv::Str, "to_lower") => StrToLower,
-            (Recv::Str, "contains") => StrContains,
-            (Recv::Str, "starts_with") => StrStartsWith,
-            (Recv::Str, "ends_with") => StrEndsWith,
-            (Recv::Str, "replace") => StrReplace,
-            (Recv::Str, "slice") => StrSlice,
-            (Recv::Str, "char_at") => StrCharAt,
-            (Recv::Str, "index_of") => StrIndexOf,
-            (Recv::Str, "repeat") => StrRepeat,
-            (Recv::Str, "pad_left") => StrPadLeft,
-            (Recv::Str, "pad_right") => StrPadRight,
-            (Recv::Str, "parse_int") => StrParseInt,
-            (Recv::Str, "parse_float") => StrParseFloat,
-            (Recv::Str, "to_string") => StrToString,
-
-            (Recv::Map, "len") => MapLen,
-            (Recv::Map, "is_empty") => MapIsEmpty,
-            (Recv::Map, "get") => MapGet,
-            (Recv::Map, "insert") => MapInsert,
-            (Recv::Map, "remove") => MapRemove,
-            (Recv::Map, "contains_key") => MapContainsKey,
-            (Recv::Map, "keys") => MapKeys,
-            (Recv::Map, "values") => MapValues,
-            (Recv::Map, "entries") => MapEntries,
-            (Recv::Map, "clear") => MapClear,
-            (Recv::Map, "clone") => MapClone,
-
-            (Recv::Int, "to_float") => IntToFloat,
-            (Recv::Int, "to_string") => IntToString,
-            (Recv::Int, "abs") => IntAbs,
-            (Recv::Int, "pow") => IntPow,
-            (Recv::Int, "min") => IntMin,
-            (Recv::Int, "max") => IntMax,
-
-            (Recv::Float, "to_int") => FloatToInt,
-            (Recv::Float, "to_string") => FloatToString,
-            (Recv::Float, "abs") => FloatAbs,
-            (Recv::Float, "floor") => FloatFloor,
-            (Recv::Float, "ceil") => FloatCeil,
-            (Recv::Float, "round") => FloatRound,
-            (Recv::Float, "sqrt") => FloatSqrt,
-            (Recv::Float, "is_nan") => FloatIsNan,
-
-            (Recv::Option_, "is_some") => OptIsSome,
-            (Recv::Option_, "is_none") => OptIsNone,
-            (Recv::Option_, "unwrap") => OptUnwrap,
-            (Recv::Option_, "unwrap_or") => OptUnwrapOr,
-            (Recv::Option_, "map") => OptMap,
-            (Recv::Option_, "and_then") => OptAndThen,
-            (Recv::Option_, "or") => OptOr,
-
-            (Recv::Result_, "is_ok") => ResIsOk,
-            (Recv::Result_, "is_err") => ResIsErr,
-            (Recv::Result_, "unwrap") => ResUnwrap,
-            (Recv::Result_, "unwrap_or") => ResUnwrapOr,
-            (Recv::Result_, "unwrap_err") => ResUnwrapErr,
-            (Recv::Result_, "map") => ResMap,
-            (Recv::Result_, "map_err") => ResMapErr,
-            (Recv::Result_, "and_then") => ResAndThen,
-
-            (Recv::Range, "to_list") => RangeToList,
-            (Recv::Range, "contains") => RangeContains,
-            (Recv::Range, "len") => RangeLen,
-            (Recv::Range, "map") => RangeMap,
-            (Recv::Range, "filter") => RangeFilter,
-            (Recv::Range, "each") => RangeEach,
-            (Recv::Range, "fold") => RangeFold,
-            (Recv::Range, "rev") => RangeRev,
-
-            _ => return None,
-        })
+    /// Every builtin method name for a receiver kind (for tooling —
+    /// completion in the language server).
+    pub fn methods_of(recv: Recv) -> impl Iterator<Item = &'static str> {
+        METHOD_TABLE
+            .iter()
+            .filter(move |(r, _, _)| *r == recv)
+            .map(|(_, n, _)| *n)
     }
 
     /// Resolve a free (prelude) function by name.
@@ -404,6 +307,24 @@ impl Native {
                 _ => return None,
             })),
             _ => None,
+        }
+    }
+
+    /// Every member name of a builtin namespace (for completion). A unit
+    /// test asserts each listed name resolves via `namespace_member`.
+    pub fn namespace_members(ns: &str) -> &'static [&'static str] {
+        match ns {
+            "math" => &[
+                "pi", "e", "sqrt", "sin", "cos", "tan", "atan", "atan2", "log", "log2",
+                "exp", "pow", "floor", "ceil", "round", "abs_int", "abs", "min", "max",
+                "min_float", "max_float", "random", "seed",
+            ],
+            "fs" => &[
+                "read", "write", "append", "exists", "is_dir", "list_dir", "create_dir",
+                "remove",
+            ],
+            "os" => &["args", "env", "run", "exit", "time"],
+            _ => &[],
         }
     }
 
@@ -723,4 +644,124 @@ impl Native {
 pub enum MathMember {
     Fn(Native),
     Const(f64),
+}
+
+/// The builtin method registry: (receiver kind, name, native).
+/// `Native::method` and `Native::methods_of` both read this single table.
+const METHOD_TABLE: &[(Recv, &str, Native)] = &[
+    (Recv::List, "len", Native::ListLen),
+    (Recv::List, "is_empty", Native::ListIsEmpty),
+    (Recv::List, "push", Native::ListPush),
+    (Recv::List, "pop", Native::ListPop),
+    (Recv::List, "insert", Native::ListInsert),
+    (Recv::List, "remove", Native::ListRemove),
+    (Recv::List, "get", Native::ListGet),
+    (Recv::List, "first", Native::ListFirst),
+    (Recv::List, "last", Native::ListLast),
+    (Recv::List, "contains", Native::ListContains),
+    (Recv::List, "index_of", Native::ListIndexOf),
+    (Recv::List, "reverse", Native::ListReverse),
+    (Recv::List, "sort", Native::ListSort),
+    (Recv::List, "sort_by", Native::ListSortBy),
+    (Recv::List, "map", Native::ListMap),
+    (Recv::List, "filter", Native::ListFilter),
+    (Recv::List, "each", Native::ListEach),
+    (Recv::List, "fold", Native::ListFold),
+    (Recv::List, "any", Native::ListAny),
+    (Recv::List, "all", Native::ListAll),
+    (Recv::List, "find", Native::ListFind),
+    (Recv::List, "flat_map", Native::ListFlatMap),
+    (Recv::List, "zip", Native::ListZip),
+    (Recv::List, "enumerate", Native::ListEnumerate),
+    (Recv::List, "slice", Native::ListSlice),
+    (Recv::List, "concat", Native::ListConcat),
+    (Recv::List, "join", Native::ListJoin),
+    (Recv::List, "clone", Native::ListClone),
+    (Recv::List, "clear", Native::ListClear),
+    (Recv::Str, "len", Native::StrLen),
+    (Recv::Str, "byte_len", Native::StrByteLen),
+    (Recv::Str, "is_empty", Native::StrIsEmpty),
+    (Recv::Str, "chars", Native::StrChars),
+    (Recv::Str, "split", Native::StrSplit),
+    (Recv::Str, "trim", Native::StrTrim),
+    (Recv::Str, "to_upper", Native::StrToUpper),
+    (Recv::Str, "to_lower", Native::StrToLower),
+    (Recv::Str, "contains", Native::StrContains),
+    (Recv::Str, "starts_with", Native::StrStartsWith),
+    (Recv::Str, "ends_with", Native::StrEndsWith),
+    (Recv::Str, "replace", Native::StrReplace),
+    (Recv::Str, "slice", Native::StrSlice),
+    (Recv::Str, "char_at", Native::StrCharAt),
+    (Recv::Str, "index_of", Native::StrIndexOf),
+    (Recv::Str, "repeat", Native::StrRepeat),
+    (Recv::Str, "pad_left", Native::StrPadLeft),
+    (Recv::Str, "pad_right", Native::StrPadRight),
+    (Recv::Str, "parse_int", Native::StrParseInt),
+    (Recv::Str, "parse_float", Native::StrParseFloat),
+    (Recv::Str, "to_string", Native::StrToString),
+    (Recv::Map, "len", Native::MapLen),
+    (Recv::Map, "is_empty", Native::MapIsEmpty),
+    (Recv::Map, "get", Native::MapGet),
+    (Recv::Map, "insert", Native::MapInsert),
+    (Recv::Map, "remove", Native::MapRemove),
+    (Recv::Map, "contains_key", Native::MapContainsKey),
+    (Recv::Map, "keys", Native::MapKeys),
+    (Recv::Map, "values", Native::MapValues),
+    (Recv::Map, "entries", Native::MapEntries),
+    (Recv::Map, "clear", Native::MapClear),
+    (Recv::Map, "clone", Native::MapClone),
+    (Recv::Int, "to_float", Native::IntToFloat),
+    (Recv::Int, "to_string", Native::IntToString),
+    (Recv::Int, "abs", Native::IntAbs),
+    (Recv::Int, "pow", Native::IntPow),
+    (Recv::Int, "min", Native::IntMin),
+    (Recv::Int, "max", Native::IntMax),
+    (Recv::Float, "to_int", Native::FloatToInt),
+    (Recv::Float, "to_string", Native::FloatToString),
+    (Recv::Float, "abs", Native::FloatAbs),
+    (Recv::Float, "floor", Native::FloatFloor),
+    (Recv::Float, "ceil", Native::FloatCeil),
+    (Recv::Float, "round", Native::FloatRound),
+    (Recv::Float, "sqrt", Native::FloatSqrt),
+    (Recv::Float, "is_nan", Native::FloatIsNan),
+    (Recv::Option_, "is_some", Native::OptIsSome),
+    (Recv::Option_, "is_none", Native::OptIsNone),
+    (Recv::Option_, "unwrap", Native::OptUnwrap),
+    (Recv::Option_, "unwrap_or", Native::OptUnwrapOr),
+    (Recv::Option_, "map", Native::OptMap),
+    (Recv::Option_, "and_then", Native::OptAndThen),
+    (Recv::Option_, "or", Native::OptOr),
+    (Recv::Result_, "is_ok", Native::ResIsOk),
+    (Recv::Result_, "is_err", Native::ResIsErr),
+    (Recv::Result_, "unwrap", Native::ResUnwrap),
+    (Recv::Result_, "unwrap_or", Native::ResUnwrapOr),
+    (Recv::Result_, "unwrap_err", Native::ResUnwrapErr),
+    (Recv::Result_, "map", Native::ResMap),
+    (Recv::Result_, "map_err", Native::ResMapErr),
+    (Recv::Result_, "and_then", Native::ResAndThen),
+    (Recv::Range, "to_list", Native::RangeToList),
+    (Recv::Range, "contains", Native::RangeContains),
+    (Recv::Range, "len", Native::RangeLen),
+    (Recv::Range, "map", Native::RangeMap),
+    (Recv::Range, "filter", Native::RangeFilter),
+    (Recv::Range, "each", Native::RangeEach),
+    (Recv::Range, "fold", Native::RangeFold),
+    (Recv::Range, "rev", Native::RangeRev),
+];
+
+#[cfg(test)]
+mod namespace_tests {
+    use super::*;
+
+    #[test]
+    fn listed_namespace_members_resolve() {
+        for ns in ["math", "fs", "os"] {
+            for name in Native::namespace_members(ns) {
+                assert!(
+                    Native::namespace_member(ns, name).is_some(),
+                    "{ns}.{name} listed but does not resolve"
+                );
+            }
+        }
+    }
 }

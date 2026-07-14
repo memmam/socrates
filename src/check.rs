@@ -3543,6 +3543,16 @@ impl Checker {
         Type::Var(v)
     }
 
+    /// The methods defined on a type, as (name, is_pub) pairs (for tooling —
+    /// the language server's completion).
+    pub fn methods_on(&self, def: DefId) -> Vec<(String, bool)> {
+        self.methods
+            .iter()
+            .filter(|((d, _), _)| *d == def)
+            .map(|((_, name), &idx)| (name.clone(), self.fns[idx as usize].is_pub))
+            .collect()
+    }
+
     /// Zonked display of a type against this checker's defs (for tooling —
     /// the language server's hover).
     pub fn display_type_public(&self, t: &Type) -> String {
