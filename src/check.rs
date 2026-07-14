@@ -59,6 +59,8 @@ pub enum Res {
 
 #[derive(Debug, Clone)]
 pub struct FnInfo {
+    /// Visible to importing modules (`pub fn` / `pub` method).
+    pub is_pub: bool,
     pub name: String,
     pub generics: Vec<String>,
     /// Parameter types (may contain `Param(i)`).
@@ -69,6 +71,7 @@ pub struct FnInfo {
 
 #[derive(Debug, Clone)]
 pub struct GlobalInfo {
+    pub is_pub: bool,
     pub name: String,
     pub mutable: bool,
     pub ty: Type,
@@ -139,6 +142,8 @@ pub struct Checker {
     module_prefix: String,
     /// The current module's imports: alias → module key.
     imports: HashMap<String, String>,
+    /// Whether the `let` statement currently being checked is `pub`.
+    cur_let_is_pub: bool,
 }
 
 impl Default for Checker {
@@ -174,6 +179,7 @@ impl Checker {
             pending_globals: HashSet::new(),
             module_prefix: String::new(),
             imports: HashMap::new(),
+            cur_let_is_pub: false,
         }
     }
 
@@ -270,24 +276,51 @@ impl Checker {
     }
 
     /// Resolve a possibly module-qualified type name: "alias.Type" through
-    /// the current imports, otherwise a local/prelude lookup.
-    fn resolve_def_name(&self, name: &str) -> Option<DefId> {
+    /// the current imports, otherwise a local/prelude lookup. A foreign type
+    /// must be `pub` (E0339); the def is still returned so checking
+    /// continues gracefully.
+    fn resolve_def_name(&mut self, name: &str, span: Span) -> Option<DefId> {
         match name.split_once('.') {
             Some((alias, rest)) => {
                 let key = self.imports.get(alias)?;
-                self.defs.lookup(&format!("{key}.{rest}"))
+                let def = self.defs.lookup(&format!("{key}.{rest}"))?;
+                let is_pub = match self.defs.get(def) {
+                    TypeDef::Struct(s) => s.is_pub,
+                    TypeDef::Enum(e) => e.is_pub,
+                };
+                if !is_pub {
+                    self.private_item(span, "type", name, rest);
+                }
+                Some(def)
             }
             None => self.lookup_def_local(name),
         }
+    }
+
+    /// The module prefix embedded in a stored (qualified) name: everything
+    /// before the last `.` segment ("" for root-module names).
+    fn name_module(stored: &str) -> &str {
+        match stored.rfind('.') {
+            Some(i) => &stored[..i],
+            None => "",
+        }
+    }
+
+    fn private_item(&mut self, span: Span, what: &str, shown: &str, bare: &str) {
+        self.diags.push(
+            Diagnostic::error("E0339", format!("{what} `{shown}` is private"))
+                .with_label(span, "not exported by its module")
+                .with_note(format!("add `pub` to `{bare}` in the defining module")),
+        );
     }
 
     fn predeclare_types(&mut self, program: &Program) {
         const RESERVED: &[&str] =
             &["Int", "Float", "Bool", "String", "Unit", "List", "Map", "Range"];
         for stmt in &program.stmts {
-            let (name, span, is_struct, generics) = match &stmt.kind {
-                StmtKind::Struct(s) => (&s.name, s.name.span, true, &s.generics),
-                StmtKind::Enum(e) => (&e.name, e.name.span, false, &e.generics),
+            let (name, span, is_struct, generics, is_pub) = match &stmt.kind {
+                StmtKind::Struct(s) => (&s.name, s.name.span, true, &s.generics, s.is_pub),
+                StmtKind::Enum(e) => (&e.name, e.name.span, false, &e.generics, e.is_pub),
                 _ => continue,
             };
             if RESERVED.contains(&name.name.as_str()) {
@@ -326,12 +359,14 @@ impl Checker {
             let stored = self.qualify(&name.name);
             let def = if is_struct {
                 TypeDef::Struct(StructDef {
+                    is_pub,
                     name: stored,
                     generics: generic_names,
                     fields: Vec::new(),
                 })
             } else {
                 TypeDef::Enum(EnumDef {
+                    is_pub,
                     name: stored,
                     generics: generic_names,
                     variants: Vec::new(),
@@ -509,6 +544,7 @@ impl Checker {
 
         let idx = self.fns.len() as u32;
         self.fns.push(FnInfo {
+            is_pub: f.is_pub,
             name,
             generics,
             params,
@@ -651,7 +687,7 @@ impl Checker {
                                 arity_error(self, 0);
                             }
                             Type::Param(i as u32)
-                        } else if let Some(def) = self.resolve_def_name(n) {
+                        } else if let Some(def) = self.resolve_def_name(n, name.span) {
                             let want = self.defs.get(def).generics().len();
                             if args.len() != want {
                                 arity_error(self, want);
@@ -716,7 +752,8 @@ impl Checker {
                     );
                 }
             }
-            StmtKind::Let { mutable, pattern, ty, init } => {
+            StmtKind::Let { is_pub, mutable, pattern, ty, init } => {
+                self.cur_let_is_pub = *is_pub;
                 let annotated = ty.as_ref().map(|t| self.resolve_type_expr(t));
                 let init_ty = self.check_expr(init, annotated.as_ref());
                 let bound_ty = match &annotated {
@@ -1026,6 +1063,33 @@ impl Checker {
                 match op {
                     UnOp::Neg => {
                         let r = self.uni.shallow_resolve(&t);
+                        // `-x` on a user type dispatches to its `neg` method.
+                        if let Type::Named(def, _) = &r {
+                            if let Some(&idx) = self.methods.get(&(*def, "neg".to_string())) {
+                                self.check_method_visible(*def, idx, "neg", e.span);
+                                let info = self.fns[idx as usize].clone();
+                                if info.params.len() != 1 {
+                                    self.diags.push(
+                                        Diagnostic::error(
+                                            "E0317",
+                                            "`neg` overloads unary `-`, so it must take \
+                                             only `self`"
+                                                .to_string(),
+                                        )
+                                        .with_label(e.span, "")
+                                        .with_secondary(info.span, "method declared here"),
+                                    );
+                                    return self.fresh(e.span, "negation");
+                                }
+                                self.res.insert(e.id, Res::Fn(idx));
+                                let inst: Vec<Type> = (0..info.generics.len())
+                                    .map(|_| self.fresh(e.span, "type argument"))
+                                    .collect();
+                                let p0 = substitute(&info.params[0], &inst);
+                                self.expect_type(&p0, &t, expr.span, None);
+                                return substitute(&info.ret, &inst);
+                            }
+                        }
                         match r {
                             Type::Int | Type::Float => r,
                             Type::Var(_) => {
@@ -1055,7 +1119,7 @@ impl Checker {
             }
             ExprKind::Try(inner) => self.check_try(e, inner),
             ExprKind::Binary { op, op_span, lhs, rhs } => {
-                self.check_binary(*op, *op_span, lhs, rhs)
+                self.check_binary(e, *op, *op_span, lhs, rhs)
             }
             ExprKind::Index { base, index } => {
                 let bt = self.check_expr(base, None);
@@ -1365,6 +1429,14 @@ impl Checker {
     fn check_module_member(&mut self, e: &Expr, alias: &str, key: &str, field: &Ident) -> Type {
         let qname = format!("{key}.{}", field.name);
         if let Some(&idx) = self.fn_by_name.get(&qname) {
+            if !self.fns[idx as usize].is_pub {
+                self.private_item(
+                    field.span,
+                    "function",
+                    &format!("{alias}.{}", field.name),
+                    &field.name,
+                );
+            }
             self.res.insert(e.id, Res::Fn(idx));
             let info = self.fns[idx as usize].clone();
             let inst: Vec<Type> = (0..info.generics.len())
@@ -1375,6 +1447,14 @@ impl Checker {
             return Type::Fn(params, Box::new(ret));
         }
         if let Some(&slot) = self.global_by_name.get(&qname) {
+            if !self.globals[slot as usize].is_pub {
+                self.private_item(
+                    field.span,
+                    "binding",
+                    &format!("{alias}.{}", field.name),
+                    &field.name,
+                );
+            }
             self.res.insert(e.id, Res::Global(slot));
             return self.globals[slot as usize].ty.clone();
         }
@@ -1444,7 +1524,7 @@ impl Checker {
             if let ExprKind::Var(alias) = &inner.kind {
                 if !self.name_is_value(alias) && self.imports.contains_key(alias.as_str()) {
                     if let Some(def) =
-                        self.resolve_def_name(&format!("{alias}.{}", tyname.name))
+                        self.resolve_def_name(&format!("{alias}.{}", tyname.name), tyname.span)
                     {
                         if matches!(self.defs.get(def), TypeDef::Enum(_)) {
                             return self.check_variant_path(e, def, field);
@@ -1623,7 +1703,7 @@ impl Checker {
             if let ExprKind::Var(alias) = &inner.kind {
                 if !self.name_is_value(alias) && self.imports.contains_key(alias.as_str()) {
                     if let Some(def) =
-                        self.resolve_def_name(&format!("{alias}.{}", tyname.name))
+                        self.resolve_def_name(&format!("{alias}.{}", tyname.name), tyname.span)
                     {
                         if matches!(self.defs.get(def), TypeDef::Enum(_)) {
                             let ename = self.defs.get(def).name().to_string();
@@ -1653,6 +1733,7 @@ impl Checker {
         // rejected), so builtin method dispatch below is unaffected.
         if let Type::Named(def, _) = &resolved {
             if let Some(&idx) = self.methods.get(&(*def, method.name.clone())) {
+                self.check_method_visible(*def, idx, &method.name, method.span);
                 return self.check_user_method_call(e, recv, &rt, method, args, idx);
             }
         }
@@ -1936,6 +2017,14 @@ impl Checker {
     ) -> Type {
         let qname = format!("{key}.{}", method.name);
         if let Some(&idx) = self.fn_by_name.get(&qname) {
+            if !self.fns[idx as usize].is_pub {
+                self.private_item(
+                    method.span,
+                    "function",
+                    &format!("{alias}.{}", method.name),
+                    &method.name,
+                );
+            }
             self.res.insert(e.id, Res::ModuleFn(idx));
             let info = self.fns[idx as usize].clone();
             let inst: Vec<Type> = (0..info.generics.len())
@@ -1970,6 +2059,14 @@ impl Checker {
             return ret;
         }
         if let Some(&slot) = self.global_by_name.get(&qname) {
+            if !self.globals[slot as usize].is_pub {
+                self.private_item(
+                    method.span,
+                    "binding",
+                    &format!("{alias}.{}", method.name),
+                    &method.name,
+                );
+            }
             self.res.insert(e.id, Res::Global(slot));
             let gty = self.globals[slot as usize].ty.clone();
             return self.check_callable_value(e, &gty, args, method.span);
@@ -2295,7 +2392,14 @@ impl Checker {
         }
     }
 
-    fn check_binary(&mut self, op: BinOp, op_span: Span, lhs: &Expr, rhs: &Expr) -> Type {
+    fn check_binary(
+        &mut self,
+        e: &Expr,
+        op: BinOp,
+        op_span: Span,
+        lhs: &Expr,
+        rhs: &Expr,
+    ) -> Type {
         use BinOp::*;
         match op {
             And | Or => {
@@ -2349,6 +2453,16 @@ impl Checker {
             }
             Add | Sub | Mul | Div | Rem => {
                 let lt = self.check_expr(lhs, None);
+                // Operator methods (v0.3): a user-typed left operand
+                // dispatches `a + b` to `a.add(b)` and so on. Dispatch is on
+                // the LEFT type only; the right operand's type is whatever
+                // the method declares (so `vec * 2.0` works).
+                if let Type::Named(def, _) = self.uni.shallow_resolve(&lt) {
+                    let mname = op_method_name(op);
+                    if let Some(&idx) = self.methods.get(&(def, mname.to_string())) {
+                        return self.check_operator_method(e, op, op_span, idx, &lt, lhs, rhs);
+                    }
+                }
                 let rt = self.check_expr(rhs, Some(&lt));
                 if self.uni.unify(&lt, &rt).is_err() {
                     let (ls, rs) = (self.show(&lt), self.show(&rt));
@@ -2373,6 +2487,70 @@ impl Checker {
         }
     }
 
+    /// Foreign (cross-module) use of a method requires `pub`.
+    fn check_method_visible(&mut self, def: DefId, idx: u32, mname: &str, span: Span) {
+        let type_name = self.defs.get(def).name().to_string();
+        if Self::name_module(&type_name) != self.module_prefix
+            && !self.fns[idx as usize].is_pub
+        {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0339",
+                    format!("method `{mname}` on `{type_name}` is private"),
+                )
+                .with_label(span, "not exported by its module")
+                .with_note(format!("add `pub` to `fn {mname}` in its impl block")),
+            );
+        }
+    }
+
+    /// `a + b` dispatching to a user type's `add` method (etc.).
+    fn check_operator_method(
+        &mut self,
+        e: &Expr,
+        op: BinOp,
+        op_span: Span,
+        idx: u32,
+        recv_ty: &Type,
+        lhs: &Expr,
+        rhs: &Expr,
+    ) -> Type {
+        let mname = op_method_name(op);
+        let info = self.fns[idx as usize].clone();
+        let def = match self.uni.shallow_resolve(recv_ty) {
+            Type::Named(d, _) => d,
+            _ => unreachable!("operator dispatch requires a Named receiver"),
+        };
+        self.check_method_visible(def, idx, mname, op_span);
+        if info.params.len() != 2 {
+            self.diags.push(
+                Diagnostic::error(
+                    "E0317",
+                    format!(
+                        "`{mname}` overloads `{}`, so it must take exactly one \
+                         parameter besides `self`; it takes {}",
+                        op.symbol(),
+                        info.params.len() - 1
+                    ),
+                )
+                .with_label(op_span, "")
+                .with_secondary(info.span, "method declared here"),
+            );
+            self.check_expr(rhs, None);
+            return self.fresh(op_span, "operator result");
+        }
+        self.res.insert(e.id, Res::Fn(idx));
+        let inst: Vec<Type> = (0..info.generics.len())
+            .map(|_| self.fresh(e.span, "type argument"))
+            .collect();
+        let params: Vec<Type> = info.params.iter().map(|p| substitute(p, &inst)).collect();
+        let ret = substitute(&info.ret, &inst);
+        self.expect_type(&params[0], recv_ty, lhs.span, None);
+        let rt = self.check_expr(rhs, Some(&params[1]));
+        self.expect_type(&params[1], &rt, rhs.span, None);
+        ret
+    }
+
     fn check_arith_operand(&mut self, op: BinOp, t: &Type, span: Span) {
         use BinOp::*;
         let r = self.uni.shallow_resolve(t);
@@ -2392,17 +2570,34 @@ impl Checker {
                 Rem => "`Int`",
                 _ => "`Int` or `Float`",
             };
-            self.diags.push(
-                Diagnostic::error(
-                    "E0321",
-                    format!(
-                        "operator `{}` is not defined for `{}`",
-                        op.symbol(),
-                        self.show(&r)
-                    ),
-                )
-                .with_label(span, format!("expected {allowed}")),
-            );
+            let mut d = Diagnostic::error(
+                "E0321",
+                format!(
+                    "operator `{}` is not defined for `{}`",
+                    op.symbol(),
+                    self.show(&r)
+                ),
+            )
+            .with_label(span, format!("expected {allowed}"));
+            if let Type::Named(def, _) = &r {
+                let mname = op_method_name(op);
+                if self.methods.contains_key(&(*def, mname.to_string())) {
+                    // Reachable only from compound assignment (plain binary
+                    // expressions dispatch before this check runs).
+                    d = d.with_note(format!(
+                        "compound assignment does not dispatch to operator \
+                         methods; write `x = x {} ...`",
+                        op.symbol()
+                    ));
+                } else {
+                    d = d.with_note(format!(
+                        "define `fn {mname}(self, other)` in an impl block to \
+                         overload `{}` for this type",
+                        op.symbol()
+                    ));
+                }
+            }
+            self.diags.push(d);
         }
     }
 
@@ -2439,7 +2634,7 @@ impl Checker {
     }
 
     fn check_struct_lit(&mut self, e: &Expr, name: &Ident, fields: &[(Ident, Expr)]) -> Type {
-        let Some(def) = self.resolve_def_name(&name.name) else {
+        let Some(def) = self.resolve_def_name(&name.name, name.span) else {
             let mut d = Diagnostic::error(
                 "E0401",
                 format!("unknown struct `{}`", name.name),
@@ -2827,7 +3022,7 @@ impl Checker {
             }
             PatternKind::Variant { enum_name, variant, fields, has_parens } => {
                 let def = match enum_name {
-                    Some(en) => match self.resolve_def_name(&en.name) {
+                    Some(en) => match self.resolve_def_name(&en.name, en.span) {
                         Some(d) if matches!(self.defs.get(d), TypeDef::Enum(_)) => d,
                         Some(_) => {
                             self.diags.push(
@@ -2940,7 +3135,7 @@ impl Checker {
                 }
             }
             PatternKind::Struct { name, fields, rest } => {
-                let Some(def) = self.resolve_def_name(&name.name) else {
+                let Some(def) = self.resolve_def_name(&name.name, name.span) else {
                     self.diags.push(
                         Diagnostic::error(
                             "E0401",
@@ -3096,6 +3291,7 @@ impl Checker {
                 let slot = self.globals.len() as u32;
                 let stored = self.qualify(&group.name);
                 self.globals.push(GlobalInfo {
+                    is_pub: self.cur_let_is_pub,
                     name: stored.clone(),
                     mutable,
                     ty: group.ty.clone(),
@@ -3540,6 +3736,18 @@ fn prelude_variant(name: &str) -> Option<(DefId, u32)> {
         "Ok" => Some((RESULT_DEF, 0)),
         "Err" => Some((RESULT_DEF, 1)),
         _ => None,
+    }
+}
+
+/// The well-known method name an arithmetic operator dispatches to.
+fn op_method_name(op: BinOp) -> &'static str {
+    match op {
+        BinOp::Add => "add",
+        BinOp::Sub => "sub",
+        BinOp::Mul => "mul",
+        BinOp::Div => "div",
+        BinOp::Rem => "rem",
+        _ => unreachable!("only arithmetic operators dispatch to methods"),
     }
 }
 

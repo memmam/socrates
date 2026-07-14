@@ -1,0 +1,18 @@
+// SPEC §5.2 (v0.3): module items are private unless declared `pub` — E0339
+// covers functions, bindings, types, and methods. Public items (used on the
+// valid lines below) are unaffected.
+//? error: E0339
+//? error: function `sealed.helper` is private
+//? error: binding `sealed.hidden` is private
+//? error: type `sealed.Secret` is private
+//? error: method `hidden_m` on `sealed.Wrapped` is private
+import sealed;
+
+let ok = sealed.api(1) + sealed.visible;
+let w = sealed.Wrapped { value: 3 };
+w.open_m();
+
+sealed.helper(2);
+let h = sealed.hidden;
+let s: sealed.Secret = sealed.Secret { code: 1 };
+w.hidden_m();

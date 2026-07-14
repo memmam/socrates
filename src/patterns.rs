@@ -307,6 +307,7 @@ mod tests {
     fn defs() -> Defs {
         let mut d = Defs::new();
         d.add(TypeDef::Enum(EnumDef {
+            is_pub: true,
             name: "Shape".into(),
             generics: vec![],
             variants: vec![

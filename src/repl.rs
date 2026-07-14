@@ -107,7 +107,7 @@ pub fn run_repl() -> i32 {
                 let stmt_id = NodeId(next_id);
                 next_id += 1;
                 *program.stmts.last_mut().unwrap() = Stmt {
-                    kind: StmtKind::Let { mutable: false, pattern: pat, ty: None, init: expr },
+                    kind: StmtKind::Let { is_pub: false, mutable: false, pattern: pat, ty: None, init: expr },
                     span,
                     id: stmt_id,
                 };

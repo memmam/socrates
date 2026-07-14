@@ -958,7 +958,15 @@ impl<'a> Compiler<'a> {
             ExprKind::Unary { op, expr } => {
                 self.expr(expr);
                 match op {
-                    UnOp::Neg => self.emit(Op::Neg, e.span),
+                    UnOp::Neg => {
+                        // `-x` on a user type dispatches to its `neg` method.
+                        if let Some(Res::Fn(idx)) = self.res.get(&e.id).cloned() {
+                            let p = self.fn_proto_map[idx as usize];
+                            self.emit(Op::CallFn(p, 1), e.span)
+                        } else {
+                            self.emit(Op::Neg, e.span)
+                        }
+                    }
                     UnOp::Not => self.emit(Op::Not, e.span),
                 };
             }
@@ -1002,9 +1010,18 @@ impl<'a> Compiler<'a> {
                     self.emit(Op::Not, *op_span);
                 }
                 other => {
-                    self.expr(lhs);
-                    self.expr(rhs);
-                    self.emit(bin_op(*other), *op_span);
+                    // An operator method (`a + b` → `a.add(b)`): the checker
+                    // recorded the target fn on the Binary node.
+                    if let Some(Res::Fn(idx)) = self.res.get(&e.id).cloned() {
+                        self.expr(lhs);
+                        self.expr(rhs);
+                        let p = self.fn_proto_map[idx as usize];
+                        self.emit(Op::CallFn(p, 2), *op_span);
+                    } else {
+                        self.expr(lhs);
+                        self.expr(rhs);
+                        self.emit(bin_op(*other), *op_span);
+                    }
                 }
             },
             ExprKind::Index { base, index } => {

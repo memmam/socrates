@@ -1,0 +1,31 @@
+// A module with a mix of public and private items, for the visibility tests.
+// Private items are freely usable inside their own module.
+pub struct Wrapped {
+    value: Int,
+}
+
+struct Secret {
+    code: Int,
+}
+
+impl Wrapped {
+    pub fn open_m(self) -> Int {
+        self.hidden_m() + 1
+    }
+
+    fn hidden_m(self) -> Int {
+        self.value
+    }
+}
+
+fn helper(x: Int) -> Int {
+    x * 2
+}
+
+pub fn api(x: Int) -> Int {
+    let s = Secret { code: helper(x) };
+    s.code + hidden
+}
+
+let hidden = 5;
+pub let visible = 7;

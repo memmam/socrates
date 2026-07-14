@@ -1,0 +1,29 @@
+// SPEC §5.1 (v0.3): operator dispatch errors — a user type without the
+// method gets E0321 with a pointer to the impl-block spelling; compound
+// assignment never dispatches (E0321 with the rewrite note); equality is
+// structural and cannot be overloaded (an `eq` method changes nothing).
+// (The `Plain` error carries a note suggesting `fn add(self, other)`; the
+// `Vec1` compound-assign error notes that `+=` never dispatches. The runner
+// matches messages, so the directives below check the messages only.)
+//? error: E0321
+//? error: operator `+` is not defined for `Plain`
+//? error: operator `+` is not defined for `Vec1`
+struct Plain {
+    n: Int,
+}
+
+struct Vec1 {
+    x: Float,
+}
+
+impl Vec1 {
+    fn add(self, o: Vec1) -> Vec1 {
+        Vec1 { x: self.x + o.x }
+    }
+}
+
+let p = Plain { n: 1 };
+let q = p + p;
+
+let mut v = Vec1 { x: 1.0 };
+v += Vec1 { x: 2.0 };

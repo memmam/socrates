@@ -1,0 +1,69 @@
+// SPEC §5.1 (v0.3): arithmetic operators dispatch to well-known methods on
+// user types: `+`→add, `-`→sub, `*`→mul, `/`→div, `%`→rem, unary `-`→neg.
+// Dispatch is on the LEFT operand's type; the right operand (and the result)
+// are whatever the method declares.
+struct Vec2 {
+    x: Float,
+    y: Float,
+}
+
+fn v2(x: Float, y: Float) -> Vec2 {
+    Vec2 { x: x, y: y }
+}
+
+impl Vec2 {
+    fn add(self, o: Vec2) -> Vec2 { v2(self.x + o.x, self.y + o.y) }
+    fn sub(self, o: Vec2) -> Vec2 { v2(self.x - o.x, self.y - o.y) }
+    fn mul(self, k: Float) -> Vec2 { v2(self.x * k, self.y * k) }
+    fn neg(self) -> Vec2 { v2(-self.x, -self.y) }
+    fn show(self) -> String { "({self.x}, {self.y})" }
+}
+
+let a = v2(1.0, 2.0);
+let b = v2(10.0, 20.0);
+
+println((a + b).show());          //? expect: (11.0, 22.0)
+println((b - a).show());          //? expect: (9.0, 18.0)
+println((a * 3.0).show());        //? expect: (3.0, 6.0)
+println((-a).show());             //? expect: (-1.0, -2.0)
+
+// Operators chain with normal precedence: `*` binds tighter than `+`.
+println((a + b * 2.0).show());    //? expect: (21.0, 42.0)
+
+// Mixed operand and result types: `%` on a Money value yields the change.
+struct Money {
+    cents: Int,
+}
+
+impl Money {
+    fn add(self, o: Money) -> Money { Money { cents: self.cents + o.cents } }
+    fn rem(self, unit: Int) -> Int { self.cents % unit }
+    fn div(self, ways: Int) -> Money { Money { cents: self.cents / ways } }
+}
+
+let m = Money { cents: 1234 };
+println(m % 100);                        //? expect: 34
+println((m / 3).cents);                  //? expect: 411
+println((m + Money { cents: 66 }).cents); //? expect: 1300
+
+// Generic types overload too; the method scheme instantiates per call.
+struct Pair[T] {
+    a: T,
+    b: T,
+}
+
+impl Pair[T] {
+    fn add(self, o: Pair[T]) -> Pair[T] {
+        Pair { a: self.a, b: o.b }
+    }
+}
+
+let p = Pair { a: 1, b: 2 } + Pair { a: 3, b: 4 };
+println(p.a);                     //? expect: 1
+println(p.b);                     //? expect: 4
+
+// Compound assignment stays sugar over the plain form.
+let mut acc = v2(0.0, 0.0);
+acc = acc + a;
+acc = acc + b;
+println(acc.show());              //? expect: (11.0, 22.0)
