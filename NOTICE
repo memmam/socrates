@@ -40,3 +40,10 @@ PRIOR-LICENSE NOTICE
    notice forward is governed exclusively by the Apache License,
    Version 2.0, including its NOTICE-preservation requirements
    (Section 4(d)), which apply to this file.
+
+THIRD-PARTY ATTRIBUTIONS
+
+ports/icaa/ is a Fable-language port of ICAA (Isoline-Coverage
+Anti-Aliasing) from https://github.com/SkyeShark/icaa-antialiasing,
+Copyright (c) 2026 ICAA contributors, used under the MIT License. The
+original license text accompanies the port at ports/icaa/LICENSE-upstream.

@@ -40,3 +40,17 @@ jobs:
           ./target/release/fable test tests/spec > /dev/null
       - name: Demo golden tests
         run: ./target/release/fable test demos > /dev/null
+      - name: ICAA port golden tests
+        run: FABLE_PATH=ports ./target/release/fable test ports/icaa/spec.fable
+      - name: ICAA port cross-validation (Fable vs JS reference)
+        run: |
+          mkdir -p /tmp/icaa-scenes
+          FABLE_PATH=ports ./target/release/fable ports/icaa/scenes.fable /tmp/icaa-scenes > /dev/null
+          for scene in /tmp/icaa-scenes/*.ppm; do
+            name=$(basename "$scene" .ppm)
+            for preset in quality fast; do
+              node ports/icaa/reference/icaa-cpu.mjs "$scene" "/tmp/icaa-scenes/${name}_${preset}_js.ppm" "$preset"
+              FABLE_PATH=ports ./target/release/fable ports/icaa/main.fable "$scene" "/tmp/icaa-scenes/${name}_${preset}_fb.ppm" "$preset"
+              node ports/icaa/reference/compare.mjs "/tmp/icaa-scenes/${name}_${preset}_js.ppm" "/tmp/icaa-scenes/${name}_${preset}_fb.ppm"
+            done
+          done
