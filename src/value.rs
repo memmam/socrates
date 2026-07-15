@@ -33,6 +33,7 @@ pub enum Upval {
 }
 
 #[derive(Debug, Clone)]
+#[repr(u8)] // explicit tag: a plain byte load beats a niche-encoded discriminant here
 pub enum Obj {
     /// Recycled slot (member of the free list).
     Free,
@@ -60,7 +61,45 @@ pub struct FMap {
     /// (key hash, key, value) in insertion order.
     pub entries: Vec<(u64, Value, Value)>,
     /// hash → entry indices.
-    index: std::collections::HashMap<u64, Bucket>,
+    index: std::collections::HashMap<u64, Bucket, BuildMixHasher>,
+}
+
+/// The index keys are already FNV-mixed structural hashes; instead of
+/// SipHash-ing them again, finish with one splitmix64-style round (FNV's
+/// low bits alone avalanche poorly, and hashbrown derives both the bucket
+/// index and its control byte from the hash).
+#[derive(Debug, Clone, Copy, Default)]
+struct BuildMixHasher;
+
+#[derive(Default)]
+struct MixHasher(u64);
+
+impl std::hash::BuildHasher for BuildMixHasher {
+    type Hasher = MixHasher;
+    fn build_hasher(&self) -> MixHasher {
+        MixHasher(0)
+    }
+}
+
+impl std::hash::Hasher for MixHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write_u64(&mut self, n: u64) {
+        let mut x = n;
+        x ^= x >> 30;
+        x = x.wrapping_mul(0xbf58476d1ce4e5b9);
+        x ^= x >> 31;
+        self.0 = x;
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        // Not reached for u64 keys; kept correct for completeness.
+        for &b in bytes {
+            self.0 = (self.0 ^ b as u64).wrapping_mul(0x100000001b3);
+        }
+    }
 }
 
 /// Entry indices sharing one key hash. True 64-bit collisions are rare, so
