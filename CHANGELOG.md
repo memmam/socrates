@@ -1,10 +1,10 @@
 # Changelog
 
-Each release was shipped as one reviewed pull request; the book documents
-them narratively (chapters 7–10 for v0.2 onward). Golden spec tests pin
-every feature listed here.
+Each release was shipped as one reviewed pull request. Golden spec tests pin
+every feature listed here; `docs/SPEC.md` marks each with the version that
+introduced it, and `CLAUDE.md` keeps the release ledger.
 
-## Unreleased (v0.7 — the infrastructure release, in progress)
+## v0.7.0 — the infrastructure release
 
 - `fable build <dir|file>` — pack a program into one self-contained
   executable. Every file the program touches (modules, data files, the

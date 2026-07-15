@@ -116,7 +116,9 @@ jobs:
       - name: Assemble the demo zoo
         shell: bash
         run: |
-          host="target/release/fable"
+          # The host stapler is the runner's native `fable`; we only ever
+          # cross within an OS, so the host extension equals matrix.ext.
+          host="target/release/fable${{ matrix.ext }}"
           launcher="target/${{ matrix.target }}/release/fable${{ matrix.ext }}"
           mkdir -p zoo
           for d in demos/*/; do
@@ -199,6 +201,7 @@ jobs:
           else
             gh release create "$TAG" \
               --draft \
+              --prerelease \
               --target "$GITHUB_SHA" \
               --title "Fable $TAG" \
               --notes-file .github/RELEASE_NOTES.md \
