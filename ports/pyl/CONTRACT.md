@@ -64,11 +64,13 @@ Only what upstream uses: Butterworth designs of order 2 and 3, `low` and
 `butter(order, wn_low, wn_high, btype)` → `List[Sos]` where each `Sos`
 is `{b0, b1, b2, a1, a2}` (a0 normalized to 1). Pinned algorithm:
 
-1. Analog lowpass prototype poles: `p_k = -exp(i·π·(2k+1)/(2N))` for
-   k = 0..N-1 (unit circle, left half-plane); gain 1; no zeros.
+1. Analog lowpass prototype poles (scipy `buttap` ordering):
+   `p_k = -exp(i·π·(2k − N + 1)/(2N))` for k = 0..N-1 (unit circle,
+   left half-plane; an earlier revision of this contract wrote
+   `(2k+1)` which lands in the right half-plane for even N — caught
+   during implementation); gain 1; no zeros.
 2. Prewarp: `warped = 4·tan(π·Wn/2)` for each cutoff (fs = 2).
-3. `low`: `p ← warped/2 · p` — wait, precisely: `p ← warped · p`,
-   overall analog gain `warped^N`. `band`: with `bw = w2 - w1`,
+3. `low`: `p ← warped · p`, overall analog gain `warped^N`. `band`: with `bw = w2 - w1`,
    `w0 = sqrt(w1·w2)`: each prototype pole p becomes the pair
    `p' = (p·bw/2) ± sqrt((p·bw/2)² − w0²)` (2N poles), plus N zeros at
    s = 0; gain `bw^N`.
@@ -76,16 +78,18 @@ is `{b0, b1, b2, a1, a2}` (a0 normalized to 1). Pinned algorithm:
    transform contributes gain `(4 − s)` to the denominator product —
    full digital gain = `analog_gain · Re(Π(4 − z_analog_zeros) / Π(4 −
    p_analog_poles))`; zeros at s = ∞ map to z = −1.
-5. SOS pairing: sort digital poles into conjugate pairs ordered by
-   ascending |1 − |p|| distance is NOT required — instead use this fixed
-   deterministic order: pair each complex-conjugate pole pair in the
-   order produced by steps 1–3 (k ascending; for `band`, the `+sqrt`
-   branch then the `−sqrt` branch grouped per k). Zeros: `low` order 2/3
-   → all digital zeros at z = −1, distributed two per section (order 3:
-   the first-order section takes one); `band` → each section takes one
-   z = +1 and one z = −1 zero... EXCEPTION: see the per-filter freeze
-   below. The overall gain multiplies the first section's b
-   coefficients.
+5. SOS pairing: pair each complex-conjugate pole pair in the order
+   produced by steps 1–3 (scan the pole list left to right; each unused
+   pole takes its nearest unused conjugate). For odd-order `low`, the
+   leftover real pole forms a first-order section. Zeros: `low` → all
+   digital zeros at z = −1, two per second-order section (the
+   first-order section takes one); `band` → each second-order section
+   takes one z = +1 and one z = −1 (`b ∝ [1, 0, −1]`). Section order
+   and gain placement follow **the freeze file** (which follows scipy's
+   `zpk2sos` output for these designs — note scipy places an odd
+   order's real-pole section first and carries the overall gain in the
+   first emitted section); where an implementation's natural emission
+   order differs, it must permute to match the freeze.
 6. **The per-filter freeze (authoritative):** prose descriptions of SOS
    pairing conventions are error-prone, so the binding artifact is a
    coefficient dump. The shim author implements steps 1–5, then writes
@@ -134,9 +138,11 @@ The shim monkeypatches upstream's `random` and `np.random` to these.
 
 ## Audio I/O (`pyl.audio`) — the PAW format
 
-Fable cannot write binary files (a real limitation this port surfaces —
-logged for the language's field-test ledger), so audio travels as PAW,
-a PPM-spirited text format:
+Audio travels between the two implementations as PAW, a PPM-spirited
+text format chosen for diffability. (The port initially surfaced a real
+language gap here — Fable had no binary file I/O — which became v0.7's
+`Bytes` type; the Fable side can now also emit WAV directly, but PAW
+remains the parity-comparison format.)
 
 ```
 PAW1
