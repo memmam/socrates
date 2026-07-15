@@ -1,4 +1,4 @@
 v0.7.0
 # First line is the release tag (read via `head -1`). Any push to main that
 # changes this file re-fires the Release workflow, re-cutting the draft against
-# the current commit — used here to rebuild on the Node 24 action bump.
+# the current commit — used here to re-point the draft target at current main.
