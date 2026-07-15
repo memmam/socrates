@@ -36,6 +36,9 @@
 //   np.repeat(x[:, None], 2, axis=1)   nd.mono2(x)
 //   len(x)  (frames)                   x.frames()
 //   x[f] / x[f, c]                     x.get(f, c) / x.set(f, c, v)
+//   x[:, c]     (column copy)          x.channel(c)
+//   np.mean(x)  (all components)       x.mean_all()
+//   np.max(np.abs(x)) (any shape)      x.max_abs_all()
 //
 // Everything returns a fresh array except the in-place ops set_range /
 // add_range / set. Shape mismatches panic with both shapes in the
@@ -276,6 +279,39 @@ impl Nd {
         let mut m = 0.0;
         for v in self.data { m = math.max_float(m, v.abs()); }
         m
+    }
+
+    // ---- claudewave-port additions (kept additive; the mono-only
+    // mean/max_abs semantics above are pinned and unchanged) ----
+
+    // np.mean(x) with axis=None on any shape: plain left-to-right f64
+    // accumulation over every component in storage order / count
+    pub fn mean_all(self) -> Float {
+        let mut acc = 0.0;
+        for v in self.data { acc += v; }
+        acc / self.data.len().to_float()
+    }
+
+    // np.max(np.abs(x)) on any shape; 0.0 on an empty array (layer
+    // decision, same as max_abs)
+    pub fn max_abs_all(self) -> Float {
+        let mut m = 0.0;
+        for v in self.data { m = math.max_float(m, v.abs()); }
+        m
+    }
+
+    // x[:, c] — one channel as a mono copy
+    pub fn channel(self, c: Int) -> Nd {
+        if c < 0 || c >= self.ch {
+            panic("pyl.nd: channel: channel {c} out of range (ch {self.ch})");
+        }
+        let data = [];
+        let mut i = c;
+        while i < self.data.len() {
+            data.push(self.data[i]);
+            i += self.ch;
+        }
+        Nd { ch: 1, data }
     }
 
     // running sum, same length, left to right, plain f64 accumulation

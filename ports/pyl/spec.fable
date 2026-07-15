@@ -157,6 +157,17 @@ println(str(nd.concat([nd.of([1.0]), nd.of([2.0, 3.0])]).data));  //? expect: [1
 println(str(nd.mono2(nd.of([1.0, 2.0])).data));              //? expect: [1.0, 1.0, 2.0, 2.0]
 println(str(try(|| nd.concat([]))));                         //? expect: Err("pyl.nd: concat: empty parts list")
 
+// ---- nd: claudewave-port additions (channel / mean_all / max_abs_all) ----
+
+let ca = nd.stack2(nd.of([1.0, 2.0, 3.0]), nd.of([4.0, -8.0, 6.0]));
+println(str(ca.channel(0).data));                            //? expect: [1.0, 2.0, 3.0]
+println(str(ca.channel(1).data));                            //? expect: [4.0, -8.0, 6.0]
+println(str(nd.of([7.0, 9.0]).channel(0).data));             //? expect: [7.0, 9.0]
+println(str(try(|| ca.channel(2))));                         //? expect: Err("pyl.nd: channel: channel 2 out of range (ch 2)")
+// mean_all sums in storage (interleaved) order: ((((1+4)+2)-8)+3)+6 = 8
+println("{ca.mean_all()} {nd.of([1.0, 2.0]).mean_all()}");   //? expect: 1.3333333333333333 1.5
+println("{ca.max_abs_all()} {nd.of([-5.0, 3.0]).max_abs_all()}");  //? expect: 8.0 5.0
+
 // ---- signal: sosfilt ------------------------------------------------------
 
 // pure gain: b = [0.5, 0, 0], a1 = a2 = 0

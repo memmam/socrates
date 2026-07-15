@@ -51,6 +51,20 @@ jobs:
           FABLE_PATH=ports ./target/release/fable ports/pyl/check_freeze.fable
           python3 -m pip install --quiet scipy
           python3 ports/claudewave/reference/check_sos_vs_scipy.py ports/claudewave/reference/sos_freeze.txt
+      - name: claudewave port cross-validation (Fable vs shim-run upstream)
+        run: |
+          mkdir -p /tmp/cw
+          python3 ports/claudewave/reference/gen_stream.py /tmp/cw/rand_stream.txt
+          CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt python3 ports/claudewave/reference/run_upstream.py /tmp/cw/truth
+          FABLE_PATH=ports CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt ./target/release/fable ports/claudewave/battery.fable /tmp/cw/fable
+          n=$(ls /tmp/cw/truth/*.paw | wc -l)
+          test "$n" -eq 32 || { echo "expected 32 battery items, got $n"; exit 1; }
+          for p in /tmp/cw/truth/*.paw; do
+            name=$(basename "$p")
+            echo "== $name"
+            python3 ports/claudewave/reference/compare_paw.py "$p" "/tmp/cw/fable/$name" || exit 1
+          done
+          diff /tmp/cw/truth/chords.txt /tmp/cw/fable/chords.txt
       - name: ICAA port golden tests
         run: FABLE_PATH=ports ./target/release/fable test ports/icaa/spec.fable
       - name: ICAA port cross-validation (Fable vs JS reference)
