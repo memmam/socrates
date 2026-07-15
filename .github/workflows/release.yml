@@ -154,7 +154,8 @@ jobs:
       # Phase B: upgrade the ad-hoc macOS signatures to Developer ID + Apple
       # notarization so downloaded binaries open with no Gatekeeper warning.
       # Dormant until the signing secrets are set — the ad-hoc binaries above
-      # ship as-is otherwise. Required repo secrets:
+      # ship as-is otherwise. Setup runbook: docs/RELEASING-macOS.md.
+      # Required repo secrets:
       #   MACOS_CERT_P12_BASE64   base64 of the Developer ID Application .p12
       #   MACOS_CERT_PASSWORD     the .p12 export password
       #   MACOS_SIGN_IDENTITY     e.g. "Developer ID Application: Name (TEAMID)"
@@ -260,8 +261,11 @@ jobs:
           # the tag-push trigger — this guard avoids a duplicate draft for a
           # release that already shipped.
           if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "release $TAG already exists; uploading any missing assets"
+            echo "release $TAG already exists; refreshing assets and notes"
             gh release upload "$TAG" "${assets[@]}" --clobber
+            # Re-runs (e.g. once macOS notarization is configured) must also
+            # refresh the body, or a re-cut draft keeps its first notes.
+            gh release edit "$TAG" --notes-file .github/RELEASE_NOTES.md
           else
             gh release create "$TAG" \
               --draft \

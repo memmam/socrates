@@ -94,6 +94,8 @@ and the standing numbers.
 - `docs/SPEC.md` — the normative language reference (`(vN)` tags mark when a
   feature landed).
 - `docs/ARCHITECTURE.md` — implementation internals, module by module.
+- `docs/RELEASING-macOS.md` — one-time setup to turn on Developer ID signing +
+  notarization for the macOS demo-zoo binaries (the six repo secrets).
 - `bench/RESULTS.md` — benchmark methodology + the efficiency-pass deltas.
 - `demos/NOTES.md` — the field-test triage ledgers: every papercut demo
   authors hit, and whether it was fixed / documented / declined. The raw
