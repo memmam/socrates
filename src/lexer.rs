@@ -460,43 +460,34 @@ impl<'a> Lexer<'a> {
             }
             '<' => {
                 self.pos += 1;
-                if self.eat(b'<') {
-                    // `a << 1` otherwise dies as a bare "expected an
-                    // expression" two tokens later; say what's missing.
-                    self.error_at(
-                        Span::new(start as u32, self.pos as u32),
-                        "E0100",
-                        "unexpected `<<`; Fable has no bitwise shift operators",
-                    );
+                let k = if self.eat(b'<') {
+                    TokenKind::Shl
+                } else if self.eat(b'=') {
+                    TokenKind::Le
                 } else {
-                    let k = if self.eat(b'=') { TokenKind::Le } else { TokenKind::Lt };
-                    self.push(k, start, self.pos);
-                }
+                    TokenKind::Lt
+                };
+                self.push(k, start, self.pos);
             }
             '>' => {
                 self.pos += 1;
-                if self.eat(b'>') {
-                    self.error_at(
-                        Span::new(start as u32, self.pos as u32),
-                        "E0100",
-                        "unexpected `>>`; Fable has no bitwise shift operators",
-                    );
+                let k = if self.eat(b'>') {
+                    TokenKind::Shr
+                } else if self.eat(b'=') {
+                    TokenKind::Ge
                 } else {
-                    let k = if self.eat(b'=') { TokenKind::Ge } else { TokenKind::Gt };
-                    self.push(k, start, self.pos);
-                }
+                    TokenKind::Gt
+                };
+                self.push(k, start, self.pos);
             }
             '&' => {
                 self.pos += 1;
-                if self.eat(b'&') {
-                    self.push(TokenKind::AmpAmp, start, self.pos);
-                } else {
-                    self.error_at(
-                        Span::new(start as u32, self.pos as u32),
-                        "E0100",
-                        "unexpected character `&`; logical and is `&&`",
-                    );
-                }
+                let k = if self.eat(b'&') { TokenKind::AmpAmp } else { TokenKind::Amp };
+                self.push(k, start, self.pos);
+            }
+            '^' => {
+                self.pos += 1;
+                self.push(TokenKind::Caret, start, self.pos);
             }
             '|' => {
                 self.pos += 1;

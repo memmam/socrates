@@ -151,7 +151,7 @@ impl Formatter {
                 self.out.push_str(";\n");
             }
             StmtKind::Assign { target, op, value } => {
-                self.expr(target, 9);
+                self.expr(target, 13);
                 let sym = match op {
                     None => "=",
                     Some(BinOp::Add) => "+=",
@@ -434,7 +434,7 @@ impl Formatter {
             ExprKind::Unit => self.out.push_str("()"),
             ExprKind::Var(n) => self.out.push_str(n),
             ExprKind::Field { base, field } => {
-                self.expr(base, 9);
+                self.expr(base, 13);
                 self.out.push('.');
                 self.out.push_str(&field.name);
             }
@@ -446,12 +446,12 @@ impl Formatter {
                     self.expr_inner(callee);
                     self.out.push(')');
                 } else {
-                    self.expr(callee, 9);
+                    self.expr(callee, 13);
                 }
                 self.call_args(args);
             }
             ExprKind::MethodCall { recv, method, args } => {
-                self.expr(recv, 9);
+                self.expr(recv, 13);
                 self.out.push('.');
                 self.out.push_str(&method.name);
                 self.call_args(args);
@@ -461,10 +461,10 @@ impl Formatter {
                     UnOp::Neg => "-",
                     UnOp::Not => "!",
                 });
-                self.expr(expr, 8);
+                self.expr(expr, 12);
             }
             ExprKind::Try(inner) => {
-                self.expr(inner, 9);
+                self.expr(inner, 13);
                 self.out.push('?');
             }
             ExprKind::Binary { op, lhs, rhs, .. } => {
@@ -484,7 +484,7 @@ impl Formatter {
                 self.expr(rhs, p + 1);
             }
             ExprKind::Index { base, index } => {
-                self.expr(base, 9);
+                self.expr(base, 13);
                 self.out.push('[');
                 self.expr(index, 0);
                 self.out.push(']');
@@ -807,8 +807,14 @@ fn bin_prec(op: BinOp) -> u8 {
         BinOp::And => 2,
         BinOp::Eq | BinOp::Ne => 3,
         BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => 4,
-        BinOp::Add | BinOp::Sub => 6,
-        BinOp::Mul | BinOp::Div | BinOp::Rem => 7,
+        // Range sits at 5; bitwise (v0.7) binds tighter than ranges and
+        // looser than arithmetic, in Rust's relative order.
+        BinOp::BitOr => 6,
+        BinOp::BitXor => 7,
+        BinOp::BitAnd => 8,
+        BinOp::Shl | BinOp::Shr => 9,
+        BinOp::Add | BinOp::Sub => 10,
+        BinOp::Mul | BinOp::Div | BinOp::Rem => 11,
     }
 }
 
@@ -816,9 +822,9 @@ fn expr_prec(e: &Expr) -> u8 {
     match &e.kind {
         ExprKind::Binary { op, .. } => bin_prec(*op),
         ExprKind::Range { .. } => 5,
-        ExprKind::Unary { .. } => 8,
+        ExprKind::Unary { .. } => 12,
         ExprKind::Lambda { .. } => 1,
-        ExprKind::If { .. } | ExprKind::Match { .. } => 9,
-        _ => 10,
+        ExprKind::If { .. } | ExprKind::Match { .. } => 13,
+        _ => 14,
     }
 }

@@ -2499,6 +2499,14 @@ impl Checker {
                 self.require_comparable(&lt, op_span, "order");
                 Type::Bool
             }
+            BitAnd | BitOr | BitXor | Shl | Shr => {
+                // Bitwise (v0.7): Int only, no operator-method dispatch.
+                let lt = self.check_expr(lhs, Some(&Type::Int));
+                self.expect_type(&Type::Int, &lt, lhs.span, None);
+                let rt = self.check_expr(rhs, Some(&Type::Int));
+                self.expect_type(&Type::Int, &rt, rhs.span, None);
+                Type::Int
+            }
             Add | Sub | Mul | Div | Rem => {
                 let lt = self.check_expr(lhs, None);
                 // Operator methods (v0.3): a user-typed left operand

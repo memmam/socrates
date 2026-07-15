@@ -1,0 +1,4 @@
+// Negative shift counts panic too.
+//? panic: shift amount out of range: -1 (must be 0..=63)
+let n = -1;
+println(8 >> n);

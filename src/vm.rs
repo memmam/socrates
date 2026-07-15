@@ -717,6 +717,9 @@ impl Vm {
                 Op::Mul => self.op_arith(op)?,
                 Op::Div => self.op_arith(op)?,
                 Op::Rem => self.op_arith(op)?,
+                Op::BitAnd | Op::BitOr | Op::BitXor | Op::Shl | Op::Shr => {
+                    self.op_bitwise(op)?
+                }
                 Op::Neg => {
                     let v = self.pop();
                     let r = match v {
@@ -1076,6 +1079,37 @@ impl Vm {
             _ => return Err(self.error("internal: bad arithmetic operands (VM bug)")),
         };
         self.stack.push(r);
+        Ok(())
+    }
+
+    /// Bitwise ops (v0.7): Int-only by the checker. `>>` is arithmetic
+    /// (sign-extending), matching the two's-complement Int; shift counts
+    /// outside 0..=63 panic rather than quietly wrapping.
+    fn op_bitwise(&mut self, op: Op) -> Result<(), VmError> {
+        let b = self.pop();
+        let a = self.pop();
+        let (Value::Int(x), Value::Int(y)) = (a, b) else {
+            return Err(self.error("internal: bad bitwise operands (VM bug)"));
+        };
+        let v = match op {
+            Op::BitAnd => x & y,
+            Op::BitOr => x | y,
+            Op::BitXor => x ^ y,
+            Op::Shl | Op::Shr => {
+                if !(0..64).contains(&y) {
+                    return Err(self.error(format!(
+                        "shift amount out of range: {y} (must be 0..=63)"
+                    )));
+                }
+                if matches!(op, Op::Shl) {
+                    x.wrapping_shl(y as u32)
+                } else {
+                    x >> y
+                }
+            }
+            _ => unreachable!(),
+        };
+        self.stack.push(Value::Int(v));
         Ok(())
     }
 
