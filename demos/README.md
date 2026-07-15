@@ -1,6 +1,6 @@
 # The Fable demos
 
-Ten programs, each a self-contained showcase of the language doing real
+Eleven programs, each a self-contained showcase of the language doing real
 work. Every demo is deterministic, pins its complete output with golden
 `//?` directives, and passes under GC stress:
 
@@ -23,6 +23,7 @@ FABLE_GC_STRESS=1 ./target/release/fable test demos
 | [`plot/`](plot/) | A function plotter: SVG line charts with 1/2/5 nice ticks and collision-dodged labels, a 75-stroke spirograph, terminal sparklines. | Regenerates both committed SVGs byte-for-byte. The palette follows dataviz accessibility guidance. |
 | [`sudoku/`](sudoku/) | Naked-singles propagation + most-constrained-cell backtracking over three classic puzzles (including Inkala's "hardest"). | The verifier is independent of the solver — the spec deliberately corrupts a solved board to prove it. Trail-based undo restores boards byte-for-byte. |
 | [`wfc/`](wfc/) | Wave-function collapse: learns tile adjacency from ASCII samples, generates new textures by entropy-driven constraint propagation. | The spec pins the *contract*, not just output: zero adjacency violations, same-seed determinism, and a provably impossible tile set that must exhaust its seed budget. |
+| [`parmandel/`](parmandel/) | The Mandelbrot set rendered by four worker isolates (v0.7), each band on its own OS thread in its own VM, streaming rows back over string channels. | The output pins exactly despite true parallelism: per-worker message order is FIFO and assembly drains band by band — determinism by protocol, not by luck. |
 
 ## Where they came from
 
