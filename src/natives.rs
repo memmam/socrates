@@ -990,9 +990,9 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         // ------------------------------------------------------------------
         // String methods
         // ------------------------------------------------------------------
-        StrLen => Value::Int(recv_str(vm, argc)?.chars().count() as i64),
-        StrByteLen => Value::Int(recv_str(vm, argc)?.len() as i64),
-        StrIsEmpty => Value::Bool(recv_str(vm, argc)?.is_empty()),
+        StrLen => Value::Int(str_ref(vm, argc, 0)?.chars().count() as i64),
+        StrByteLen => Value::Int(str_ref(vm, argc, 0)?.len() as i64),
+        StrIsEmpty => Value::Bool(str_ref(vm, argc, 0)?.is_empty()),
         StrChars => {
             let s = recv_str(vm, argc)?;
             let out = alloc_rooted_list(vm, Vec::new());
@@ -1018,103 +1018,103 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             finish_rooted(vm, 1, Value::Obj(out))
         }
         StrTrim => {
-            let s = recv_str(vm, argc)?;
-            vm.alloc_str(s.trim().to_string())
+            let s = str_ref(vm, argc, 0)?.trim().to_string();
+            vm.alloc_str(s)
         }
         StrTrimStart => {
-            let s = recv_str(vm, argc)?;
-            vm.alloc_str(s.trim_start().to_string())
+            let s = str_ref(vm, argc, 0)?.trim_start().to_string();
+            vm.alloc_str(s)
         }
         StrTrimEnd => {
-            let s = recv_str(vm, argc)?;
-            vm.alloc_str(s.trim_end().to_string())
+            let s = str_ref(vm, argc, 0)?.trim_end().to_string();
+            vm.alloc_str(s)
         }
         StrToUpper => {
-            let s = recv_str(vm, argc)?;
-            vm.alloc_str(s.to_ascii_uppercase())
+            let s = str_ref(vm, argc, 0)?.to_ascii_uppercase();
+            vm.alloc_str(s)
         }
         StrToLower => {
-            let s = recv_str(vm, argc)?;
-            vm.alloc_str(s.to_ascii_lowercase())
+            let s = str_ref(vm, argc, 0)?.to_ascii_lowercase();
+            vm.alloc_str(s)
         }
         StrContains => {
-            let s = recv_str(vm, argc)?;
-            let sub = vm.str_of(vm.native_arg(argc, 1))?;
-            Value::Bool(s.contains(&sub))
+            let s = str_ref(vm, argc, 0)?;
+            let sub = str_ref(vm, argc, 1)?;
+            Value::Bool(s.contains(sub))
         }
         StrStartsWith => {
-            let s = recv_str(vm, argc)?;
-            let sub = vm.str_of(vm.native_arg(argc, 1))?;
-            Value::Bool(s.starts_with(&sub))
+            let s = str_ref(vm, argc, 0)?;
+            let sub = str_ref(vm, argc, 1)?;
+            Value::Bool(s.starts_with(sub))
         }
         StrEndsWith => {
-            let s = recv_str(vm, argc)?;
-            let sub = vm.str_of(vm.native_arg(argc, 1))?;
-            Value::Bool(s.ends_with(&sub))
+            let s = str_ref(vm, argc, 0)?;
+            let sub = str_ref(vm, argc, 1)?;
+            Value::Bool(s.ends_with(sub))
         }
         StrReplace => {
-            let s = recv_str(vm, argc)?;
-            let from = vm.str_of(vm.native_arg(argc, 1))?;
-            let to = vm.str_of(vm.native_arg(argc, 2))?;
-            if from.is_empty() {
-                vm.alloc_str(s)
-            } else {
-                vm.alloc_str(s.replace(&from, &to))
-            }
+            let out = {
+                let s = str_ref(vm, argc, 0)?;
+                let from = str_ref(vm, argc, 1)?;
+                let to = str_ref(vm, argc, 2)?;
+                if from.is_empty() { s.to_string() } else { s.replace(from, to) }
+            };
+            vm.alloc_str(out)
         }
         StrSlice => {
-            let s = recv_str(vm, argc)?;
             let a = int_arg(vm, argc, 1)?;
             let b = int_arg(vm, argc, 2)?;
-            let chars: Vec<char> = s.chars().collect();
-            let len = chars.len() as i64;
-            let start = a.clamp(0, len) as usize;
-            let end = b.clamp(0, len) as usize;
-            let out: String =
-                if start >= end { String::new() } else { chars[start..end].iter().collect() };
+            // Single forward walk over the borrowed receiver; clamping to the
+            // char count falls out of skip/take saturating at the end.
+            let out: String = {
+                let s = str_ref(vm, argc, 0)?;
+                let start = a.max(0) as usize;
+                let count = (b.max(0) as usize).saturating_sub(start);
+                s.chars().skip(start).take(count).collect()
+            };
             vm.alloc_str(out)
         }
         StrCharAt => {
-            let s = recv_str(vm, argc)?;
             let i = int_arg(vm, argc, 1)?;
-            if i < 0 {
-                make_none(vm)
+            let c = if i < 0 {
+                None
             } else {
-                match s.chars().nth(i as usize) {
-                    Some(c) => {
-                        let cv = vm.alloc_str(c.to_string());
-                        make_some(vm, cv)
-                    }
-                    None => make_none(vm),
-                }
-            }
-        }
-        StrCodeAt => {
-            let s = recv_str(vm, argc)?;
-            let i = int_arg(vm, argc, 1)?;
-            if i < 0 {
-                make_none(vm)
-            } else {
-                match s.chars().nth(i as usize) {
-                    Some(c) => make_some(vm, Value::Int(c as i64)),
-                    None => make_none(vm),
-                }
-            }
-        }
-        StrIndexOf => {
-            let s = recv_str(vm, argc)?;
-            let sub = vm.str_of(vm.native_arg(argc, 1))?;
-            match s.find(&sub) {
-                Some(byte_idx) => {
-                    let char_idx = s[..byte_idx].chars().count() as i64;
-                    make_some(vm, Value::Int(char_idx))
+                str_ref(vm, argc, 0)?.chars().nth(i as usize)
+            };
+            match c {
+                Some(c) => {
+                    let cv = vm.alloc_str(c.to_string());
+                    make_some(vm, cv)
                 }
                 None => make_none(vm),
             }
         }
+        StrCodeAt => {
+            let i = int_arg(vm, argc, 1)?;
+            let c = if i < 0 {
+                None
+            } else {
+                str_ref(vm, argc, 0)?.chars().nth(i as usize)
+            };
+            match c {
+                Some(c) => make_some(vm, Value::Int(c as i64)),
+                None => make_none(vm),
+            }
+        }
+        StrIndexOf => {
+            let hit = {
+                let s = str_ref(vm, argc, 0)?;
+                let sub = str_ref(vm, argc, 1)?;
+                s.find(sub).map(|byte_idx| s[..byte_idx].chars().count() as i64)
+            };
+            match hit {
+                Some(char_idx) => make_some(vm, Value::Int(char_idx)),
+                None => make_none(vm),
+            }
+        }
         StrIndexOfFrom => {
-            let s = recv_str(vm, argc)?;
-            let sub = vm.str_of(vm.native_arg(argc, 1))?;
+            let s = str_ref(vm, argc, 0)?;
+            let sub = str_ref(vm, argc, 1)?;
             let from = int_arg(vm, argc, 2)?.max(0) as usize;
             // `from` is a character index, like every string index in Fable.
             // Past-the-end starts find nothing (except the empty pattern,
@@ -1128,7 +1128,7 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                 if bf == s.len() && !sub.is_empty() {
                     None
                 } else {
-                    s[bf..].find(&sub).map(|rel| {
+                    s[bf..].find(sub).map(|rel| {
                         s[..bf + rel].chars().count() as i64
                     })
                 }
@@ -1139,49 +1139,52 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             }
         }
         StrRepeat => {
-            let s = recv_str(vm, argc)?;
             let times = int_arg(vm, argc, 1)?;
-            if times <= 0 {
-                vm.alloc_str(String::new())
-            } else {
-                let total = (times as u128) * (s.len() as u128);
-                if total > (1 << 30) {
-                    return Err(vm.error("string repeat result too large"));
+            let out = {
+                let s = str_ref(vm, argc, 0)?;
+                if times <= 0 {
+                    String::new()
+                } else {
+                    let total = (times as u128) * (s.len() as u128);
+                    if total > (1 << 30) {
+                        return Err(vm.error("string repeat result too large"));
+                    }
+                    s.repeat(times as usize)
                 }
-                vm.alloc_str(s.repeat(times as usize))
-            }
+            };
+            vm.alloc_str(out)
         }
         StrPadLeft | StrPadRight => {
-            let s = recv_str(vm, argc)?;
             let width = int_arg(vm, argc, 1)?.max(0) as usize;
-            let pad = vm.str_of(vm.native_arg(argc, 2))?;
-            if width > (1 << 30) {
-                return Err(vm.error("pad width too large"));
-            }
-            let cur = s.chars().count();
-            if cur >= width || pad.is_empty() {
-                vm.alloc_str(s)
-            } else {
-                let need = width - cur;
-                let filler: String = pad.chars().cycle().take(need).collect();
-                let out = if matches!(n, StrPadLeft) {
-                    format!("{filler}{s}")
+            let out = {
+                let s = str_ref(vm, argc, 0)?;
+                let pad = str_ref(vm, argc, 2)?;
+                if width > (1 << 30) {
+                    return Err(vm.error("pad width too large"));
+                }
+                let cur = s.chars().count();
+                if cur >= width || pad.is_empty() {
+                    s.to_string()
                 } else {
-                    format!("{s}{filler}")
-                };
-                vm.alloc_str(out)
-            }
+                    let need = width - cur;
+                    let filler: String = pad.chars().cycle().take(need).collect();
+                    if matches!(n, StrPadLeft) {
+                        format!("{filler}{s}")
+                    } else {
+                        format!("{s}{filler}")
+                    }
+                }
+            };
+            vm.alloc_str(out)
         }
         StrParseInt => {
-            let s = recv_str(vm, argc)?;
-            match s.parse::<i64>() {
+            match str_ref(vm, argc, 0)?.parse::<i64>() {
                 Ok(i) => make_some(vm, Value::Int(i)),
                 Err(_) => make_none(vm),
             }
         }
         StrParseFloat => {
-            let s = recv_str(vm, argc)?;
-            match s.parse::<f64>() {
+            match str_ref(vm, argc, 0)?.parse::<f64>() {
                 Ok(f) => make_some(vm, Value::Float(f)),
                 Err(_) => make_none(vm),
             }
