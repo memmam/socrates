@@ -1,5 +1,8 @@
 // solver — naked-singles constraint propagation plus depth-first
-// backtracking with the most-constrained-cell (MRV) heuristic.
+// backtracking with the most-constrained-cell (MRV) heuristic, all of it
+// running on the board's 9-bit candidate masks: a contradiction is
+// `mask == 0`, a naked single is `popcount(mask) == 1`, and guesses come
+// off the mask lowest-bit-first, which is ascending digit order.
 //
 // The search mutates one shared Board. Every placement made by
 // propagation is logged on a trail list so a failed branch can unwind
@@ -9,9 +12,9 @@
 import board;
 
 pub struct Stats {
-    assignments: Int,  // total digits placed (propagated singles + guesses)
-    guesses: Int,      // speculative placements at branch points
-    backtracks: Int,   // guesses undone after a contradiction
+    assignments: Int, // total digits placed (propagated singles + guesses)
+    guesses: Int, // speculative placements at branch points
+    backtracks: Int, // guesses undone after a contradiction
 }
 
 pub fn new_stats() -> Stats {
@@ -42,8 +45,9 @@ fn unwind(b: board.Board, trail: List[Int]) {
 }
 
 // Naked-singles propagation: while some empty cell has exactly one
-// candidate, fill it in (each fill can create new singles, so loop to a
-// fixpoint). Returns false on a contradiction — a cell with no candidates.
+// candidate bit, fill it in (each fill can create new singles, so loop
+// to a fixpoint). Returns false on a contradiction — an empty candidate
+// mask.
 fn propagate(b: board.Board, trail: List[Int], st: Stats) -> Bool {
     let mut changed = true;
     while changed {
@@ -53,11 +57,11 @@ fn propagate(b: board.Board, trail: List[Int], st: Stats) -> Bool {
                 continue;
             }
             let cands = b.candidates(i / 9, i % 9);
-            if cands.is_empty() {
+            if cands == 0 {
                 return false;
             }
-            if cands.len() == 1 {
-                assign(b, trail, i / 9, i % 9, cands[0], st);
+            if board.popcount(cands) == 1 {
+                assign(b, trail, i / 9, i % 9, board.lowest_digit(cands), st);
                 changed = true;
             }
         }
@@ -65,30 +69,30 @@ fn propagate(b: board.Board, trail: List[Int], st: Stats) -> Bool {
     true
 }
 
-// The most-constrained empty cell and its candidates, or None if the grid
-// is full. After propagation every empty cell has >= 2 candidates, so a
-// 2-candidate cell is as constrained as it gets — stop looking early.
-fn best_cell(b: board.Board) -> Option[(Int, Int, List[Int])] {
+// The most-constrained empty cell and its candidate mask, or None if the
+// grid is full. After propagation every empty cell has >= 2 candidates,
+// so a 2-bit mask is as constrained as it gets — stop looking early.
+// Ties break toward the first cell scanned.
+fn best_cell(b: board.Board) -> Option[(Int, Int, Int)] {
     let mut best_i = -1;
-    let mut best: List[Int] = [];
+    let mut best_mask = 0;
+    let mut best_n = 10; // more than any mask's popcount
     for i in 0..81 {
         if b.cells[i] != 0 {
             continue;
         }
-        let cands = b.candidates(i / 9, i % 9);
-        if best_i < 0 || cands.len() < best.len() {
+        let m = b.candidates(i / 9, i % 9);
+        let n = board.popcount(m);
+        if n < best_n {
             best_i = i;
-            best = cands;
+            best_mask = m;
+            best_n = n;
         }
-        if best.len() == 2 {
+        if best_n == 2 {
             break;
         }
     }
-    if best_i < 0 {
-        None
-    } else {
-        Some((best_i / 9, best_i % 9, best))
-    }
+    if best_i < 0 { None } else { Some((best_i / 9, best_i % 9, best_mask)) }
 }
 
 // Depth-first search. Returns true with the board solved in place, or
@@ -100,9 +104,14 @@ fn search(b: board.Board, st: Stats) -> Bool {
         return false;
     }
     match best_cell(b) {
-        None -> true,  // no empty cells left: solved
-        Some((r, c, cands)) -> {
-            for d in cands {
+        None -> true, // no empty cells left: solved
+        Some((r, c, mask)) -> {
+            // Try candidates in ascending digit order by peeling the
+            // lowest set bit off the mask each pass (xor removes it).
+            let mut rest = mask;
+            while rest != 0 {
+                let d = board.lowest_digit(rest);
+                rest = rest ^ board.digit_bit(d);
                 st.guesses += 1;
                 assign(b, trail, r, c, d, st);
                 if search(b, st) {
@@ -114,7 +123,7 @@ fn search(b: board.Board, st: Stats) -> Bool {
             }
             unwind(b, trail);
             false
-        }
+        },
     }
 }
 

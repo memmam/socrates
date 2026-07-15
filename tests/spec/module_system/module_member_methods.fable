@@ -1,0 +1,12 @@
+// Method calls and field access on module-qualified value members
+// (v0.7 demo-round fix: `alias.member.method()` used to be hijacked by
+// the `alias.Enum.Variant` path and die with "no enum `member`").
+
+import geo;
+
+println(geo.answer.to_float());          //? expect: 42.0
+println(geo.xs.len());                   //? expect: 3
+println((geo.xs).len());                 //? expect: 3
+println(geo.xs.map(|x| x * 2));          //? expect: [2, 4, 6]
+println(geo.unit_square.is_square());    //? expect: true
+println(geo.area(geo.Shape.Circle(1.0)).to_fixed(4));   //? expect: 3.1416

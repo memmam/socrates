@@ -1,30 +1,87 @@
 // board — the sudoku grid: parsing with validation, pretty-printing,
-// constant-time constraint bookkeeping for the solver, and an independent
-// verifier for finished grids.
+// 9-bit candidate masks for the solver, and an independent verifier for
+// finished grids.
 //
-// A Board is 81 cells (row-major, 0 = empty) plus three "used" tables so
-// that `allows(r, c, d)` — may digit d go at (r, c)? — is three list
-// lookups instead of a scan. Boards have reference semantics, so the
-// solver mutates one shared grid in place and undoes on backtrack.
+// A candidate set is one Int (v0.7 bitwise operators): bit d-1 stands for
+// digit d, so "any of 1..9" is 0b111111111 = 511 and set algebra is
+// plain arithmetic — union `|`, intersection `&`, complement `^ 511`,
+// membership one shift and one `&`. Nine bits live nowhere near bit 63,
+// so the arithmetic right shift never smears a sign bit through a mask
+// (a 64-bit bitboard has to re-mask after every `>>`; this demo never
+// does).
+//
+// A Board is 81 cells (row-major, 0 = empty) plus one used-digit mask per
+// row, column, and box. Boards have reference semantics, so the solver
+// mutates one shared grid in place and undoes on backtrack.
 
-pub struct Board {
-    cells: List[Int],            // 81 cells, row-major; 0 = empty
-    row_used: List[List[Bool]],  // row_used[r][d]: digit d already in row r
-    col_used: List[List[Bool]],  // col_used[c][d]: digit d already in column c
-    box_used: List[List[Bool]],  // box_used[b][d]: digit d already in box b
+import std.lists;
+import std.strings;
+
+// ---- the 9-bit mask kit ---------------------------------------------------
+
+// All nine digit bits set: the candidate mask of an unconstrained cell.
+pub let full_mask = 0b111111111; // = 511
+
+// The mask holding only digit d. `-` binds tighter than `<<` (Rust
+// relative precedence), so this shifts by d - 1: digit 1 is bit 0.
+pub fn digit_bit(d: Int) -> Int {
+    1 << d - 1
 }
 
-// 9 units x digits 1..9 (index 0 unused), all free.
-fn used_table() -> List[List[Bool]] {
-    (0..9).map(|_| (0..10).map(|_| false))
+// Is digit d in the mask? Shift the digit's bit down to position 0 and
+// test it; `&` binds tighter than `==`, so no parentheses are needed.
+pub fn has(mask: Int, d: Int) -> Bool {
+    mask >> d - 1 & 1 == 1
+}
+
+// Set-bit count by shift-and-add: peel the low bit with `& 1`, shift the
+// rest down. Masks are non-negative (bits 0..8 only), so the arithmetic
+// `>>` streams in zero bits and the loop terminates.
+pub fn popcount(mask: Int) -> Int {
+    let mut m = mask;
+    let mut n = 0;
+    while m != 0 {
+        n += m & 1;
+        m = m >> 1;
+    }
+    n
+}
+
+// The digit named by the lowest set bit — *the* naked single whenever
+// popcount(mask) == 1. Panics on an empty mask.
+pub fn lowest_digit(mask: Int) -> Int {
+    if mask == 0 {
+        panic("lowest_digit: empty mask");
+    }
+    let mut m = mask;
+    let mut d = 1;
+    while m & 1 == 0 {
+        m = m >> 1;
+        d += 1;
+    }
+    d
+}
+
+// The mask unpacked to digits, ascending — display and test helper.
+pub fn digits_of(mask: Int) -> List[Int] {
+    (1..=9).filter(|d| has(mask, d))
+}
+
+// ---- the grid ---------------------------------------------------------------
+
+pub struct Board {
+    cells: List[Int], // 81 cells, row-major; 0 = empty
+    row_used: List[Int], // row_used[r]: mask of digits already in row r
+    col_used: List[Int], // col_used[c]: mask of digits already in column c
+    box_used: List[Int], // box_used[b]: mask of digits already in box b
 }
 
 pub fn empty() -> Board {
     Board {
-        cells: (0..81).map(|_| 0),
-        row_used: used_table(),
-        col_used: used_table(),
-        box_used: used_table(),
+        cells: lists.fill(81, 0),
+        row_used: lists.fill(9, 0),
+        col_used: lists.fill(9, 0),
+        box_used: lists.fill(9, 0),
     }
 }
 
@@ -38,29 +95,40 @@ impl Board {
         self.cells[r * 9 + c]
     }
 
+    // Every digit already used in the three units covering (r, c): the
+    // union of the row, column, and box constraint masks.
+    fn used(self, r: Int, c: Int) -> Int {
+        self.row_used[r] | self.col_used[c] | self.box_used[box_of(r, c)]
+    }
+
+    // Every digit that could legally go at (r, c), as one mask: the used
+    // set complemented within nine bits (`^ full_mask` flips bits 0..8
+    // and nothing else).
+    pub fn candidates(self, r: Int, c: Int) -> Int {
+        self.used(r, c) ^ full_mask
+    }
+
     // Can digit d be placed at (r, c) without clashing?
     pub fn allows(self, r: Int, c: Int, d: Int) -> Bool {
-        !self.row_used[r][d] && !self.col_used[c][d] && !self.box_used[box_of(r, c)][d]
+        self.used(r, c) & digit_bit(d) == 0
     }
 
     pub fn place(self, r: Int, c: Int, d: Int) {
+        let bit = digit_bit(d);
         self.cells[r * 9 + c] = d;
-        self.row_used[r][d] = true;
-        self.col_used[c][d] = true;
-        self.box_used[box_of(r, c)][d] = true;
+        self.row_used[r] = self.row_used[r] | bit;
+        self.col_used[c] = self.col_used[c] | bit;
+        self.box_used[box_of(r, c)] = self.box_used[box_of(r, c)] | bit;
     }
 
+    // Remove the digit at (r, c). Its bit is set in all three masks by
+    // construction, so xor toggles it back off.
     pub fn unplace(self, r: Int, c: Int) {
-        let d = self.cells[r * 9 + c];
+        let bit = digit_bit(self.cells[r * 9 + c]);
         self.cells[r * 9 + c] = 0;
-        self.row_used[r][d] = false;
-        self.col_used[c][d] = false;
-        self.box_used[box_of(r, c)][d] = false;
-    }
-
-    // All digits that could legally go in the empty cell (r, c).
-    pub fn candidates(self, r: Int, c: Int) -> List[Int] {
-        (1..=9).filter(|d| self.allows(r, c, d))
+        self.row_used[r] = self.row_used[r] ^ bit;
+        self.col_used[c] = self.col_used[c] ^ bit;
+        self.box_used[box_of(r, c)] = self.box_used[box_of(r, c)] ^ bit;
     }
 
     pub fn clue_count(self) -> Int {
@@ -72,28 +140,30 @@ impl Board {
         self.cells.map(|d| if d == 0 { "." } else { str(d) }).join("")
     }
 
-    // Pretty 13-line grid with box rules:
+    // Pretty 13-line grid with box rules, accumulated in a
+    // strings.Builder (`+=` in a loop recopies the whole string each
+    // pass — O(n²); the Builder joins once):
     //   +-------+-------+-------+
     //   | 5 3 . | . 7 . | . . . |
     pub fn show(self) -> String {
         let rule = "+-------+-------+-------+";
-        let lines = [rule];
+        let out = strings.builder();
+        out.push(rule);
         for r in 0..9 {
-            let mut line = "|";
+            out.push("\n|");
             for c in 0..9 {
                 let d = self.get(r, c);
-                let mark = if d == 0 { "." } else { str(d) };
-                line += " {mark}";
+                out.push(if d == 0 { " ." } else { " {d}" });
                 if c % 3 == 2 {
-                    line += " |";
+                    out.push(" |");
                 }
             }
-            lines.push(line);
             if r % 3 == 2 {
-                lines.push(rule);
+                out.push("\n");
+                out.push(rule);
             }
         }
-        lines.join("\n")
+        out.build()
     }
 }
 
@@ -125,16 +195,22 @@ pub fn parse(text: String) -> Result[Board, String] {
 }
 
 // Does this unit (a list of 9 cells) contain each digit exactly once?
+// Fold the digits into a mask: a repeated digit finds its bit already
+// set, and nine distinct digits or-ed together are exactly full_mask.
 fn unit_ok(b: Board, cells: List[(Int, Int)]) -> Bool {
-    let seen = (0..10).map(|_| false);
+    let mut seen = 0;
     for (r, c) in cells {
         let d = b.get(r, c);
-        if d < 1 || d > 9 || seen[d] {
+        if d < 1 || d > 9 {
             return false;
         }
-        seen[d] = true;
+        let bit = digit_bit(d);
+        if seen & bit != 0 {
+            return false;
+        }
+        seen = seen | bit;
     }
-    true
+    seen == full_mask
 }
 
 // Independent check of a finished grid: every given from the original

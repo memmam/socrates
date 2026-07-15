@@ -27,7 +27,7 @@ fn show(r: rules.Rules, w: Int, h: Int, seed: Int) {
             for row in out.grid {
                 println(row.trim_end());
             }
-        }
+        },
         None -> println("wfc: no texture after 50 seeds"),
     }
 }

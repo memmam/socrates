@@ -106,7 +106,7 @@ pub fn run_capture_path_with(
                 Ok(u) => u,
                 Err((_source, diags)) => return RunOutcome::CompileError(diags),
             };
-            run_units(units)
+            run_units(units, path.parent().map(|p| p.to_path_buf()))
         })
         .expect("failed to spawn interpreter thread")
         .join()
@@ -118,10 +118,10 @@ fn run_capture_path_here(path: &std::path::Path) -> RunOutcome {
         Ok(u) => u,
         Err((_source, diags)) => return RunOutcome::CompileError(diags),
     };
-    run_units(units)
+    run_units(units, path.parent().map(|p| p.to_path_buf()))
 }
 
-fn run_units(units: Vec<modules::ModuleUnit>) -> RunOutcome {
+fn run_units(units: Vec<modules::ModuleUnit>, entry_dir: Option<std::path::PathBuf>) -> RunOutcome {
     let mut warnings = Vec::new();
     let mut checker = check::Checker::new();
     let mut builder = compiler::ProgramBuilder::new();
@@ -145,6 +145,7 @@ fn run_units(units: Vec<modules::ModuleUnit>) -> RunOutcome {
     let mut units = units;
     let first_source = units.remove(0).source;
     let mut vm = vm::Vm::new(program, first_source, Box::new(writer));
+    vm.entry_dir = entry_dir;
     // Workers spawned by the program under test write into the same buffer.
     vm.worker_sink = Some(std::sync::Arc::new(std::sync::Mutex::new(SharedWriter(
         buf.clone(),

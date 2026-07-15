@@ -3,6 +3,10 @@
 // Block level: headings (#..######), paragraphs, unordered lists, and
 // fenced code blocks. Inline level: **bold**, *italic*, `code`, and
 // [text](url) links. Everything else is escaped literal text.
+//
+// All string accumulation goes through strings.Builder (v0.7): every
+// hot path here appends in a loop, which is exactly the shape where
+// `+=` on an immutable String is O(n²) and a Builder is O(n).
 
 import std.strings;
 
@@ -10,11 +14,11 @@ import std.strings;
 
 // Escape the HTML metacharacters so page text can never smuggle markup.
 pub fn escape(s: String) -> String {
-    let out: List[String] = [];
+    let out = strings.builder();
     for c in s {
         out.push(escape_char(c));
     }
-    out.join("")
+    out.build()
 }
 
 fn escape_char(c: String) -> String {
@@ -24,11 +28,7 @@ fn escape_char(c: String) -> String {
         "&lt;"
     } else if c == ">" {
         "&gt;"
-    } else if c == "\"" {
-        "&quot;"
-    } else {
-        c
-    }
+    } else if c == "\"" { "&quot;" } else { c }
 }
 
 // ------------------------------------------------------------ inline spans
@@ -38,7 +38,7 @@ fn escape_char(c: String) -> String {
 // a recognized delimiter must find its closing partner, otherwise it is
 // treated as literal text (so a stray `*` never eats the rest of a line).
 pub fn render_inline(s: String) -> String {
-    let out: List[String] = [];
+    let out = strings.builder();
     let mut i = 0;
     while i < s.len() {
         let c = s.slice(i, i + 1);
@@ -47,16 +47,20 @@ pub fn render_inline(s: String) -> String {
                 Some(close) -> {
                     out.push("<strong>{render_inline(s.slice(i + 2, close))}</strong>");
                     i = close + 2;
-                }
-                None -> { i = push_literal(out, c, i); }
+                },
+                None -> {
+                    i = push_literal(out, c, i);
+                },
             }
         } else if c == "*" {
             match s.index_of_from("*", i + 1) {
                 Some(close) -> {
                     out.push("<em>{render_inline(s.slice(i + 1, close))}</em>");
                     i = close + 1;
-                }
-                None -> { i = push_literal(out, c, i); }
+                },
+                None -> {
+                    i = push_literal(out, c, i);
+                },
             }
         } else if c == "`" {
             match s.index_of_from("`", i + 1) {
@@ -64,27 +68,31 @@ pub fn render_inline(s: String) -> String {
                     // Code spans are opaque: no nested markup, just escaping.
                     out.push("<code>{escape(s.slice(i + 1, close))}</code>");
                     i = close + 1;
-                }
-                None -> { i = push_literal(out, c, i); }
+                },
+                None -> {
+                    i = push_literal(out, c, i);
+                },
             }
         } else if c == "[" {
             match parse_link(s, i) {
                 Some((html, next)) -> {
                     out.push(html);
                     i = next;
-                }
-                None -> { i = push_literal(out, c, i); }
+                },
+                None -> {
+                    i = push_literal(out, c, i);
+                },
             }
         } else {
             i = push_literal(out, c, i);
         }
     }
-    out.join("")
+    out.build()
 }
 
 // Emit the character `c` (found at index `i`) as escaped text; returns
 // the next index.
-fn push_literal(out: List[String], c: String, i: Int) -> Int {
+fn push_literal(out: strings.Builder, c: String, i: Int) -> Int {
     out.push(escape_char(c));
     i + 1
 }
@@ -105,12 +113,16 @@ fn parse_link(s: String, i: Int) -> Option[(String, Int)] {
 // ------------------------------------------------------------ block level
 
 // Convert a whole Markdown document to HTML (one block element per line
-// group, joined with newlines).
+// group, "\n"-separated). The document, the pending paragraph, and the
+// pending code block each accumulate in their own Builder; list items
+// stay a List[String] because each one becomes its own <li>.
 pub fn to_html(src: String) -> String {
-    let out: List[String] = [];
-    let para: List[String] = [];   // pending paragraph lines
-    let items: List[String] = [];  // pending list items
-    let code: List[String] = [];   // pending code-block lines (escaped)
+    let out = strings.builder(); // finished block elements
+    let para = strings.builder(); // pending paragraph text, lines joined by " "
+    let items: List[String] = []; // pending list items
+    let code = strings.builder(); // pending code-block body (escaped lines)
+    let mut code_lines = 0; // Builder.len() counts chars, so an escaped
+    // empty line would be invisible to it
     let mut in_code = false;
     let mut lang = "";
 
@@ -118,11 +130,16 @@ pub fn to_html(src: String) -> String {
         // Inside a fence everything is verbatim until the closing ```.
         if in_code {
             if line.trim() == "```" {
-                out.push(code_block(code, lang));
+                block(out, code_block(code.build(), lang));
                 code.clear();
+                code_lines = 0;
                 in_code = false;
             } else {
+                if code_lines > 0 {
+                    code.push("\n");
+                }
                 code.push(escape(line));
+                code_lines += 1;
             }
             continue;
         }
@@ -138,7 +155,7 @@ pub fn to_html(src: String) -> String {
             flush_para(out, para);
             flush_list(out, items);
             let text = line.slice(level + 1, line.len()).trim();
-            out.push("<h{level}>{render_inline(text)}</h{level}>");
+            block(out, "<h{level}>{render_inline(text)}</h{level}>");
             continue;
         }
         if line.starts_with("- ") {
@@ -151,18 +168,23 @@ pub fn to_html(src: String) -> String {
             flush_list(out, items);
             continue;
         }
-        // An ordinary text line: part of the current paragraph.
+        // An ordinary text line: part of the current paragraph. The raw
+        // text accumulates first and is inline-rendered once on flush,
+        // so spans may cross line boundaries within a paragraph.
         flush_list(out, items);
+        if para.len() > 0 {
+            para.push(" ");
+        }
         para.push(line.trim());
     }
 
     // Close anything still open (including an unterminated fence).
     if in_code {
-        out.push(code_block(code, lang));
+        block(out, code_block(code.build(), lang));
     }
     flush_para(out, para);
     flush_list(out, items);
-    out.join("\n")
+    out.build()
 }
 
 // The text of the first `# ` heading — used as the page title.
@@ -182,34 +204,41 @@ fn heading_level(line: String) -> Int {
     while line.slice(n, n + 1) == "#" {
         n += 1;
     }
-    if n >= 1 && n <= 6 && line.slice(n, n + 1) == " " {
-        n
-    } else {
-        0
+    if n >= 1 && n <= 6 && line.slice(n, n + 1) == " " { n } else { 0 }
+}
+
+// Append one finished block element to the document. Blocks are never
+// empty strings, so len() == 0 means exactly "no blocks yet" and the
+// "\n" separator lands only between blocks.
+fn block(out: strings.Builder, html: String) {
+    if out.len() > 0 {
+        out.push("\n");
     }
+    out.push(html);
 }
 
 // Adjacent source lines belong to one paragraph, joined with spaces.
-fn flush_para(out: List[String], para: List[String]) {
-    if !para.is_empty() {
-        out.push("<p>{render_inline(para.join(" "))}</p>");
+// (Paragraph lines are nonempty — blank lines flush instead — so
+// para.len() > 0 is a reliable "paragraph open" test.)
+fn flush_para(out: strings.Builder, para: strings.Builder) {
+    if para.len() > 0 {
+        block(out, "<p>{render_inline(para.build())}</p>");
         para.clear();
     }
 }
 
-fn flush_list(out: List[String], items: List[String]) {
+fn flush_list(out: strings.Builder, items: List[String]) {
     if !items.is_empty() {
-        out.push("<ul>");
+        block(out, "<ul>");
         for item in items {
-            out.push("  <li>{render_inline(item)}</li>");
+            block(out, "  <li>{render_inline(item)}</li>");
         }
-        out.push("</ul>");
+        block(out, "</ul>");
         items.clear();
     }
 }
 
-fn code_block(code: List[String], lang: String) -> String {
-    let body = code.join("\n");
+fn code_block(body: String, lang: String) -> String {
     if lang == "" {
         "<pre><code>{body}</code></pre>"
     } else {

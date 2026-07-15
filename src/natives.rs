@@ -189,12 +189,9 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                 .unwrap_or_else(crate::worker::stdout_sink);
             // Resolve relative to the entry script's directory, the same
             // rule imports use (absolute paths pass through untouched).
-            let base = vm
-                .sources
-                .first()
-                .and_then(|s| std::path::Path::new(&s.name).parent())
-                .map(|p| p.to_path_buf())
-                .unwrap_or_default();
+            // vm.entry_dir is set by every runner; None (REPL, string
+            // sources) falls back to the working directory.
+            let base = vm.entry_dir.clone().unwrap_or_default();
             match crate::worker::spawn(&file, args, &base, sink) {
                 Ok(handle) => {
                     let h = vm.heap.alloc(Obj::Worker(std::rc::Rc::new(

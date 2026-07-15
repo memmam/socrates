@@ -13,18 +13,18 @@
 
 pub enum Expr {
     Num(Float),
-    Ref(String),                // B2
-    Rng(String, String),        // B2:B9  (only meaningful inside a call)
-    Call(String, List[Expr]),   // sum(B2:B9, 5)
-    Bin(String, Expr, Expr),    // op is "+", "-", "*" or "/"
+    Ref(String), // B2
+    Rng(String, String), // B2:B9  (only meaningful inside a call)
+    Call(String, List[Expr]), // sum(B2:B9, 5)
+    Bin(String, Expr, Expr), // op is "+", "-", "*" or "/"
     Neg(Expr),
 }
 
 enum Tok {
     Num(Float),
-    Ref(String),     // letters-then-digits, normalized to upper case
-    Ident(String),   // a function name, normalized to lower case
-    Sym(String),     // + - * / ( ) , :
+    Ref(String), // letters-then-digits, normalized to upper case
+    Ident(String), // a function name, normalized to lower case
+    Sym(String), // + - * / ( ) , :
 }
 
 fn is_digit(c: String) -> Bool {
@@ -32,7 +32,7 @@ fn is_digit(c: String) -> Bool {
 }
 
 fn is_alpha(c: String) -> Bool {
-    (c >= "a" && c <= "z") || (c >= "A" && c <= "Z")
+    c >= "a" && c <= "z" || c >= "A" && c <= "Z"
 }
 
 fn lex(src: String) -> Result[List[Tok], String] {
@@ -139,18 +139,17 @@ impl Parser {
                     Tok.Num(v) -> Ok(Expr.Num(v)),
                     Tok.Ref(a) -> self.ref_or_range(a),
                     Tok.Ident(name) -> self.call(name),
-                    Tok.Sym(s) ->
-                        if s == "-" {
-                            // Unary minus binds tighter than * and /.
-                            Ok(Expr.Neg(self.expr_bp(30)?))
-                        } else if s == "(" {
-                            let inner = self.expr_bp(1)?;
-                            if self.eat(")") { Ok(inner) } else { Err("expected ')'") }
-                        } else {
-                            Err("unexpected '{s}'")
-                        },
+                    Tok.Sym(s) -> if s == "-" {
+                        // Unary minus binds tighter than * and /.
+                        Ok(Expr.Neg(self.expr_bp(30)?))
+                    } else if s == "(" {
+                        let inner = self.expr_bp(1)?;
+                        if self.eat(")") { Ok(inner) } else { Err("expected ')'") }
+                    } else {
+                        Err("unexpected '{s}'")
+                    },
                 }
-            }
+            },
         }
     }
 
@@ -163,7 +162,7 @@ impl Parser {
             Some(Tok.Ref(to)) -> {
                 self.pos += 1;
                 Ok(Expr.Rng(from, to))
-            }
+            },
             _ -> Err("expected a cell after ':'"),
         }
     }

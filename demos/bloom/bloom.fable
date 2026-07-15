@@ -1,0 +1,136 @@
+// bloom — the filter itself: m bits packed in a Bytes buffer, k probes
+// per word by double hashing. Bit i lives at byte i >> 3 under mask
+// 1 << (i & 7), so the buffer is exactly m / 8 bytes.
+
+import std.strings;
+import hash;
+
+pub struct Bloom {
+    bits: Bytes,
+    m: Int, // filter size in bits; a power of two so `& m - 1` is the index mask
+    k: Int, // probes per word
+    inserted: Int,
+}
+
+pub fn new(m: Int, k: Int) -> Bloom {
+    // `m & m - 1` clears the lowest set bit: zero exactly for powers of two.
+    if m < 8 || m & m - 1 != 0 {
+        panic("bloom.new: m must be a power of two >= 8, got {m}");
+    }
+    if k < 1 || k > 32 {
+        panic("bloom.new: k must be in 1..=32, got {k}");
+    }
+    Bloom { bits: bytes(m >> 3), m, k, inserted: 0 }
+}
+
+impl Bloom {
+    // The k probe positions for w: classic double hashing h1 + i*h2 with
+    // two independent hashes. h2 is forced odd, so with m a power of two
+    // the stride is coprime to m and the k probes never collapse onto one
+    // bit.
+    pub fn indices(self, w: String) -> List[Int] {
+        let h1 = hash.fnv1a32(w);
+        let h2 = hash.xs32(w) | 1;
+        (0..self.k).map(|i| h1 + i * h2 & self.m - 1)
+    }
+
+    pub fn get_bit(self, i: Int) -> Bool {
+        self.bits.get(i >> 3) & 1 << (i & 7) != 0
+    }
+
+    pub fn set_bit(self, i: Int) {
+        self.bits.set(i >> 3, self.bits.get(i >> 3) | 1 << (i & 7));
+    }
+
+    pub fn insert(self, w: String) {
+        for i in self.indices(w) {
+            self.set_bit(i);
+        }
+        self.inserted += 1;
+    }
+
+    // May report false positives, must never report a false negative.
+    pub fn contains(self, w: String) -> Bool {
+        self.indices(w).all(|i| self.get_bit(i))
+    }
+
+    // Exact number of set bits: SWAR popcount, byte by byte.
+    pub fn popcount(self) -> Int {
+        let mut n = 0;
+        for i in 0..self.bits.len() {
+            n += hash.popcount_byte(self.bits.get(i));
+        }
+        n
+    }
+
+    pub fn fill_ratio(self) -> Float {
+        self.popcount().to_float() / self.m.to_float()
+    }
+
+    // Bytes byte_lo..byte_hi rendered as bits IN INDEX ORDER: the leftmost
+    // character of byte j's group is bit 8j (the byte's LSB, mask 1), so
+    // reading left to right walks filter indices 0, 1, 2, ...
+    pub fn bit_string(self, byte_lo: Int, byte_hi: Int) -> String {
+        let sb = strings.builder();
+        for j in byte_lo..byte_hi {
+            if j > byte_lo {
+                sb.push(" ");
+            }
+            for bit in 0..8 {
+                sb.push_char(48 + (self.bits.get(j) >> bit & 1));
+            }
+        }
+        sb.build()
+    }
+
+    // Wire format: "BLM1" magic, then k as u16le, m as u32le, inserted as
+    // u32le (the v0.7 little-endian pushers), then the m/8 filter bytes —
+    // a 14-byte header.
+    pub fn serialize(self) -> Bytes {
+        let out = "BLM1".to_bytes();
+        out.push_u16le(self.k);
+        out.push_u32le(self.m);
+        out.push_u32le(self.inserted);
+        out.concat(self.bits)
+    }
+}
+
+// Bytes ships little-endian pushers but no little-endian readers, so
+// deserialization reassembles the integers with shifts and ors.
+fn read_u16le(b: Bytes, off: Int) -> Int {
+    b.get(off) | b.get(off + 1) << 8
+}
+
+fn read_u32le(b: Bytes, off: Int) -> Int {
+    b.get(off) | b.get(off + 1) << 8 | b.get(off + 2) << 16 | b.get(off + 3) << 24
+}
+
+pub fn deserialize(b: Bytes) -> Result[Bloom, String] {
+    if b.len() < 14 {
+        return Err("bloom.deserialize: {b.len()} bytes is shorter than the 14-byte header");
+    }
+    let magic = b.slice(0, 4).utf8()?;
+    if magic != "BLM1" {
+        return Err("bloom.deserialize: bad magic \"{magic}\"");
+    }
+    let k = read_u16le(b, 4);
+    let m = read_u32le(b, 6);
+    let inserted = read_u32le(b, 10);
+    let body = b.slice(14, b.len());
+    if m < 8 || m & m - 1 != 0 || body.len() != m >> 3 {
+        return Err("bloom.deserialize: m={m} does not match {body.len()} filter bytes");
+    }
+    Ok(Bloom { bits: body, m, k, inserted })
+}
+
+// The textbook estimates. After n insertions with k hashes into m bits,
+// the expected fraction of set bits is 1 - e^(-kn/m), and the false-
+// positive probability is that raised to the k. Both go through libm
+// (math.exp / math.pow), so callers must pin them via to_fixed, never raw.
+pub fn theoretical_fill(m: Int, k: Int, n: Int) -> Float {
+    1.0 - math.exp(-(k * n).to_float() / m.to_float())
+}
+
+pub fn theoretical_fp(m: Int, k: Int, n: Int) -> Float {
+    math.pow(theoretical_fill(m, k, n), k.to_float())
+}

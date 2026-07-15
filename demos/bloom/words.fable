@@ -1,0 +1,46 @@
+// words — the deterministic corpus generator. The corpus must be
+// identical forever, on every machine and in every release, so it does
+// not touch math.random / math.seed (seeded streams are only stable
+// within a release). The PRNG is the C-standard LCG written out in plain
+// integer arithmetic — deliberately a different family from the xorshift
+// hashing this corpus is used to test.
+
+import std.strings;
+
+pub struct Gen {
+    state: Int,
+}
+
+pub fn gen(seed: Int) -> Gen {
+    Gen { state: seed & 0x7FFFFFFF }
+}
+
+impl Gen {
+    // state' = (state * 1103515245 + 12345) mod 2^31 — the multiplier is
+    // ~2^30 and the state 31 bits, so the product stays under 2^61: no
+    // overflow panic, no masking subtleties.
+    pub fn next(self) -> Int {
+        self.state = self.state * 1103515245 + 12345 & 0x7FFFFFFF;
+        self.state
+    }
+
+    // Uniform-ish in 0..n from the top 15 bits (an LCG's low bits cycle
+    // fast; its high bits are the good ones). Tiny modulo bias — fine for
+    // a word generator, and deterministic either way.
+    pub fn below(self, n: Int) -> Int {
+        (self.next() >> 16) % n
+    }
+
+    // A pronounceable word: 2-4 consonant-vowel syllables ("kevu",
+    // "tozaneri"), built with a Builder rather than string +=.
+    pub fn word(self) -> String {
+        let consonants = "bdfgklmnprstvz";
+        let vowels = "aeiou";
+        let sb = strings.builder();
+        for _ in 0..2 + self.below(3) {
+            sb.push(consonants.char_at(self.below(14)).unwrap());
+            sb.push(vowels.char_at(self.below(5)).unwrap());
+        }
+        sb.build()
+    }
+}

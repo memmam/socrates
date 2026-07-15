@@ -8,14 +8,15 @@ deterministically: fixed depth, first-best tie-breaking, no randomness, so
 every run produces the identical game (which the golden tests pin, node
 counts and all).
 
-About 450 lines of Fable in four files:
+About 500 lines of Fable in five files:
 
 | File | What it does |
 |------|--------------|
-| `board.fable` | piece codes, board rendering, the move generator (forced captures, multi-jumps, crowning), and `apply`/`undo_move` so the search mutates one shared board instead of copying it |
+| `board.fable` | piece codes, board rendering (a `strings.Builder`, not `+=`), the move generator (forced captures, multi-jumps, crowning), and `apply`/`undo_move` so the search mutates one shared board instead of copying it |
 | `engine.fable` | positional evaluation, negamax + alpha-beta with a capture extension, and `Stats` (whose `add` method overloads `+` for tallying) |
-| `main.fable` | the self-play loop: draw detection (threefold repetition, 50 quiet plies), periodic board printing, final result and node statistics |
-| `spec.fable` | golden tests for the rules and the search |
+| `zobrist.fable` | 64-bit Zobrist position hashing built on the v0.7 bitwise operators — an xorshift64 key table written in Fable itself (pure `^`/`<<`/`>>`), one key per (square, piece) plus a side-to-move key |
+| `main.fable` | the self-play loop: draw detection (threefold repetition via Zobrist hashes in two `std.set`s, 50 quiet plies), periodic board printing, final result and node statistics |
+| `spec.fable` | golden tests for the rules, the search, and the hashing |
 
 ## Run it
 
@@ -23,7 +24,7 @@ From the repository root:
 
 ```sh
 ./target/release/fable demos/checkers/main.fable   # play the game (~15 s)
-./target/release/fable test demos/checkers         # golden tests (all four files)
+./target/release/fable test demos/checkers         # golden tests (all five files)
 ```
 
 ## Sample output
@@ -74,7 +75,21 @@ self-play checkers.
   where captures are forced, the search keeps going until the position is
   quiet, so a depth-6 search never mistakes the middle of a piece trade
   for a material swing.
+- **Repetition detection (v0.7):** every reached position is hashed —
+  the xor of one 64-bit key per occupied (square, piece) plus a
+  side-to-move key — and the hash dropped into a `std.set`. `insert`
+  reports whether the set changed, so two sets count to three:
+  a hash rejected by the first set is a revisit, one rejected by both is
+  the third occurrence and the game is drawn. The key table comes from a
+  xorshift64 generator written in Fable (`^`, `<<`, and a masked `>>` —
+  Fable's `>>` is arithmetic, so a logical shift is shift-then-mask),
+  which keeps the table, and thus the pinned transcript, stable across
+  releases — unlike `math.seed` streams.
 - **Determinism:** move generation order is fixed (board scan order), and
   the root keeps the *first* best-scoring move, so the whole game — every
   move, every node count — is reproducible. `main.fable` carries
   `//? expect:` directives pinning the full game transcript.
+- **Not done on purpose:** full bitboard move generation. It would change
+  generation order — and with it the pinned 106-ply game — for no gain a
+  demo can show; the v0.7 bitwise operators appear where they pay their
+  way (the hash), not everywhere they could.

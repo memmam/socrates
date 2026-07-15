@@ -213,6 +213,7 @@ fn worker_main(
         machine.sources.push(unit.source);
     }
     machine.script_args = args;
+    machine.entry_dir = path.parent().map(|p| p.to_path_buf());
     machine.worker_ctx = Some(WorkerCtx { tx, rx });
     // Grandchildren spawned by this worker inherit the same output sink.
     machine.worker_sink = Some(sink);

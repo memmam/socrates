@@ -6,6 +6,23 @@ every feature listed here.
 
 ## Unreleased (v0.7 — the infrastructure release, in progress)
 
+- The v0.7 demo round: six new demos (`synthwave`, `png`, `bloom`,
+  `spectra`, `swarm`, `reversi`) built on the new infrastructure, all
+  eleven existing demos modernized to it, seventeen writers plus
+  seventeen adversarial verifiers. Best practices distilled into
+  `demos/STYLE.md`; the papercut triage is `demos/NOTES.md` § "The
+  v0.7 round".
+- **Fixed (found by the round):** method calls and field access on
+  module-qualified `pub let` members (`m.answer.to_float()`) no longer
+  misresolve as enum paths; `worker.spawn` resolves relative files
+  against the true entry script's directory even when the entry has
+  imports; `fable fmt` formats every file argument (it silently took
+  only the first); the formatter keeps interior comments of bracketed
+  literals in place (they now pin the element-per-line layout — the
+  official escape hatch for 2-D data tables); fitting `if/else-if`
+  chains stay on one line and over-width ones break all branches
+  consistently.
+
 - `fable fmt` is now line-width-aware (v0.6 review note): constructs
   that fit in 100 columns keep their one-line layout; longer ones break
   the way an author would — call arguments one per line with a trailing

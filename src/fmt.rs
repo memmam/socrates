@@ -29,12 +29,19 @@
 //!   elements keep the attached `}).next(...)` layout;
 //! - binary operators: the same-precedence spine breaks before each operator;
 //! - `|x| expr` lambdas break to a block body;
-//! - `if`/`else` inlines only when it fits, `match` arms break in place.
+//! - `if`/`else`(-`if` chains) inline only when the whole chain fits; a chain
+//!   that breaks, breaks every branch (never `} else if c { 1 } else { 0 }`);
+//! - `match` arms break in place.
 //!
 //! Flat rendering never consumes comments (constructs that would flush them
 //! report "cannot flatten" instead), so a rolled-back attempt has no side
-//! effects. Layout decisions depend only on the AST and the current column —
-//! never on source line numbers — which keeps formatting idempotent.
+//! effects. A bracketed literal or argument list with *interior* comments
+//! never flattens at all: it keeps the one-element-per-line layout, own-line
+//! comments staying before their element and trailing comments on their
+//! element's line — so a comment doubles as the author's escape hatch for
+//! meaning-bearing multi-line layout. Layout decisions otherwise depend only
+//! on the AST and the current column — never on source line numbers — which
+//! keeps formatting idempotent.
 
 use crate::ast::*;
 use crate::diag::Diagnostic;
@@ -106,6 +113,9 @@ struct Formatter {
 struct ChainLink<'a> {
     name: &'a Ident,
     args: Option<&'a [Expr]>,
+    /// End of the call's own span (just past the `)`), bounding its argument
+    /// region for interior-comment placement.
+    close: u32,
     suffixes: Vec<ChainSuffix<'a>>,
 }
 
@@ -126,6 +136,7 @@ fn collect_chain(mut e: &Expr) -> (&Expr, Vec<ChainSuffix<'_>>, Vec<ChainLink<'_
                 links.push(ChainLink {
                     name: method,
                     args: Some(args),
+                    close: e.span.end,
                     suffixes: std::mem::take(&mut pending),
                 });
                 e = recv;
@@ -135,6 +146,7 @@ fn collect_chain(mut e: &Expr) -> (&Expr, Vec<ChainSuffix<'_>>, Vec<ChainLink<'_
                 links.push(ChainLink {
                     name: field,
                     args: None,
+                    close: e.span.end,
                     suffixes: std::mem::take(&mut pending),
                 });
                 e = base;
@@ -564,6 +576,31 @@ impl Formatter {
             && self.comments[self.next_comment].span.start < upto
     }
 
+    /// Whether any not-yet-emitted line-ending comment starts in
+    /// `[start, end)` — i.e. the region (a bracketed literal's interior, an
+    /// argument list) has comments the flat layout would evict. Such a
+    /// construct never flattens: it keeps the one-element-per-line layout
+    /// with each comment attached where the author put it, which also makes
+    /// interior comments the escape hatch for meaning-bearing multi-line
+    /// layout. Only comments that end their source line count: those are the
+    /// positions (own-line, end-of-line) the broken layout can reproduce. A
+    /// mid-line `/* .. */` with code after it on the same line cannot be
+    /// pinned and keeps the old evict-after-statement behavior.
+    fn comments_within(&self, start: u32, end: u32) -> bool {
+        self.comments[self.next_comment..]
+            .iter()
+            .take_while(|c| c.span.start < end)
+            .any(|c| c.span.start >= start && self.ends_its_line(c.span.end))
+    }
+
+    /// Whether only whitespace follows `offset` on its source line.
+    fn ends_its_line(&self, offset: u32) -> bool {
+        self.src.text[offset as usize..]
+            .chars()
+            .take_while(|&ch| ch != '\n')
+            .all(char::is_whitespace)
+    }
+
     /// A block that is short enough to inline as `{ expr }` in expressions.
     fn inline_block<'b>(&self, b: &'b Block) -> Option<&'b Expr> {
         if b.stmts.len() != 1 || self.comments_before(b.span.end) {
@@ -655,6 +692,9 @@ impl Formatter {
                 true
             }
             ExprKind::Call { callee, args } => {
+                if !args.is_empty() && self.comments_within(callee.span.end, e.span.end) {
+                    return false; // interior comments pin the broken layout
+                }
                 // `(s.field)(args)` must keep its parens: without them the
                 // source re-parses as a method call `s.field(args)`.
                 if matches!(callee.kind, ExprKind::Field { .. }) {
@@ -669,6 +709,9 @@ impl Formatter {
                 self.flat_args(args)
             }
             ExprKind::MethodCall { recv, method, args } => {
+                if !args.is_empty() && self.comments_within(method.span.end, e.span.end) {
+                    return false; // interior comments pin the broken layout
+                }
                 if !self.flat_expr(recv, 13) {
                     return false;
                 }
@@ -717,6 +760,9 @@ impl Formatter {
                 true
             }
             ExprKind::List(items) => {
+                if !items.is_empty() && self.comments_within(e.span.start, e.span.end) {
+                    return false; // interior comments pin the broken layout
+                }
                 self.out.push('[');
                 for (i, it) in items.iter().enumerate() {
                     if i > 0 {
@@ -733,6 +779,9 @@ impl Formatter {
                 if entries.is_empty() {
                     self.out.push_str("{:}");
                     return true;
+                }
+                if self.comments_within(e.span.start, e.span.end) {
+                    return false; // interior comments pin the broken layout
                 }
                 self.out.push('{');
                 for (i, (k, v)) in entries.iter().enumerate() {
@@ -751,6 +800,9 @@ impl Formatter {
                 true
             }
             ExprKind::Tuple(items) => {
+                if !items.is_empty() && self.comments_within(e.span.start, e.span.end) {
+                    return false; // interior comments pin the broken layout
+                }
                 self.out.push('(');
                 for (i, it) in items.iter().enumerate() {
                     if i > 0 {
@@ -771,6 +823,9 @@ impl Formatter {
                 self.flat_expr(hi, 6)
             }
             ExprKind::StructLit { name, fields } => {
+                if !fields.is_empty() && self.comments_within(name.span.end, e.span.end) {
+                    return false; // interior comments pin the broken layout
+                }
                 self.out.push_str(&name.name);
                 self.out.push_str(" { ");
                 for (i, (fname, value)) in fields.iter().enumerate() {
@@ -813,15 +868,12 @@ impl Formatter {
                 self.flat_expr(body, 1)
             }
             ExprKind::If { cond, then, els } => {
-                // Only a simple if/else with single-expression branches can
-                // be one line.
+                // Only an if/else(-if chain) whose every branch is a single
+                // expression can be one line; the whole chain flattens (or
+                // none of it does — `expr_broken` breaks every branch).
                 let Some(els_e) = els else { return false };
-                let ExprKind::Block(eb) = &els_e.kind else { return false };
-                let (Some(t), Some(x)) = (self.inline_block(then), self.inline_block(eb))
-                else {
-                    return false;
-                };
-                let (t, x) = (t.clone(), x.clone());
+                let Some(t) = self.inline_block(then) else { return false };
+                let t = t.clone();
                 self.out.push_str("if ");
                 if !self.flat_expr(cond, 0) {
                     return false;
@@ -830,12 +882,22 @@ impl Formatter {
                 if !self.flat_expr(&t, 0) {
                     return false;
                 }
-                self.out.push_str(" } else { ");
-                if !self.flat_expr(&x, 0) {
-                    return false;
+                self.out.push_str(" } else ");
+                match &els_e.kind {
+                    // `else if ...`: flatten the rest of the chain in place.
+                    ExprKind::If { .. } => self.flat_expr_inner(els_e),
+                    ExprKind::Block(eb) => {
+                        let Some(x) = self.inline_block(eb) else { return false };
+                        let x = x.clone();
+                        self.out.push_str("{ ");
+                        if !self.flat_expr(&x, 0) {
+                            return false;
+                        }
+                        self.out.push_str(" }");
+                        true
+                    }
+                    _ => false,
                 }
-                self.out.push_str(" }");
-                true
             }
             ExprKind::Block(_) | ExprKind::Match { .. } => false,
         }
@@ -906,7 +968,7 @@ impl Formatter {
                 } else {
                     self.expr(callee, 13, 0);
                 }
-                self.call_args_group(args, rider);
+                self.call_args_group(args, callee.span.end, e.span.end, rider);
             }
             ExprKind::Unary { op, expr } => {
                 self.out.push_str(match op {
@@ -923,11 +985,15 @@ impl Formatter {
                 }
                 self.out.push_str("[\n");
                 self.indent += 1;
+                self.last_line = self.line_of(e.span.start);
                 for it in items {
+                    self.flush_comments(it.span.start);
                     self.pad();
                     self.expr(it, 0, 1);
                     self.out.push_str(",\n");
+                    self.last_line = self.line_of(it.span.end.saturating_sub(1));
                 }
+                self.flush_comments(e.span.end);
                 self.indent -= 1;
                 self.pad();
                 self.out.push(']');
@@ -939,13 +1005,17 @@ impl Formatter {
                 }
                 self.out.push_str("{\n");
                 self.indent += 1;
+                self.last_line = self.line_of(e.span.start);
                 for (k, v) in entries {
+                    self.flush_comments(k.span.start);
                     self.pad();
                     self.expr(k, 0, 2);
                     self.out.push_str(": ");
                     self.expr(v, 0, 1);
                     self.out.push_str(",\n");
+                    self.last_line = self.line_of(v.span.end.saturating_sub(1));
                 }
+                self.flush_comments(e.span.end);
                 self.indent -= 1;
                 self.pad();
                 self.out.push('}');
@@ -953,11 +1023,15 @@ impl Formatter {
             ExprKind::Tuple(items) => {
                 self.out.push_str("(\n");
                 self.indent += 1;
+                self.last_line = self.line_of(e.span.start);
                 for it in items {
+                    self.flush_comments(it.span.start);
                     self.pad();
                     self.expr(it, 0, 1);
                     self.out.push_str(",\n");
+                    self.last_line = self.line_of(it.span.end.saturating_sub(1));
                 }
+                self.flush_comments(e.span.end);
                 self.indent -= 1;
                 self.pad();
                 self.out.push(')');
@@ -971,20 +1045,21 @@ impl Formatter {
                 self.out.push_str(&name.name);
                 self.out.push_str(" {\n");
                 self.indent += 1;
+                self.last_line = self.line_of(name.span.end.saturating_sub(1));
                 for (fname, value) in fields {
+                    self.flush_comments(fname.span.start);
                     self.pad();
                     self.out.push_str(&fname.name);
                     // Shorthand when the value is a variable of the same name.
-                    if let ExprKind::Var(v) = &value.kind {
-                        if *v == fname.name {
-                            self.out.push_str(",\n");
-                            continue;
-                        }
+                    let shorthand = matches!(&value.kind, ExprKind::Var(v) if *v == fname.name);
+                    if !shorthand {
+                        self.out.push_str(": ");
+                        self.expr(value, 0, 1);
                     }
-                    self.out.push_str(": ");
-                    self.expr(value, 0, 1);
                     self.out.push_str(",\n");
+                    self.last_line = self.line_of(value.span.end.saturating_sub(1));
                 }
+                self.flush_comments(e.span.end);
                 self.indent -= 1;
                 self.pad();
                 self.out.push('}');
@@ -1001,7 +1076,10 @@ impl Formatter {
                     self.out.push_str(" else ");
                     match &els_e.kind {
                         ExprKind::Block(b) => self.block(b),
-                        _ => self.expr(els_e, 0, rider), // else-if chain
+                        // An else-if: the chain as a whole did not fit flat,
+                        // so every branch of it breaks — never a half-inline
+                        // chain like `} else if c { 1 } else { 0 }`.
+                        _ => self.expr_broken(els_e, rider),
                     }
                 }
             }
@@ -1072,7 +1150,7 @@ impl Formatter {
         self.out.push('.');
         self.out.push_str(&link.name.name);
         if let Some(args) = link.args {
-            self.call_args_group(args, rider + link.suffixes.len());
+            self.call_args_group(args, link.name.span.end, link.close, rider + link.suffixes.len());
         }
         self.chain_suffixes(&link.suffixes);
     }
@@ -1092,19 +1170,24 @@ impl Formatter {
 
     /// An argument list: flat when it fits; hugged when the last argument can
     /// never be one line (so `f(a, |x| {` ... `})` keeps its shape); one
-    /// argument per line with a trailing comma otherwise.
-    fn call_args_group(&mut self, args: &[Expr], rider: usize) {
+    /// argument per line with a trailing comma otherwise. `open`/`close`
+    /// bound the argument region (from just after the callee to just past the
+    /// `)`): interior comments there rule out the flat layout and are emitted
+    /// next to their argument in the broken one.
+    fn call_args_group(&mut self, args: &[Expr], open: u32, close: u32, rider: usize) {
         if args.is_empty() {
             self.out.push_str("()");
             return;
         }
-        if self.group(rider, |s| s.flat_args(args)) {
+        let commented = self.comments_within(open, close);
+        if !commented && self.group(rider, |s| s.flat_args(args)) {
             return;
         }
         let (last, init) = args.split_last().expect("non-empty");
         // A single unbreakable token (usually a long string) that would not
-        // fit even on a line of its own: breaking cannot help, keep it flat.
-        if init.is_empty() && is_atom(last) {
+        // fit even on a line of its own: breaking cannot help, keep it flat
+        // (unless a comment needs the broken layout to survive).
+        if init.is_empty() && is_atom(last) && !commented {
             let arg_width = self.measure(|s| {
                 let _ = s.flat_expr(last, 0);
             });
@@ -1117,20 +1200,29 @@ impl Formatter {
         }
         // Hug a last argument that can never be one line, and also container
         // literals (`f([` ... `])`), which break element-per-line in place.
+        // Comments before the last argument need one-argument-per-line lines
+        // of their own to attach to, so they rule the hug out.
         let container = matches!(
             last.kind,
             ExprKind::List(_) | ExprKind::MapLit(_) | ExprKind::StructLit { .. }
         );
-        if (container || !self.can_flatten(last)) && self.try_hug(init, last, rider) {
+        if (container || !self.can_flatten(last))
+            && !self.comments_within(open, last.span.start)
+            && self.try_hug(init, last, rider)
+        {
             return;
         }
         self.out.push_str("(\n");
         self.indent += 1;
+        self.last_line = self.line_of(open.saturating_sub(1));
         for a in args {
+            self.flush_comments(a.span.start);
             self.pad();
             self.expr(a, 0, 1);
             self.out.push_str(",\n");
+            self.last_line = self.line_of(a.span.end.saturating_sub(1));
         }
+        self.flush_comments(close);
         self.indent -= 1;
         self.pad();
         self.out.push(')');

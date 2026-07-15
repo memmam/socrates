@@ -1,19 +1,25 @@
 // wfc — the wave-function-collapse core.
 //
-// Every cell of the output grid starts in *superposition*: the set of all
-// tiles (a Map[String, Bool] used as a set). Each step of the loop
+// Every cell of the output grid is one Int bitmask (bit t = tile t is
+// still possible). Cells start as the full superposition r.all_mask, and
+// each step of the loop
 //
 //   1. finds the most constrained undecided cell — lowest Shannon entropy,
-//      plus a pinch of random noise so ties don't resolve top-left first,
-//   2. collapses it to one tile, chosen at random weighted by the sample
-//      frequencies, and
-//   3. propagates: neighbours drop candidates that no longer have support,
-//      and any cell that shrinks is re-queued (arc consistency).
+//      plus a pinch of random noise so ties don't resolve top-left first
+//      (undecided = popcount > 1),
+//   2. collapses it to one tile (`1 << t`), chosen at random weighted by
+//      the sample frequencies, and
+//   3. propagates: a neighbour's new candidate set is one `&` against the
+//      union of its supporters' allow-masks, and any cell that shrinks is
+//      re-queued (arc consistency, breadth-first over a std.deque).
 //
-// A cell with zero candidates left is a contradiction: the attempt is
-// abandoned and generate() restarts with the next seed.
+// A cell whose mask reaches 0 is a contradiction: the attempt is abandoned
+// and generate() restarts with the next seed.
 
 import rules;
+import std.deque;
+import std.lists;
+import std.strings;
 
 // A finished texture, plus how many seeds it took to get there.
 pub struct Outcome {
@@ -28,7 +34,7 @@ pub fn generate(r: rules.Rules, w: Int, h: Int, seed: Int, max_tries: Int) -> Op
         attempt += 1;
         match run(r, w, h) {
             Some(g) -> return Some(Outcome { grid: g, attempts: attempt }),
-            None -> {}  // contradiction — reroll with the next seed
+            None -> {}, // contradiction — reroll with the next seed
         }
     }
     None
@@ -36,39 +42,36 @@ pub fn generate(r: rules.Rules, w: Int, h: Int, seed: Int, max_tries: Int) -> Op
 
 // One full attempt; None means it ran into a contradiction.
 fn run(r: rules.Rules, w: Int, h: Int) -> Option[List[String]] {
-    // Start every cell with the full candidate set.
-    let cells: List[Map[String, Bool]] = [];
-    for _ in 0..w * h {
-        let all: Map[String, Bool] = {:};
-        for t in r.tiles {
-            all[t] = true;
-        }
-        cells.push(all);
-    }
-
+    // Every cell starts as the full candidate set (Ints are values, so the
+    // filled copies are independent). Entropy is cached per cell and
+    // refreshed only when a mask actually shrinks — the selection scan
+    // reads the cache instead of recomputing O(tiles) per cell per step.
+    let cells = lists.fill(w * h, r.all_mask);
+    let ent = lists.fill(w * h, entropy(r.all_mask, r));
     while true {
-        match lowest_entropy(cells, r) {
-            None -> return Some(render(cells, w, h)),  // all cells decided
+        match lowest_entropy(cells, ent) {
+            None -> return Some(render(cells, r, w, h)), // all cells decided
             Some(i) -> {
-                let choice: Map[String, Bool] = {:};
-                choice[pick(cells[i], r)] = true;
-                cells[i] = choice;
-                if !propagate(cells, r, w, h, i) {
+                cells[i] = 1 << pick(cells[i], r);
+                if !propagate(cells, ent, r, w, h, i) {
                     return None;
                 }
-            }
+            },
         }
     }
 }
 
-// Index of the undecided cell with the smallest entropy, or None when every
-// cell already holds exactly one tile.
-fn lowest_entropy(cells: List[Map[String, Bool]], r: rules.Rules) -> Option[Int] {
+// Index of the undecided cell with the smallest cached entropy, or None
+// when every cell already holds exactly one tile. (This is the hottest
+// loop in the demo, so no enumerate()/min_by here: both allocate per
+// element, and a hand scan with two locals allocates nothing.)
+fn lowest_entropy(cells: List[Int], ent: List[Float]) -> Option[Int] {
     let mut best = -1;
     let mut best_h = 0.0;
-    for (i, cands) in cells.enumerate() {
-        if cands.len() > 1 {
-            let h = entropy(cands, r) + math.random() * 0.001;
+    for i in 0..cells.len() {
+        let cands = cells[i];
+        if cands & cands - 1 != 0 { // more than one bit set: undecided
+            let h = ent[i] + math.random() * 0.001;
             if best < 0 || h < best_h {
                 best = i;
                 best_h = h;
@@ -78,15 +81,15 @@ fn lowest_entropy(cells: List[Map[String, Bool]], r: rules.Rules) -> Option[Int]
     if best < 0 { None } else { Some(best) }
 }
 
-// Shannon entropy of a candidate set under the learned weights:
+// Shannon entropy of a candidate mask under the learned weights:
 //   H = ln(sum w) - (sum w*ln w) / (sum w)
 // Rare tiles contribute little uncertainty, so a cell whose remaining
 // choices are all rare collapses before one that could still be anything.
-fn entropy(cands: Map[String, Bool], r: rules.Rules) -> Float {
+fn entropy(cands: Int, r: rules.Rules) -> Float {
     let mut sum_w = 0.0;
     let mut sum_wlw = 0.0;
-    for t in r.tiles {
-        if cands.contains_key(t) {
+    for t in 0..r.weights.len() {
+        if cands >> t & 1 == 1 {
             let w = r.weights[t].to_float();
             sum_w += w;
             sum_wlw += w * math.log(w);
@@ -95,18 +98,18 @@ fn entropy(cands: Map[String, Bool], r: rules.Rules) -> Float {
     math.log(sum_w) - sum_wlw / sum_w
 }
 
-// Weighted random choice among a cell's candidates, so tiles common in the
-// sample stay common in the output.
-fn pick(cands: Map[String, Bool], r: rules.Rules) -> String {
+// Weighted random choice among a mask's candidates, so tiles common in the
+// sample stay common in the output. Returns the chosen tile id.
+fn pick(cands: Int, r: rules.Rules) -> Int {
     let mut total = 0;
-    for t in r.tiles {
-        if cands.contains_key(t) {
+    for t in 0..r.weights.len() {
+        if cands >> t & 1 == 1 {
             total += r.weights[t];
         }
     }
     let mut roll = math.rand_int(0, total - 1);
-    for t in r.tiles {
-        if cands.contains_key(t) {
+    for t in 0..r.weights.len() {
+        if cands >> t & 1 == 1 {
             roll -= r.weights[t];
             if roll < 0 {
                 return t;
@@ -116,33 +119,35 @@ fn pick(cands: Map[String, Bool], r: rules.Rules) -> String {
     panic("pick: empty candidate set")
 }
 
-// Arc consistency outward from a just-shrunk cell: a neighbour keeps a
-// candidate only while at least one of our candidates supports it, and any
-// neighbour that shrinks is queued to constrain *its* neighbours in turn.
-// Returns false on contradiction (a cell lost its last candidate).
-fn propagate(cells: List[Map[String, Bool]], r: rules.Rules, w: Int, h: Int, start: Int) -> Bool {
-    let queue = [start];
-    let mut head = 0;
-    while head < queue.len() {
-        let i = queue[head];
-        head += 1;
+// Arc consistency outward from a just-shrunk cell: a neighbour keeps only
+// the tiles some candidate of ours still supports — one `&` against the
+// support mask — and any neighbour that shrinks is queued to constrain
+// *its* neighbours in turn. Returns false on contradiction (mask hit 0).
+fn propagate(
+    cells: List[Int],
+    ent: List[Float],
+    r: rules.Rules,
+    w: Int,
+    h: Int,
+    start: Int,
+) -> Bool {
+    let q = deque.from_list([start]);
+    while !q.is_empty() {
+        let i = q.pop_front().unwrap();
+        let cands = cells[i]; // stable across the 4 directions: only neighbours shrink
         for d in 0..4 {
             let nx = i % w + rules.dir_dx[d];
             let ny = i / w + rules.dir_dy[d];
             if nx >= 0 && nx < w && ny >= 0 && ny < h {
                 let j = ny * w + nx;
-                let kept: Map[String, Bool] = {:};
-                for t in r.tiles {
-                    if cells[j].contains_key(t) && supported(cells[i], r, d, t) {
-                        kept[t] = true;
-                    }
-                }
-                if kept.len() == 0 {
+                let kept = cells[j] & support(cands, r, d);
+                if kept == 0 {
                     return false;
                 }
-                if kept.len() < cells[j].len() {
+                if kept != cells[j] {
                     cells[j] = kept;
-                    queue.push(j);
+                    ent[j] = entropy(kept, r); // keep the cache fresh
+                    q.push_back(j);
                 }
             }
         }
@@ -150,25 +155,36 @@ fn propagate(cells: List[Map[String, Bool]], r: rules.Rules, w: Int, h: Int, sta
     true
 }
 
-// Does any candidate in `cands` allow `t` in direction `d`?
-fn supported(cands: Map[String, Bool], r: rules.Rules, d: Int, t: String) -> Bool {
-    for s in r.tiles {
-        if cands.contains_key(s) && r.allowed(s, d, t) {
-            return true;
+// The union of allow-masks over every candidate in `cands`: the set of
+// tiles that at least one of our candidates permits in direction `d`.
+fn support(cands: Int, r: rules.Rules, d: Int) -> Int {
+    let mut m = 0;
+    for s in 0..r.tiles.len() {
+        if cands >> s & 1 == 1 {
+            m = m | r.allow[s * 4 + d]; // r.mask(s, d), inlined: this loop is hot
         }
     }
-    false
+    m
 }
 
 // Join the now-singleton cells back into rows of text.
-fn render(cells: List[Map[String, Bool]], w: Int, h: Int) -> List[String] {
+fn render(cells: List[Int], r: rules.Rules, w: Int, h: Int) -> List[String] {
     let rows: List[String] = [];
     for y in 0..h {
-        let mut row = "";
+        let row = strings.builder();
         for x in 0..w {
-            row += cells[y * w + x].keys()[0];
+            row.push(r.tiles[tile_of(cells[y * w + x])]);
         }
-        rows.push(row);
+        rows.push(row.build());
     }
     rows
+}
+
+// The index of the single set bit in a collapsed cell's mask.
+fn tile_of(mask: Int) -> Int {
+    let mut t = 0;
+    while mask >> t & 1 == 0 {
+        t += 1;
+    }
+    t
 }

@@ -28,11 +28,12 @@ fn show(path: String) {
                 println(grid);
                 println("");
                 println("formulas:");
-                for line in s.formulas() {
-                    println(line);
+                let report = s.formulas();
+                if report != "" {
+                    println(report);
                 }
-            }
-        }
+            },
+        },
     }
 }
 

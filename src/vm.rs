@@ -95,6 +95,10 @@ pub struct Vm {
     /// Arguments after the script path on the CLI (`os.args()`).
     pub script_args: Vec<String>,
     pub out: Box<dyn Write>,
+    /// The entry script's directory, for `worker.spawn`'s file-relative
+    /// resolution. Explicit because `sources[0]` is the first *loaded*
+    /// module (an import), not the entry script (v0.7 demo-round fix).
+    pub entry_dir: Option<std::path::PathBuf>,
     /// Set when this VM *is* a worker: its channel ends to the parent.
     pub worker_ctx: Option<crate::worker::WorkerCtx>,
     /// Where workers spawned by this VM write their output. `None` means
@@ -128,6 +132,7 @@ impl Vm {
             temp_roots: Vec::new(),
             script_args: Vec::new(),
             out,
+            entry_dir: None,
             worker_ctx: None,
             worker_sink: None,
             start: Instant::now(),

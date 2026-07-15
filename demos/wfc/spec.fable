@@ -1,6 +1,6 @@
-// spec — component tests for the wfc demo: rule learning, the WFC contract
-// (every adjacency in the output was seen in the sample), determinism, and
-// the contradiction/restart path.
+// spec — component tests for the wfc demo: rule learning, the bitmask rule
+// table, the WFC contract (every adjacency in the output was seen in the
+// sample), determinism, and the contradiction/restart path.
 //
 //   ./target/release/fable test demos/wfc
 
@@ -10,19 +10,43 @@ import wfc;
 
 // -- learning ---------------------------------------------------------------
 
-let tiny = rules.learn([
-    "ab",
-    "ba",
-]);
+let tiny = rules.learn(["ab", "ba"]);
 println("tiles {tiny.tiles} weights {tiny.weights}");
 println("b right-of a: {tiny.allowed("a", 1, "b")}");
 println("b below a   : {tiny.allowed("a", 2, "b")}");
-println("a right-of a: {tiny.allowed("a", 1, "a")}");   // never adjacent
-println("a below a   : {tiny.allowed("a", 2, "a")}");   // columns alternate too
+println("a right-of a: {tiny.allowed("a", 1, "a")}"); // never adjacent
+println("a below a   : {tiny.allowed("a", 2, "a")}"); // columns alternate too
+
+// -- the bitmask rule table ---------------------------------------------------
+// Tiles get ids in first-seen order (a=0, b=1), sets are bitmasks: the
+// full superposition of two tiles is 0b11, and "right of a" is exactly {b}.
+
+println("all_mask {tiny.all_mask} = popcount {rules.popcount(tiny.all_mask)} tiles");
+println("mask right-of a: {tiny.mask(0, 1)} (only bit 1 = b)");
+println("popcount: 0 -> {rules.popcount(0)}, 0b10110 -> {rules.popcount(22)}");
+
+// Learned adjacency is symmetric by construction — every pair is recorded
+// from both ends — so mask(a, d) bit b must equal mask(b, opposite d) bit a.
+fn mask_table_consistent(r: rules.Rules) -> Bool {
+    let n = r.tiles.len();
+    for a in 0..n {
+        for d in 0..4 {
+            for b in 0..n {
+                let fwd = r.mask(a, d) >> b & 1;
+                let back = r.mask(b, (d + 2) % 4) >> a & 1;
+                if fwd != back {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
 
 // -- the WFC contract --------------------------------------------------------
 // Count adjacent pairs in a texture that the rules forbid; a correct
-// generator produces zero.
+// generator produces zero. This check speaks glyphs, not bitmasks, so it
+// stays independent of the core's set representation.
 
 fn violations(grid: List[String], r: rules.Rules) -> Int {
     let rows = grid.map(|s| s.chars());
@@ -44,10 +68,12 @@ fn violations(grid: List[String], r: rules.Rules) -> Int {
 }
 
 let island = rules.learn(samples.island);
+println("island masks consistent: {mask_table_consistent(island)}");
 let out = wfc.generate(island, 20, 9, 42, 10).unwrap();
 println("island 20x9 : attempts {out.attempts} violations {violations(out.grid, island)}");
 
 let plumbing = rules.learn(samples.pipes);
+println("pipes masks consistent: {mask_table_consistent(plumbing)}");
 let pout = wfc.generate(plumbing, 17, 8, 3, 10).unwrap();
 println("pipes 17x8  : attempts {pout.attempts} violations {violations(pout.grid, plumbing)}");
 
@@ -70,12 +96,17 @@ match wfc.generate(impossible, 3, 1, 1, 25) {
 }
 
 // Pinned output for `fable test demos/wfc`:
-//? expect: tiles ["a", "b"] weights {"a": 2, "b": 2}
+//? expect: tiles ["a", "b"] weights [2, 2]
 //? expect: b right-of a: true
 //? expect: b below a   : true
 //? expect: a right-of a: false
 //? expect: a below a   : false
+//? expect: all_mask 3 = popcount 2 tiles
+//? expect: mask right-of a: 2 (only bit 1 = b)
+//? expect: popcount: 0 -> 0, 0b10110 -> 3
+//? expect: island masks consistent: true
 //? expect: island 20x9 : attempts 1 violations 0
+//? expect: pipes masks consistent: true
 //? expect: pipes 17x8  : attempts 1 violations 0
 //? expect: same seed reproduces: true
 //? expect: impossible rules: contradiction on all 25 seeds

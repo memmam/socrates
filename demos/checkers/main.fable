@@ -6,6 +6,8 @@
 
 import board;
 import engine;
+import zobrist;
+import std.set;
 
 let depth = 6;
 
@@ -27,22 +29,33 @@ println("");
 
 let mut side = board.black;
 let mut ply = 1;
-let mut quiet = 0;          // plies since the last capture or crowning
+let mut quiet = 0; // plies since the last capture or crowning
 let mut verdict = "";
 let mut total = engine.new_stats();
-let mut shown = 0;          // last ply whose board we printed
-let seen: Map[String, Int] = {:};   // position -> times reached (repetition draw)
+let mut shown = 0; // last ply whose board we printed
+
+// Threefold-repetition bookkeeping: every reached (position, side to
+// move) is Zobrist-hashed and the hash dropped into a std.set. `insert`
+// reports whether the set changed, so two sets count to three with no
+// Map[_, Int] tally: a hash rejected by `seen` is a second (or later)
+// visit, and one rejected by `seen_twice` too is the third.
+let seen = set.new();
+let seen_twice = set.new();
 
 while verdict == "" {
     let st = engine.new_stats();
     match engine.best_move(b, side, depth, st) {
         None -> {
             verdict = "{side_name(-side)} wins — {side_name(side)} has no legal moves";
-        }
+        },
         Some((m, score)) -> {
             let u = b.apply(m);
             let crowned = b.at(u.to) != u.moved;
-            if m.caps.len() > 0 || crowned { quiet = 0; } else { quiet += 1; }
+            if m.caps.len() > 0 || crowned {
+                quiet = 0;
+            } else {
+                quiet += 1;
+            }
             total = total + st;
             let tag = if crowned { "  (crowned)" } else { "" };
             println("{str(ply).pad_left(3, " ")}. {side_name(side)} {m.notation().pad_right(12, " ")} eval {signed(score).pad_left(6, " ")}  nodes {st.nodes}{tag}");
@@ -52,15 +65,19 @@ while verdict == "" {
                 println("");
                 shown = ply;
             }
-            let key = "{-side}:{b.key()}";
-            let times = seen.get(key).unwrap_or(0) + 1;
-            seen[key] = times;
-            if times >= 3 { verdict = "draw — threefold repetition"; }
-            if quiet >= 50 { verdict = "draw — 50 plies without a capture or crowning"; }
-            if ply >= 180 && verdict == "" { verdict = "draw — move limit reached"; }
+            let h = zobrist.hash(b, -side);
+            if !seen.insert(h) && !seen_twice.insert(h) {
+                verdict = "draw — threefold repetition";
+            }
+            if quiet >= 50 {
+                verdict = "draw — 50 plies without a capture or crowning";
+            }
+            if ply >= 180 && verdict == "" {
+                verdict = "draw — move limit reached";
+            }
             side = -side;
             ply += 1;
-        }
+        },
     }
 }
 

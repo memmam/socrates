@@ -1,8 +1,8 @@
 # mini-lisp — a Lisp interpreter written in Fable
 
 A small, classic tree-walking Lisp: an s-expression reader, an evaluator
-with lexical closures, and a handful of builtins — about 400 lines of
-Fable. The demo runs five sample Lisp programs from `programs/*.lisp`,
+with lexical closures, and a handful of builtins — about 450 lines of
+Fable. The demo runs six sample Lisp programs from `programs/*.lisp`,
 printing each program's source and every top-level result.
 
 ## Run it
@@ -46,7 +46,10 @@ error demo: (car (quote ())) -> error: car of empty list
 - **Atoms**: integers and symbols; `#t` / `#f` are the booleans, and only
   `#f` is falsy (Scheme truthiness).
 - **Special forms**: `define` (with `(define (f a b) body)` sugar),
-  `lambda` (lexical closures), `if`, `quote` (plus the `'x` reader sugar).
+  `lambda` (lexical closures), `if`, `let` (parallel bindings, like
+  Scheme's), `quote` (plus the `'x` reader sugar). Reserved words cannot
+  be `define`d; duplicate `lambda` parameters and duplicate `let`
+  bindings are errors.
 - **Builtins**: `+ - * / %` (variadic), chained comparisons
   `= < > <= >=`, and `cons car cdr list null? not`. Lists are proper
   lists only (no dotted pairs).
@@ -58,7 +61,10 @@ error demo: (car (quote ())) -> error: car of empty list
 |---|---|
 | s-expressions | a recursive `enum Sexp { Num, Sym, Form(List[Sexp]) }` |
 | runtime values | `enum Value`, with a `Closure` struct for lambdas |
-| environments | `struct Env { vars: Map[String, Value], parent: Option[Env] }` — reference semantics make recursive `define` work |
+| environments | `struct Env { vars: Map[String, Value], parent: Option[Env], specials: set.Set[String] }` — reference semantics make recursive `define` work |
+| special-form dispatch | a `std.set` `Set[String]` of reserved words, built once in `global_env` and shared by reference with every child scope (Fable has no module-level constants); one probe decides special-vs-application, and the same set rejects `(define if 3)` |
+| printing | `strings.Builder` threaded through the recursive printers (`show` in both `eval` and `reader`) — O(output) instead of re-copying child strings at every nesting level |
+| duplicate names | `Set.insert -> Bool` ("did it change?") catches `(lambda (x x) ...)` and `(let ((a 1) (a 2)) ...)` |
 | error reporting | `Result[Value, String]` + the `?` operator everywhere |
 | overflow, stack overflow | `try()` converts runtime panics into Lisp-level errors |
 | tail calls | Fable's TCO reaches *through* `eval`, so tail-recursive Lisp loops (see `programs/loop.lisp`) run in constant stack space |
@@ -69,4 +75,4 @@ Files:
 - `eval.fable` — values, environments, special forms, builtins
 - `main.fable` — driver: reads each `.lisp` file with `fs.read`, prints
   source and results; its full output is pinned by test directives
-- `spec.fable` — 33 one-liner golden tests, happy paths and error paths
+- `spec.fable` — 41 one-liner golden tests, happy paths and error paths

@@ -14,13 +14,17 @@
 //   cond   := column op value
 //   op     := '==' | '!=' | '<' | '<=' | '>' | '>=' | 'contains'
 //   value  := a number, a bare word, or 'single quoted text'
+//
+// sum/avg need a numeric column; min/max take ANY column — text compares
+// lexically (Val.cmp order), so `min city` is the alphabetically first city.
 
 import table;
+import std.lists;
 
 // ---------------------------------------------------------------- tokens
 
 enum Tok {
-    Word(String),   // bare word: column names, keywords, operators, numbers
+    Word(String), // bare word: column names, keywords, operators, numbers
     Quoted(String), // 'single quoted' value, may contain spaces
     Comma,
 }
@@ -55,7 +59,13 @@ fn lex(src: String) -> Result[List[Tok], String] {
             i = end + 1;
         } else {
             let start = i;
-            while i < n && chars[i] != " " && chars[i] != "\t" && chars[i] != "," && chars[i] != "'" { i += 1; }
+            while i < n
+                && chars[i] != " "
+                && chars[i] != "\t"
+                && chars[i] != ","
+                && chars[i] != "'" {
+                i += 1;
+            }
             toks.push(Tok.Word(src.slice(start, i)));
         }
     }
@@ -66,9 +76,9 @@ fn lex(src: String) -> Result[List[Tok], String] {
 
 // One selected output column.
 pub enum Sel {
-    All,                 // *
-    Col(String),         // plain column
-    Count,               // count
+    All, // *
+    Col(String), // plain column
+    Count, // count
     Agg(String, String), // (function, column), e.g. avg pop
 }
 
@@ -116,7 +126,7 @@ impl Parser {
             Some(x) if x == w -> {
                 self.pos += 1;
                 true
-            }
+            },
             _ -> false,
         }
     }
@@ -126,7 +136,7 @@ impl Parser {
             Some(Tok.Comma) -> {
                 self.pos += 1;
                 true
-            }
+            },
             _ -> false,
         }
     }
@@ -150,19 +160,27 @@ fn is_op(w: String) -> Bool {
 
 pub fn parse(src: String) -> Result[Query, String] {
     let p = Parser { toks: lex(src)?, pos: 0 };
-    if !p.eat("select") { return Err("a query starts with 'select'"); }
+    if !p.eat("select") {
+        return Err("a query starts with 'select'");
+    }
     let q = Query { sels: parse_sels(p)?, conds: [], group: None, order: None, limit: None };
 
     if p.eat("where") {
         q.conds.push(parse_cond(p)?);
-        while p.eat("and") { q.conds.push(parse_cond(p)?); }
+        while p.eat("and") {
+            q.conds.push(parse_cond(p)?);
+        }
     }
     if p.eat("group") {
-        if !p.eat("by") { return Err("expected 'by' after 'group'"); }
+        if !p.eat("by") {
+            return Err("expected 'by' after 'group'");
+        }
         q.group = Some(p.take_word("a column to group by")?);
     }
     if p.eat("order") {
-        if !p.eat("by") { return Err("expected 'by' after 'order'"); }
+        if !p.eat("by") {
+            return Err("expected 'by' after 'order'");
+        }
         // The key may span words ("order by avg pop desc"): gather words
         // until a direction / 'limit' / end of query.
         let parts: List[String] = [];
@@ -171,11 +189,13 @@ pub fn parse(src: String) -> Result[Query, String] {
                 Some(w) if w != "asc" && w != "desc" && w != "limit" -> {
                     p.pos += 1;
                     parts.push(w);
-                }
+                },
                 _ -> break,
             }
         }
-        if parts.is_empty() { return Err("expected a column after 'order by'"); }
+        if parts.is_empty() {
+            return Err("expected a column after 'order by'");
+        }
         let mut desc = false;
         if p.eat("desc") {
             desc = true;
@@ -187,7 +207,9 @@ pub fn parse(src: String) -> Result[Query, String] {
     if p.eat("limit") {
         let w = p.take_word("a row count after 'limit'")?;
         match w.parse_int() {
-            Some(k) if k >= 0 -> { q.limit = Some(k); }
+            Some(k) if k >= 0 -> {
+                q.limit = Some(k);
+            },
             _ -> return Err("'limit' needs a non-negative integer, found '{w}'"),
         }
     }
@@ -198,7 +220,9 @@ pub fn parse(src: String) -> Result[Query, String] {
 }
 
 fn parse_sels(p: Parser) -> Result[List[Sel], String] {
-    if p.eat("*") { return Ok([Sel.All]); }
+    if p.eat("*") {
+        return Ok([Sel.All]);
+    }
     let sels: List[Sel] = [];
     let mut more = true;
     while more {
@@ -210,18 +234,24 @@ fn parse_sels(p: Parser) -> Result[List[Sel], String] {
 
 fn parse_sel(p: Parser) -> Result[Sel, String] {
     let w = p.take_word("a column name")?;
-    if w == "count" { return Ok(Sel.Count); }
+    if w == "count" {
+        return Ok(Sel.Count);
+    }
     if ["sum", "avg", "min", "max"].contains(w) {
         return Ok(Sel.Agg(w, p.take_word("a column after '{w}'")?));
     }
-    if is_keyword(w) { return Err("expected a column name, found keyword '{w}'"); }
+    if is_keyword(w) {
+        return Err("expected a column name, found keyword '{w}'");
+    }
     Ok(Sel.Col(w))
 }
 
 fn parse_cond(p: Parser) -> Result[Cond, String] {
     let col = p.take_word("a column name after 'where'/'and'")?;
     let op = p.take_word("an operator after '{col}'")?;
-    if !is_op(op) { return Err("unknown operator '{op}' (try == != < <= > >= contains)"); }
+    if !is_op(op) {
+        return Err("unknown operator '{op}' (try == != < <= > >= contains)");
+    }
     let want = match p.take() {
         Some(Tok.Quoted(s)) -> table.text(s),
         Some(Tok.Word(w)) -> match w.parse_float() {
@@ -231,7 +261,7 @@ fn parse_cond(p: Parser) -> Result[Cond, String] {
         Some(t) -> return Err("expected a value after '{op}', found {tok_show(t)}"),
         None -> return Err("expected a value after '{op}'"),
     };
-    Ok(Cond { col: col, op: op, want: want })
+    Ok(Cond { col, op, want })
 }
 
 // -------------------------------------------------------------- executor
@@ -243,11 +273,7 @@ pub fn run(t: table.Table, q: Query) -> Result[table.Table, String] {
         Sel.Agg(_, _) -> true,
         _ -> false,
     });
-    if q.group.is_some() || has_agg {
-        run_grouped(t, rows, q)
-    } else {
-        run_plain(t, rows, q)
-    }
+    if q.group.is_some() || has_agg { run_grouped(t, rows, q) } else { run_plain(t, rows, q) }
 }
 
 fn col_index(t: table.Table, name: String) -> Result[Int, String] {
@@ -267,8 +293,12 @@ fn filter_rows(t: table.Table, conds: List[Cond]) -> Result[List[List[table.Val]
 }
 
 fn holds(v: table.Val, op: String, want: table.Val) -> Bool {
-    if op == "==" { return v == want; } // structural equality
-    if op == "!=" { return v != want; }
+    if op == "==" {
+        return v == want;
+    } // structural equality
+    if op == "!=" {
+        return v != want;
+    }
     if op == "contains" {
         return match (v, want) {
             (Str(a), Str(b)) -> a.contains(b),
@@ -276,7 +306,11 @@ fn holds(v: table.Val, op: String, want: table.Val) -> Bool {
         };
     }
     let c = v.cmp(want);
-    if op == "<" { c < 0 } else if op == "<=" { c <= 0 } else if op == ">" { c > 0 } else { c >= 0 }
+    if op == "<" {
+        c < 0
+    } else if op == "<=" {
+        c <= 0
+    } else if op == ">" { c > 0 } else { c >= 0 }
 }
 
 // No grouping and no aggregates: order (by any source column), cut, project.
@@ -287,27 +321,37 @@ fn run_plain(t: table.Table, rows: List[List[table.Val]], q: Query) -> Result[ta
             let i = col_index(t, key)?;
             let sign = if desc { -1 } else { 1 };
             out = out.sort_by(|a, b| a[i].cmp(b[i]) * sign); // stable, so ties keep file order
-        }
-        None -> {}
+        },
+        None -> {},
     }
     out = cut(out, q.limit);
 
     let names: List[String] = [];
     for s in q.sels {
         match s {
-            Sel.All -> { for h in t.headers { names.push(h); } }
+            Sel.All -> {
+                for h in t.headers {
+                    names.push(h);
+                }
+            },
             Sel.Col(c) -> names.push(c),
-            _ -> {} // unreachable: aggregate queries take the grouped path
+            _ -> {}, // unreachable: aggregate queries take the grouped path
         }
     }
     let idxs: List[Int] = [];
-    for name in names { idxs.push(col_index(t, name)?); }
+    for name in names {
+        idxs.push(col_index(t, name)?);
+    }
     Ok(table.Table { headers: names, rows: out.map(|r| idxs.map(|i| r[i])) })
 }
 
 // Grouped (or whole-table) aggregation: bucket rows by the group key,
 // fold each bucket into one output row, then order by an OUTPUT column.
-fn run_grouped(t: table.Table, rows: List[List[table.Val]], q: Query) -> Result[table.Table, String] {
+fn run_grouped(
+    t: table.Table,
+    rows: List[List[table.Val]],
+    q: Query,
+) -> Result[table.Table, String] {
     // Plain columns are only meaningful when they are the group key.
     for s in q.sels {
         match s {
@@ -315,7 +359,7 @@ fn run_grouped(t: table.Table, rows: List[List[table.Val]], q: Query) -> Result[
                 return Err("column '{c}' must be the 'group by' column or aggregated");
             },
             Sel.All -> return Err("'*' cannot be mixed with aggregates"),
-            _ -> {}
+            _ -> {},
         }
     }
 
@@ -326,11 +370,15 @@ fn run_grouped(t: table.Table, rows: List[List[table.Val]], q: Query) -> Result[
         Some(gcol) -> {
             let gi = col_index(t, gcol)?;
             for r in rows {
-                if !buckets.contains_key(r[gi]) { buckets[r[gi]] = []; }
+                if !buckets.contains_key(r[gi]) {
+                    buckets[r[gi]] = [];
+                }
                 buckets[r[gi]].push(r);
             }
-        }
-        None -> { buckets[table.text("all")] = rows; } // one bucket: the whole table
+        },
+        None -> {
+            buckets[table.text("all")] = rows;
+        }, // one bucket: the whole table
     }
 
     let names = q.sels.map(|s| match s {
@@ -340,7 +388,9 @@ fn run_grouped(t: table.Table, rows: List[List[table.Val]], q: Query) -> Result[
         Sel.All -> "*",
     });
     let out_rows: List[List[table.Val]] = [];
-    for (key, bucket) in buckets.entries() { out_rows.push(agg_row(t, q.sels, key, bucket)?); }
+    for (key, bucket) in buckets.entries() {
+        out_rows.push(agg_row(t, q.sels, key, bucket)?);
+    }
 
     let mut out = out_rows;
     match q.order {
@@ -348,16 +398,21 @@ fn run_grouped(t: table.Table, rows: List[List[table.Val]], q: Query) -> Result[
             Some(i) -> {
                 let sign = if desc { -1 } else { 1 };
                 out = out.sort_by(|a, b| a[i].cmp(b[i]) * sign);
-            }
+            },
             None -> return Err("'order by {key}' must name an output column ({names.join(", ")})"),
-        }
-        None -> {}
+        },
+        None -> {},
     }
     Ok(table.Table { headers: names, rows: cut(out, q.limit) })
 }
 
 // Fold one bucket into one output row.
-fn agg_row(t: table.Table, sels: List[Sel], key: table.Val, bucket: List[List[table.Val]]) -> Result[List[table.Val], String] {
+fn agg_row(
+    t: table.Table,
+    sels: List[Sel],
+    key: table.Val,
+    bucket: List[List[table.Val]],
+) -> Result[List[table.Val], String] {
     let row: List[table.Val] = [];
     for s in sels {
         match s {
@@ -365,32 +420,37 @@ fn agg_row(t: table.Table, sels: List[Sel], key: table.Val, bucket: List[List[ta
             Sel.Count -> row.push(table.num(bucket.len().to_float())),
             Sel.Agg(f, c) -> {
                 let i = col_index(t, c)?;
-                let nums: List[Float] = [];
-                for r in bucket {
-                    match r[i] {
-                        Num(x) -> nums.push(x),
-                        Str(_) -> return Err("'{f} {c}': column '{c}' has text values"),
-                    }
-                }
-                row.push(table.num(aggregate(f, nums)?));
-            }
-            Sel.All -> {} // rejected earlier
+                row.push(aggregate(f, c, bucket.map(|r| r[i]))?);
+            },
+            Sel.All -> {}, // rejected earlier
         }
     }
     Ok(row)
 }
 
-fn aggregate(f: String, xs: List[Float]) -> Result[Float, String] {
-    if xs.is_empty() { return Err("'{f}' over an empty group"); }
-    if f == "sum" {
-        Ok(xs.fold(0.0, |a, x| a + x))
-    } else if f == "avg" {
-        Ok(xs.fold(0.0, |a, x| a + x) / xs.len().to_float())
-    } else if f == "min" {
-        Ok(xs.fold(xs[0], |a, x| math.min_float(a, x)))
-    } else {
-        Ok(xs.fold(xs[0], |a, x| math.max_float(a, x)))
+// Fold one column of a bucket. min/max order whole cells with Val.cmp via
+// std.lists.min_by/max_by (v0.7), so they work on text columns too; the
+// stdlib's first-winner tie rule keeps results deterministic. sum/avg still
+// demand numbers, folded with lists.sum_float.
+fn aggregate(f: String, c: String, vals: List[table.Val]) -> Result[table.Val, String] {
+    if vals.is_empty() {
+        return Err("'{f}' over an empty group");
     }
+    if f == "min" {
+        return Ok(lists.min_by(vals, |a, b| a.cmp(b)).unwrap());
+    }
+    if f == "max" {
+        return Ok(lists.max_by(vals, |a, b| a.cmp(b)).unwrap());
+    }
+    let nums: List[Float] = [];
+    for v in vals {
+        match v {
+            Num(x) -> nums.push(x),
+            Str(_) -> return Err("'{f} {c}': column '{c}' has text values"),
+        }
+    }
+    let total = lists.sum_float(nums);
+    Ok(table.num(if f == "avg" { total / nums.len().to_float() } else { total }))
 }
 
 // First `limit` rows, or all of them when no limit was given.
