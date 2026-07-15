@@ -79,8 +79,11 @@ fable build demos/png --launcher ./fable-aarch64-macos -o png-macos
 
 Because stapling is just byte concatenation, one host can assemble binaries
 for every target it has a launcher for — which is exactly how the release
-"demo zoo" is produced: each demo, cross-built for Linux, Windows, and macOS,
-all from one runner.
+"demo zoo" is produced: each demo, cross-built for `x86_64` and `aarch64`
+Linux and Windows, all from one runner. (Apple Silicon macOS is the exception
+for now — a payload appended onto a Mach-O can't be code-signed, and macOS
+won't run an unsigned binary, so the zoo ships as the interpreter plus demo
+sources there.)
 
 ## `fable lsp`
 

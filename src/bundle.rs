@@ -58,7 +58,42 @@ pub fn staple(launcher: &[u8], payload: &[u8]) -> Vec<u8> {
 /// running.
 pub fn read_self() -> Option<Bundle> {
     let exe = std::env::current_exe().ok()?;
-    read_from(&exe).ok().flatten()
+    // Fast path: the trailer is the exact tail (ELF and PE tolerate appended
+    // data, so the magic is the last 8 bytes). One 16-byte read for an
+    // ordinary `fable`.
+    if let Ok(Some(b)) = read_from(&exe) {
+        return Some(b);
+    }
+    // Fallback: tolerate trailing bytes after the trailer (e.g. a code
+    // signature appended past our payload) by scanning the whole image
+    // backward for the magic.
+    let data = std::fs::read(&exe).ok()?;
+    scan(&data)
+}
+
+/// Find the stapled bundle by scanning `data` backward for the trailer magic,
+/// tolerating trailing bytes after it (e.g. a Mach-O code signature). Returns
+/// the payload of the last magic whose length prefix yields a parseable
+/// bundle.
+fn scan(data: &[u8]) -> Option<Bundle> {
+    if data.len() < 16 {
+        return None;
+    }
+    let mut p = data.len() - 8;
+    loop {
+        if &data[p..p + 8] == MAGIC && p >= 8 {
+            let len = u64::from_le_bytes(data[p - 8..p].try_into().unwrap()) as usize;
+            if let Some(start) = (p - 8).checked_sub(len) {
+                if let Some(b) = parse(&data[start..p - 8]) {
+                    return Some(b);
+                }
+            }
+        }
+        if p == 0 {
+            return None;
+        }
+        p -= 1;
+    }
 }
 
 fn read_from(path: &Path) -> io::Result<Option<Bundle>> {
@@ -202,6 +237,21 @@ mod tests {
     #[test]
     fn plain_binary_has_no_bundle() {
         assert!(parse(b"not a payload at all").is_none());
+    }
+
+    #[test]
+    fn scan_finds_magic_before_a_trailing_signature() {
+        let files = vec![("main.fable".to_string(), b"println(1);".to_vec())];
+        let mut img = staple(b"mach-o-image", &payload("main.fable", &files));
+        // Simulate a code signature appended after our trailer.
+        img.extend_from_slice(b"\x00fake code signature blob\xff\xfe");
+        let b = scan(&img).expect("scan locates the payload past trailing bytes");
+        assert_eq!(b.files, files);
+    }
+
+    #[test]
+    fn scan_ignores_plain_binaries() {
+        assert!(scan(b"an ordinary executable with no bundle at all").is_none());
     }
 
     #[test]

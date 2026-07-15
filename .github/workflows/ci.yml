@@ -118,3 +118,87 @@ jobs:
         run: |
           cargo build --release --features gpu
           ./target/release/fable docs/assets/gpu_double.fable
+
+  demo-zoo:
+    # Proves the release's cross-compile + `fable build` stapling works on
+    # every non-native target before a release is ever cut (x86_64-linux is
+    # covered by the `test` job's build smoke). For a target whose arch
+    # matches the runner, a stapled demo is run and diffed against its source
+    # run; for a true cross target we can only build + staple (no execution),
+    # which is exactly what the release does. Zero-dependency pure Rust makes
+    # these cross-builds need nothing but the rustup target (+ a linker for
+    # aarch64 GNU); rustc locates the MSVC ARM64 tools itself.
+    name: Demo zoo (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            label: aarch64-linux
+            ext: ""
+            apt: gcc-aarch64-linux-gnu
+            linker: aarch64-linux-gnu-gcc
+            run: false
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: x86_64-windows
+            ext: ".exe"
+            run: true
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            label: aarch64-windows
+            ext: ".exe"
+            run: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Cross linker (aarch64 linux)
+        if: matrix.apt != ''
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.apt }}
+      - name: Build host stapler
+        run: cargo build --release
+      - name: Build target launcher
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.linker }}
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Staple + verify
+        shell: bash
+        run: |
+          host="target/release/fable${{ matrix.ext }}"
+          launcher="target/${{ matrix.target }}/release/fable${{ matrix.ext }}"
+          for demo in csvql parmandel; do
+            "$host" build "demos/$demo" --launcher "$launcher" -o "${demo}${{ matrix.ext }}"
+            test -s "${demo}${{ matrix.ext }}" || { echo "no binary produced for $demo" >&2; exit 1; }
+          done
+          if [ "${{ matrix.run }}" = "true" ]; then
+            # Native arch: the stapled binary runs here — prove it reproduces
+            # the source run byte-for-byte.
+            for demo in csvql parmandel; do
+              ( ./"${demo}${{ matrix.ext }}" ) > "${demo}.bin.out"
+              "$host" "demos/$demo/main.fable" > "${demo}.src.out"
+              diff "${demo}.src.out" "${demo}.bin.out"
+            done
+            echo "ran and matched source on ${{ matrix.label }}"
+          else
+            echo "cross-built and stapled ${{ matrix.label }} (no native execution)"
+          fi
+
+  macos-source:
+    # macOS single-file binaries can't be code-signed (a payload appended past
+    # the Mach-O __LINKEDIT fails codesign's strict validation), so the release
+    # ships the interpreter + demo sources for Apple Silicon. This proves that
+    # combination actually runs on arm64 macOS — the only macOS coverage in CI.
+    name: macOS Apple Silicon (interpreter + demos)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - name: Spec + demo golden suites on Apple Silicon
+        run: |
+          ./target/release/fable test tests/spec demos > /dev/null
+          echo "interpreter + all demos run on aarch64-macos"

@@ -190,7 +190,7 @@ source, or when you're hacking on Fable itself.
 print their value *and its type*:
 
 ```text
-Fable 0.6.0 — type a program, or :help
+Fable 0.7.0 — type a program, or :help
 fable> 1 + 2 * 3
 7 : Int
 fable> let double = |x: Int| x * 2;

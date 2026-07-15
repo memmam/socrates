@@ -64,7 +64,12 @@ jobs:
             target: aarch64-apple-darwin
             label: aarch64-macos
             ext: ""
-            codesign: true
+            # Apple Silicon requires a valid code signature to run, but a
+            # payload appended past the Mach-O __LINKEDIT can't be signed
+            # (codesign strict-validation rejects it). So macOS ships the
+            # interpreter + demo sources instead of stapled single-file
+            # binaries; proper macOS single-file is a follow-up.
+            sources_zoo: true
     env:
       TAG: pending
     steps:
@@ -116,19 +121,36 @@ jobs:
       - name: Assemble the demo zoo
         shell: bash
         run: |
-          host="target/release/fable"
-          launcher="target/${{ matrix.target }}/release/fable${{ matrix.ext }}"
           mkdir -p zoo
-          for d in demos/*/; do
-            name="$(basename "$d")"
-            [ -f "${d}main.fable" ] || continue
-            "$host" build "demos/$name" --launcher "$launcher" -o "zoo/${name}${{ matrix.ext }}"
-          done
-          # Stapling appends bytes after the Mach-O image, which invalidates
-          # the linker's ad-hoc signature; arm64 macOS refuses to run an
-          # unsigned/tampered binary, so re-sign each one ad-hoc.
-          if [ "${{ matrix.codesign }}" = "true" ]; then
-            for b in zoo/*; do codesign --force --sign - "$b"; done
+          if [ "${{ matrix.sources_zoo }}" = "true" ]; then
+            # macOS: ship the interpreter + demo sources. Run any demo with
+            # `./fable demos/<name>/main.fable` from the unpacked directory.
+            cp "target/${{ matrix.target }}/release/fable${{ matrix.ext }}" zoo/
+            cp -R demos zoo/demos
+            {
+              echo "The Fable demo zoo (Apple Silicon)."
+              echo
+              echo "Single-file demo binaries aren't shipped for macOS yet: a payload"
+              echo "appended onto the interpreter can't be code-signed, and Apple Silicon"
+              echo "won't run an unsigned binary. So this archive is the fable interpreter"
+              echo "plus every demo's source. From this directory:"
+              echo
+              echo "    ./fable demos/lisp/main.fable"
+              echo "    ./fable test demos            # run all seventeen as golden tests"
+              echo
+              echo "The first run of an unsigned download may need Gatekeeper cleared:"
+              echo "    xattr -d com.apple.quarantine ./fable"
+            } > zoo/RUN.txt
+          else
+            # The host stapler is the runner's native `fable`; we only ever
+            # cross within an OS, so the host extension equals matrix.ext.
+            host="target/release/fable${{ matrix.ext }}"
+            launcher="target/${{ matrix.target }}/release/fable${{ matrix.ext }}"
+            for d in demos/*/; do
+              name="$(basename "$d")"
+              [ -f "${d}main.fable" ] || continue
+              "$host" build "demos/$name" --launcher "$launcher" -o "zoo/${name}${{ matrix.ext }}"
+            done
           fi
           cp demos/README.md LICENSE NOTICE zoo/
           ls -l zoo
@@ -199,6 +221,7 @@ jobs:
           else
             gh release create "$TAG" \
               --draft \
+              --prerelease \
               --target "$GITHUB_SHA" \
               --title "Fable $TAG" \
               --notes-file .github/RELEASE_NOTES.md \
