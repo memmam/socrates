@@ -1,8 +1,10 @@
 // chart.fable — the plotting layer: sampling functions into series,
 // data-space -> pixel-space frames, "nice" tick selection, a line-chart
-// renderer on top of svg.Doc, and a terminal sparkline.
+// renderer and a stem-chart (spectrum) renderer on top of svg.Doc, and a
+// terminal sparkline.
 
 import svg;
+import std.lists;
 
 // --- series ---------------------------------------------------------------
 
@@ -14,7 +16,14 @@ pub struct Series {
 }
 
 // Sample y = f(x) at n evenly spaced points across [x0, x1].
-pub fn sample(name: String, color: String, f: fn(Float) -> Float, x0: Float, x1: Float, n: Int) -> Series {
+pub fn sample(
+    name: String,
+    color: String,
+    f: fn(Float) -> Float,
+    x0: Float,
+    x1: Float,
+    n: Int,
+) -> Series {
     let xs = [];
     let ys = [];
     for i in 0..n {
@@ -22,7 +31,7 @@ pub fn sample(name: String, color: String, f: fn(Float) -> Float, x0: Float, x1:
         xs.push(x);
         ys.push(f(x));
     }
-    Series { name: name, color: color, xs: xs, ys: ys }
+    Series { name, color, xs, ys }
 }
 
 // --- coordinate transform ---------------------------------------------------
@@ -30,10 +39,14 @@ pub fn sample(name: String, color: String, f: fn(Float) -> Float, x0: Float, x1:
 // The affine map from a data rectangle onto a pixel rectangle.
 // SVG's y axis points down, so sy flips.
 pub struct Frame {
-    x_min: Float, x_max: Float,
-    y_min: Float, y_max: Float,
-    px: Float, py: Float,     // top-left of the plot area, in pixels
-    pw: Float, ph: Float,     // size of the plot area, in pixels
+    x_min: Float,
+    x_max: Float,
+    y_min: Float,
+    y_max: Float,
+    px: Float,
+    py: Float, // top-left of the plot area, in pixels
+    pw: Float,
+    ph: Float, // size of the plot area, in pixels
 }
 
 impl Frame {
@@ -54,7 +67,11 @@ impl Frame {
 fn nice_step(raw: Float) -> Float {
     let mag = math.pow(10.0, math.floor(math.log10(raw)));
     let n = raw / mag;
-    if n <= 1.0 { mag } else if n <= 2.0 { 2.0 * mag } else if n <= 5.0 { 5.0 * mag } else { 10.0 * mag }
+    if n <= 1.0 {
+        mag
+    } else if n <= 2.0 {
+        2.0 * mag
+    } else if n <= 5.0 { 5.0 * mag } else { 10.0 * mag }
 }
 
 // Tick positions covering [lo, hi] with roughly `target` steps. Each tick
@@ -87,7 +104,7 @@ pub struct Chart {
 }
 
 pub fn chart(title: String, width: Int, height: Int) -> Chart {
-    Chart { title: title, width: width, height: height, series: [] }
+    Chart { title, width, height, series: [] }
 }
 
 // Spread label positions so adjacent labels never overlap: sort by desired
@@ -110,23 +127,32 @@ impl Chart {
     }
 
     // Data bounds (y padded 8%) mapped onto the pixel plot area.
+    // std.lists (v0.7) does the per-series extents; the folds it replaced
+    // are gone.
     pub fn frame(self) -> Frame {
-        if self.series.is_empty() { panic("chart needs at least one series"); }
+        if self.series.is_empty() {
+            panic("chart needs at least one series");
+        }
         let s0 = self.series[0];
         let mut x_lo = s0.xs[0];
         let mut x_hi = s0.xs[0];
         let mut y_lo = s0.ys[0];
         let mut y_hi = s0.ys[0];
         for s in self.series {
-            for x in s.xs { x_lo = math.min_float(x_lo, x); x_hi = math.max_float(x_hi, x); }
-            for y in s.ys { y_lo = math.min_float(y_lo, y); y_hi = math.max_float(y_hi, y); }
+            x_lo = math.min_float(x_lo, lists.min_float(s.xs).unwrap());
+            x_hi = math.max_float(x_hi, lists.max_float(s.xs).unwrap());
+            y_lo = math.min_float(y_lo, lists.min_float(s.ys).unwrap());
+            y_hi = math.max_float(y_hi, lists.max_float(s.ys).unwrap());
         }
         // A flat series still needs a non-degenerate frame.
         let pad = if y_hi - y_lo < 1.0e-12 { 1.0 } else { (y_hi - y_lo) * 0.08 };
         Frame {
-            x_min: x_lo, x_max: x_hi,
-            y_min: y_lo - pad, y_max: y_hi + pad,
-            px: 46.0, py: 64.0,
+            x_min: x_lo,
+            x_max: x_hi,
+            y_min: y_lo - pad,
+            y_max: y_hi + pad,
+            px: 46.0,
+            py: 64.0,
             pw: self.width.to_float() - 46.0 - 112.0,
             ph: self.height.to_float() - 64.0 - 36.0,
         }
@@ -178,14 +204,75 @@ impl Chart {
     }
 }
 
+// --- stem chart (spectrum panel) ----------------------------------------------
+
+// A stem chart for non-negative data indexed by position — the natural shape
+// for a magnitude spectrum: one vertical line per (bin, value), rooted on a
+// zero baseline, with the same grid/tick chrome as the line chart. Stems
+// taller than 5% of the peak get their bin number annotated at the tip.
+pub fn stems(
+    title: String,
+    caption: String,
+    color: String,
+    ys: List[Float],
+    width: Int,
+    height: Int,
+) -> String {
+    if ys.is_empty() {
+        panic("stem chart needs at least one value");
+    }
+    let peak = lists.max_float(ys).unwrap();
+    let headroom = if peak < 1.0e-12 { 1.0 } else { peak * 0.08 };
+    let fr = Frame {
+        x_min: 0.0,
+        x_max: (ys.len() - 1).to_float(),
+        y_min: 0.0,
+        y_max: peak + headroom,
+        px: 46.0,
+        py: 64.0,
+        pw: width.to_float() - 46.0 - 20.0,
+        ph: height.to_float() - 64.0 - 36.0,
+    };
+
+    let d = svg.doc(width, height);
+    d.rect(0.0, 0.0, width.to_float(), height.to_float(), "#fcfcfb");
+
+    for t in ticks(fr.y_min, fr.y_max, 5) {
+        let y = fr.sy(t);
+        d.line(fr.px, y, fr.px + fr.pw, y, grid, 1.0);
+        d.text(fr.px - 8.0, y + 3.5, 11, "end", ink_muted, svg.num(t));
+    }
+    for t in ticks(fr.x_min, fr.x_max, 8) {
+        let x = fr.sx(t);
+        d.line(x, fr.py, x, fr.py + fr.ph, grid, 1.0);
+        d.text(x, fr.py + fr.ph + 16.0, 11, "middle", ink_muted, svg.num(t));
+    }
+
+    d.add("<text x=\"{svg.num(fr.px)}\" y=\"26\" font-size=\"15\" font-weight=\"600\" fill=\"{ink}\" font-family=\"system-ui, sans-serif\">{title}</text>");
+    d.text(fr.px, 48.0, 12, "start", ink_soft, caption);
+
+    let y0 = fr.sy(0.0);
+    for (k, v) in ys.enumerate() {
+        let x = fr.sx(k.to_float());
+        d.line(x, y0, x, fr.sy(v), color, 2.0);
+        if v > 0.05 * peak {
+            d.circle(x, fr.sy(v), 2.5, color);
+            d.text(x, fr.sy(v) - 8.0, 11, "middle", ink_soft, str(k));
+        }
+    }
+    d.line(fr.px, y0, fr.px + fr.pw, y0, axis, 1.2);
+
+    d.render()
+}
+
 // --- sparkline ---------------------------------------------------------------
 
 // A compact terminal rendering: one block glyph per sample, eight levels,
-// scaled to the series' own min..max.
+// scaled to the series' own min..max (std.lists, v0.7).
 pub fn sparkline(ys: List[Float]) -> String {
     let glyphs = "▁▂▃▄▅▆▇█".chars();
-    let lo = ys.fold(ys[0], |a, y| math.min_float(a, y));
-    let hi = ys.fold(ys[0], |a, y| math.max_float(a, y));
+    let lo = lists.min_float(ys).unwrap();
+    let hi = lists.max_float(ys).unwrap();
     let span = if hi - lo < 1.0e-12 { 1.0 } else { hi - lo };
     ys.map(|y| {
         let level = ((y - lo) / span * 7.0).round().to_int();

@@ -256,6 +256,8 @@ fn real_main() -> ExitCode {
             let mut machine =
                 vm::Vm::new(program, first_source, Box::new(std::io::stdout()));
             machine.script_args = script_args;
+            machine.entry_dir =
+                std::path::Path::new(path).parent().map(|p| p.to_path_buf());
             for unit in units {
                 machine.sources.push(unit.source);
             }

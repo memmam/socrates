@@ -1568,24 +1568,37 @@ impl Checker {
         }
 
         // Module-qualified enum path: `alias.Enum.Variant` (nullary).
+        // `alias.member.field` where `member` is a module VALUE falls
+        // through to ordinary field access on the member (v0.7 fix, same
+        // shape as the method-call case below).
         if let ExprKind::Field { base: inner, field: tyname } = &base.kind {
             if let ExprKind::Var(alias) = &inner.kind {
-                if !self.name_is_value(alias) && self.imports.contains_key(alias.as_str()) {
-                    if let Some(def) =
-                        self.resolve_def_name(&format!("{alias}.{}", tyname.name), tyname.span)
-                    {
-                        if matches!(self.defs.get(def), TypeDef::Enum(_)) {
-                            return self.check_variant_path(e, def, field);
+                if !self.name_is_value(alias) {
+                    if let Some(key) = self.imports.get(alias.as_str()).cloned() {
+                        if let Some(def) =
+                            self.resolve_def_name(&format!("{alias}.{}", tyname.name), tyname.span)
+                        {
+                            if matches!(self.defs.get(def), TypeDef::Enum(_)) {
+                                return self.check_variant_path(e, def, field);
+                            }
+                        }
+                        let qname = format!("{key}.{}", tyname.name);
+                        let is_value_member = self.fn_by_name.contains_key(&qname)
+                            || self.global_by_name.contains_key(&qname);
+                        if !is_value_member {
+                            self.diags.push(
+                                Diagnostic::error(
+                                    "E0413",
+                                    format!(
+                                        "no enum or member `{}` in module `{alias}`",
+                                        tyname.name
+                                    ),
+                                )
+                                .with_label(tyname.span, ""),
+                            );
+                            return self.fresh(e.span, "unknown member");
                         }
                     }
-                    self.diags.push(
-                        Diagnostic::error(
-                            "E0413",
-                            format!("no enum `{}` in module `{alias}`", tyname.name),
-                        )
-                        .with_label(tyname.span, ""),
-                    );
-                    return self.fresh(e.span, "unknown member");
                 }
             }
         }
@@ -1747,28 +1760,42 @@ impl Checker {
         }
 
         // Module-qualified variant construction: `alias.Enum.Variant(args)`.
+        // `alias.member.method(args)` where `member` is a module VALUE
+        // (pub let / fn) is NOT this case — it falls through to ordinary
+        // method dispatch on the member's value (fixed in the v0.7 demo
+        // round: this arm used to hijack every alias.x.y(..) shape).
         if let ExprKind::Field { base: inner, field: tyname } = &recv.kind {
             if let ExprKind::Var(alias) = &inner.kind {
-                if !self.name_is_value(alias) && self.imports.contains_key(alias.as_str()) {
-                    if let Some(def) =
-                        self.resolve_def_name(&format!("{alias}.{}", tyname.name), tyname.span)
-                    {
-                        if matches!(self.defs.get(def), TypeDef::Enum(_)) {
-                            let ename = self.defs.get(def).name().to_string();
-                            return self.check_variant_ctor(e, def, &ename, method, args);
+                if !self.name_is_value(alias) {
+                    if let Some(key) = self.imports.get(alias.as_str()).cloned() {
+                        if let Some(def) =
+                            self.resolve_def_name(&format!("{alias}.{}", tyname.name), tyname.span)
+                        {
+                            if matches!(self.defs.get(def), TypeDef::Enum(_)) {
+                                let ename = self.defs.get(def).name().to_string();
+                                return self.check_variant_ctor(e, def, &ename, method, args);
+                            }
+                        }
+                        let qname = format!("{key}.{}", tyname.name);
+                        let is_value_member = self.fn_by_name.contains_key(&qname)
+                            || self.global_by_name.contains_key(&qname);
+                        if !is_value_member {
+                            self.diags.push(
+                                Diagnostic::error(
+                                    "E0413",
+                                    format!(
+                                        "no enum or member `{}` in module `{alias}`",
+                                        tyname.name
+                                    ),
+                                )
+                                .with_label(tyname.span, ""),
+                            );
+                            for a in args {
+                                self.check_expr(a, None);
+                            }
+                            return self.fresh(e.span, "unknown member");
                         }
                     }
-                    self.diags.push(
-                        Diagnostic::error(
-                            "E0413",
-                            format!("no enum `{}` in module `{alias}`", tyname.name),
-                        )
-                        .with_label(tyname.span, ""),
-                    );
-                    for a in args {
-                        self.check_expr(a, None);
-                    }
-                    return self.fresh(e.span, "unknown member");
                 }
             }
         }

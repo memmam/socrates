@@ -6,6 +6,9 @@
 // grid[y][x] (row, column). Everything begins as solid `wall`; rooms and
 // corridors carve cells into `floor`.
 
+import std.lists;
+import std.strings;
+
 // ---- tiles ----
 
 pub let wall = "#";
@@ -17,8 +20,8 @@ pub let path_mark = "*";
 // ---- rooms ----
 
 pub struct Room {
-    x: Int,   // left column
-    y: Int,   // top row
+    x: Int, // left column
+    y: Int, // top row
     w: Int,
     h: Int,
 }
@@ -33,8 +36,10 @@ impl Room {
     // cell, so any accepted room keeps at least one wall between itself
     // and every neighbor.
     pub fn intersects(self, o: Room) -> Bool {
-        self.x <= o.x + o.w && o.x <= self.x + self.w
-            && self.y <= o.y + o.h && o.y <= self.y + self.h
+        self.x <= o.x + o.w
+            && o.x <= self.x + self.w
+            && self.y <= o.y + o.h
+            && o.y <= self.y + self.h
     }
 }
 
@@ -53,7 +58,9 @@ pub struct Dungeon {
 // Fable's seeded PRNG, so a math.seed(n) call before generate() makes the
 // whole dungeon reproducible.
 pub fn generate(width: Int, height: Int, attempts: Int) -> Dungeon {
-    let grid = (0..height).map(|_| (0..width).map(|_| wall));
+    // lists.fill builds each row; the rows themselves still go through map,
+    // because fill(height, row) would alias one row object height times.
+    let grid = (0..height).map(|_| lists.fill(width, wall));
     let rooms: List[Room] = [];
 
     for _ in 0..attempts {
@@ -62,36 +69,30 @@ pub fn generate(width: Int, height: Int, attempts: Int) -> Dungeon {
         let room = Room {
             x: math.rand_int(1, width - w - 2),
             y: math.rand_int(1, height - h - 2),
-            w: w,
-            h: h,
+            w,
+            h,
         };
         if rooms.any(|r| r.intersects(room)) {
-            continue;   // collides with an earlier room: reroll
+            continue; // collides with an earlier room: reroll
         }
         carve_room(grid, room);
         match rooms.last() {
             Some(prev) -> carve_corridor(grid, prev.center(), room.center()),
-            None -> {}
+            None -> {},
         }
         rooms.push(room);
     }
 
     // The player starts in the first room; the treasure goes in whichever
     // room lies farthest from it (by Manhattan distance between centers).
+    // lists.max_by keeps the first winner on ties, exactly like the fold
+    // it replaced, so the same room wins under either implementation.
     let start = rooms.first().unwrap().center();
-    let far = rooms.fold(rooms[0], |best, r| {
-        if manhattan(r.center(), start) > manhattan(best.center(), start) {
-            r
-        } else {
-            best
-        }
-    });
-    Dungeon {
-        grid: grid,
-        rooms: rooms,
-        start: start,
-        treasure: far.center(),
-    }
+    let by_distance = |a: Room, b: Room| {
+        manhattan(a.center(), start) - manhattan(b.center(), start)
+    };
+    let far = lists.max_by(rooms, by_distance).unwrap();
+    Dungeon { grid, rooms, start, treasure: far.center() }
 }
 
 fn manhattan(a: (Int, Int), b: (Int, Int)) -> Int {
@@ -139,31 +140,41 @@ fn carve_v(grid: List[List[String]], y1: Int, y2: Int, x: Int) {
 // Render the grid as printable rows. Wall cells buried in solid rock (no
 // open neighbor in any of the 8 directions) print as blank space, so only
 // the dungeon's outline shows; trailing blanks are trimmed off each row.
+//
+// The 8-neighborhood test is bitwise (v0.7): each row's open cells pack
+// into one Int — bit x set means (y, x) is carved — which caps render at
+// 62 columns wide. Shifting a row left and right and ORing smears every
+// open bit onto its horizontal neighbors; ORing the smeared rows above,
+// at, and below finishes the 3x3 dilation, and one `>> x & 1` then
+// answers "does anything open touch this cell" in O(1).
 pub fn render(grid: List[List[String]]) -> List[String] {
     let height = grid.len();
-    let width = grid[0].len();
-    (0..height).map(|y| {
-        let row = (0..width).map(|x| {
-            if grid[y][x] == wall && !touches_open(grid, y, x) {
-                " "
-            } else {
-                grid[y][x]
-            }
-        });
-        row.join("").trim_end()
-    })
-}
-
-fn touches_open(grid: List[List[String]], y: Int, x: Int) -> Bool {
-    for dy in -1..=1 {
-        for dx in -1..=1 {
-            let ny = y + dy;
-            let nx = x + dx;
-            if ny >= 0 && ny < grid.len() && nx >= 0 && nx < grid[0].len()
-                && grid[ny][nx] != wall {
-                return true;
+    let open = grid.map(|row| {
+        let mut bits = 0;
+        for (x, t) in row.enumerate() {
+            if t != wall {
+                bits = bits | 1 << x;
             }
         }
-    }
-    false
+        bits
+    });
+    let spread = open.map(|bits| bits | bits << 1 | bits >> 1);
+    (0..height).map(|y| {
+        let mut near = spread[y];
+        if y > 0 {
+            near = near | spread[y - 1];
+        }
+        if y < height - 1 {
+            near = near | spread[y + 1];
+        }
+        let b = strings.builder();
+        for (x, t) in grid[y].enumerate() {
+            if t == wall && near >> x & 1 == 0 {
+                b.push(" ");
+            } else {
+                b.push(t);
+            }
+        }
+        b.build().trim_end()
+    })
 }

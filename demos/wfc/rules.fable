@@ -1,12 +1,20 @@
 // rules — learn a wave-function-collapse tile set from an ASCII sample.
 //
-// A tile is a single character. One scan over the sample records:
-//   * every distinct tile, in first-seen order,
-//   * how often each occurs (its weight — used for entropy and sampling),
-//   * which tile was seen next to which, per direction (the adjacency rules).
+// A tile is a single character, given a small integer id in first-seen
+// order. Tile *sets* — the adjacency rules here and every cell's candidate
+// set in wfc.fable — are Int bitmasks (v0.7 bitwise operators): bit t set
+// means tile t is in the set, so intersection is `&`, union is `|`, set
+// size is a popcount, and the whole rule table is one Int per
+// (tile, direction):
 //
-// Fable has no set type, so the rule table (and later each cell's candidate
-// set in wfc.fable) is a Map[String, Bool] used as a set.
+//   allow[a * 4 + d]  =  the set of tiles that may sit in direction d of a.
+//
+// One scan over the sample records every distinct tile, how often it
+// occurs (its weight — used for entropy and sampling), and which tile was
+// seen next to which per direction.
+
+import std.lists;
+import std.strings;
 
 // The four cardinal directions, in the fixed order up, right, down, left.
 // wfc.fable indexes the same tables, so learning and generation agree.
@@ -18,15 +26,24 @@ pub fn dir_name(d: Int) -> String {
     names[d]
 }
 
-pub struct Rules {
-    tiles: List[String],        // distinct tiles, first-seen order
-    weights: Map[String, Int],  // tile -> occurrences in the sample
-    allow: Map[String, Bool],   // set of "a:d:b" — b may sit in direction d of a
+// The number of set bits in a mask — the size of a tile set. Kernighan's
+// loop: `m & (m - 1)` clears the lowest set bit, so it runs once per member.
+pub fn popcount(mask: Int) -> Int {
+    let mut m = mask;
+    let mut n = 0;
+    while m != 0 {
+        m = m & m - 1;
+        n += 1;
+    }
+    n
 }
 
-// The set key for "tile b may appear in direction d of tile a".
-fn key(a: String, d: Int, b: String) -> String {
-    "{a}:{d}:{b}"
+pub struct Rules {
+    tiles: List[String], // tile id -> glyph, first-seen order
+    index: Map[String, Int], // glyph -> tile id
+    weights: List[Int], // tile id -> occurrences in the sample
+    allow: List[Int], // (a * 4 + d) -> bitmask of tiles allowed there
+    all_mask: Int, // the full superposition: (1 << tiles.len()) - 1
 }
 
 pub fn learn(sample: List[String]) -> Rules {
@@ -40,55 +57,76 @@ pub fn learn(sample: List[String]) -> Rules {
         }
     }
 
+    // Pass 1: the tile inventory and weights, ids in first-seen order.
     let tiles: List[String] = [];
-    let weights: Map[String, Int] = {:};
-    let allow: Map[String, Bool] = {:};
+    let index: Map[String, Int] = {:};
+    let weights: List[Int] = [];
+    for row in grid {
+        for a in row {
+            if !index.contains_key(a) {
+                index[a] = tiles.len();
+                tiles.push(a);
+                weights.push(0);
+            }
+            weights[index[a]] += 1;
+        }
+    }
+
+    // Pass 2: for each cell, set the neighbour's bit in the (tile,
+    // direction) mask. (Two passes so every glyph already has its id.)
+    let allow = lists.fill(tiles.len() * 4, 0);
     for (y, row) in grid.enumerate() {
         for (x, a) in row.enumerate() {
-            if !weights.contains_key(a) {
-                tiles.push(a);
-                weights[a] = 0;
-            }
-            weights[a] += 1;
-            // Record the neighbour actually seen in each direction.
+            let ai = index[a];
             for d in 0..4 {
                 let nx = x + dir_dx[d];
                 let ny = y + dir_dy[d];
                 if nx >= 0 && nx < w && ny >= 0 && ny < h {
-                    allow[key(a, d, grid[ny][nx])] = true;
+                    let k = ai * 4 + d;
+                    allow[k] = allow[k] | 1 << index[grid[ny][nx]];
                 }
             }
         }
     }
-    Rules { tiles, weights, allow }
+    Rules { tiles, index, weights, allow, all_mask: (1 << tiles.len()) - 1 }
 }
 
 impl Rules {
-    // May tile `b` sit in direction `d` of tile `a`?
+    // The set of tiles that may sit in direction `d` of tile id `a`.
+    pub fn mask(self, a: Int, d: Int) -> Int {
+        self.allow[a * 4 + d]
+    }
+
+    // May glyph `b` sit in direction `d` of glyph `a`? Contract checks
+    // (spec.fable) speak glyphs, not ids, so they stay representation-free.
     pub fn allowed(self, a: String, d: Int, b: String) -> Bool {
-        self.allow.contains_key(key(a, d, b))
+        self.mask(self.index[a], d) >> self.index[b] & 1 == 1
     }
 
     // Every tile that may sit in direction `d` of `a`, as one string ("~#").
-    pub fn neighbours(self, a: String, d: Int) -> String {
-        let mut out = "";
-        for b in self.tiles {
-            if self.allowed(a, d, b) {
-                out += b;
+    pub fn neighbours(self, a: Int, d: Int) -> String {
+        let out = strings.builder();
+        let m = self.mask(a, d);
+        for (b, glyph) in self.tiles.enumerate() {
+            if m >> b & 1 == 1 {
+                out.push(glyph);
             }
         }
-        out
+        out.build()
     }
 
     // One printable line per tile: its weight and the allowed neighbour
     // set in each direction, e.g.  '#' weight 28  up[~#.] right[~#.] ...
     pub fn describe(self) -> List[String] {
-        self.tiles.map(|t| {
-            let mut line = "'{t}' weight {str(self.weights[t]).pad_left(2, " ")} ";
+        let out: List[String] = [];
+        for (t, glyph) in self.tiles.enumerate() {
+            let line = strings.builder();
+            line.push("'{glyph}' weight {str(self.weights[t]).pad_left(2, " ")} ");
             for d in 0..4 {
-                line += " {dir_name(d)}[{self.neighbours(t, d).pad_right(4, " ")}]";
+                line.push(" {dir_name(d)}[{self.neighbours(t, d).pad_right(4, " ")}]");
             }
-            line
-        })
+            out.push(line.build());
+        }
+        out
     }
 }

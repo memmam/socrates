@@ -1,0 +1,88 @@
+// image — a plasma raster in pure integer math.
+//
+// The classic plasma is sums of sines; libm sines round differently across
+// machines, and this demo pins its PNG byte-for-byte, so the sine here is
+// Bhaskara I's 7th-century rational approximation — exact integer
+// arithmetic, same bytes everywhere, and within 0.2% of the real thing.
+
+import std.strings;
+
+// Integer sine: degrees in, value scaled by 256 out (isin(90) == 256).
+// Bhaskara I: sin(x°) ~ 4x(180-x) / (40500 - x(180-x)) for x in 0..=180.
+pub fn isin(deg: Int) -> Int {
+    let d = (deg % 360 + 360) % 360;
+    let x = if d < 180 { d } else { d - 180 };
+    let p = x * (180 - x);
+    let v = 4 * p * 256 / (40500 - p);
+    if d < 180 { v } else { -v }
+}
+
+// Integer cosine, for free.
+pub fn icos(deg: Int) -> Int {
+    isin(deg + 90)
+}
+
+// Floor of the square root, by Newton's method on integers.
+pub fn isqrt(n: Int) -> Int {
+    if n < 0 {
+        panic("isqrt of negative {n}");
+    }
+    if n < 2 {
+        return n;
+    }
+    let mut x = n;
+    let mut y = (x + 1) / 2;
+    while y < x {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    x
+}
+
+// One channel: an angle in degrees mapped through isin onto 0..255.
+fn chan(deg: Int) -> Int {
+    (isin(deg) + 256) * 255 / 512
+}
+
+// The raster: w*h RGB pixels, row-major, 3 bytes per pixel, no padding.
+// Four interference waves (two axis-aligned, one diagonal, one radial)
+// sum to a phase angle; the color channels read that angle 120 degrees
+// apart, so the palette cycles hue-like through the pattern.
+pub fn plasma(w: Int, h: Int) -> Bytes {
+    let px = bytes(0);
+    for y in 0..h {
+        for x in 0..w {
+            let dx = 2 * x - w;
+            let dy = 2 * y - h;
+            let v = isin(x * 23)
+                + isin(y * 31)
+                + isin((x + y) * 13)
+                + isin(isqrt(dx * dx * 9 + dy * dy * 16) * 7);
+            let a = v * 90 / 256; // -360..360 degrees of phase
+            px.push(chan(a));
+            px.push(chan(a + 120));
+            px.push(chan(a + 240));
+        }
+    }
+    px
+}
+
+// A terminal preview: luma per pixel, darkest '.' to brightest '@',
+// sampling every step-th row so 32 rows fit in a golden block.
+pub fn preview(px: Bytes, w: Int, h: Int, step: Int) -> List[String] {
+    let ramp = ".:-=+*#%@".chars();
+    let rows = [];
+    let mut y = 0;
+    while y < h {
+        let line = strings.builder();
+        for x in 0..w {
+            let i = (y * w + x) * 3;
+            // Integer BT.601-ish luma: (2r + 5g + b) / 8.
+            let luma = (2 * px.get(i) + 5 * px.get(i + 1) + px.get(i + 2)) / 8;
+            line.push(ramp[luma * ramp.len() / 256]);
+        }
+        rows.push(line.build());
+        y += step;
+    }
+    rows
+}

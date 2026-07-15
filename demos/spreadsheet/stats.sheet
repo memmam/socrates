@@ -1,0 +1,15 @@
+# stats.sheet — min/max/avg fed healthy, empty, and poisoned ranges.
+# Column A holds scores, column B the judges, column C is deliberately
+# empty (the "empty range"), and E10 pours a division by zero into an
+# otherwise healthy max(). E11 reads the poisoned cell downstream.
+Score,Judge,,Stat,Value
+7.5,alice,,best,=max(A2:A5)
+9,bob,,worst,=min(A2:A5)
+8.5,carol,,mean,=avg(A2:A5)
+6,dave,,scored,=count(A2:A5)
+,,,words count,=count(B2:B5)
+,,,empty mean,=avg(C2:C5)
+,,,empty best,=min(C2:C5)
+,,,empty tally,=count(C2:C5)
+,,,poisoned best,=max(A2:A5, 1/0)
+,,,downstream,=E10*2

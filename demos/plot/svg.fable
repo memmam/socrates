@@ -2,8 +2,11 @@
 //
 // A Doc accumulates element strings and renders them as one standalone
 // <svg> file. Everything is plain string building: Fable's interpolation
-// ("cx=\"{x}\"") does the heavy lifting, and List[String].join glues the
-// document together at the end.
+// ("cx=\"{x}\"") does the heavy lifting, and a strings.Builder (v0.7)
+// glues the document together — element strings go in as they come,
+// build() concatenates once at the end, O(n) total.
+
+import std.strings;
 
 // Format a coordinate: round to 2 decimals and drop a trailing ".0" so
 // the generated file stays compact ("12.5" and "40", never "40.0").
@@ -19,17 +22,21 @@ pub fn num(v: Float) -> String {
 pub struct Doc {
     width: Int,
     height: Int,
-    parts: List[String],
+    body: strings.Builder,
 }
 
 pub fn doc(width: Int, height: Int) -> Doc {
-    Doc { width: width, height: height, parts: [] }
+    Doc { width, height, body: strings.builder() }
 }
 
 impl Doc {
-    // Escape hatch: append any element verbatim.
+    // Escape hatch: append any element verbatim. Elements are separated by
+    // newlines; Builder.len() is O(1), so "am I the first element?" is free.
     pub fn add(self, element: String) {
-        self.parts.push(element);
+        if self.body.len() > 0 {
+            self.body.push("\n");
+        }
+        self.body.push(element);
     }
 
     pub fn rect(self, x: Float, y: Float, w: Float, h: Float, fill: String) {
@@ -54,9 +61,10 @@ impl Doc {
         self.add("<text x=\"{num(x)}\" y=\"{num(y)}\" font-size=\"{size}\" text-anchor=\"{anchor}\" fill=\"{fill}\" font-family=\"system-ui, sans-serif\">{s}</text>");
     }
 
+    // Non-consuming, like Builder.build(): rendering twice gives the same
+    // document, and elements can still be added afterwards.
     pub fn render(self) -> String {
-        let body = self.parts.join("\n");
         let head = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{self.width}\" height=\"{self.height}\" viewBox=\"0 0 {self.width} {self.height}\">";
-        "{head}\n{body}\n</svg>\n"
+        "{head}\n{self.body.build()}\n</svg>\n"
     }
 }

@@ -1,0 +1,94 @@
+// zlib — an RFC 1950 stream around RFC 1951 *stored* (uncompressed)
+// deflate blocks. Stored blocks are the trapdoor in the spec: a fully
+// valid zlib stream with zero compression machinery — two header bytes,
+// then per block a 3-bit header rounded to a byte, LEN, ~LEN, the raw
+// bytes, and finally the Adler-32 of the uncompressed data.
+
+import bits;
+import crc;
+
+// What inflate_stored recovered, plus what it saw on the way.
+pub struct Inflated {
+    data: Bytes, // the uncompressed payload
+    blocks: Int, // how many stored blocks the stream held
+    adler_ok: Bool, // trailer matched a recomputed Adler-32
+}
+
+// Wrap raw in a zlib stream of stored blocks of at most block_size bytes.
+pub fn deflate_stored(raw: Bytes, block_size: Int) -> Bytes {
+    if block_size < 1 || block_size > 65535 {
+        panic("deflate_stored: block_size {block_size} not in 1..=65535");
+    }
+    let mut out = bytes(0);
+    // CMF 0x78: CM=8 (deflate), CINFO=7. FLG 0x01 makes (CMF<<8|FLG) a
+    // multiple of 31 with FDICT clear and FLEVEL "fastest".
+    out.push(0x78);
+    out.push(0x01);
+    let n = raw.len();
+    let mut pos = 0;
+    while true {
+        let len = (n - pos).min(block_size);
+        let is_final = pos + len == n;
+        // Block header byte: BFINAL is bit 0, BTYPE=00 (stored) is bits 1-2.
+        out.push(if is_final { 1 } else { 0 });
+        out.push_u16le(len);
+        out.push_u16le(len ^ 0xFFFF); // NLEN: one's complement of LEN
+        out = out.concat(raw.slice(pos, pos + len));
+        pos += len;
+        if is_final {
+            break;
+        }
+    }
+    bits.push_u32be(out, crc.adler32(raw)); // trailer is big-endian
+    out
+}
+
+// Undo deflate_stored: walk the blocks, stitch the payload back together,
+// and recompute the Adler-32 against the trailer.
+pub fn inflate_stored(z: Bytes) -> Result[Inflated, String] {
+    if z.len() < 11 {
+        return Err("zlib: stream too short ({z.len()} bytes)");
+    }
+    let cmf = z.get(0);
+    let flg = z.get(1);
+    if cmf & 15 != 8 {
+        return Err("zlib: CM {cmf & 15} is not deflate");
+    }
+    if (cmf << 8 | flg) % 31 != 0 {
+        return Err("zlib: header check failed");
+    }
+    if flg >> 5 & 1 == 1 {
+        return Err("zlib: FDICT set (no preset dictionaries here)");
+    }
+    let mut data = bytes(0);
+    let mut blocks = 0;
+    let mut pos = 2;
+    while true {
+        if pos + 5 > z.len() {
+            return Err("zlib: truncated block header at {pos}");
+        }
+        let header = z.get(pos);
+        if header >> 1 & 3 != 0 {
+            return Err("zlib: block type {header >> 1 & 3} is not stored");
+        }
+        let len = bits.read_u16le(z, pos + 1);
+        let nlen = bits.read_u16le(z, pos + 3);
+        if len ^ nlen != 0xFFFF {
+            return Err("zlib: LEN/NLEN mismatch in block {blocks}");
+        }
+        if pos + 5 + len > z.len() {
+            return Err("zlib: block {blocks} runs past end of stream");
+        }
+        data = data.concat(z.slice(pos + 5, pos + 5 + len));
+        blocks += 1;
+        pos += 5 + len;
+        if header & 1 == 1 {
+            break;
+        }
+    }
+    if pos + 4 != z.len() {
+        return Err("zlib: {z.len() - pos - 4} trailing bytes after adler");
+    }
+    let adler_ok = bits.read_u32be(z, pos) == crc.adler32(data);
+    Ok(Inflated { data, blocks, adler_ok })
+}

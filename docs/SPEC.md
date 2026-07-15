@@ -670,7 +670,7 @@ Method calls are type-directed (resolved at compile time from the receiver's typ
 `insert(Int, T) -> Unit`, `remove(Int) -> T` (panics OOB),
 `get(Int) -> Option[T]`, `first() -> Option[T]`, `last() -> Option[T]`,
 `contains(T) -> Bool`, `index_of(T) -> Option[Int]`,
-`reverse() -> List[T]` (returns new), `reversed` alias — **no**, only `reverse`,
+`reverse() -> List[T]` (returns new; there is no `reversed` alias),
 `sort() -> List[T]` (returns a new sorted list; elements must be Int/Float/String —
 a concrete violation is a compile error E0322, and a violation reached through a
 generic type parameter panics at runtime), `sort_by(fn(T, T) -> Int) -> List[T]` (comparator returns
@@ -711,7 +711,9 @@ except that the empty pattern matches at the end),
 `trim() -> String`, `trim_start() -> String`, `trim_end() -> String`
 (Unicode whitespace; v0.6 added the one-sided pair), `parse_int() -> Option[Int]`
 (optional sign, decimal only, no surrounding spaces),
-`parse_float() -> Option[Float]`, `to_string() -> String` (identity).
+`parse_float() -> Option[Float]`, `to_string() -> String` (identity),
+`to_bytes() -> Bytes` (the UTF-8 encoding; the inverse bridge is
+`Bytes.utf8()`, § 8.4b).
 
 ### 8.4 `Map[K, V]` methods
 
@@ -742,8 +744,10 @@ mutating a key afterward strands the entry, as with other mutable keys.
 ### 8.4c `Worker` methods (v0.7)
 
 A `Worker` is the parent's handle to a spawned isolate (§ 7, the `worker`
-namespace). It displays as `<worker>`, cannot be compared with `==` or
-ordered, and cannot be a map key.
+namespace). `Worker` is a nameable type usable in signatures and
+annotations (`fn spawn_pool(n: Int) -> List[Worker]`). It displays as
+`<worker>`, cannot be compared with `==` or ordered, and cannot be a
+map key.
 
 `send(String) -> Bool` (`false` once the worker has finished),
 `recv() -> Option[String]` (**blocks**; `None` means the worker finished

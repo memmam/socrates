@@ -2,6 +2,8 @@
 // memoizing evaluator with cycle detection, and the ASCII renderer.
 
 import formula;
+import std.lists;
+import std.set;
 import std.strings;
 
 // What was typed into a cell.
@@ -9,11 +11,11 @@ pub enum Content {
     Number(Float),
     Words(String),
     Formula(formula.Expr),
-    Broken(String),          // a formula that failed to parse (the message)
+    Broken(String), // a formula that failed to parse (the message)
 }
 
 pub struct Cell {
-    raw: String,             // the original text, e.g. "=B2*C2"
+    raw: String, // the original text, e.g. "=B2*C2"
     content: Content,
 }
 
@@ -22,24 +24,24 @@ pub enum Value {
     Num(Float),
     Text(String),
     Blank,
-    Bad(String),             // an error code such as "#CYCLE!" or "#DIV/0!"
+    Bad(String), // an error code such as "#CYCLE!" or "#DIV/0!"
 }
 
 pub struct Sheet {
-    cells: Map[String, Cell],    // "B2" -> cell (only non-empty cells)
+    cells: Map[String, Cell], // "B2" -> cell (only non-empty cells)
     n_cols: Int,
     n_rows: Int,
-    cache: Map[String, Value],   // memoized results
-    busy: Map[String, Bool],     // cells currently being evaluated (cycle detection)
+    cache: Map[String, Value], // memoized results
+    busy: set.Set[String], // cells currently being evaluated (cycle detection)
 }
 
 pub fn empty() -> Sheet {
-    Sheet { cells: {:}, n_cols: 0, n_rows: 0, cache: {:}, busy: {:} }
+    Sheet { cells: {:}, n_cols: 0, n_rows: 0, cache: {:}, busy: set.new() }
 }
 
 // ---------------------------------------------------------------- addresses
 
-let a_code = 65;    // "A".code_at(0), the start of the column alphabet
+let a_code = 65; // "A".code_at(0), the start of the column alphabet
 
 fn col_name(col: Int) -> String {
     char(a_code + col)
@@ -72,8 +74,12 @@ fn split_fields(line: String) -> List[String] {
     let mut cur = "";
     let mut depth = 0;
     for c in line {
-        if c == "(" { depth += 1; }
-        if c == ")" { depth -= 1; }
+        if c == "(" {
+            depth += 1;
+        }
+        if c == ")" {
+            depth -= 1;
+        }
         if c == "," && depth == 0 {
             fields.push(cur);
             cur = "";
@@ -130,7 +136,7 @@ impl Sheet {
             Some((col, row)) -> {
                 self.n_cols = math.max(self.n_cols, col + 1);
                 self.n_rows = math.max(self.n_rows, row + 1);
-            }
+            },
             None -> panic("bad cell address '{a}'"),
         }
         self.cells[a] = Cell { raw: text, content: classify(text) };
@@ -140,16 +146,17 @@ impl Sheet {
     // The value of the cell at `a`, memoized. Cycle detection is the
     // classic tri-state walk: a cell is *busy* from the moment we start
     // computing it until its value lands in the cache, so meeting a busy
-    // cell again means the references loop back on themselves.
+    // cell again means the references loop back on themselves. The busy
+    // set is a std.set, and `insert` reporting "already there" IS the
+    // cycle check — marking and detecting are one operation.
     pub fn value_of(self, a: String) -> Value {
         match self.cache.get(a) {
             Some(v) -> return v,
-            None -> {}
+            None -> {},
         }
-        if self.busy.get(a).unwrap_or(false) {
+        if !self.busy.insert(a) {
             return Value.Bad("#CYCLE!");
         }
-        self.busy[a] = true;
         let v = match self.cells.get(a) {
             None -> Value.Blank,
             Some(cell) -> match cell.content {
@@ -171,7 +178,7 @@ impl Sheet {
                 Some(_) -> self.value_of(a),
                 None -> Value.Bad("#REF!"),
             },
-            Rng(_, _) -> Value.Bad("#VALUE!"),   // a bare range needs sum()/avg()/...
+            Rng(_, _) -> Value.Bad("#VALUE!"), // a bare range needs sum()/avg()/...
             Neg(x) -> match self.as_num(self.eval(x)) {
                 Ok(n) -> Value.Num(0.0 - n),
                 Err(bad) -> bad,
@@ -199,12 +206,13 @@ impl Sheet {
         match (self.as_num(lv), self.as_num(rv)) {
             (Err(bad), _) -> bad,
             (_, Err(bad)) -> bad,
-            (Ok(l), Ok(r)) ->
-                if op == "+" { Value.Num(l + r) }
-                else if op == "-" { Value.Num(l - r) }
-                else if op == "*" { Value.Num(l * r) }
-                else if r == 0.0 { Value.Bad("#DIV/0!") }
-                else { Value.Num(l / r) },
+            (Ok(l), Ok(r)) -> if op == "+" {
+                Value.Num(l + r)
+            } else if op == "-" {
+                Value.Num(l - r)
+            } else if op == "*" {
+                Value.Num(l * r)
+            } else if r == 0.0 { Value.Bad("#DIV/0!") } else { Value.Num(l / r) },
         }
     }
 
@@ -224,8 +232,8 @@ impl Sheet {
                 match v {
                     Num(n) -> nums.push(n),
                     Bad(code) -> return Err(Value.Bad(code)),
-                    Text(_) -> {}
-                    Blank -> {}
+                    Text(_) -> {},
+                    Blank -> {},
                 }
             }
         }
@@ -246,17 +254,26 @@ fn span(a: String, b: String) -> Option[List[String]] {
     Some(addrs)
 }
 
+// `sum` and `count` have identities (0), so an empty range is fine; `avg`,
+// `min` and `max` need at least one number, so an empty range is #VALUE!.
+// std.lists says the same thing with Option: min_float/max_float return
+// None for [], which maps straight onto the error.
 fn aggregate(name: String, nums: List[Float]) -> Value {
-    let n = nums.len().to_float();
-    let total = nums.fold(0.0, |acc, x| acc + x);
     match name {
-        "count" -> Value.Num(n),
-        "sum" -> Value.Num(total),
-        "avg" | "min" | "max" if nums.is_empty() -> Value.Bad("#VALUE!"),
-        "avg" -> Value.Num(total / n),
-        "min" -> Value.Num(nums.fold(nums[0], |acc, x| math.min_float(acc, x))),
-        "max" -> Value.Num(nums.fold(nums[0], |acc, x| math.max_float(acc, x))),
+        "count" -> Value.Num(nums.len().to_float()),
+        "sum" -> Value.Num(lists.sum_float(nums)),
+        "avg" if nums.is_empty() -> Value.Bad("#VALUE!"),
+        "avg" -> Value.Num(lists.sum_float(nums) / nums.len().to_float()),
+        "min" -> need_one(lists.min_float(nums)),
+        "max" -> need_one(lists.max_float(nums)),
         _ -> Value.Bad("#NAME?"),
+    }
+}
+
+fn need_one(extreme: Option[Float]) -> Value {
+    match extreme {
+        Some(v) -> Value.Num(v),
+        None -> Value.Bad("#VALUE!"),
     }
 }
 
@@ -288,16 +305,18 @@ impl Sheet {
         }
     }
 
-    // The whole grid as an aligned ASCII table. Each column is as wide as
-    // its widest value; numbers and errors align right, words align left.
+    // The whole grid as an aligned ASCII table, accumulated in a
+    // strings.Builder (a += loop would recopy the grid per line). Each
+    // column is as wide as its widest value; numbers and errors align
+    // right, words align left.
     pub fn render(self) -> String {
         let widths: List[Int] = [];
         for c in 0..self.n_cols {
-            let mut w = 1;
+            let lens = [1]; // a column is at least as wide as its name
             for r in 0..self.n_rows {
-                w = math.max(w, self.display(addr(c, r)).len());
+                lens.push(self.display(addr(c, r)).len());
             }
-            widths.push(w);
+            widths.push(lists.max(lens).unwrap_or(1));
         }
 
         let label_w = str(self.n_rows).len();
@@ -308,7 +327,10 @@ impl Sheet {
             rule.push("-".repeat(widths[c]));
         }
 
-        let lines = [head.join(" | ").trim_end(), rule.join("-+-")];
+        let out = strings.builder();
+        out.push(head.join(" | ").trim_end());
+        out.push("\n");
+        out.push(rule.join("-+-"));
         for r in 0..self.n_rows {
             let row = [str(r + 1).pad_left(label_w, " ")];
             for c in 0..self.n_cols {
@@ -320,28 +342,40 @@ impl Sheet {
                 row.push(cell);
             }
             // Trailing spaces are trimmed so golden tests stay readable.
-            lines.push(row.join(" | ").trim_end());
+            out.push("\n");
+            out.push(row.join(" | ").trim_end());
         }
-        strings.join_lines(lines)
+        out.build()
     }
 
-    // Row-major "show your work" listing of every formula cell.
-    pub fn formulas(self) -> List[String] {
-        let out: List[String] = [];
+    // Row-major "show your work" report of every formula cell, one per
+    // line — built once, in a Builder, instead of a list of lines. Empty
+    // string when the sheet holds no formulas at all.
+    pub fn formulas(self) -> String {
+        let out = strings.builder();
         for r in 0..self.n_rows {
             for c in 0..self.n_cols {
                 let a = addr(c, r);
-                match self.cells.get(a) {
+                let line = match self.cells.get(a) {
                     Some(cell) -> match cell.content {
-                        Formula(_) -> out.push(report(a, cell.raw, self.display(a))),
-                        Broken(msg) -> out.push(report(a, cell.raw, "#PARSE! ({msg})")),
-                        _ -> {}
+                        Formula(_) -> Some(report(a, cell.raw, self.display(a))),
+                        Broken(msg) -> Some(report(a, cell.raw, "#PARSE! ({msg})")),
+                        _ -> None,
                     },
-                    None -> {}
+                    None -> None,
+                };
+                match line {
+                    Some(text) -> {
+                        if out.len() > 0 {
+                            out.push("\n");
+                        }
+                        out.push(text);
+                    },
+                    None -> {},
                 }
             }
         }
-        out
+        out.build()
     }
 }
 

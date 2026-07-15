@@ -19,14 +19,17 @@ select <cols>                          -- columns, '*', count, sum/avg/min/max <
 Values in `where` are numbers, bare words, or `'single quoted text'` (for
 values with spaces: `where country == 'United States'`). Operators need
 surrounding spaces. Without `group by`, aggregates fold the whole result
-into one row; with it, `order by` names an *output* column.
+into one row; with it, `order by` names an *output* column. `sum`/`avg`
+need a numeric column; `min`/`max` take any column — over text they pick
+the lexically first/last cell, so `min city group by country` is each
+country's alphabetically first city.
 
 ## Run it
 
 From the repo root:
 
 ```
-./target/release/fable demos/csvql/main.fable            # 8 showcase queries
+./target/release/fable demos/csvql/main.fable           # 12 showcase queries
 ./target/release/fable demos/csvql/main.fable \
     "select city, pop where continent == Asia order by pop desc limit 3"
 ./target/release/fable test demos/csvql                  # golden tests
@@ -78,3 +81,14 @@ lexer's closing quote, and `os.exit` in a value position (main.fable no
 longer needs a dead `panic("unreachable")` after it). `Val.show`
 deliberately skips v0.6's `to_fixed`, which would keep trailing zeros
 ("7.00") that csvql's tables drop ("7").
+
+v0.7 modernization: the report renderer accumulates the whole table in
+one `strings.Builder` (a `+=` loop recopies the report so far on every
+cell, O(n²) in the output; the builder joins once), and the aggregate
+folds run on `std.lists` — `sum`/`avg` through `lists.sum_float`, and
+`min`/`max` through `lists.min_by`/`lists.max_by` with `Val.cmp` as the
+comparator. That last change is also a feature: because `min_by` orders
+whole cells instead of raw floats, `min`/`max` now work on text columns
+(`select country, min city, max city group by country`), and the
+stdlib's documented first-winner tie rule keeps the output
+deterministic. Column widths use `lists.max` over the shown cells.

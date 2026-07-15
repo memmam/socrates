@@ -120,3 +120,73 @@ diff itself. Confirmed findings, all fixed in the same release:
   ops/sec); map lookups with interpolated string keys measured at ~0.36s
   per million — composite string keys are a fine idiom.
 - Everything above survives `FABLE_GC_STRESS=1` byte-identically.
+
+---
+
+## The v0.7 round
+
+The process re-ran against **v0.7** (the infrastructure release): six new
+demos exercising Bytes/FFT/workers/bitwise/std-collections, plus a
+modernization pass over all eleven existing demos — seventeen independent
+authors, seventeen adversarial verifiers, every demo green under GC stress
+before integration. Distilled best practices: [`STYLE.md`](STYLE.md).
+
+### Bugs — fixed in-round
+
+| Issue | Reported by | Fix |
+|-------|-------------|-----|
+| Method call on a module-qualified `pub let` member misresolved as an enum path (`m.answer.to_float()` → E0413 "no enum `answer`"; parens didn't help) | synthwave, checkers | The `alias.Enum.Variant` special case now falls through to ordinary field/method dispatch when the middle segment is a value member; E0413 fires only when it is neither. Regression: `tests/spec/module_system/module_member_methods.fable` |
+| `worker.spawn` resolved relative files against the wrong directory whenever the entry script had any import (base came from `sources[0]` = first *loaded* module) | swarm | `Vm.entry_dir` is now set explicitly by every runner; spawn resolves against the true entry script's directory. Regression: `tests/spec/workers/spawn_with_import.fable` |
+| `fable fmt` silently formatted only its first file argument (exit 0, no diagnostic) | synthwave, reversi, spreadsheet, csvql | `fable fmt [-w] [--width N] <file>...` now formats every argument |
+| The formatter evicted comments living inside bracketed literals, dumping them orphaned after the statement | reversi, regex, csvql | Interior comments now pin the broken element-per-line layout with each comment kept in place — which is also the official escape hatch for meaning-bearing 2-D layout (wfc's training samples) |
+| Value-position `if/else-if` chains broke despite fitting in 100 columns, and asymmetrically (first branch blockified, rest inline) | synthwave, reversi, csvql | Chains that fit stay on one line; chains that don't break all branches consistently |
+
+### The feature queue (deduplicated, by demand)
+
+Reported as missing by independent authors; counts are distinct demos.
+These are the v0.8 candidates, roughly in order of observed pain:
+
+- **Bit intrinsics** (×5: bloom, dungeon, sudoku, wfc, reversi):
+  `count_ones`/`trailing_zeros`/`leading_zeros` on Int. Every bit-heavy
+  demo hand-rolls SWAR popcount and binary-search ctz, and the classic
+  shortcuts (`x & -x`, multiply folds) panic under checked overflow.
+- **Bytes readers + BE + bulk append** (×5: synthwave, png ×2, bloom,
+  regex): the LE pushers have no matching readers; big-endian formats
+  (PNG) hand-roll everything; no `push_bytes`/`push_str` bulk append
+  (concat is O(total) per join), no 64-bit accessors.
+- **Logical right shift** (×3: reversi, sudoku, checkers-docs): `>>` is
+  arithmetic; unsigned-bitfield code re-masks after every shift, and the
+  obvious mask `(1 << 64 - k) - 1` panics at k = 1. A `>>>` operator or
+  `ushr` intrinsic; `reversi/bits.fable` is the interim reference.
+- **Bitwise compound assignment** (×3: reversi, sudoku, wfc): `|=` `&=`
+  `^=` `<<=` `>>=` to match the arithmetic set.
+- **`while let` / `if let`** (×3: dungeon, mdsite, parmandel): the
+  deque-drain and worker-recv loops force an `is_empty`+`unwrap` or
+  6-line `while true { match ... }` dance.
+- **Hex** (×3: png, bloom + literals in reversi): no `to_hex`, no hex
+  `parse_int`, and Int literals can't express bit patterns ≥ 2⁶³
+  (`0x8080808080808080` is unwritable; reversi builds masks by shifting).
+- **Builder ergonomics** (×3: spreadsheet, mdsite, plot): `is_empty()`,
+  a separator-aware `build(sep)`/join mode.
+- **fft magnitude helper** (×2: spectra, plot): every rfft consumer
+  writes the same `re.zip(im).map(|p| ...)` power/magnitude line.
+- Singles worth noting: worker `try_recv`/select (swarm — the dynamic
+  scheduler workaround is documented in its README), `lists` key-based
+  `max_by_key` (spectra), `fable test --bless` re-pinning mode (bloom),
+  module-level constants / lazy statics (lisp), a counting-map helper
+  (checkers), `Range.all/any` (sudoku), 32-bit wrapping multiply for
+  hash finalizers (bloom), ergonomic `std.json` construction (swarm).
+
+### Warts acknowledged, working as intended (documented instead)
+
+- Named `fn` declarations always take block bodies under the formatter;
+  the "fits stays flat" rule applies to expressions, not items (SPEC).
+- A call whose single argument is an over-width string literal stays on
+  one over-width line rather than breaking pointlessly (fmt keeps
+  "never split a token" and doesn't wrap what wrapping can't fix).
+- `import std.lists` binds the name `lists` (the final segment), per the
+  module system's normal rule; SPEC prose spells it `std.lists` when
+  naming the module path. A targeted diagnostic for `std.X` is queued.
+- Seeded `math.seed` streams remain stable within a release only —
+  corpora that must outlive releases belong to hand-rolled PRNGs
+  (STYLE.md § 2).

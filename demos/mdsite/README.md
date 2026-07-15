@@ -4,7 +4,7 @@ A small, complete static site generator: it reads Markdown pages from
 `content/`, converts them to HTML with a hand-written line-based
 converter, wraps each page in a shared template whose navigation bar is
 generated from the page list, writes the finished site to `out/`, and
-prints a build report. About 450 lines of Fable across four files.
+prints a build report. About 500 lines of Fable across four files.
 
 ## Run it
 
@@ -31,7 +31,14 @@ mdsite: building 3 pages  content/ -> out/
   hello-fable.md   Hello, Fable          178   2978
 
   wrote 3 pages, 8342 bytes of HTML
+  3/3 pages byte-identical to the committed out/
 ```
+
+The last line is a regeneration check: before overwriting each page the
+builder reads the committed bytes back (`fs.read_bytes`, v0.7) and
+compares them to the fresh render — `Bytes` equality is structural — so
+the golden test pins that a fresh build reproduces the committed site
+byte for byte, not just byte counts.
 
 And an excerpt of the HTML it produces (`out/about.html`):
 
@@ -67,7 +74,9 @@ And an excerpt of the HTML it produces (`out/about.html`):
 | slugs and extensions | `std.path` (`ext`, `strip_ext`, `join`) |
 | line splitting, word counts | `std.strings` (`lines`, `words`) |
 | inline-markup scanning | a char-index cursor over the string itself: `index_of_from` / `slice` (before v0.6 this needed hand-rolled `matches_at`/`find_at` helpers over an exploded char list); missing delimiters propagate via `?` inside `parse_link` |
-| HTML assembly | `List[String]` + `join` — string building without quadratic concatenation |
+| HTML assembly | `strings.Builder` (v0.7) everywhere strings grow in a loop — escaping, the inline scanner, the block state machine, the page shell; O(n) where `+=` would be O(n²) (before v0.7: `List[String]` + `join`) |
+| slug collisions | `std.set` (v0.7): `insert` reports whether the slug was new, so two sources can never silently claim one output file |
+| output pinning | `fs.read_bytes` + structural `Bytes` equality (v0.7): each committed page is compared byte-for-byte against the fresh render |
 | page ordering / nav | `sort_by` with a key function that pins `index` first |
 
 Files:
@@ -77,5 +86,8 @@ Files:
 - `site.fable` — the `Page` struct, nav builder, HTML shell, and CSS
 - `main.fable` — the driver and build report; its full output is pinned
   by `//? expect:` directives
-- `spec.fable` — 22 golden checks for the converter, including edge
-  cases (unclosed delimiters, `#######`, unterminated fences)
+- `spec.fable` — 25 golden checks for the converter, including edge
+  cases (unclosed delimiters, `#######`, unterminated fences, and the
+  accumulator edges pinned across the v0.7 Builder refactor: the empty
+  document, spans crossing joined paragraph lines, a code block whose
+  first line is blank)

@@ -7,20 +7,32 @@
 
 import syntax;
 
-// Character-class membership: inside any range, flipped when negated.
-fn in_class(ranges: List[(String, String)], neg: Bool, c: String) -> Bool {
-    let hit = ranges.any(|r| {
-        let (lo, hi) = r;
-        lo <= c && c <= hi
-    });
-    hit != neg
+// Character-class membership. Code points 0..255 are one bit in the
+// class's 256-bit bitmap (built once at compile time): byte c >> 3, mask
+// bit c & 7 — two shifts and a mask on the hot path, however many ranges
+// the class was written with. `>>` is arithmetic, so the & 1 after it
+// matters: byte values with bit 7 set would otherwise sign-extend... they
+// don't here (a byte is 0..255), but the mask also isolates the one bit we
+// shifted down. Code points above 255 fall back to the class's leftover
+// ranges. `neg` flips the verdict.
+fn in_class(set: syntax.CharSet, ch: String) -> Bool {
+    let c = ch.code_at(0).unwrap();
+    let hit = if c < 256 {
+        set.bits.get(c >> 3) >> (c & 7) & 1 == 1
+    } else {
+        set.hi.any(|r| {
+            let (lo, hi) = r;
+            lo <= c && c <= hi
+        })
+    };
+    hit != set.neg
 }
 
 fn walk(n: syntax.Ast, cs: List[String], pos: Int, k: fn(Int) -> Bool) -> Bool {
     match n {
         Char(c) -> pos < cs.len() && cs[pos] == c && k(pos + 1),
         Any -> pos < cs.len() && k(pos + 1),
-        Class(ranges, neg) -> pos < cs.len() && in_class(ranges, neg, cs[pos]) && k(pos + 1),
+        Class(set) -> pos < cs.len() && in_class(set, cs[pos]) && k(pos + 1),
         Start -> pos == 0 && k(pos),
         End -> pos == cs.len() && k(pos),
         Seq(parts) -> walk_seq(parts, 0, cs, pos, k),
@@ -32,7 +44,13 @@ fn walk(n: syntax.Ast, cs: List[String], pos: Int, k: fn(Int) -> Bool) -> Bool {
 }
 
 // Concatenation: match parts[i] here, then — wherever it ends — the rest.
-fn walk_seq(parts: List[syntax.Ast], i: Int, cs: List[String], pos: Int, k: fn(Int) -> Bool) -> Bool {
+fn walk_seq(
+    parts: List[syntax.Ast],
+    i: Int,
+    cs: List[String],
+    pos: Int,
+    k: fn(Int) -> Bool,
+) -> Bool {
     if i == parts.len() {
         k(pos)
     } else {
@@ -52,11 +70,37 @@ pub fn find(re: syntax.Ast, text: String) -> Option[(Int, Int)] {
     let cs = text.chars();
     let mut hit = 0;
     for start in 0..=cs.len() {
-        if walk(re, cs, start, |end| { hit = end; true }) {
+        if walk(re, cs, start, |end| {
+            hit = end;
+            true
+        }) {
             return Some((start, hit));
         }
     }
     None
+}
+
+// Every non-overlapping match, left to right: the leftmost match, then the
+// next one starting at or after its end — repeated `find`s without the
+// rescans. A zero-width match advances the scan by one character so the
+// loop always terminates (so /x*/ on "yyy" yields (0,0) (1,1) (2,2) (3,3)).
+pub fn find_all(re: syntax.Ast, text: String) -> List[(Int, Int)] {
+    let cs = text.chars();
+    let spans: List[(Int, Int)] = [];
+    let mut start = 0;
+    while start <= cs.len() {
+        let mut hit = 0;
+        if walk(re, cs, start, |end| {
+            hit = end;
+            true
+        }) {
+            spans.push((start, hit));
+            start = if hit > start { hit } else { start + 1 };
+        } else {
+            start += 1;
+        }
+    }
+    spans
 }
 
 // Does the pattern match anywhere in the text? Anchor with ^ and $ to

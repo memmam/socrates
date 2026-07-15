@@ -27,7 +27,7 @@ fn run_source(src: String) -> Result[List[String], String] {
         match try(|| interp.eval(form, env)) {
             Err(msg) -> return Err("panic: {msg}"),
             Ok(Err(msg)) -> return Err(msg),
-            Ok(Ok(Void)) -> {}   // definitions print nothing
+            Ok(Ok(Void)) -> {}, // definitions print nothing
             Ok(Ok(v)) -> results.push(interp.show(v)),
         }
     }
@@ -39,7 +39,7 @@ fn show_program(name: String) -> Result[Unit, String] {
     println("");
     println(";;; {name}");
     for line in strings.lines(src) {
-        println("    {line}".trim_end());   // blank lines stay blank, not "    "
+        println("    {line}".trim_end()); // blank lines stay blank, not "    "
     }
     for r in run_source(src)? {
         println("=> {r}");
@@ -49,13 +49,13 @@ fn show_program(name: String) -> Result[Unit, String] {
 
 println("mini-lisp, a Lisp interpreter written in Fable");
 
-for name in ["factorial.lisp", "fib.lisp", "map.lisp", "adder.lisp", "loop.lisp"] {
+for name in ["factorial.lisp", "fib.lisp", "map.lisp", "adder.lisp", "loop.lisp", "let.lisp"] {
     match show_program(name) {
-        Ok(_) -> {}
+        Ok(_) -> {},
         Err(e) -> {
             println("lisp: {e}");
             os.exit(1);
-        }
+        },
     }
 }
 
@@ -135,5 +135,24 @@ match run_source("(car (quote ()))") {
 //? expect:
 //? expect:     (sum-to 100000 0)
 //? expect: => 5000050000
+//? expect:
+//? expect: ;;; let.lisp
+//? expect:     ; let binds locals in parallel: every expr is evaluated in the
+//? expect:     ; enclosing scope, then the body sees all the names at once.
+//? expect:     (define (dist2 x1 y1 x2 y2)
+//? expect:       (let ((dx (- x2 x1))
+//? expect:             (dy (- y2 y1)))
+//? expect:         (+ (* dx dx) (* dy dy))))
+//? expect:
+//? expect:     (dist2 0 0 3 4)
+//? expect:
+//? expect:     ; parallel, not sequential: this (+ x 1) sees the OUTER x (10),
+//? expect:     ; not the freshly bound 100.
+//? expect:     (define x 10)
+//? expect:     (let ((x (* x x))
+//? expect:           (y (+ x 1)))
+//? expect:       (list x y))
+//? expect: => 25
+//? expect: => (100 11)
 //? expect:
 //? expect: error demo: (car (quote ())) -> error: car of empty list

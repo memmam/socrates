@@ -5,15 +5,18 @@ Fable. From one small hand-drawn ASCII sample the demo learns which tiles
 may sit next to which (and how often each tile occurs), then synthesises
 larger textures that obey the same local rules:
 
-1. every output cell starts in *superposition* — the set of all tiles,
-   kept as a `Map[String, Bool]` used as a set (Fable has no set type);
+1. every output cell starts in *superposition* — the set of all tiles.
+   Tiles get small integer ids, so a tile set is an `Int` **bitmask**
+   (v0.7 bitwise operators): membership is a shift-and-mask, set size is
+   a popcount, intersection is `&`;
 2. the undecided cell with the lowest Shannon entropy (weighted by sample
    frequency, plus a pinch of random noise to break ties) is **collapsed**
-   to a single weighted-random tile;
-3. the change is **propagated** as arc consistency: neighbours drop
-   candidates that no longer have support, and every cell that shrinks is
-   re-queued to constrain its own neighbours;
-4. a cell with no candidates left is a **contradiction** — the attempt is
+   to a single weighted-random tile (`1 << t`);
+3. the change is **propagated** as arc consistency: a neighbour's new
+   candidate set is one `&` against the union of its supporters'
+   allow-masks, and every cell that shrinks is re-queued (a `std.deque`)
+   to constrain its own neighbours;
+4. a cell whose mask reaches `0` is a **contradiction** — the attempt is
    abandoned and generation restarts with the next seed.
 
 Everything is driven by `math.seed`, so each seed is a reproducible
@@ -71,19 +74,23 @@ the demo to see it.)
 | File | Role |
 |------|------|
 | `samples.fable` | the two hand-drawn training patterns, shared by main and spec |
-| `rules.fable` | learning: tile inventory, weights, and the per-direction adjacency set (`"a:d:b"` keys in a map-as-set), plus the printable tile-set description |
-| `wfc.fable` | the core loop: entropy bookkeeping, weighted collapse, arc-consistency propagation over a queue, restart-on-contradiction |
+| `rules.fable` | learning: tile inventory, weights, and the adjacency table — one bitmask per (tile, direction) in a flat `List[Int]` — plus `popcount` and the printable tile-set description |
+| `wfc.fable` | the core loop: cached entropy bookkeeping, weighted collapse, arc-consistency propagation over a `std.deque`, restart-on-contradiction |
 | `main.fable` | seeds, prints sample / learned rules / textures, and pins the full output with `//? expect:` directives |
-| `spec.fable` | component golden tests: learned rules on a tiny sample, zero rule violations in generated output, same-seed determinism, and a provably impossible tile set that must exhaust its seed budget |
+| `spec.fable` | component golden tests: learned rules on a tiny sample, the bitmask rule table (all_mask, per-direction masks, popcount, forward/backward mask consistency), zero rule violations in generated output, same-seed determinism, and a provably impossible tile set that must exhaust its seed budget |
 
 Notes on the algorithm:
 
 - Entropy of a candidate set is `ln(Σw) − (Σ w·ln w)/Σw` — a cell whose
   remaining options are all rare tiles is "nearly decided" and collapses
-  before a cell that could still be anything.
-- Propagation is a breadth-first worklist (a list plus a read cursor).
-  A neighbour keeps a candidate only while at least one of the source
-  cell's candidates supports it in that direction.
+  before a cell that could still be anything. Entropy is cached per cell
+  and refreshed only when propagation actually shrinks a mask, so the
+  selection scan is O(cells) instead of O(cells × tiles).
+- Propagation is breadth-first over a `std.deque`. A neighbour's new
+  candidate set is `cells[j] & support`, where `support` is the union
+  (`|`) of `allow[s * 4 + d]` over the source cell's candidates `s` —
+  the whole per-tile "does anything support you?" loop of the map-based
+  version collapses into two bitwise operations.
 - `generate(rules, w, h, seed, max_tries)` reseeds with `seed + attempt`
   on each contradiction and returns `None` only when the budget runs out —
   `spec.fable` exercises that path with rules learned from the single row
@@ -91,3 +98,7 @@ Notes on the algorithm:
   `math.seed` scrambles its argument, so the adjacent seeds these retries
   use produce genuinely independent streams — under v0.5 they collided,
   which made a retry mostly replay the failed attempt.)
+- The v0.7 rewrite (map-as-set → bitmasks, entropy cache, `std.deque`
+  queue, `strings.Builder` rendering) kept the RNG call order — and
+  therefore every pinned texture — byte-identical, while making the
+  main generation about 5x faster and an 80x40 island about 6.7x faster.

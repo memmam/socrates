@@ -3,7 +3,13 @@
 // (y1 exclusive). Run directly (not as a worker) it does nothing, so the
 // golden harness passes it through.
 
-fn cell(px: Int, py: Int, w: Int, h: Int) -> String {
+import std.strings;
+
+// The palette char code for one pixel: iterate z = z^2 + c until escape,
+// then map the iteration count onto " .:-=+*#%@" (interior points get '@').
+// Returns a char *code* so the row loop can strings.Builder.push_char it —
+// no one-character string allocated per pixel.
+fn cell(px: Int, py: Int, w: Int, h: Int) -> Int {
     let x0 = -2.2 + 3.0 * px.to_float() / w.to_float();
     let y0 = -1.2 + 2.4 * py.to_float() / h.to_float();
     let mut x = 0.0;
@@ -20,12 +26,8 @@ fn cell(px: Int, py: Int, w: Int, h: Int) -> String {
         it += 1;
     }
     let palette = " .:-=+*#%@";
-    if it == max {
-        "@"
-    } else {
-        let idx = it * (palette.len() - 1) / max;
-        palette.chars()[idx]
-    }
+    let idx = if it == max { palette.len() - 1 } else { it * (palette.len() - 1) / max };
+    palette.code_at(idx).unwrap()
 }
 
 if worker.is_worker() {
@@ -34,11 +36,14 @@ if worker.is_worker() {
     let h = args[1].parse_int().unwrap();
     let y0 = args[2].parse_int().unwrap();
     let y1 = args[3].parse_int().unwrap();
+    // One Builder, cleared per row: += on a String in a loop recopies the
+    // accumulated prefix every character (O(w^2) per row); this is O(w).
+    let row = strings.builder();
     for py in y0..y1 {
-        let mut row = "";
+        row.clear();
         for px in 0..w {
-            row += cell(px, py, w, h);
+            row.push_char(cell(px, py, w, h));
         }
-        worker.send(row);
+        worker.send(row.build());
     }
 }

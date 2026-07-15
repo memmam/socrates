@@ -3,6 +3,8 @@
 // The reader knows nothing about evaluation. `(foo 1 2)` is just
 // Form([Sym("foo"), Num(1), Num(2)]); giving it meaning is eval's job.
 
+import std.strings;
+
 // An s-expression — the one shape all of Lisp is made of.
 pub enum Sexp {
     Num(Int),
@@ -12,11 +14,28 @@ pub enum Sexp {
 
 impl Sexp {
     // Render an expression back to source form (used in error messages).
+    // One Builder rides through the recursion: O(output), no re-copying
+    // of child strings at each nesting level.
     pub fn show(self) -> String {
+        let b = strings.builder();
+        self.write(b);
+        b.build()
+    }
+
+    fn write(self, b: strings.Builder) {
         match self {
-            Sexp.Num(n) -> str(n),
-            Sexp.Sym(s) -> s,
-            Sexp.Form(items) -> "(" + items.map(|x| x.show()).join(" ") + ")",
+            Sexp.Num(n) -> b.push(str(n)),
+            Sexp.Sym(s) -> b.push(s),
+            Sexp.Form(items) -> {
+                b.push("(");
+                for (i, x) in items.enumerate() {
+                    if i > 0 {
+                        b.push(" ");
+                    }
+                    x.write(b);
+                }
+                b.push(")");
+            },
         }
     }
 }
@@ -96,7 +115,7 @@ fn parse_form(r: Reader) -> Result[Sexp, String] {
             Some(")") -> {
                 r.pos += 1;
                 return Ok(Sexp.Form(items));
-            }
+            },
             Some(_) -> items.push(parse_expr(r)?),
         }
     }

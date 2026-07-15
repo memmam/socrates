@@ -1,14 +1,15 @@
 // site — the page model, the shared HTML template, and the nav builder.
 
 import markdown as md;
+import std.strings;
 
 // One built page. Struct values have reference semantics, so pages can
 // be passed around and collected freely without copying.
 pub struct Page {
-    slug: String,   // output name without extension ("about" -> about.html)
-    title: String,  // first `# ` heading of the source
-    body: String,   // converted HTML body
-    words: Int,     // word count of the Markdown source
+    slug: String, // output name without extension ("about" -> about.html)
+    title: String, // first `# ` heading of the source
+    body: String, // converted HTML body
+    words: Int, // word count of the Markdown source
 }
 
 // Site order: index first, everything else alphabetically by slug.
@@ -24,11 +25,7 @@ fn nav_key(p: Page) -> String {
 fn cmp(a: String, b: String) -> Int {
     if a < b {
         -1
-    } else if a > b {
-        1
-    } else {
-        0
-    }
+    } else if a > b { 1 } else { 0 }
 }
 
 // One <a> per page; the current page is marked so the CSS can highlight it.
@@ -41,28 +38,36 @@ pub fn nav_html(pages: List[Page], current: String) -> String {
     links.join(" ")
 }
 
-// Wrap one converted page in the shared HTML shell.
+// Wrap one converted page in the shared HTML shell. The document
+// accumulates in a strings.Builder (v0.7) — each `line` push is O(1),
+// the final `build` one join.
 pub fn render(site_name: String, p: Page, nav: String) -> String {
-    let doc: List[String] = [];
-    doc.push("<!doctype html>");
-    doc.push("<html lang=\"en\">");
-    doc.push("<head>");
-    doc.push("<meta charset=\"utf-8\">");
-    doc.push("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-    doc.push("<title>{md.escape(p.title)} · {site_name}</title>");
-    doc.push("<style>");
-    doc.push(stylesheet());
-    doc.push("</style>");
-    doc.push("</head>");
-    doc.push("<body>");
-    doc.push("<header><span class=\"brand\">{site_name}</span><nav>{nav}</nav></header>");
-    doc.push("<main>");
-    doc.push(p.body);
-    doc.push("</main>");
-    doc.push("<footer>built by mdsite — a static site generator written in Fable</footer>");
-    doc.push("</body>");
-    doc.push("</html>");
-    doc.join("\n") + "\n"
+    let doc = strings.builder();
+    line(doc, "<!doctype html>");
+    line(doc, "<html lang=\"en\">");
+    line(doc, "<head>");
+    line(doc, "<meta charset=\"utf-8\">");
+    line(doc, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+    line(doc, "<title>{md.escape(p.title)} · {site_name}</title>");
+    line(doc, "<style>");
+    line(doc, stylesheet());
+    line(doc, "</style>");
+    line(doc, "</head>");
+    line(doc, "<body>");
+    line(doc, "<header><span class=\"brand\">{site_name}</span><nav>{nav}</nav></header>");
+    line(doc, "<main>");
+    line(doc, p.body);
+    line(doc, "</main>");
+    line(doc, "<footer>built by mdsite — a static site generator written in Fable</footer>");
+    line(doc, "</body>");
+    line(doc, "</html>");
+    doc.build()
+}
+
+// One "\n"-terminated line of the document.
+fn line(doc: strings.Builder, s: String) {
+    doc.push(s);
+    doc.push("\n");
 }
 
 // Inline CSS, shared by every page. (A literal `\{` must be escaped in

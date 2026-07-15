@@ -1,11 +1,21 @@
-# sudoku — constraint propagation + backtracking search, in Fable
+# sudoku — constraint propagation + backtracking search, on 9-bit masks
 
-A complete sudoku solver. Naked-singles propagation fills every cell that
-has exactly one legal digit, looping to a fixpoint; when logic alone
-stalls, a depth-first search guesses at the **most-constrained cell**
-(fewest candidates first) and backtracks on contradiction. The board is
-one shared mutable grid — placements are logged on a trail so a failed
-branch unwinds exactly what it added.
+A complete sudoku solver whose candidate sets are **9-bit Int masks**
+(v0.7 bitwise operators): bit d-1 stands for digit d, so "any of 1..9" is
+`0b111111111 = 511` and the whole constraint algebra is arithmetic —
+union `|`, intersection `&`, complement `^ 511`, membership one shift and
+one `&`. The board keeps one used-digit mask per row, column, and box;
+the legal digits for a cell are `(row | col | box) ^ 511`, computed fresh
+in O(1) whenever asked.
+
+Naked-singles propagation fills every cell whose mask has exactly one bit
+(`popcount(mask) == 1` — popcount is a shift-and-add loop, five lines),
+looping to a fixpoint; when logic alone stalls, a depth-first search
+guesses at the **most-constrained cell** (fewest mask bits first) and
+backtracks on contradiction (`mask == 0`). Guesses peel the mask
+lowest-bit-first — ascending digit order — so the search is fully
+deterministic. The board is one shared mutable grid; placements are
+logged on a trail so a failed branch unwinds exactly what it added.
 
 Three inline puzzles show the spread: an easy one that propagation solves
 outright (zero guesses), Arto Inkala's 2010 "world's hardest sudoku", and
@@ -14,25 +24,30 @@ is the proven minimum for a unique solution). Every answer is re-checked
 by an independent verifier — all 27 units and every original given — and
 the run prints search statistics per puzzle.
 
-About 400 lines of Fable in four files:
+About 450 lines of Fable in four files:
 
 | File | What it does |
 |------|--------------|
-| `board.fable` | the `Board` struct (81 cells + per-row/column/box "used" tables so candidate checks are O(1)), parsing with validation, pretty-printing, and the independent `verify` |
-| `solver.fable` | naked-singles propagation, the MRV cell chooser, trail-based backtracking search, and `Stats` (assignments / guesses / backtracks) |
+| `board.fable` | the 9-bit mask kit (`digit_bit`, `has`, `popcount`, `lowest_digit`, `digits_of`), the `Board` struct (81 cells + one used-mask per row/column/box), parsing with validation, Builder-based pretty-printing, and the independent `verify` (each unit folds to a mask that must equal 511) |
+| `solver.fable` | naked-singles propagation, the MRV cell chooser, trail-based backtracking that iterates guesses by peeling mask bits, and `Stats` (assignments / guesses / backtracks) |
 | `main.fable` | the three puzzles, side-by-side puzzle/solution rendering, `?`-based error plumbing, an optional `--time` flag |
-| `spec.fable` | golden tests: parser rejections, an unsolvable puzzle (checking the board is restored after failure), the Inkala solution against its published ground truth, and a corrupted grid that `verify` must catch |
+| `spec.fable` | golden tests: mask-kit self-tests (full mask = 511, digit-bit round trips, `&`/`\|`/`^` set algebra, the precedence the code leans on, arithmetic `>>`), parser rejections, an unsolvable puzzle (checking the board is restored after failure), the Inkala solution against its published ground truth, a candidate-elimination check on a real grid, and a corrupted grid that `verify` must catch |
 
-Everything is deterministic — candidates are tried in ascending order and
-heuristic ties break toward the first cell — so the full output of both
-runnable files is pinned with `expect` directives for `fable test`.
+Everything is deterministic — candidates are tried in ascending digit
+order and heuristic ties break toward the first cell — so the full output
+of both runnable files is pinned with `expect` directives for
+`fable test`. The mask representation reproduces the exact same search
+as the v0.5 list-of-candidates version (same masks, same order), so the
+pinned solve narratives — down to `assignments=10939 guesses=1850
+backtracks=1837` on the Inkala — are unchanged, while the whole run got
+about 2x faster (no per-cell candidate lists to allocate).
 
 ## Run it
 
 From the repository root:
 
 ```sh
-./target/release/fable demos/sudoku/main.fable          # solve the three puzzles (~0.6 s)
+./target/release/fable demos/sudoku/main.fable          # solve the three puzzles (~0.3 s)
 ./target/release/fable demos/sudoku/main.fable --time   # same, plus wall-clock times
 ./target/release/fable test demos/sudoku                # golden tests (all four files)
 ```
@@ -64,3 +79,21 @@ singles and guesses together), `guesses` counts speculative placements at
 branch points, `backtracks` counts guesses undone after a contradiction.
 The easy puzzle finishes at `guesses=0` — propagation alone solves it —
 while the hard one needs 1850 guesses, which is exactly why it is hard.
+
+## The mask idioms, if you need them elsewhere
+
+Everything the solver knows about bit fiddling is in the ~40-line kit at
+the top of `board.fable`:
+
+```fable
+pub let full_mask = 0b111111111;                   // digits 1..9
+pub fn digit_bit(d: Int) -> Int { 1 << d - 1 }     // `-` binds tighter than `<<`
+pub fn has(mask: Int, d: Int) -> Bool { mask >> d - 1 & 1 == 1 }
+```
+
+Precedence is Rust's: arithmetic > shifts > `&` > `^` > `|` > comparisons,
+so none of the expressions above need parentheses. Two cautions carried in
+the code comments: Fable's `>>` is **arithmetic** (sign-extending) — 9-bit
+masks never touch the sign bit so it costs nothing here, but a full-width
+bitboard must re-mask after every right shift; and there is no `|=`/`&=`/
+`^=`, so mask updates are written out as `m = m | bit`.

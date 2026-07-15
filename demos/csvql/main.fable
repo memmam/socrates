@@ -29,7 +29,7 @@ fn show(t: table.Table, src: String) {
             println(result.render());
             let n = result.rows.len();
             println(if n == 1 { "(1 row)" } else { "({n} rows)" });
-        }
+        },
         Err(e) -> println("error: {e}"),
     }
     println("");
@@ -40,12 +40,16 @@ let t = match load() {
     Err(e) -> {
         println("csvql: {e}");
         os.exit(66) // since v0.6, os.exit typechecks in a value position
-    }
+    },
 };
 
 println("csvql — {t.rows.len()} cities loaded ({t.headers.join(", ")})");
 println("");
 
+// NOTE: this file is deliberately NOT `fable fmt`-canonical. The v0.7
+// formatter hoists comments that sit inside a list literal (leading OR
+// trailing) out below the enclosing statement, which would strand every
+// per-query annotation below `];`. Reformat once that is fixed.
 let showcase = [
     // projection + filter + generic sort + limit
     "select city, country, pop where continent == Europe order by pop desc limit 3",
@@ -61,7 +65,15 @@ let showcase = [
     "select city, country, pop where pop >= 15 and continent != Asia order by pop desc",
     // whole-table aggregates: no 'group by' means one bucket
     "select count, avg pop, max elev where continent == Asia",
-    // errors are values: a bad column reports, the program carries on
+    // min + max with group by: the population range within each continent
+    "select continent, min pop, max pop group by continent order by max pop desc",
+    // v0.7: min/max order whole cells (std.lists.min_by/max_by over Val.cmp),
+    // so they work on TEXT columns too — alphabetical first/last city
+    "select country, count, min city, max city group by country order by count desc limit 3",
+    "select min city, max city where continent == Europe",
+    // sum/avg still insist on numbers; errors are values: a bad aggregate or a
+    // bad column reports one line and the next query runs
+    "select avg city",
     "select city where fame > 9000",
 ];
 
@@ -136,6 +148,34 @@ for q in queries {
 //? expect: ------+---------+---------
 //? expect:     7 |   25.47 |      216
 //? expect: (1 row)
+//? expect:
+//? expect: csvql> select continent, min pop, max pop group by continent order by max pop desc
+//? expect: continent     | min pop | max pop
+//? expect: --------------+---------+--------
+//? expect: Asia          |    10.6 |    37.3
+//? expect: South America |    11.2 |    22.4
+//? expect: North America |     6.4 |    22.3
+//? expect: Africa        |     5.1 |    21.8
+//? expect: Europe        |     3.6 |    12.7
+//? expect: Oceania       |     5.1 |     5.1
+//? expect: (6 rows)
+//? expect:
+//? expect: csvql> select country, count, min city, max city group by country order by count desc limit 3
+//? expect: country       | count | min city | max city
+//? expect: --------------+-------+----------+---------
+//? expect: United States |     3 | Chicago  | New York
+//? expect: India         |     2 | Delhi    | Mumbai
+//? expect: China         |     2 | Beijing  | Shanghai
+//? expect: (3 rows)
+//? expect:
+//? expect: csvql> select min city, max city where continent == Europe
+//? expect: min city | max city
+//? expect: ---------+---------
+//? expect: Berlin   | Rome
+//? expect: (1 row)
+//? expect:
+//? expect: csvql> select avg city
+//? expect: error: 'avg city': column 'city' has text values
 //? expect:
 //? expect: csvql> select city where fame > 9000
 //? expect: error: unknown column 'fame' (columns: city, country, continent, pop, elev)

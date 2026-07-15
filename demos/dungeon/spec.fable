@@ -1,10 +1,13 @@
 // spec — golden tests for the dungeon toolkit: room geometry, BFS on
-// hand-drawn maps, and generator invariants.
+// hand-drawn maps, flood coverage, the visited-bitset word boundary, and
+// generator invariants.
 //
 //   ./target/release/fable test demos/dungeon
 
 import dungeon;
 import path;
+
+import std.lists;
 
 let open = |t: String| t != "#";
 
@@ -23,15 +26,9 @@ println(a.intersects(dungeon.Room { x: 8, y: 3, w: 4, h: 3 }));
 
 // ---- BFS on a hand-drawn map ----
 
-let maze = [
-    "#######",
-    "#.....#",
-    "#.###.#",
-    "#.#...#",
-    "#.#.###",
-    "#...###",
-    "#######",
-].map(|row| row.chars());
+let maze = ["#######", "#.....#", "#.###.#", "#.#...#", "#.#.###", "#...###", "#######"].map(
+    |row| row.chars(),
+);
 
 match path.shortest(maze, (1, 1), (3, 3), open) {
     Some(route) -> println(route),
@@ -40,11 +37,7 @@ match path.shortest(maze, (1, 1), (3, 3), open) {
 //? expect: [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (5, 2), (5, 3), (4, 3), (3, 3)]
 
 // A sealed-off goal: BFS floods the reachable region and gives up cleanly.
-let sealed = [
-    "#####",
-    "#.#.#",
-    "#####",
-].map(|row| row.chars());
+let sealed = ["#####", "#.#.#", "#####"].map(|row| row.chars());
 println(path.shortest(sealed, (1, 1), (1, 3), open).is_none());
 //? expect: true
 
@@ -54,6 +47,32 @@ match path.shortest(maze, (1, 1), (1, 1), open) {
     None -> println("unreachable"),
 }
 //? expect: [(1, 1)]
+
+// ---- flood coverage ----
+
+// reachable() floods the whole maze from the entrance: all 16 open cells,
+// as a std.set with free membership queries afterwards.
+let flood = path.reachable(maze, (1, 1), open);
+println(flood.len());
+//? expect: 16
+println(flood.contains((3, 3)) && !flood.contains((0, 0)));
+//? expect: true
+
+// On the sealed map the flood stops at the walls around the start cell.
+println(path.reachable(sealed, (1, 1), open).to_list());
+//? expect: [(1, 1)]
+
+// ---- BFS across a bitset word boundary ----
+
+// shortest() packs its visited flags 64 cells to an Int; a 1x70 strip
+// forces the flat cell indices across the word-0/word-1 boundary (and
+// through bit 63, where an unmasked arithmetic `>>` would sign-extend).
+let strip = [lists.fill(70, ".")];
+match path.shortest(strip, (0, 0), (0, 69), open) {
+    Some(route) -> println(route.len()),
+    None -> println("unreachable"),
+}
+//? expect: 70
 
 // ---- generator invariants ----
 
@@ -91,4 +110,10 @@ println(clashes);
 
 // ...and the treasure is always reachable from the start.
 println(path.shortest(d1.grid, d1.start, d1.treasure, open).is_some());
+//? expect: true
+
+// Stronger: the flood from the start covers every carved tile, so the
+// corridor chain connected the *whole* dungeon, not just the treasure room.
+let carved = lists.sum(d1.grid.map(|row| row.filter(open).len()));
+println(path.reachable(d1.grid, d1.start, open).len() == carved);
 //? expect: true

@@ -11,6 +11,13 @@ Formulas start with `=` and support:
 - `sum`, `avg`, `min`, `max`, `count` over any mix of ranges and scalars
   (aggregates skip words and blank cells, like a real spreadsheet)
 
+Aggregates follow the identity rule: `sum` and `count` of an empty range
+are `0`, while `avg`/`min`/`max` need at least one number and turn an
+empty range into `#VALUE!` (std.lists' `min_float`/`max_float` return
+`Option`, and `None` maps straight onto the error). Any error cell in any
+argument wins over everything else — first one in argument order, row-major
+within a range. `aggregates.fable` + `stats.sheet` pin all of this.
+
 Bad cells become error *values* instead of crashing the sheet: `#CYCLE!`
 (reference cycles, found by the busy-set walk in `sheet.fable`), `#DIV/0!`,
 `#VALUE!` (words in arithmetic), `#NAME?` (unknown function), `#REF!`
@@ -24,6 +31,7 @@ From the repo root:
 ```
 ./target/release/fable demos/spreadsheet/main.fable                # both demo sheets
 ./target/release/fable demos/spreadsheet/main.fable my.sheet       # your own file
+./target/release/fable demos/spreadsheet/aggregates.fable          # aggregate edge cases
 ./target/release/fable test demos/spreadsheet                      # golden tests
 ```
 
@@ -33,14 +41,23 @@ comment lines, and commas inside parentheses belong to the formula
 
 ## Files
 
-| File            | What it is                                              |
-|-----------------|---------------------------------------------------------|
-| `formula.fable` | lexer + Pratt parser producing the `Expr` tree          |
-| `sheet.fable`   | grid model, loader, evaluator (cycle detection), renderer |
-| `main.fable`    | CLI glue, plus the golden `//? expect:` output          |
-| `checks.fable`  | unit-style golden tests against the public API          |
-| `budget.sheet`  | the happy-path demo sheet                               |
-| `cycles.sheet`  | the unhappy-path demo sheet                             |
+| File               | What it is                                              |
+|--------------------|---------------------------------------------------------|
+| `formula.fable`    | lexer + Pratt parser producing the `Expr` tree          |
+| `sheet.fable`      | grid model, loader, evaluator (cycle detection), renderer |
+| `main.fable`       | CLI glue, plus the golden `//? expect:` output          |
+| `checks.fable`     | unit-style golden tests against the public API          |
+| `aggregates.fable` | min/max/avg on empty, words-only, and error-poisoned ranges |
+| `budget.sheet`     | the happy-path demo sheet                               |
+| `cycles.sheet`     | the unhappy-path demo sheet                             |
+| `stats.sheet`      | the aggregate torture sheet (`aggregates.fable` renders it) |
+
+The engine leans on the v0.7 collections layer: the cycle-detection busy
+set is a `std.set` (one `insert()` both marks the cell and detects the
+cycle — `false` means "already being evaluated", i.e. `#CYCLE!`), the
+aggregates are `std.lists` (`sum_float`, `min_float`, `max_float`), and
+the grid and formula report accumulate in a `strings.Builder` instead of
+a list-of-lines join.
 
 ## Sample output
 
