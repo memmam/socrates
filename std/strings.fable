@@ -49,33 +49,38 @@ pub fn strip_suffix(s: String, suffix: String) -> String {
 // ---- Builder: string accumulation without the quadratic tax ----
 //
 // Strings are immutable, so `acc += piece` in a loop copies the whole
-// accumulator every time — O(n²) overall. A Builder keeps the pieces in a
-// list and concatenates once in `build()`, for O(n) total.
+// accumulator every time — O(n²) overall. A Builder appends each piece's
+// UTF-8 to one growable byte buffer and decodes once in `build()`, for
+// O(n) total.
 //
 //   let b = strings.builder();
 //   for w in words { b.push(w); }
 //   let s = b.build();
 
 pub struct Builder {
-    parts: List[String],
+    buf: Bytes,
     chars: Int,
 }
 
 pub fn builder() -> Builder {
-    Builder { parts: [], chars: 0 }
+    Builder { buf: bytes(0), chars: 0 }
 }
 
 impl Builder {
     // Append a string.
     pub fn push(self, s: String) {
-        self.parts.push(s);
+        self.buf.push_str(s);
         self.chars += s.len();
     }
 
     // Append one character by Unicode scalar value (`char(code)` rules:
     // surrogates and out-of-range codes panic).
     pub fn push_char(self, code: Int) {
-        self.parts.push(char(code));
+        if code >= 0 && code < 128 {
+            self.buf.push(code); // ASCII: one byte, no temporary string
+        } else {
+            self.buf.push_str(char(code));
+        }
         self.chars += 1;
     }
 
@@ -84,15 +89,16 @@ impl Builder {
         self.chars
     }
 
-    // The accumulated string, in one join. The builder is left intact:
-    // building twice gives the same string.
+    // The accumulated string, in one decode. The builder is left intact:
+    // building twice gives the same string. The buffer holds exactly the
+    // pushed pieces' UTF-8, so the decode cannot fail.
     pub fn build(self) -> String {
-        self.parts.join("")
+        self.buf.utf8().unwrap()
     }
 
     // Empty the builder for reuse.
     pub fn clear(self) {
-        self.parts.clear();
+        self.buf = bytes(0);
         self.chars = 0;
     }
 }
