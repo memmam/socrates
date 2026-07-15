@@ -187,18 +187,31 @@ jobs:
             echo "cross-built and stapled ${{ matrix.label }} (no native execution)"
           fi
 
-  macos-source:
-    # macOS single-file binaries can't be code-signed (a payload appended past
-    # the Mach-O __LINKEDIT fails codesign's strict validation), so the release
-    # ships the interpreter + demo sources for Apple Silicon. This proves that
-    # combination actually runs on arm64 macOS — the only macOS coverage in CI.
-    name: macOS Apple Silicon (interpreter + demos)
+  macos-singlefile:
+    # macOS can't use the append trick (a payload past the Mach-O __LINKEDIT
+    # fails codesign, and arm64 macOS won't run unsigned), so a single-file
+    # binary is built by linking the payload in as a `__DATA,__fablezoo`
+    # section (`ld -sectcreate`). This proves the whole chain on Apple Silicon:
+    # emit the payload, link it in, sign, and run — matching the source run.
+    name: macOS single-file demo (aarch64)
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release
       - name: Spec + demo golden suites on Apple Silicon
+        run: cargo build --release && ./target/release/fable test tests/spec demos > /dev/null
+      - name: Build, sign, and run a section-embedded demo binary
         run: |
-          ./target/release/fable test tests/spec demos > /dev/null
-          echo "interpreter + all demos run on aarch64-macos"
+          host="target/release/fable"                       # payload emitter
+          for demo in csvql parmandel; do
+            "$host" build "demos/$demo" --payload-only -o "$PWD/$demo.payload"
+            RUSTFLAGS="-Clink-arg=-Wl,-sectcreate,__DATA,__fablezoo,$PWD/$demo.payload" \
+              cargo build --release --target aarch64-apple-darwin
+            cp "target/aarch64-apple-darwin/release/fable" "./$demo-bin"
+            codesign --force --sign - "./$demo-bin"
+            codesign --verify --strict "./$demo-bin"
+            ( ./"$demo-bin" ) > "$demo.bin.out"
+            "$host" "demos/$demo/main.fable" > "$demo.src.out"
+            diff "$demo.src.out" "$demo.bin.out"
+          done
+          echo "section-embedded macOS binaries sign, run, and match source"

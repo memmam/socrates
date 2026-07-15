@@ -45,14 +45,15 @@ fable build demos/lisp -o lisp     # build one yourself
 ./lisp                             # run it anywhere
 ```
 
-The release carries the whole zoo cross-compiled for four desktop targets —
-`x86_64` and `aarch64` Linux, and `x86_64` and `aarch64` Windows — as
-`fable-demozoo-<version>-<target>.tar.gz`. Extract with `tar -xf` (built in on
-Windows 10+ as well) and run any animal in the zoo. Apple Silicon macOS gets
-its own `aarch64-macos` archive — the `fable` interpreter plus every demo's
-source — since a single-file binary can't yet be code-signed on macOS (a
-payload appended past the Mach-O `__LINKEDIT` fails `codesign`'s strict
-validation); true single-file macOS binaries are a follow-up.
+The release carries the whole zoo cross-compiled for five desktop targets —
+`x86_64` and `aarch64` Linux, `x86_64` and `aarch64` Windows, and Apple
+Silicon macOS — as `fable-demozoo-<version>-<target>.tar.gz`. Extract with
+`tar -xf` (built in on Windows 10+ as well) and run any animal in the zoo. On
+Linux and Windows the payload is appended to the interpreter; on macOS — where
+appending past the Mach-O `__LINKEDIT` would break code signing — it is linked
+in as a `__DATA,__fablezoo` section instead. The macOS binaries are ad-hoc
+signed, so a downloaded copy needs `xattr -d com.apple.quarantine ./<demo>`
+once until a notarized build lands.
 
 ## Where they came from
 

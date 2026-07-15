@@ -384,6 +384,7 @@ fn build_bundle(rest: &[String]) -> ExitCode {
     let mut input: Option<String> = None;
     let mut out: Option<String> = None;
     let mut launcher: Option<String> = None;
+    let mut payload_only = false;
     let mut i = 0;
     while i < rest.len() {
         match rest[i].as_str() {
@@ -401,6 +402,10 @@ fn build_bundle(rest: &[String]) -> ExitCode {
                     None => return usage_err("`--launcher` needs a path"),
                 }
             }
+            // Emit just the raw payload archive instead of a stapled binary.
+            // The macOS release links this into a binary as a Mach-O section
+            // (`ld -sectcreate`), which appending can't achieve there.
+            "--payload-only" => payload_only = true,
             flag if flag.starts_with('-') && flag != "-" => {
                 return usage_err(&format!("unknown flag `{flag}`"));
             }
@@ -466,6 +471,25 @@ fn build_bundle(rest: &[String]) -> ExitCode {
         sub.into_iter().map(|(rel, data)| (join_prefix(&prefix, &rel), data)).collect();
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
+    let payload = bundle::payload(&entry_rel, &files);
+
+    // `--payload-only`: emit the raw archive, no launcher. The macOS release
+    // links it in as a Mach-O section instead of appending.
+    if payload_only {
+        let out = out.unwrap_or_else(|| "payload.bin".to_string());
+        if let Err(e) = std::fs::write(&out, &payload) {
+            eprintln!("fable build: cannot write {out}: {e}");
+            return ExitCode::from(66);
+        }
+        eprintln!(
+            "wrote {out} ({} file{}, {} bytes)",
+            files.len(),
+            if files.len() == 1 { "" } else { "s" },
+            payload.len()
+        );
+        return ExitCode::SUCCESS;
+    }
+
     // Launcher bytes: an explicit path (a cross-compiled `fable` for another
     // target) or this very executable.
     let launcher_bytes = match &launcher {
@@ -491,7 +515,6 @@ fn build_bundle(rest: &[String]) -> ExitCode {
         }
     };
 
-    let payload = bundle::payload(&entry_rel, &files);
     let image = bundle::staple(&launcher_bytes, &payload);
 
     // Default output name: the program directory's basename (adopting the
@@ -615,7 +638,7 @@ fn make_executable(_path: &str) {}
 
 fn usage_err(msg: &str) -> ExitCode {
     eprintln!("fable build: {msg}");
-    eprintln!("usage: fable build <dir|file.fable> [-o OUT] [--launcher PATH]");
+    eprintln!("usage: fable build <dir|file.fable> [-o OUT] [--launcher PATH] [--payload-only]");
     ExitCode::from(64)
 }
 

@@ -381,7 +381,13 @@ path *as given* to `build`, imports, `fs.*`, and `worker.spawn` all resolve
 against the unpacked tree with no special-casing anywhere in the loader or the
 VM. Extraction refuses absolute or `..` paths. Because stapling is pure byte
 concatenation and target-independent, `--launcher` lets one host assemble
-binaries for every cross-compiled target (the release "demo zoo").
+binaries for every cross-compiled target (the release "demo zoo"). macOS is
+the exception to the append: a Mach-O with data past `__LINKEDIT` fails code
+signing (and Apple Silicon won't run unsigned), so there the payload is linked
+in as a `__DATA,__fablezoo` section (`fable build --payload-only` emits the
+raw archive; the release links it with `ld -sectcreate`). `read_self` handles
+both — tail magic first, then a portable Mach-O parse for the section, then a
+backward scan tolerating a trailing code signature.
 
 **The efficiency pass** rewrote the interpreter's hot paths against a
 benchmark harness (`bench/`, results in `bench/RESULTS.md`): dispatch-loop

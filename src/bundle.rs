@@ -21,6 +21,13 @@ use std::path::{Path, PathBuf};
 /// incompatible layout change). Chosen to be unlikely in a binary's tail.
 const MAGIC: &[u8; 8] = b"FABLZOO1";
 
+/// On macOS the payload can't be appended (a Mach-O with data past
+/// `__LINKEDIT` fails code signing, and Apple Silicon won't run unsigned), so
+/// it is linked in as a section instead — `ld -sectcreate __DATA __fablezoo
+/// payload.bin` — and read back out of the image by [`macho_section`]. Names
+/// live in a fixed 16-byte, NUL-padded field.
+const MACHO_SECTION_NAME: &[u8] = b"__fablezoo";
+
 /// An unpacked program: the entry file's bundle-relative path plus every
 /// file's bundle-relative path and contents.
 pub struct Bundle {
@@ -64,11 +71,63 @@ pub fn read_self() -> Option<Bundle> {
     if let Ok(Some(b)) = read_from(&exe) {
         return Some(b);
     }
+    let data = std::fs::read(&exe).ok()?;
+    // macOS: the payload rides in a Mach-O `__fablezoo` section, not the tail.
+    if let Some(b) = macho_section(&data) {
+        return Some(b);
+    }
     // Fallback: tolerate trailing bytes after the trailer (e.g. a code
     // signature appended past our payload) by scanning the whole image
     // backward for the magic.
-    let data = std::fs::read(&exe).ok()?;
     scan(&data)
+}
+
+/// Find the payload in a `__fablezoo` section of a 64-bit little-endian
+/// Mach-O (our only macOS target is arm64), reading it straight from the file
+/// image by its recorded offset — no ASLR/slide concerns. Returns `None` for
+/// any non-Mach-O binary or a Mach-O without the section, so ELF/PE and an
+/// ordinary `fable` fall through untouched.
+fn macho_section(data: &[u8]) -> Option<Bundle> {
+    const MH_MAGIC_64: u32 = 0xFEED_FACF;
+    const LC_SEGMENT_64: u32 = 0x19;
+    let u32at = |o: usize| data.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+    let u64at = |o: usize| data.get(o..o + 8).map(|b| u64::from_le_bytes(b.try_into().unwrap()));
+
+    if u32at(0)? != MH_MAGIC_64 {
+        return None;
+    }
+    let ncmds = u32at(16)? as usize;
+    let mut off = 32; // sizeof(mach_header_64)
+    for _ in 0..ncmds {
+        let cmd = u32at(off)?;
+        let cmdsize = u32at(off + 4)? as usize;
+        if cmdsize < 8 {
+            return None;
+        }
+        if cmd == LC_SEGMENT_64 {
+            // segment_command_64: nsects is at +64, section_64 records at +72.
+            let nsects = u32at(off + 64)? as usize;
+            for s in 0..nsects {
+                let sect = off + 72 + s * 80; // sizeof(section_64) == 80
+                let name = data.get(sect..sect + 16)?;
+                if name16_eq(name, MACHO_SECTION_NAME) {
+                    let size = u64at(sect + 40)? as usize; // section_64.size
+                    let foff = u32at(sect + 48)? as usize; // section_64.offset
+                    return parse(data.get(foff..foff.checked_add(size)?)?);
+                }
+            }
+        }
+        off = off.checked_add(cmdsize)?;
+    }
+    None
+}
+
+/// Compare a fixed 16-byte, NUL-padded Mach-O name field against `name`.
+fn name16_eq(field: &[u8], name: &[u8]) -> bool {
+    name.len() <= 16
+        && field.len() == 16
+        && &field[..name.len()] == name
+        && field[name.len()..].iter().all(|&b| b == 0)
 }
 
 /// Find the stapled bundle by scanning `data` backward for the trailer magic,
@@ -252,6 +311,44 @@ mod tests {
     #[test]
     fn scan_ignores_plain_binaries() {
         assert!(scan(b"an ordinary executable with no bundle at all").is_none());
+    }
+
+    #[test]
+    fn macho_section_reads_payload() {
+        let files = vec![("main.fable".to_string(), b"println(42);".to_vec())];
+        let pl = payload("main.fable", &files);
+        // Minimal 64-bit Mach-O: header + one __DATA segment with one
+        // __fablezoo section whose file offset points past the load commands.
+        let cmdsize = 72 + 80usize; // segment_command_64 + one section_64
+        let payload_off = 32 + cmdsize;
+        let mut m = vec![0u8; payload_off];
+        m[0..4].copy_from_slice(&0xFEED_FACFu32.to_le_bytes()); // magic MH_MAGIC_64
+        m[16..20].copy_from_slice(&1u32.to_le_bytes()); // ncmds
+        m[20..24].copy_from_slice(&(cmdsize as u32).to_le_bytes()); // sizeofcmds
+        let c = 32; // LC_SEGMENT_64
+        m[c..c + 4].copy_from_slice(&0x19u32.to_le_bytes()); // cmd
+        m[c + 4..c + 8].copy_from_slice(&(cmdsize as u32).to_le_bytes()); // cmdsize
+        m[c + 8..c + 14].copy_from_slice(b"__DATA"); // segname
+        m[c + 64..c + 68].copy_from_slice(&1u32.to_le_bytes()); // nsects
+        let s = c + 72; // section_64
+        m[s..s + 10].copy_from_slice(b"__fablezoo"); // sectname
+        m[s + 16..s + 22].copy_from_slice(b"__DATA"); // segname
+        m[s + 40..s + 48].copy_from_slice(&(pl.len() as u64).to_le_bytes()); // size
+        m[s + 48..s + 52].copy_from_slice(&(payload_off as u32).to_le_bytes()); // offset
+        m.extend_from_slice(&pl);
+
+        let b = macho_section(&m).expect("reads the __fablezoo section");
+        assert_eq!(b.entry, "main.fable");
+        assert_eq!(b.files, files);
+    }
+
+    #[test]
+    fn macho_section_ignores_non_macho() {
+        assert!(macho_section(b"\x7fELF not a mach-o at all, longer than a header").is_none());
+        // A Mach-O with no __fablezoo section (ncmds = 0).
+        let mut m = vec![0u8; 32];
+        m[0..4].copy_from_slice(&0xFEED_FACFu32.to_le_bytes());
+        assert!(macho_section(&m).is_none());
     }
 
     #[test]

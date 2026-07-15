@@ -64,12 +64,11 @@ jobs:
             target: aarch64-apple-darwin
             label: aarch64-macos
             ext: ""
-            # Apple Silicon requires a valid code signature to run, but a
-            # payload appended past the Mach-O __LINKEDIT can't be signed
-            # (codesign strict-validation rejects it). So macOS ships the
-            # interpreter + demo sources instead of stapled single-file
-            # binaries; proper macOS single-file is a follow-up.
-            sources_zoo: true
+            # macOS can't append (a payload past __LINKEDIT fails codesign),
+            # so each demo binary is built by linking the payload in as a
+            # `__DATA,__fablezoo` section. Signs ad-hoc by default; upgrades
+            # to Developer ID + notarization when the signing secrets exist.
+            macos_section: true
     env:
       TAG: pending
     steps:
@@ -122,25 +121,22 @@ jobs:
         shell: bash
         run: |
           mkdir -p zoo
-          if [ "${{ matrix.sources_zoo }}" = "true" ]; then
-            # macOS: ship the interpreter + demo sources. Run any demo with
-            # `./fable demos/<name>/main.fable` from the unpacked directory.
-            cp "target/${{ matrix.target }}/release/fable${{ matrix.ext }}" zoo/
-            cp -R demos zoo/demos
-            {
-              echo "The Fable demo zoo (Apple Silicon)."
-              echo
-              echo "Single-file demo binaries aren't shipped for macOS yet: a payload"
-              echo "appended onto the interpreter can't be code-signed, and Apple Silicon"
-              echo "won't run an unsigned binary. So this archive is the fable interpreter"
-              echo "plus every demo's source. From this directory:"
-              echo
-              echo "    ./fable demos/lisp/main.fable"
-              echo "    ./fable test demos            # run all seventeen as golden tests"
-              echo
-              echo "The first run of an unsigned download may need Gatekeeper cleared:"
-              echo "    xattr -d com.apple.quarantine ./fable"
-            } > zoo/RUN.txt
+          if [ "${{ matrix.macos_section }}" = "true" ]; then
+            # macOS: build each demo binary by linking its payload in as a
+            # `__DATA,__fablezoo` section (appending can't be code-signed).
+            # The linker ad-hoc signs by default; re-sign + verify explicitly.
+            host="target/release/fable"
+            mkdir -p payloads
+            for d in demos/*/; do
+              name="$(basename "$d")"
+              [ -f "${d}main.fable" ] || continue
+              "$host" build "demos/$name" --payload-only -o "$PWD/payloads/$name.bin"
+              RUSTFLAGS="-Clink-arg=-Wl,-sectcreate,__DATA,__fablezoo,$PWD/payloads/$name.bin" \
+                cargo build --release --target ${{ matrix.target }}
+              cp "target/${{ matrix.target }}/release/fable" "zoo/${name}"
+              codesign --force --sign - "zoo/${name}"
+              codesign --verify --strict "zoo/${name}"
+            done
           else
             # The host stapler is the runner's native `fable`; we only ever
             # cross within an OS, so the host extension equals matrix.ext.
@@ -154,6 +150,54 @@ jobs:
           fi
           cp demos/README.md LICENSE NOTICE zoo/
           ls -l zoo
+
+      # Phase B: upgrade the ad-hoc macOS signatures to Developer ID + Apple
+      # notarization so downloaded binaries open with no Gatekeeper warning.
+      # Dormant until the signing secrets are set — the ad-hoc binaries above
+      # ship as-is otherwise. Required repo secrets:
+      #   MACOS_CERT_P12_BASE64   base64 of the Developer ID Application .p12
+      #   MACOS_CERT_PASSWORD     the .p12 export password
+      #   MACOS_SIGN_IDENTITY     e.g. "Developer ID Application: Name (TEAMID)"
+      #   MACOS_NOTARY_KEY_P8_BASE64 / _KEY_ID / _ISSUER_ID  App Store Connect API key
+      - name: Developer ID sign + notarize (when configured)
+        if: matrix.macos_section && env.MACOS_CERT_P12_BASE64 != ''
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          MACOS_NOTARY_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          kc="$RUNNER_TEMP/fable-signing.keychain-db"
+          kcpw="$(uuidgen)"
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpw" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" login.keychain-db
+          echo "$MACOS_NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          # Re-sign every binary with Developer ID (hardened runtime + timestamp).
+          for b in zoo/*; do
+            case "$(basename "$b")" in README.md|LICENSE|NOTICE) continue;; esac
+            [ -f "$b" ] || continue
+            codesign --force --options runtime --timestamp \
+              --sign "$MACOS_SIGN_IDENTITY" --keychain "$kc" "$b"
+            codesign --verify --strict "$b"
+          done
+          # Notarize all binaries in one submission (bare CLI tools can't have a
+          # ticket stapled, so Gatekeeper verifies online on first run).
+          ( cd zoo && zip -q -X "$RUNNER_TEMP/zoo.zip" $(ls | grep -vE '^(README\.md|LICENSE|NOTICE)$') )
+          xcrun notarytool submit "$RUNNER_TEMP/zoo.zip" \
+            --key "$RUNNER_TEMP/notary.p8" \
+            --key-id "$MACOS_NOTARY_KEY_ID" \
+            --issuer "$MACOS_NOTARY_ISSUER_ID" \
+            --wait
+          security delete-keychain "$kc"
+          echo "Developer ID signed + notarized the macOS zoo"
 
       - name: Package
         shell: bash

@@ -105,8 +105,8 @@ golden-tested. This image is Fable output too:
   appended payload, producing one executable that needs no `fable` and no
   source tree. Cross-target by design: every release ships the whole
   [demo zoo](demos/#the-demo-zoo--download-and-run) built for `x86_64` and
-  `aarch64` Linux and Windows (Apple Silicon macOS ships the interpreter +
-  demo sources — single-file macOS is a follow-up).
+  `aarch64` Linux and Windows, plus Apple Silicon macOS (where the payload
+  rides in a Mach-O section rather than appended, so it stays code-signable).
 - **Rust-quality diagnostics** everywhere, with stable codes, multi-span
   labels, and targeted hints (write `{}` for an empty map and the error
   tells you the literal is `{:}`):

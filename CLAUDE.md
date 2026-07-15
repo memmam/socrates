@@ -144,10 +144,13 @@ and the standing numbers.
   its own tail at startup — a self-contained executable whose output is
   byte-identical to the source run. Target-independent stapling (`--launcher`)
   lets one host cross-build the whole **demo zoo**: all seventeen demos for
-  `x86_64`/`aarch64` Linux + Windows, shipped in the release. (macOS single-file
-  is deferred: a payload appended past the Mach-O `__LINKEDIT` fails `codesign`
-  strict validation and arm64 macOS won't run unsigned, so Apple Silicon ships
-  the interpreter + demo sources; the fix is postject-style section injection.)
+  `x86_64`/`aarch64` Linux + Windows and Apple-Silicon macOS, shipped in the
+  release. macOS can't append (a payload past the Mach-O `__LINKEDIT` fails
+  `codesign` and arm64 won't run unsigned), so there the payload is linked in
+  as a `__DATA,__fablezoo` section (`ld -sectcreate`; `fable build
+  --payload-only` emits it; `read_self` parses the running image to read it
+  back) and ad-hoc signed. Developer ID signing + notarization are wired in
+  `release.yml`, dormant until the `MACOS_CERT_P12_BASE64` etc. secrets exist.
 
 ## Workflow conventions
 

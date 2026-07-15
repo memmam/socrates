@@ -63,16 +63,17 @@ Every one of the seventeen [`demos/`](https://github.com/memmam/fable/tree/main/
 alpha-beta engine, a from-scratch PNG encoder, a chiptune renderer, a
 parallel Mandelbrot, and ten more — ships as a **self-contained binary**: no
 `fable`, no source, one file you run. They are attached as
-`fable-demozoo-v0.7.0-<target>.tar.gz` for four desktop targets:
+`fable-demozoo-v0.7.0-<target>.tar.gz` for five desktop targets:
 
 - `x86_64-linux`, `aarch64-linux`
 - `x86_64-windows`, `aarch64-windows`
+- `aarch64-macos` (Apple Silicon)
 
 Unpack with `tar -xf` (built in on Windows 10+ too) and run any animal in the
-zoo. **Apple Silicon macOS** gets its own `aarch64-macos` archive — the
-`fable` interpreter plus every demo's source (`./fable demos/lisp/main.fable`)
-— because a single-file binary can't yet be code-signed on macOS; true
-single-file macOS binaries are a fast follow-up.
+zoo. On macOS the payload rides in a Mach-O section (appending it would break
+code signing); the binaries are ad-hoc signed, so a downloaded copy needs
+Gatekeeper cleared once — `xattr -d com.apple.quarantine ./<demo>` — until a
+notarized build lands.
 
 ## Getting started
 

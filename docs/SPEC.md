@@ -926,6 +926,9 @@ A struct-literal field is `IDENT ":" expr` or the shorthand `IDENT` — § 2.3.)
   supplies interpreter bytes cross-compiled for another target (stapling is
   host-independent, so one machine can assemble binaries for every target);
   `-o` sets the output path (default: the program directory's name).
+  `--payload-only` writes just the archive (no launcher) — the macOS build
+  links it in as a `__DATA,__fablezoo` Mach-O section instead of appending,
+  since a Mach-O with data past `__LINKEDIT` cannot be code-signed.
 - `fable repl` — interactive REPL; expressions print their value (in `str` form,
   except `String` values print quoted) unless the value is `()`. Imports
   work (v0.5) and persist across inputs.
