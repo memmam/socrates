@@ -61,7 +61,7 @@ their place fastest.
   language change updates the spec in the same PR.
 - **Everything observable is golden-tested and byte-identical.** Every
   demo's full stdout is pinned (`demos/`), every ```fable block in `book/`
-  executes in CI, and the spec suite (`tests/spec/`, 294 tests) runs through
+  executes in CI, and the spec suite (`tests/spec/`, 309 tests) runs through
   the same `fable test` path users get. A refactor that changes any pinned
   output is wrong unless the output change is the point.
 - **GC-stress must stay green.** `FABLE_GC_STRESS=1` collects before every
@@ -77,7 +77,7 @@ cargo test                                    # unit + golden spec suite
 FABLE_GC_STRESS=1 cargo test --test spec_runner
 cargo clippy --all-targets -- -D warnings
 cargo build --release
-./target/release/fable test tests/spec        # 294
+./target/release/fable test tests/spec        # 309
 ./target/release/fable test demos             # 71, also with FABLE_GC_STRESS=1
 FABLE_PATH=ports ./target/release/fable test ports/pyl/spec.fable   # + ports/icaa/spec.fable
 ./target/release/fable build demos/csvql -o /tmp/csvql && (cd /tmp && ./csvql)  # `fable build` smoke
@@ -153,11 +153,30 @@ and the standing numbers.
   --payload-only` emits it; `read_self` parses the running image to read it
   back) and ad-hoc signed. Developer ID signing + notarization are wired in
   `release.yml`, dormant until the `MACOS_CERT_P12_BASE64` etc. secrets exist.
+- **v0.8 — the demo round's feature queue.** The v0.7 demo round left a
+  ranked, deduplicated feature-request queue (`demos/NOTES.md`); this
+  release works through it directly rather than via a fresh round.
+  `if let`/`while let` (pure parser sugar, desugared fully to `match`/`while`
+  at parse time — the checker and compiler need no special cases); bitwise
+  compound assignment (`&= |= ^= <<= >>=`); hex/binary literals now express
+  the full 64-bit pattern (bit 63 included) plus `String.parse_hex()`;
+  `Bytes` 64-bit accessors (`push`/`read_u64le`/`be`); `Int.wrapping_add`/
+  `sub`/`mul`; `fft.magnitude`; `Range.any`/`all`; non-blocking
+  `worker.try_recv()`; `strings.Builder.is_empty`/`push_joined`;
+  `lists.min_by_key`/`max_by_key`; a new `std.lazy` module (`Lazy[T]`,
+  deferred/memoized computation); ergonomic `std.json` construction
+  (`obj`/`arr`/`jstr`/`num`/`int`/`bool`/`null`); and `fable test --bless`,
+  which rewrites mismatched `//? expect:` lines in place when the
+  actual/expected count already agrees. One item (a counting-map helper)
+  declined — one demo, one-line workaround, `std` grows reluctantly. Four
+  items in the original queue turned out to already be shipped in v0.7's
+  own efficiency pass; `demos/NOTES.md` now says so.
 
 ## Workflow conventions
 
-- Merge-on-green: CI is trusted; PRs are opened as drafts with auto-merge
-  armed. Feature work happens on a dedicated branch off `main`.
+- Merge-on-green: CI is trusted; feature PRs are real (non-draft) with
+  auto-merge armed — drafts are reserved for *releases*. Feature work
+  happens on a dedicated branch off `main`.
 - Commit messages state what changed and (for perf) the measured delta.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.

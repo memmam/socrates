@@ -247,9 +247,27 @@ println(flags);
 
 `Int` carries the rest of the bit toolbox as methods: `count_ones()`,
 `leading_zeros()`, `trailing_zeros()`, `rotate_left(n)`/`rotate_right(n)`,
-and `to_hex()` for the two's-complement hex string. A `Set`-of-small-ints as
-a single integer is a common idiom — the sudoku demo keeps each cell's
-candidate digits in a 9-bit mask:
+`to_hex()` for the two's-complement hex string, and `wrapping_add`/
+`wrapping_sub`/`wrapping_mul` for the rare case where you *want* overflow
+to wrap instead of panic (hash finalizers, bit-mixing). Hex and binary
+literals name the same full 64-bit pattern `to_hex()` prints — bit 63
+included, so `0x8000000000000000` is `Int`'s most negative value — and
+`String.parse_hex()` is `to_hex()`'s inverse:
+
+```fable
+println(0x8000000000000000);
+println((-1).to_hex());
+println("ffffffffffffffff".parse_hex());
+```
+
+```text
+-9223372036854775808
+ffffffffffffffff
+Some(-1)
+```
+
+A `Set`-of-small-ints as a single integer is a common idiom — the sudoku
+demo keeps each cell's candidate digits in a 9-bit mask:
 
 ```fable
 let all = (1 << 9) - 1;    // nine ones: digits 1..9

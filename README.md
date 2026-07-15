@@ -27,8 +27,8 @@ println("total area: {total.to_fixed(2)}");
 Everything here — lexer, parser, unification-based type inference, Maranget
 exhaustiveness checking, bytecode compiler, stack VM, mark-and-sweep garbage
 collector, REPL, formatter, language server, and disassembler — lives in
-about 21,000 lines of dependency-free Rust in `src/`. It is pinned down by
-294 golden spec tests (every one a runnable Fable program), a book whose 122
+about 22,500 lines of dependency-free Rust in `src/`. It is pinned down by
+309 golden spec tests (every one a runnable Fable program), a book whose 134
 snippets execute in CI, and seventeen demo programs whose complete output is
 golden-tested. This image is Fable output too:
 
@@ -55,7 +55,10 @@ golden-tested. This image is Fable output too:
   error *with a concrete witness*: `the value Shape.Rect(_, _) is not
   covered`. Unreachable arms warn. Or-patterns, guards, nested
   destructuring, and struct patterns all participate — and patterns work in
-  `let` and `for` heads too: `for (i, x) in xs.enumerate() { ... }`.
+  `let` and `for` heads too: `for (i, x) in xs.enumerate() { ... }`. `if let`
+  and `while let` test a single pattern without the ceremony of a full
+  `match` — both are sugar for it, so they inherit its exhaustiveness and
+  type rules for free.
 - **Closures done properly.** Lua-style upvalues: captured variables are
   shared by reference, live past their scope, and close automatically — two
   closures over one `let mut` counter see each other's increments.
@@ -73,27 +76,35 @@ golden-tested. This image is Fable output too:
   Lisp loop in constant stack *through* its own eval.
 - **String interpolation.** `"sum = {a + b}"` with arbitrary nested
   expressions — including nested strings with their own interpolations.
-- **Systems and binary data.** Bitwise operators (`& | ^ << >>`) and Int
-  intrinsics (`count_ones`, `ushr`, `to_hex`, …), plus a `Bytes` buffer with
-  little- and big-endian pushers and readers for building wire formats,
-  files, and checksums by hand — the `png` and `synthwave` demos write real
-  PNG and WAV.
+- **Systems and binary data.** Bitwise operators (`& | ^ << >>`, plus
+  compound assignment `&= |= ^= <<= >>=`) and Int intrinsics (`count_ones`,
+  `ushr`, `to_hex`, `wrapping_add`/`sub`/`mul`, …), plus a `Bytes` buffer
+  with little- and big-endian pushers and readers up to 64 bits for
+  building wire formats, files, and checksums by hand — the `png` and
+  `synthwave` demos write real PNG and WAV. Hex/binary literals name the
+  full 64-bit bit pattern, so `0x8080808080808080` is as writable as `1`.
 - **Parallelism as a first-class citizen.** `worker.spawn` runs a whole
   Fable program on its own OS thread with its own heap, communicating over
-  string channels — shared-nothing isolates with panic isolation. Plus a
-  native `fft` namespace and a feature-gated `gpu` compute path.
+  string channels — shared-nothing isolates with panic isolation. `recv`
+  blocks; `try_recv` doesn't, for a parent polling several workers without
+  picking one to wait on. Plus a native `fft` namespace (with a `magnitude`
+  helper) and a feature-gated `gpu` compute path.
 - **Batteries.** 150+ built-in methods across `List`, `Map`, `String`,
-  `Bytes`, `Option`, `Result`, `Range`, `Int`, `Float`; `math`/`fs`/`os`/`fft`
-  namespaces (Result-based and `?`-friendly); and an embedded standard
-  library — `import std.json;` — written in Fable itself: json, flags, path,
-  strings (with a `Builder`), lazy iterators, and the `set`/`deque`/`lists`
-  collections.
+  `Bytes`, `Option`, `Result`, `Range` (short-circuiting `any`/`all`),
+  `Int`, `Float`; `math`/`fs`/`os`/`fft` namespaces (Result-based and
+  `?`-friendly); and an embedded standard library — `import std.json;` —
+  written in Fable itself: json (with ergonomic construction), flags, path,
+  strings (with a `Builder`), lazy iterators, deferred/memoized `Lazy[T]`
+  values, and the `set`/`deque`/`lists` collections (including key-based
+  `min_by_key`/`max_by_key`).
 
 ## The toolchain
 
 - **A test runner.** `fable test dir/` — any `.fable` file with
   `//? expect/error/panic` directives is a golden test; the interpreter's
-  own 294-test suite runs through the same command's code.
+  own 309-test suite runs through the same command's code. `--bless`
+  rewrites a mismatched `//? expect:` line in place when the value changed
+  but the print statements around it didn't, instead of making you retype it.
 - **A language server.** `fable lsp` — diagnostics as you type, hover
   types, go-to-definition across modules, and completion that works
   mid-edit. JSON-RPC hand-rolled; still zero dependencies.
@@ -125,7 +136,7 @@ golden-tested. This image is Fable output too:
 - **A real GC, stress-tested.** Tracing mark-and-sweep with checkpoint
   rooting. Run anything with `FABLE_GC_STRESS=1` to collect before *every*
   allocation — the entire test suite passes under it.
-- **An executable book.** All 122 runnable snippets in [`book/`](book/)
+- **An executable book.** All 134 runnable snippets in [`book/`](book/)
   execute in CI — including the deliberate-error demos, verified to fail
   the way the prose says they do.
 - **Seventeen golden-tested demos.** [`demos/`](demos/) holds a mini-Lisp, a
@@ -307,13 +318,18 @@ let x: Int = "no";    //? error: type mismatch
 ## Status
 
 Fable is a complete, working language. The spec (`docs/SPEC.md`) is the
-source of truth; deviations are bugs. It has grown through seven releases —
+source of truth; deviations are bugs. It has grown through eight releases —
 the core language and toolchain (v0.1–v0.5), a field-test pass that removed
-the walls real demo programs hit (v0.6), and an infrastructure release that
+the walls real demo programs hit (v0.6), an infrastructure release that
 added `Bytes`, native FFT, worker isolates, bitwise operators, a GPU path,
 and a standard-library collections layer, then a measured efficiency pass
 over the interpreter and `fable build` — self-contained single-file binaries,
-shipped as a demo zoo cross-compiled for Linux, Windows, and macOS (v0.7).
+shipped as a demo zoo cross-compiled for Linux, Windows, and macOS (v0.7) —
+and a release that worked directly through the demo round's own
+deduplicated feature-request queue: `if let`/`while let`, bitwise compound
+assignment, 64-bit hex literals and `Bytes` accessors, wrapping arithmetic,
+`Range.any`/`all`, non-blocking `worker.try_recv`, a `std.lazy` module,
+ergonomic `std.json` construction, and `fable test --bless` (v0.8).
 Features are pulled in by real use, not pushed by a roadmap; the per-release
 detail is in [`CHANGELOG.md`](CHANGELOG.md), and the project's purpose and
 invariants in [`CLAUDE.md`](CLAUDE.md).

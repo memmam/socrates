@@ -21,21 +21,18 @@ talks to its parent with `worker.recv()` and `worker.send()`:
 ```fable
 // square_worker.fable
 if worker.is_worker() {
-    while true {
-        match worker.recv() {
-            Some(msg) -> {
-                let n = msg.parse_int().unwrap();
-                worker.send(str(n * n));
-            }
-            None -> break,
-        }
+    while let Some(msg) = worker.recv() {
+        let n = msg.parse_int().unwrap();
+        worker.send(str(n * n));
     }
 }
 ```
 
 Guarding on `worker.is_worker()` means the file does nothing when run
-directly — only when spawned does it enter the loop. The parent spawns it,
-sends work, and reads results off the handle:
+directly — only when spawned does it enter the loop. `while let` is exactly
+`while true { match worker.recv() { Some(msg) -> { .. }, None -> break } }`
+(chapter 4) — the recv-loop is the idiom that motivated adding it. The
+parent spawns the worker, sends work, and reads results off the handle:
 
 ```fable
 let w = worker.spawn("square_worker.fable", []).unwrap();
@@ -121,6 +118,18 @@ else routes through Bluestein's algorithm — and the results are
 cross-checked against numpy in the test suite. The `spectra` demo builds a
 chord analyzer on it; `synthwave` uses it to verify that the notes it
 synthesized land on the frequencies it intended.
+
+Reading a spectrum almost always means magnitude, not raw re/im — a
+signal alternating every other sample puts all its energy in one bin:
+
+```fable
+let (re, im) = fft.rfft([1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0]);
+println(fft.magnitude(re, im));
+```
+
+```text
+[0.0, 0.0, 4.0, 0.0, 0.0]
+```
 
 ## `gpu`: compute shaders, behind a flag
 

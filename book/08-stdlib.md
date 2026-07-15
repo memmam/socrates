@@ -137,8 +137,8 @@ Some(8080.0)
 (`\{` writes a literal brace, since a bare `{` in a Fable string opens an
 interpolation hole.) `json.stringify` and `json.pretty` go the other way.
 Building a document by hand is just as direct with the constructors named
-for what they build (`json.jstr`, not `json.str` — this module's own code
-needs the builtin `str()`):
+for what they build — `obj`, `arr`, `jstr`, `num`, `int`, `bool`, `null`
+(`jstr`, not `str` — this module's own code needs the builtin `str()`):
 
 ```fable
 import std.json;
