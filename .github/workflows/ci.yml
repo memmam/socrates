@@ -44,6 +44,13 @@ jobs:
         run: |
           python3 -m pip install --quiet numpy
           python3 tools/fft_crosscheck.py ./target/release/fable
+      - name: pyl layer golden tests + SOS freeze check
+        run: |
+          FABLE_PATH=ports ./target/release/fable test ports/pyl/spec.fable
+          FABLE_GC_STRESS=1 FABLE_PATH=ports ./target/release/fable test ports/pyl/spec.fable
+          FABLE_PATH=ports ./target/release/fable ports/pyl/check_freeze.fable
+          python3 -m pip install --quiet scipy
+          python3 ports/claudewave/reference/check_sos_vs_scipy.py ports/claudewave/reference/sos_freeze.txt
       - name: ICAA port golden tests
         run: FABLE_PATH=ports ./target/release/fable test ports/icaa/spec.fable
       - name: ICAA port cross-validation (Fable vs JS reference)
