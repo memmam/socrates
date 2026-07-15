@@ -172,6 +172,22 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             let (or_, oi) = crate::fft::rfft(&x);
             floats_pair(vm, or_, oi)
         }
+        FftMagnitude => {
+            // Every rfft consumer wrote this same zip/hypot line; Floats
+            // aren't heap objects, so building the result list needs no
+            // extra GC rooting beyond `make_list`'s own allocation.
+            let re = float_vec_arg(vm, argc, 0)?;
+            let im = float_vec_arg(vm, argc, 1)?;
+            if re.len() != im.len() {
+                return Err(vm.error(format!(
+                    "fft.magnitude: re and im lengths differ ({} vs {})",
+                    re.len(),
+                    im.len()
+                )));
+            }
+            let mags = re.iter().zip(&im).map(|(r, i)| Value::Float(r.hypot(*i))).collect();
+            make_list(vm, mags)
+        }
 
         // ------------------------------------------------------------------
         // worker.* (v0.7) — OS-thread isolates, string channels
@@ -222,6 +238,22 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                 None => make_none(vm),
             }
         }
+        WorkerHandleTryRecv => {
+            let w = worker_rc(vm, argc)?;
+            let got = w.borrow().try_recv(); // never blocks
+            match got {
+                None => make_none(vm), // no message ready right now
+                Some(None) => {
+                    let inner = make_none(vm);
+                    make_some(vm, inner) // the worker finished
+                }
+                Some(Some(s)) => {
+                    let v = vm.alloc_str(s);
+                    let inner = make_some(vm, v);
+                    make_some(vm, inner)
+                }
+            }
+        }
         WorkerHandleJoin => {
             let w = worker_rc(vm, argc)?;
             let outcome = w.borrow_mut().join(); // blocks; idempotent
@@ -251,6 +283,29 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                     make_some(vm, v)
                 }
                 None => make_none(vm),
+            }
+        }
+        WorkerSelfTryRecv => {
+            use std::sync::mpsc::TryRecvError;
+            let got = match &vm.worker_ctx {
+                Some(ctx) => match ctx.rx.try_recv() {
+                    Ok(s) => Some(Some(s)),
+                    Err(TryRecvError::Empty) => None,
+                    Err(TryRecvError::Disconnected) => Some(None),
+                },
+                None => return Err(vm.error("worker.try_recv: not inside a worker")),
+            };
+            match got {
+                None => make_none(vm), // no message ready right now
+                Some(None) => {
+                    let inner = make_none(vm);
+                    make_some(vm, inner) // the parent hung up
+                }
+                Some(Some(s)) => {
+                    let v = vm.alloc_str(s);
+                    let inner = make_some(vm, v);
+                    make_some(vm, inner)
+                }
             }
         }
         WorkerIsWorker => Value::Bool(vm.worker_ctx.is_some()),
@@ -404,9 +459,29 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             }
             Value::Unit
         }
-        BytesReadU16le | BytesReadI16le | BytesReadU16be | BytesReadU32le | BytesReadU32be => {
+        BytesPushU64le => {
+            // No range check: `Int` is already the 64-bit two's-complement
+            // value, so its own bit pattern is exactly what gets written.
+            let v = int_arg(vm, argc, 1)?;
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(&v.to_le_bytes());
+            }
+            Value::Unit
+        }
+        BytesPushU64be => {
+            let v = int_arg(vm, argc, 1)?;
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(&v.to_be_bytes());
+            }
+            Value::Unit
+        }
+        BytesReadU16le | BytesReadI16le | BytesReadU16be | BytesReadU32le | BytesReadU32be
+        | BytesReadU64le | BytesReadU64be => {
             let off = int_arg(vm, argc, 1)?;
             let width = match n {
+                BytesReadU64le | BytesReadU64be => 8i64,
                 BytesReadU32le | BytesReadU32be => 4i64,
                 _ => 2i64,
             };
@@ -428,7 +503,17 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                 BytesReadU32le => {
                     u32::from_le_bytes([bs[o], bs[o + 1], bs[o + 2], bs[o + 3]]) as i64
                 }
-                _ => u32::from_be_bytes([bs[o], bs[o + 1], bs[o + 2], bs[o + 3]]) as i64,
+                BytesReadU32be => {
+                    u32::from_be_bytes([bs[o], bs[o + 1], bs[o + 2], bs[o + 3]]) as i64
+                }
+                BytesReadU64le => i64::from_le_bytes([
+                    bs[o], bs[o + 1], bs[o + 2], bs[o + 3], bs[o + 4], bs[o + 5], bs[o + 6],
+                    bs[o + 7],
+                ]),
+                _ => i64::from_be_bytes([
+                    bs[o], bs[o + 1], bs[o + 2], bs[o + 3], bs[o + 4], bs[o + 5], bs[o + 6],
+                    bs[o + 7],
+                ]),
             };
             Value::Int(v)
         }
@@ -1187,6 +1272,17 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                 Err(_) => make_none(vm),
             }
         }
+        StrParseHex => {
+            let s = str_ref(vm, argc, 0)?;
+            let digits = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
+            // The raw 64-bit bit pattern, like the hex literal syntax and
+            // `to_hex`'s output — no sign, so `n.to_hex().parse_hex() ==
+            // Some(n)` round-trips for every Int, including negative ones.
+            match u64::from_str_radix(digits, 16) {
+                Ok(u) => make_some(vm, Value::Int(u as i64)),
+                Err(_) => make_none(vm),
+            }
+        }
         StrToString => vm.native_arg(argc, 0),
 
         // ------------------------------------------------------------------
@@ -1342,6 +1438,15 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             // (-1).to_hex() == "ffffffffffffffff", 0.to_hex() == "0".
             let x = int_arg(vm, argc, 0)? as u64;
             vm.alloc_str(format!("{x:x}"))
+        }
+        IntWrappingAdd => {
+            Value::Int(int_arg(vm, argc, 0)?.wrapping_add(int_arg(vm, argc, 1)?))
+        }
+        IntWrappingSub => {
+            Value::Int(int_arg(vm, argc, 0)?.wrapping_sub(int_arg(vm, argc, 1)?))
+        }
+        IntWrappingMul => {
+            Value::Int(int_arg(vm, argc, 0)?.wrapping_mul(int_arg(vm, argc, 1)?))
         }
 
         FloatToInt => {
@@ -1551,6 +1656,28 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                 vm.temp_roots[top] = acc;
             }
             finish_rooted(vm, 1, acc)
+        }
+        RangeAny | RangeAll => {
+            // Short-circuiting, unlike map/filter/each — every Range item is
+            // a plain Int (never a heap object), so no GC rooting is needed.
+            let f = vm.native_arg(argc, 1);
+            let (lo, hi, inclusive) = range_of(vm, argc)?;
+            let count = range_count(lo, hi, inclusive);
+            let mut result = matches!(n, RangeAll);
+            for k in 0..count {
+                let item = Value::Int(lo.wrapping_add(k as i64));
+                let r = vm.call_value(f, &[item])?;
+                let b = expect_bool(vm, r)?;
+                if matches!(n, RangeAny) && b {
+                    result = true;
+                    break;
+                }
+                if matches!(n, RangeAll) && !b {
+                    result = false;
+                    break;
+                }
+            }
+            Value::Bool(result)
         }
     };
     vm.finish_native(argc, result);

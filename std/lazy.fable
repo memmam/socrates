@@ -1,0 +1,43 @@
+// std.lazy — deferred, memoized computation (v0.8).
+//
+// A module-level `let table = make_table();` already builds once, at
+// import time (demos/STYLE.md § 6) — but eagerly, even when the table
+// turns out never to be needed. `Lazy[T]` defers the work to the first
+// `get()` and caches the result, so an unused lazy value costs nothing:
+//
+//   import std.lazy;
+//   let table = lazy.of(|| build_expensive_table());
+//   ...
+//   table.get()   // computes and caches on the first call; free after that
+
+pub struct Lazy[T] {
+    value: Option[T],
+    thunk: fn() -> T,
+}
+
+// Wrap a zero-argument thunk. Nothing runs until the first `get()`.
+pub fn of[T](thunk: fn() -> T) -> Lazy[T] {
+    Lazy { value: None, thunk: thunk }
+}
+
+impl Lazy[T] {
+    // The computed value — computes and caches it on the first call, and
+    // every later call (on any reference to the same Lazy; structs are
+    // references) returns the cached value without calling the thunk again.
+    pub fn get(self) -> T {
+        match self.value {
+            Some(v) -> v,
+            None -> {
+                let thunk = self.thunk;
+                let v = thunk();
+                self.value = Some(v);
+                v
+            }
+        }
+    }
+
+    // Has `get()` been called yet, without forcing it?
+    pub fn is_forced(self) -> Bool {
+        self.value.is_some()
+    }
+}

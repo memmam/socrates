@@ -79,6 +79,21 @@ impl WorkerHandle {
         self.rx.recv().ok()
     }
 
+    /// Non-blocking (v0.8): `None` = no message ready right now (a blocking
+    /// `recv` would have waited); `Some(None)` = the worker finished and
+    /// the queue is drained (the same terminal state `recv` reports as a
+    /// bare `None`); `Some(Some(s))` = a message. Lets a parent poll several
+    /// workers without picking one to block on — `swarm`'s dynamic
+    /// scheduler wanted exactly this instead of its documented workaround.
+    pub fn try_recv(&self) -> Option<Option<String>> {
+        use std::sync::mpsc::TryRecvError;
+        match self.rx.try_recv() {
+            Ok(s) => Some(Some(s)),
+            Err(TryRecvError::Empty) => None,
+            Err(TryRecvError::Disconnected) => Some(None),
+        }
+    }
+
     pub fn join(&mut self) -> Result<(), String> {
         if let Some(r) = &self.result {
             return r.clone();

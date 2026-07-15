@@ -248,6 +248,55 @@ hot pixel
 pixel at (4, 2)
 ```
 
+## `if let` and `while let`: matching one pattern
+
+Testing a single pattern doesn't need a whole `match`. `if let PATTERN =
+EXPR { ... }` runs its block only when `EXPR` matches, with `else` for
+everything else:
+
+```fable
+fn describe(o: Option[Int]) -> String {
+    if let Some(n) = o {
+        "got {n}"
+    } else {
+        "nothing"
+    }
+}
+
+println(describe(Some(42)));
+println(describe(None));
+```
+
+```text
+got 42
+nothing
+```
+
+`while let` drains something one item at a time, stopping the moment the
+pattern stops matching — no `is_empty()` check, no hand-rolled `while true
+{ match ... { _ -> break } }`:
+
+```fable
+import std.deque;
+
+let q = deque.from_list([1, 2, 3]);
+let mut total = 0;
+while let Some(x) = q.pop_front() {
+    total += x;
+}
+println(total);
+```
+
+```text
+6
+```
+
+Both are sugar for `match`: `if let PAT = E { T } else { F }` is exactly
+`match E { PAT -> T, _ -> F }`, and `while let PAT = E { B }` is exactly
+`while true { match E { PAT -> B, _ -> break } }`. Because they desugar to
+an ordinary `match`, they inherit its rules for free — with no `else`, the
+arm must be `Unit`, exactly like a plain `if` with no `else`.
+
 ## Exhaustiveness: the compiler keeps score
 
 A `match` must cover every possible value of its scrutinee. If it doesn't,

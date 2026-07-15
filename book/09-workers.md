@@ -60,6 +60,32 @@ the worker has finished, `recv` blocks until a message arrives (or returns
 and reports how it ended. Inside the worker, `os.args()` returns the spawn
 arguments.
 
+`try_recv` is `recv`'s non-blocking twin, for a parent polling several
+workers without picking one to block on: outer `None` means no message is
+ready yet, `Some(None)` is `recv`'s own terminal state one level deeper (the
+worker finished), and `Some(Some(s))` is a message:
+
+```fable
+let w = worker.spawn("square_worker.fable", []).unwrap();
+println(w.try_recv());     // None — nothing sent yet, and it never blocks
+w.send("6");
+let mut got = None;
+while got.is_none() {
+    match w.try_recv() {
+        Some(inner) -> { got = Some(inner); }
+        None -> {}          // not ready — a real poller would check another worker
+    }
+}
+println(got);
+println(w.join());
+```
+
+```text
+None
+Some(Some("36"))
+Ok(())
+```
+
 Two properties make workers pleasant to build on. First, **channels
 buffer**: a parent can deal out every job up front and collect the answers
 afterward, getting full parallelism with no synchronization code. Second,

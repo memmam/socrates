@@ -383,6 +383,11 @@ impl<'a> Parser<'a> {
             TokenKind::StarEq => Some(Some(BinOp::Mul)),
             TokenKind::SlashEq => Some(Some(BinOp::Div)),
             TokenKind::PercentEq => Some(Some(BinOp::Rem)),
+            TokenKind::AmpEq => Some(Some(BinOp::BitAnd)),
+            TokenKind::PipeEq => Some(Some(BinOp::BitOr)),
+            TokenKind::CaretEq => Some(Some(BinOp::BitXor)),
+            TokenKind::ShlEq => Some(Some(BinOp::Shl)),
+            TokenKind::ShrEq => Some(Some(BinOp::Shr)),
             _ => None,
         };
         if let Some(op) = op {
@@ -464,12 +469,78 @@ impl<'a> Parser<'a> {
 
     fn while_stmt(&mut self) -> PResult<Stmt> {
         let start = self.advance().span;
+        if self.at(&TokenKind::Let) {
+            return self.while_let_stmt(start);
+        }
         let cond = self.no_struct_expr()?;
         let body = self.block()?;
         Ok(Stmt {
             span: start.to(body.span),
             id: self.id(),
             kind: StmtKind::While { cond, body },
+        })
+    }
+
+    /// `while let PATTERN = EXPR { BODY }` (v0.8) — sugar for the
+    /// recv/drain-loop dance (`while true { match EXPR { PATTERN -> BODY,
+    /// _ -> break } }`, already a documented idiom, STYLE.md § 5). Desugars
+    /// fully here: the outer `while true` and the fallback `_ -> break` arm
+    /// are synthesized, so the checker's usual `expect_unit_body` on the
+    /// while's block forces BODY to be Unit exactly as a hand-written loop
+    /// would, and codegen is the ordinary While + Match paths, unchanged.
+    fn while_let_stmt(&mut self, start: Span) -> PResult<Stmt> {
+        self.advance(); // `let`
+        let pattern = self.pattern()?;
+        self.expect(&TokenKind::Eq, "`=` after `while let` pattern")?;
+        let scrutinee = self.no_struct_expr()?;
+        let body = self.block()?;
+        let body_span = body.span;
+        let match_span = start.to(body_span);
+
+        let user_arm = MatchArm {
+            pattern,
+            guard: None,
+            body: Expr { span: body_span, id: self.id(), kind: ExprKind::Block(body) },
+            span: match_span,
+            sugar: false,
+        };
+        let break_block = Block {
+            stmts: vec![Stmt { span: body_span, id: self.id(), kind: StmtKind::Break }],
+            span: body_span,
+            id: self.id(),
+        };
+        let fallback_arm = MatchArm {
+            pattern: Pattern { kind: PatternKind::Wildcard, span: body_span, id: self.id() },
+            guard: None,
+            body: Expr { span: body_span, id: self.id(), kind: ExprKind::Block(break_block) },
+            span: body_span,
+            sugar: true,
+        };
+        let match_expr = Expr {
+            span: match_span,
+            id: self.id(),
+            kind: ExprKind::Match {
+                scrutinee: Box::new(scrutinee),
+                arms: vec![user_arm, fallback_arm],
+                sugar: MatchSugar::WhileLet,
+            },
+        };
+        let loop_body = Block {
+            stmts: vec![Stmt {
+                span: match_span,
+                id: self.id(),
+                kind: StmtKind::Expr { expr: match_expr, tail: true },
+            }],
+            span: match_span,
+            id: self.id(),
+        };
+        Ok(Stmt {
+            span: match_span,
+            id: self.id(),
+            kind: StmtKind::While {
+                cond: Expr { span: start, id: self.id(), kind: ExprKind::Bool(true) },
+                body: loop_body,
+            },
         })
     }
 
@@ -1437,6 +1508,9 @@ impl<'a> Parser<'a> {
 
     fn if_expr(&mut self) -> PResult<Expr> {
         let start = self.advance().span; // `if`
+        if self.at(&TokenKind::Let) {
+            return self.if_let_expr(start);
+        }
         let cond = self.no_struct_expr()?;
         let then = self.block()?;
         let mut span = start.to(then.span);
@@ -1457,6 +1531,61 @@ impl<'a> Parser<'a> {
             span,
             id: self.id(),
             kind: ExprKind::If { cond: Box::new(cond), then, els },
+        })
+    }
+
+    /// `if let PATTERN = EXPR { THEN } [else ...]` (v0.8) — sugar for
+    /// `match EXPR { PATTERN -> THEN, _ -> ELSE-or-Unit }`. Desugars fully
+    /// here into an ordinary two-arm `Match`: with no `else`, the fallback
+    /// arm's body is a literal `Unit`, which — via the same arm-type
+    /// unification every `Match` already does — forces THEN to be
+    /// Unit-typed too, exactly like a plain `if` with no `else`. An
+    /// `else if` chains through a recursive `if_expr` call, exactly as
+    /// plain `if`/`else if` already does.
+    fn if_let_expr(&mut self, start: Span) -> PResult<Expr> {
+        self.advance(); // `let`
+        let pattern = self.pattern()?;
+        self.expect(&TokenKind::Eq, "`=` after `if let` pattern")?;
+        let scrutinee = self.no_struct_expr()?;
+        let then = self.block()?;
+        let then_span = then.span;
+        let mut span = start.to(then_span);
+        let fallback_body = if self.eat(&TokenKind::Else) {
+            let e = if self.at(&TokenKind::If) {
+                self.if_expr()?
+            } else {
+                let b = self.block()?;
+                let bspan = b.span;
+                Expr { span: bspan, id: self.id(), kind: ExprKind::Block(b) }
+            };
+            span = span.to(e.span);
+            e
+        } else {
+            Expr { span: then_span, id: self.id(), kind: ExprKind::Unit }
+        };
+        let user_arm = MatchArm {
+            pattern,
+            guard: None,
+            body: Expr { span: then_span, id: self.id(), kind: ExprKind::Block(then) },
+            span,
+            sugar: false,
+        };
+        let fallback_span = fallback_body.span;
+        let fallback_arm = MatchArm {
+            pattern: Pattern { kind: PatternKind::Wildcard, span: fallback_span, id: self.id() },
+            guard: None,
+            body: fallback_body,
+            span: fallback_span,
+            sugar: false,
+        };
+        Ok(Expr {
+            span,
+            id: self.id(),
+            kind: ExprKind::Match {
+                scrutinee: Box::new(scrutinee),
+                arms: vec![user_arm, fallback_arm],
+                sugar: MatchSugar::IfLet,
+            },
         })
     }
 
@@ -1494,7 +1623,7 @@ impl<'a> Parser<'a> {
         Ok(Expr {
             span: start.to(end),
             id: self.id(),
-            kind: ExprKind::Match { scrutinee: Box::new(scrutinee), arms },
+            kind: ExprKind::Match { scrutinee: Box::new(scrutinee), arms, sugar: MatchSugar::None },
         })
     }
 
@@ -1558,6 +1687,11 @@ impl<'a> Parser<'a> {
                 | TokenKind::StarEq
                 | TokenKind::SlashEq
                 | TokenKind::PercentEq
+                | TokenKind::AmpEq
+                | TokenKind::PipeEq
+                | TokenKind::CaretEq
+                | TokenKind::ShlEq
+                | TokenKind::ShrEq
         ) {
             let span = self.span();
             self.diags.push(

@@ -1314,7 +1314,9 @@ impl Checker {
                 }
             }
             ExprKind::Block(block) => self.check_block(block, expected),
-            ExprKind::Match { scrutinee, arms } => self.check_match(e, scrutinee, arms, expected),
+            ExprKind::Match { scrutinee, arms, sugar } => {
+                self.check_match(e, scrutinee, arms, *sugar, expected)
+            }
         }
     }
 
@@ -2644,7 +2646,9 @@ impl Checker {
         let ok = match op {
             Add => matches!(r, Type::Int | Type::Float | Type::Str),
             Sub | Mul | Div => matches!(r, Type::Int | Type::Float),
-            Rem => matches!(r, Type::Int),
+            // Bitwise compound assignment (v0.8) mirrors plain `&`/`|`/`^`/
+            // `<<`/`>>`: Int-only, no operator-method dispatch.
+            Rem | BitAnd | BitOr | BitXor | Shl | Shr => matches!(r, Type::Int),
             _ => true,
         };
         if matches!(r, Type::Var(_)) {
@@ -2654,7 +2658,7 @@ impl Checker {
         if !ok {
             let allowed = match op {
                 Add => "`Int`, `Float`, or `String`",
-                Rem => "`Int`",
+                Rem | BitAnd | BitOr | BitXor | Shl | Shr => "`Int`",
                 _ => "`Int` or `Float`",
             };
             let mut d = Diagnostic::error(
@@ -2895,6 +2899,7 @@ impl Checker {
         e: &Expr,
         scrutinee: &Expr,
         arms: &[MatchArm],
+        sugar: MatchSugar,
         expected: Option<&Type>,
     ) -> Type {
         let st = self.check_expr(scrutinee, None);
@@ -2958,6 +2963,7 @@ impl Checker {
             scrut_ty: st.clone(),
             scrut_span: scrutinee.span,
             arms: lowered,
+            sugar,
         });
         result
     }
@@ -2983,7 +2989,12 @@ impl Checker {
                     )
                     .is_some()
                 });
-                if !reachable {
+                // `if let`/`while let` (v0.8) always append a synthetic
+                // wildcard fallback arm; when the user's own pattern is
+                // already irrefutable, that fallback is unreachable, but the
+                // user never wrote it — don't warn about compiler-generated
+                // code they can't see or edit.
+                if !reachable && dm.sugar == MatchSugar::None {
                     self.diags.push(
                         Diagnostic::warning("W0101", "unreachable match arm")
                             .with_label(arm.pattern_span, "this pattern is covered by earlier arms"),
@@ -3778,6 +3789,7 @@ struct DeferredMatch {
     scrut_ty: Type,
     scrut_span: Span,
     arms: Vec<DeferredArm>,
+    sugar: MatchSugar,
 }
 
 /// Does this block contain a `break` anywhere in its subtree?
@@ -3851,7 +3863,7 @@ fn expr_contains_break(e: &Expr) -> bool {
                 || els.as_deref().is_some_and(expr_contains_break)
         }
         ExprKind::Block(b) => block_contains_break(b),
-        ExprKind::Match { scrutinee, arms } => {
+        ExprKind::Match { scrutinee, arms, .. } => {
             expr_contains_break(scrutinee)
                 || arms.iter().any(|a| {
                     a.guard.as_ref().is_some_and(expr_contains_break)

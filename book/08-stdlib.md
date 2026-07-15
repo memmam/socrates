@@ -63,6 +63,24 @@ println("{b.build()} ({b.len()} chars)");
 Hello, world (12 chars)
 ```
 
+`is_empty()` and `push_joined(sep, s)` round it out for line- or
+field-oriented output — the latter pushes `sep` before every piece except
+the first, so a CSV row or a joined list needs no manual `if len() > 0`:
+
+```fable
+import std.strings;
+
+let row = strings.builder();
+for field in ["a", "bb", "ccc"] {
+    row.push_joined(",", field);
+}
+println(row.build());
+```
+
+```text
+a,bb,ccc
+```
+
 **Collections beyond `List` and `Map`.** `std.set` is a `Set[T]` whose
 `insert` returns whether the value was new — the one-call membership test:
 
@@ -85,18 +103,20 @@ false
 `std.deque` is a double-ended queue with `push_front`/`push_back` and
 `pop_front`/`pop_back` (each an `Option`), and `std.lists` adds the
 aggregates `List` leaves out — `sum`, `min`/`max` (returning `Option`),
-`min_by`/`max_by`, and `fill`:
+`min_by`/`max_by`, `min_by_key`/`max_by_key`, and `fill`:
 
 ```fable
 import std.lists;
 
 println(lists.sum([1, 2, 3, 4]));
 println(lists.max([3, 1, 4, 1, 5]));
+println(lists.max_by_key(["a", "bbb", "cc"], |w| w.len()));
 ```
 
 ```text
 10
 Some(5)
+Some("bbb")
 ```
 
 **JSON**, parsed and generated, with `?`-friendly accessors:
@@ -116,6 +136,20 @@ Some(8080.0)
 
 (`\{` writes a literal brace, since a bare `{` in a Fable string opens an
 interpolation hole.) `json.stringify` and `json.pretty` go the other way.
+Building a document by hand is just as direct with the constructors named
+for what they build (`json.jstr`, not `json.str` — this module's own code
+needs the builtin `str()`):
+
+```fable
+import std.json;
+
+let cfg = json.obj([("port", json.int(8080)), ("host", json.jstr("localhost"))]);
+println(json.stringify(cfg));
+```
+
+```text
+{"port":8080,"host":"localhost"}
+```
 
 **Lazy iterators**, built from nothing but structs and closures — no
 interpreter support required. An `Iter[T]` computes nothing until a consumer
@@ -135,6 +169,28 @@ println(touched);                     // [1, 2] — only what was pulled
 []
 [10, 20]
 [1, 2]
+```
+
+**Deferred, memoized computation.** A module-level `let table = build();`
+already runs once, at import — but eagerly, whether or not `table` ends up
+used. `Lazy[T]` defers the work to the first `get()` and caches it:
+
+```fable
+import std.lazy;
+
+let mut calls = 0;
+let table = lazy.of(|| { calls += 1; [1, 2, 3] });
+println(calls);        // 0 — nothing has run yet
+println(table.get());
+println(table.get());  // cached — the thunk runs at most once
+println(calls);
+```
+
+```text
+0
+[1, 2, 3]
+[1, 2, 3]
+1
 ```
 
 Rounding out the set: `std.flags` is deliberately rigid CLI parsing

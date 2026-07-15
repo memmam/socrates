@@ -44,7 +44,13 @@ error (E0106) pointing at the symbolic spelling.
 
 - **Int**: `0`, `42`, `1_000_000` (underscores may appear anywhere after the first
   digit), `0x2A`/`0X2A` (hex), `0b1010`/`0B1010` (binary). 64-bit signed.
-  Out-of-range literals are a compile error (E0105).
+  Decimal literals are range-checked as `i64`; hex/binary literals name the
+  raw 64-bit bit pattern (parsed as `u64`, then reinterpreted as the
+  two's-complement `Int` — v0.8), so every pattern `to_hex()` can produce,
+  bit 63 included, is also writable as a literal (`0x8000000000000000` is
+  `Int`'s minimum value; `0xffffffffffffffff` is `-1`). Out-of-range
+  literals — decimal beyond `i64`, or hex/binary needing a 65th bit — are a
+  compile error (E0105).
 - **Float**: `3.14`, `0.5`, `1e9`, `2.5e-3` (`e` or `E`). A float literal must have a
   digit before the `.` (`.5` is invalid; `0.5` is required). `1.` is invalid; `1.0` is
   required. A float literal whose value overflows evaluates to `inf`.
@@ -204,7 +210,9 @@ unary complement: `x ^ -1` flips every bit.
 The arithmetic operators (and unary `-`) also apply to user types through
 **operator methods** (v0.3, § 5.1): `a + b` dispatches to `a.add(b)` when
 `a`'s type defines one. `==`/`!=` remain structural for all types and cannot
-be overloaded; compound assignment (`+=`) never dispatches.
+be overloaded; compound assignment (`+=`) never dispatches. The bitwise
+operators have their own compound-assignment forms (v0.8) — `&= |= ^= <<=
+>>=` — Int-only like the plain operators, and likewise never dispatching.
 
 ### 3.2 Equality
 
@@ -242,6 +250,20 @@ let grade = if score >= 90 { "A" } else if score >= 80 { "B" } else { "C" }
   trailing expression is required. A function whose body ends in an escape-free
   `while true` loop typechecks with any return type. `panic(..)` and
   `os.exit(..)` likewise typecheck in any value position.
+- **`if let` / `while let`** (v0.8): `if let PATTERN = EXPR { .. } [else ..]`
+  and `while let PATTERN = EXPR { .. }` test a single pattern against `EXPR`
+  without the ceremony of a full `match`. Both are sugar, expanded at parse
+  time: `if let` is exactly `match EXPR { PATTERN -> THEN, _ -> ELSE }` (an
+  expression, usable anywhere `if` is — with no `else`, the implicit `_`
+  branch is `Unit`, so `THEN` must be too, exactly as a plain `if` with no
+  `else`); `while let` is exactly `while true { match EXPR { PATTERN ->
+  BODY, _ -> break } }` (the drain-loop idiom this replaces). Because both
+  desugar to ordinary `match`/`while`, everything about them — pattern
+  refutability, `else if let` chaining, `break`/`continue` scoping, GC
+  behavior — follows from those forms with no special cases; a pattern that
+  happens to be irrefutable (matches unconditionally) makes the implicit
+  fallback unreachable, which is silently fine rather than a warning, since
+  the user never wrote that arm.
 
 ### 3.4 Lambdas
 
@@ -360,7 +382,8 @@ expression statements        // execute in order
   Assigning to a plain `let` is a compile error. Field/index assignments (`p.x = v`,
   `xs[i] = v`, `m[k] = v`) do not require `mut` (the binding still points at the same
   object).
-- Compound assignment: `x += e`, `-=`, `*=`, `/=`, `%=` (sugar; same rules as `=`).
+- Compound assignment: `x += e`, `-=`, `*=`, `/=`, `%=` (sugar; same rules as
+  `=`), plus the bitwise set `&=`, `|=`, `^=`, `<<=`, `>>=` (v0.8, Int-only).
 - Semicolons terminate statements. The final expression of a block may omit the
   semicolon to become the block's value. `fn`, `struct`, `enum`, `if`, `match`,
   `while`, `for` used as statements do not need a trailing semicolon.
@@ -540,6 +563,7 @@ split-complex signals — a complex vector is a pair of equal-length
 | `fft.fft(re, im)` | `fn(List[Float], List[Float]) -> (List[Float], List[Float])` | forward DFT, no normalization |
 | `fft.ifft(re, im)` | `fn(List[Float], List[Float]) -> (List[Float], List[Float])` | inverse DFT, normalized by `1/n` |
 | `fft.rfft(x)` | `fn(List[Float]) -> (List[Float], List[Float])` | real input; the first `n/2 + 1` bins of `fft(x, zeros)` |
+| `fft.magnitude(re, im)` | `fn(List[Float], List[Float]) -> List[Float]` | `sqrt(re[i]^2 + im[i]^2)` per bin (v0.8) — every `rfft` consumer wrote this by hand |
 
 Any length `n >= 1` is supported in O(n log n): powers of two run an
 iterative radix-2 Cooley–Tukey; every other length goes through
@@ -559,6 +583,7 @@ the only things that cross the boundary are `String` messages
 | `worker.spawn(file, args)` | `fn(String, List[String]) -> Result[Worker, String]` | compile + start `file` on a new thread |
 | `worker.send(s)` | `fn(String) -> Bool` | worker → parent; errors outside a worker |
 | `worker.recv()` | `fn() -> Option[String]` | parent → worker; **blocks**; `None` = parent hung up (joined or dropped the handle); errors outside a worker |
+| `worker.try_recv()` | `fn() -> Option[Option[String]]` | (v0.8) the non-blocking twin of `worker.recv()` — never waits; outer `None` = no message ready right now, `Some(None)` = the parent hung up (recv's own terminal state, one level deeper), `Some(Some(s))` = a message; errors outside a worker |
 | `worker.is_worker()` | `fn() -> Bool` | is this program running as a worker? |
 
 `spawn` resolves `file` relative to the entry script's directory (the
@@ -588,20 +613,21 @@ Two more joined in v0.7:
 
 ### 7.1 The standard library (v0.4; expanded in v0.7)
 
-Eight modules written in Fable ship inside the interpreter, imported like any
+Nine modules written in Fable ship inside the interpreter, imported like any
 module (`import std.json;`, aliased with `as`). Everything below is `pub`;
 these modules follow the same visibility rules as user code.
 
 | Module | Exports |
 |--------|---------|
-| `std.json` | `parse(String) -> Result[Json, String]`, `stringify(Json) -> String`, `pretty(Json) -> String`; `enum Json { JNull, JBool, JNum, JStr, JArr, JObj }` with methods `get(key)`, `at(i)`, `as_str()`, `as_num()`, `as_bool()`, `is_null()`, `len()` |
+| `std.json` | `parse(String) -> Result[Json, String]`, `stringify(Json) -> String`, `pretty(Json) -> String`; `enum Json { JNull, JBool, JNum, JStr, JArr, JObj }` with methods `get(key)`, `at(i)`, `as_str()`, `as_num()`, `as_bool()`, `is_null()`, `len()`; ergonomic constructors (v0.8) `obj(entries)`, `arr(items)`, `jstr(s)`, `num(f)`, `int(i)` (`= num(i.to_float())`), `bool(b)`, `null()` — the same tree as the raw `Json.J*` constructors, named for what they build (`jstr`, not `str`, so it can't shadow the prelude `str()` for code in this module) |
 | `std.flags` | `flag(args, name) -> Bool`, `value(args, name) -> Option[String]` (only `--name=value` carries a value), `value_or(args, name, fallback)`, `positionals(args)`; a literal `--` ends flag parsing |
 | `std.path` | `join`, `base_name`, `dir_name`, `ext`, `strip_ext` — purely textual, slash-separated |
-| `std.strings` | `lines` (trailing-newline aware), `words`, `join_lines`, `ellipsize`, `strip_prefix`, `strip_suffix`; a `Builder` for string accumulation (v0.7): `builder()` makes one, methods `push(s)`, `push_char(code)`, `len()` (characters so far, O(1)), `build()` (one join; non-consuming), `clear()` — `+=` in a loop is O(n²), a Builder is O(n) |
+| `std.strings` | `lines` (trailing-newline aware), `words`, `join_lines`, `ellipsize`, `strip_prefix`, `strip_suffix`; a `Builder` for string accumulation (v0.7): `builder()` makes one, methods `push(s)`, `push_char(code)`, `len()` (characters so far, O(1)), `is_empty()` (v0.8), `build()` (one join; non-consuming), `push_joined(sep, s)` (v0.8: pushes `sep` first unless this is the builder's first piece — the separator-before-each-line idiom without a manual `if len() > 0` at every call site), `clear()` — `+=` in a loop is O(n²), a Builder is O(n) |
 | `std.iter` | lazy sequences: `of(list)`, `count_from(n)`, `from_fn(f)` build an `Iter[T]`; adapters `map`, `filter`, `take`, `chain`, `zip`; consumers `collect`, `fold`, `each`, `count`. Implemented entirely in Fable (an `Iter[T]` is a struct holding a `next` closure). |
-| `std.lists` | free-function list helpers (v0.7; builtins cannot gain methods): `fill(n, v)` (`n` aliases of one value), `sum` / `sum_float`, `min` / `max` / `min_float` / `max_float` (`Option`; `None` for `[]`), `min_by(xs, cmp)` / `max_by(xs, cmp)` under the `sort_by` comparator convention (negative/zero/positive) — ties keep the **first** winner |
+| `std.lists` | free-function list helpers (v0.7; builtins cannot gain methods): `fill(n, v)` (`n` aliases of one value), `sum` / `sum_float`, `min` / `max` / `min_float` / `max_float` (`Option`; `None` for `[]`), `min_by(xs, cmp)` / `max_by(xs, cmp)` under the `sort_by` comparator convention (negative/zero/positive), `min_by_key(xs, key)` / `max_by_key(xs, key)` (v0.8: an `Int`-valued key extractor instead of a comparator) — ties keep the **first** winner |
 | `std.set` | `Set[T]` (v0.7), backed by `Map[T, Unit]`: structural membership, insertion-order iteration. `new()`, `from_list(xs)` (first occurrence wins); methods `insert(v) -> Bool` / `remove(v) -> Bool` (did anything change), `contains`, `len`, `is_empty`, `to_list`, and `union` / `intersect` / `difference` — each returns a **new** set ordered by the left operand's insertion order, then the right's |
 | `std.deque` | `Deque[T]` (v0.7), a double-ended queue with amortized O(1) ends (two-stack representation; a pop on an empty side reverses the other side across). `new()`, `from_list(xs)` (copies); methods `push_front` / `push_back`, `pop_front` / `pop_back` / `front` / `back` (all `Option[T]`), `len`, `is_empty`, `to_list` (front to back) |
+| `std.lazy` | `Lazy[T]` (v0.8): deferred, memoized computation. `of(thunk: fn() -> T) -> Lazy[T]` wraps a zero-argument thunk that doesn't run until needed; methods `get() -> T` (computes and caches on the first call, free on every later call — on any reference, since structs are references) and `is_forced() -> Bool`. For a module-level table that's expensive to build and not always needed — a plain top-level `let` already builds once at import (eagerly); `Lazy` defers that to first use. |
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
@@ -711,7 +737,11 @@ except that the empty pattern matches at the end),
 `trim() -> String`, `trim_start() -> String`, `trim_end() -> String`
 (Unicode whitespace; v0.6 added the one-sided pair), `parse_int() -> Option[Int]`
 (optional sign, decimal only, no surrounding spaces),
-`parse_float() -> Option[Float]`, `to_string() -> String` (identity),
+`parse_float() -> Option[Float]`, `parse_hex() -> Option[Int]` (v0.8: an
+optional `0x`/`0X` prefix then hex digits, case-insensitive, no sign — the
+inverse of `to_hex()`, so `n.to_hex().parse_hex() == Some(n)` for every
+`Int`; invalid digits or an empty string give `None`),
+`to_string() -> String` (identity),
 `to_bytes() -> Bytes` (the UTF-8 encoding; the inverse bridge is
 `Bytes.utf8()`, § 8.4b).
 
@@ -739,10 +769,17 @@ argument first, so appending a buffer to itself appends its old
 contents), `push_u16le(Int)` / `push_i16le(Int)` / `push_u32le(Int)`
 and the big-endian pair `push_u16be(Int)` / `push_u32be(Int)`
 (multi-byte appends with range checks — wire formats need no bitwise
-operators), `read_u16le(Int) -> Int` / `read_i16le(Int) -> Int` /
+operators), `push_u64le(Int)` / `push_u64be(Int)` (v0.8; no range check —
+`Int` already *is* the 64-bit two's-complement value, so its own bit
+pattern is what gets written; one method covers the u64/i64 split the
+16/32-bit pushers need, since at 64 bits the two are the same operation),
+`read_u16le(Int) -> Int` / `read_i16le(Int) -> Int` /
 `read_u32le(Int) -> Int` / `read_u16be(Int) -> Int` /
-`read_u32be(Int) -> Int` (the multi-byte reads back, at a byte offset;
-a read that would touch any byte outside the buffer panics like `get`),
+`read_u32be(Int) -> Int` / `read_u64le(Int) -> Int` / `read_u64be(Int) ->
+Int` (v0.8 for the 64-bit pair; the multi-byte reads back, at a byte
+offset; a read that would touch any byte outside the buffer panics like
+`get`; unlike the 16/32-bit reads, a 64-bit read can come back negative
+when bit 63 is set, matching `to_hex`/hex-literal semantics),
 `slice(Int, Int) -> Bytes` (clamped copy, like `List.slice`),
 `concat(Bytes) -> Bytes` (new buffer), `to_list() -> List[Int]`,
 `utf8() -> Result[String, String]` (UTF-8 decode). `String.to_bytes() ->
@@ -759,7 +796,12 @@ map key.
 
 `send(String) -> Bool` (`false` once the worker has finished),
 `recv() -> Option[String]` (**blocks**; `None` means the worker finished
-and every message it sent has been received), `join() -> Result[Unit,
+and every message it sent has been received),
+`try_recv() -> Option[Option[String]]` (v0.8: the non-blocking twin —
+never waits; outer `None` = no message ready right now, `Some(None)` =
+`recv`'s own terminal state one level deeper, `Some(Some(s))` = a message —
+lets a parent poll several workers without picking one to block on),
+`join() -> Result[Unit,
 String]` (**blocks**: hangs up the parent's send side — a worker blocked
 in `worker.recv()` sees `None` — then waits; `Err` carries the worker's
 panic message; joining again returns the cached result; messages the
@@ -784,6 +826,13 @@ panic; a negative count rotates the other way), `to_hex() -> String`
 `(-1).to_hex() == "ffffffffffffffff"`, `255.to_hex() == "ff"`,
 `0.to_hex() == "0"`; fixed widths via `pad_left`).
 
+Wrapping arithmetic (v0.8): `wrapping_add(Int) -> Int` /
+`wrapping_sub(Int) -> Int` / `wrapping_mul(Int) -> Int` truncate to the low
+64 bits instead of panicking like the checked `+`/`-`/`*` operators —
+for hash finalizers and similar bit-mixing code. One 64-bit primitive
+covers a 32-bit wrap too: mask after wrapping (`a.wrapping_mul(b) &
+0xFFFFFFFF`), rather than a separate 32-bit-specific intrinsic.
+
 `Float`: `to_int() -> Int` (truncates toward zero; panics on NaN or out of Int
 range), `to_string() -> String`, `abs()`, `floor()`, `ceil()`, `round()`,
 `sqrt()`, `is_nan() -> Bool`, `to_fixed(Int) -> String` (v0.6: exactly n
@@ -805,7 +854,10 @@ error), `unwrap_or(T) -> T`, `unwrap_err() -> E` (panics on `Ok`),
 `to_list() -> List[Int]`, `contains(Int) -> Bool`, `len() -> Int`,
 `map[U](fn(Int) -> U) -> List[U]`, `filter(fn(Int) -> Bool) -> List[Int]`,
 `each(fn(Int) -> Unit) -> Unit`, `fold[A](A, fn(A, Int) -> A) -> A`,
-`rev() -> List[Int]`. Ranges are values: `let r = 1..10;`.
+`rev() -> List[Int]`, `any(fn(Int) -> Bool) -> Bool` / `all(fn(Int) ->
+Bool) -> Bool` (v0.8, short-circuiting like `List`'s — previously reachable
+only via `.to_list().any(..)`, an unneeded allocation). Ranges are values:
+`let r = 1..10;`.
 
 ### 8.8 Universal method
 
@@ -838,8 +890,9 @@ stmt        = let_stmt | assign_or_expr_stmt | while_stmt | for_stmt
 let_stmt    = "let" [ "mut" ] let_pattern [ ":" type ] "=" expr ";" ;
 let_pattern = IDENT | tuple_pat | struct_pat ;
 assign_or_expr_stmt = expr [ assign_op expr ] ";"?   (* ";" required unless final in block *)
-assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "%=" ;
-while_stmt  = "while" expr block ;
+assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "%="
+            | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
+while_stmt  = "while" expr block | "while" "let" pattern "=" expr block ;
 for_stmt    = "for" let_pattern "in" expr block ;
 return_stmt = "return" [ expr ] ";" ;
 
@@ -853,7 +906,8 @@ expr        = or_expr | if_expr | match_expr | block | lambda ;
 lambda      = "|" [ lambda_params ] "|" ( [ "->" type ] block | expr ) ;
 lambda_params = lambda_param { "," lambda_param } [ "," ] ;
 lambda_param  = ( IDENT | "_" ) [ ":" type ] ;
-if_expr     = "if" expr block [ "else" ( if_expr | block ) ] ;
+if_expr     = "if" expr block [ "else" ( if_expr | block ) ]
+            | "if" "let" pattern "=" expr block [ "else" ( if_expr | block ) ] ;
 match_expr  = "match" expr "{" arm { "," arm } [ "," ] "}" ;
 arm         = pattern [ "if" expr ] "->" arm_body ;
 arm_body    = expr | "return" [ expr ] | "break" | "continue" ;
@@ -906,6 +960,15 @@ A struct-literal field is `IDENT ":" expr` or the shorthand `IDENT` — § 2.3.)
   and expected/actual lines are compared ignoring trailing whitespace
   (trailing spaces in a directive are invisible in an editor, so they can't
   be pinned reliably). Unknown flags are rejected with a usage message.
+  `--bless` (v0.8) re-pins: a stdout-only mismatch whose actual and expected
+  line counts already agree has its `//? expect:` lines rewritten in place
+  to match the actual output instead of failing (a line-count change means
+  a print statement was added or removed, which directive corresponds to
+  which new line is then ambiguous, so that case is left as a normal
+  failure for a human to re-pin; `//? error:`/`//? panic:` directives are
+  never rewritten either way). Automates the manual "run, pipe through
+  `sed`, append, re-run" workflow (demos/STYLE.md § 1) for the common case
+  of a value changing without the print statements around it changing.
 - `fable lsp` (v0.4) — a language server over stdio: diagnostics on
   open/change (identical to `fable check`, imports included), hover with
   checked types, go-to-definition across module files, and completion

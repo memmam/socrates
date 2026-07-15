@@ -89,6 +89,21 @@ impl Builder {
         self.chars
     }
 
+    // True if nothing has been pushed yet.
+    pub fn is_empty(self) -> Bool {
+        self.chars == 0
+    }
+
+    // Push `s`, first pushing `sep` if this builder already has content —
+    // the "emit the separator before each piece, gated on len() > 0" idiom
+    // (demos/STYLE.md § 6) without a manual check at every call site.
+    pub fn push_joined(self, sep: String, s: String) {
+        if !self.is_empty() {
+            self.push(sep);
+        }
+        self.push(s);
+    }
+
     // The accumulated string, in one decode. The builder is left intact:
     // building twice gives the same string. The buffer holds exactly the
     // pushed pieces' UTF-8, so the decode cannot fail.

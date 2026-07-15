@@ -1,0 +1,22 @@
+// Range.any/all (v0.8): short-circuiting, like List's — previously only
+// reachable via `.to_list().any(..)`, an unnecessary allocation.
+
+println((0..10).any(|x| x == 7));      //? expect: true
+println((0..10).any(|x| x == 20));     //? expect: false
+println((0..10).all(|x| x < 20));      //? expect: true
+println((0..10).all(|x| x < 5));       //? expect: false
+println((1..=5).any(|x| x % 2 == 0));  //? expect: true
+println((1..=5).all(|x| x > 0));       //? expect: true
+
+// Empty ranges: `any` is vacuously false, `all` is vacuously true.
+println((5..5).any(|_| true));         //? expect: false
+println((5..5).all(|_| false));        //? expect: true
+
+// Short-circuits: a predicate that would panic past the first hit never runs.
+let mut calls = 0;
+println((0..1000).any(|x| { calls += 1; x == 2 })); //? expect: true
+println(calls);                        //? expect: 3
+
+let mut calls2 = 0;
+println((0..1000).all(|x| { calls2 += 1; x < 2 })); //? expect: false
+println(calls2);                       //? expect: 3

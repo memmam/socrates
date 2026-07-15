@@ -1158,7 +1158,7 @@ impl<'a> Compiler<'a> {
                 }
             }
             ExprKind::Block(block) => self.block_expr(block),
-            ExprKind::Match { scrutinee, arms } => self.match_expr(e, scrutinee, arms),
+            ExprKind::Match { scrutinee, arms, .. } => self.match_expr(e, scrutinee, arms),
         }
     }
 
@@ -1198,7 +1198,7 @@ impl<'a> Compiler<'a> {
                 }
             }
             ExprKind::Block(block) => self.block_expr_tail(block),
-            ExprKind::Match { scrutinee, arms } => {
+            ExprKind::Match { scrutinee, arms, .. } => {
                 self.match_expr_impl(e, scrutinee, arms, true)
             }
             _ => self.expr(e),

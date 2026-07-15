@@ -66,6 +66,16 @@ pub enum TokenKind {
     Shl,
     /// `>>` — arithmetic right shift (v0.7).
     Shr,
+    /// `&=` — bitwise-and compound assignment (v0.8), `Int`-only.
+    AmpEq,
+    /// `|=` — bitwise-or compound assignment (v0.8), `Int`-only.
+    PipeEq,
+    /// `^=` — bitwise-xor compound assignment (v0.8), `Int`-only.
+    CaretEq,
+    /// `<<=` — left-shift compound assignment (v0.8), `Int`-only.
+    ShlEq,
+    /// `>>=` — arithmetic-right-shift compound assignment (v0.8), `Int`-only.
+    ShrEq,
     Bang,
     Eq,
     Arrow,     // ->
@@ -142,6 +152,11 @@ impl TokenKind {
             Caret => "`^`".into(),
             Shl => "`<<`".into(),
             Shr => "`>>`".into(),
+            AmpEq => "`&=`".into(),
+            PipeEq => "`|=`".into(),
+            CaretEq => "`^=`".into(),
+            ShlEq => "`<<=`".into(),
+            ShrEq => "`>>=`".into(),
             Bang => "`!`".into(),
             Eq => "`=`".into(),
             Arrow => "`->`".into(),

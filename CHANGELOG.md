@@ -4,6 +4,65 @@ Each release was shipped as one reviewed pull request. Golden spec tests pin
 every feature listed here; `docs/SPEC.md` marks each with the version that
 introduced it, and `CLAUDE.md` keeps the release ledger.
 
+## v0.8.0 — the v0.7 demo round's feature queue
+
+The v0.7 demo round (seventeen writers, seventeen adversarial verifiers)
+left a deduplicated feature queue, ranked by how many independent demos hit
+each wall (`demos/NOTES.md` § "The v0.7 round"). This release works through
+it directly. 15 new spec tests (309 total); all 71 demo goldens
+byte-identical throughout.
+
+- **`if let` / `while let`** (×3: dungeon, mdsite, parmandel): test a
+  single pattern without a full `match`. Both are pure parser sugar,
+  desugared fully at parse time — `if let PAT = E { T } else { F }` is
+  exactly `match E { PAT -> T, _ -> F }`; `while let PAT = E { B }` is
+  exactly `while true { match E { PAT -> B, _ -> break } }`, the drain-loop
+  idiom STYLE.md already documented. The checker and compiler need no
+  special cases; an irrefutable user pattern making the synthetic fallback
+  arm unreachable is silently fine, not a warning — the user never wrote
+  that arm.
+- **Bitwise compound assignment** (×3: reversi, sudoku, wfc): `&= |= ^=
+  <<= >>=`, matching the arithmetic set. Int-only, never dispatches,
+  exactly like the plain bitwise operators.
+- **Hex bit patterns ≥ 2⁶³, `String.parse_hex`** (×3: png, bloom, reversi):
+  hex/binary literals now parse as the raw 64-bit pattern, so
+  `0x8080808080808080` and `0x8000000000000000` (`Int`'s minimum) are both
+  writable; `parse_hex()` is `to_hex()`'s inverse.
+- **`Bytes` 64-bit accessors** (part of the ×5 "Bytes readers" ask):
+  `push_u64le`/`push_u64be`/`read_u64le`/`read_u64be` — no range check
+  needed at 64 bits, since `Int` already *is* the two's-complement value.
+- **Builder ergonomics** (×3: spreadsheet, mdsite, plot): `is_empty()`,
+  `push_joined(sep, s)` (pushes `sep` first unless this is the builder's
+  first piece — the "gate on `len() > 0`" idiom, wrapped).
+- **`fft.magnitude(re, im) -> List[Float]`** (×2: spectra, plot): every
+  `rfft` consumer wrote this zip/hypot line by hand.
+- Singles: `worker.try_recv()` (non-blocking `recv`,
+  `Option[Option[String]]` — not-ready / hung-up / message — for a parent
+  polling several workers without blocking on one); `std.lists`
+  `min_by_key`/`max_by_key` (an `Int`-valued key extractor, alongside the
+  comparator-based `min_by`/`max_by`); `fable test --bless` (rewrites
+  mismatched `//? expect:` lines in place when the actual/expected line
+  count already agrees — a count change still fails normally, since which
+  new line pairs with which directive is then a human's call); `std.lazy`
+  (`Lazy[T]`: deferred, memoized computation — `of(thunk)`, `.get()`,
+  `.is_forced()` — the deferred half of the module-level-`let`-builds-once
+  idiom); `Range.all`/`any` (short-circuiting, matching `List`'s, where
+  before only `.to_list().any(..)` reached it); `Int.wrapping_add`/
+  `wrapping_sub`/`wrapping_mul` (64-bit wrap for hash finalizers; a 32-bit
+  wrap is `a.wrapping_mul(b) & 0xFFFFFFFF` — one primitive, not a second
+  32-bit-specific intrinsic); ergonomic `std.json` construction
+  (`json.obj`/`arr`/`jstr`/`num`/`int`/`bool`/`null`, named for what they
+  build — `jstr`, not `str`, since this module's own code calls the
+  builtin `str()` and a same-named local function would shadow it).
+- **Declined:** a counting-map helper (checkers) — one demo, and
+  `m.insert(k, m.get(k).unwrap_or(0) + 1)` is a single line; `std` grows
+  reluctantly (`demos/NOTES.md`).
+- Four items in the original queue turned out to already be shipped —
+  `count_ones`/`leading_zeros`/`trailing_zeros`/`ushr`/`rotate_left`/
+  `rotate_right`/`to_hex` and the Bytes BE pushers/readers/bulk-append all
+  landed within v0.7's own efficiency pass; the queue predated that and
+  was never updated to match.
+
 ## v0.7.0 — the infrastructure release
 
 - `fable build <dir|file>` — pack a program into one self-contained

@@ -255,7 +255,22 @@ pub enum ExprKind {
     Match {
         scrutinee: Box<Expr>,
         arms: Vec<MatchArm>,
+        /// How this was spelled (v0.8): `if let`/`while let` desugar fully
+        /// to `Match` at parse time (a two-arm match with a synthetic
+        /// wildcard fallback), so the checker and compiler need no special
+        /// cases; this only tells the formatter how to print it back and
+        /// tells the checker to silence "unreachable arm" on the synthetic
+        /// fallback (an irrefutable user pattern makes it unreachable, but
+        /// the user never wrote it).
+        sugar: MatchSugar,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatchSugar {
+    None,
+    IfLet,
+    WhileLet,
 }
 
 #[derive(Debug, Clone)]

@@ -1,0 +1,64 @@
+// `if let PATTERN = EXPR { .. } [else ..]` (v0.8): sugar for
+// `match EXPR { PATTERN -> .., _ -> .. }`, avoiding an `is_some()` +
+// `unwrap()` dance or a full `match` for a single-variant test.
+
+fn describe(o: Option[Int]) -> String {
+    if let Some(x) = o {
+        "got {x}"
+    } else {
+        "nothing"
+    }
+}
+println(describe(Some(42)));           //? expect: got 42
+println(describe(None));               //? expect: nothing
+
+// No `else`: the arm must be Unit, exactly like a plain `if` with no else.
+let mut seen = 0;
+if let Some(x) = Some(7) {
+    seen = x;
+}
+println(seen);                         //? expect: 7
+if let Some(x) = None {
+    seen = x;
+}
+println(seen);                         //? expect: 7
+
+// `else if let` chains through the same recursion plain `else if` uses.
+fn classify(o: Option[Int]) -> String {
+    if let Some(x) = o {
+        if x > 0 { "positive" } else { "non-positive" }
+    } else if true {
+        "none"
+    } else {
+        "unreached"
+    }
+}
+println(classify(Some(5)));            //? expect: positive
+println(classify(Some(-1)));           //? expect: non-positive
+println(classify(None));               //? expect: none
+
+// `else if let PAT2 = EXPR2` — a second, independent scrutinee.
+fn first_match(a: Option[Int], b: Option[Int]) -> String {
+    if let Some(x) = a {
+        "a={x}"
+    } else if let Some(y) = b {
+        "b={y}"
+    } else {
+        "neither"
+    }
+}
+println(first_match(Some(1), Some(2))); //? expect: a=1
+println(first_match(None, Some(2)));    //? expect: b=2
+println(first_match(None, None));       //? expect: neither
+
+// Struct/tuple patterns work exactly as in `match`.
+struct Point { x: Int, y: Int }
+fn on_axis(p: Point) -> Bool {
+    if let Point { x: 0, y } = p { true } else { false }
+}
+println(on_axis(Point { x: 0, y: 5 }));  //? expect: true
+println(on_axis(Point { x: 1, y: 5 }));  //? expect: false
+
+// Value position: `if let` is an ordinary expression.
+let msg = if let Ok(v) = Result.Ok(9) { "ok:{v}" } else { "err" };
+println(msg);                          //? expect: ok:9

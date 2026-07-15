@@ -190,3 +190,41 @@ These are the v0.8 candidates, roughly in order of observed pain:
 - Seeded `math.seed` streams remain stable within a release only —
   corpora that must outlive releases belong to hand-rolled PRNGs
   (STYLE.md § 2).
+
+---
+
+## The v0.8 round
+
+The feature queue above was worked through directly rather than via a
+fresh demo round. Four items in it were already stale by the time it was
+written: `count_ones`/`leading_zeros`/`trailing_zeros`, `ushr`,
+`rotate_left`/`rotate_right`, `to_hex`, and the Bytes BE pushers/readers +
+`push_bytes`/`push_str` bulk append all landed within v0.7 itself (its late
+efficiency pass pulled them forward — CLAUDE.md's v0.7 ledger has them, this
+file's queue didn't get updated to match). Confirmed present before
+starting v0.8, not re-done.
+
+Genuinely resolved in v0.8:
+
+| Queue item | Resolution |
+|------------|------------|
+| Bitwise compound assignment | `\|= &= ^= <<= >>=`, matching the arithmetic set — Int-only, never dispatches, exactly like the plain bitwise operators |
+| `while let` / `if let` | Parser-level sugar, desugared fully to `match` at parse time (`if let` → a two-arm match; `while let` → `while true { match .. { _ -> break } }`, the exact hand-written idiom above) — so the checker and compiler need no special cases, and an irreducible user pattern making the synthetic fallback arm unreachable is silently fine, not a warning |
+| Hex: bit patterns ≥ 2⁶³, `parse_hex` | Hex/binary literals now parse as the raw 64-bit pattern (`0x8080808080808080` and `0x8000000000000000` — `Int`'s minimum — are both writable); `String.parse_hex()` is `to_hex()`'s inverse |
+| Bytes 64-bit accessors | `push_u64le`/`push_u64be`/`read_u64le`/`read_u64be` — no range check needed at 64 bits, since `Int` already *is* the two's-complement value |
+| Builder ergonomics | `is_empty()`, `push_joined(sep, s)` (pushes `sep` first unless this is the builder's first piece — the manual "gate on `len() > 0`" idiom, wrapped) |
+| fft magnitude helper | `fft.magnitude(re, im) -> List[Float]` |
+| worker `try_recv` | Non-blocking `recv`, `Option[Option[String]]` (not-ready / hung-up / message) — covers the polling need directly; no separate `select` |
+| `lists` key-based `max_by_key`/`min_by_key` | Int-valued key extractor, alongside the existing comparator-based `max_by`/`min_by` |
+| `fable test --bless` | Rewrites mismatched `//? expect:` lines in place when the actual/expected line count already agrees; a count change (a print statement added or removed) still fails normally — deciding which new line pairs with which directive needs a human |
+| module-level lazy statics | `std.lazy`: `Lazy[T]`, `of(thunk)`, `.get()` (computes once, caches), `.is_forced()`. (Eager module-level `let` already built once at import, per STYLE.md § 6 — this adds the deferred half.) |
+| `Range.all`/`any` | Short-circuiting, matching `List`'s; previously reachable only via `.to_list().any(..)` |
+| 32-bit wrapping multiply | General `wrapping_add`/`wrapping_sub`/`wrapping_mul` (64-bit) — a 32-bit wrap is `a.wrapping_mul(b) & 0xFFFFFFFF`; one primitive, not a second 32-bit-specific intrinsic |
+| ergonomic `std.json` construction | `json.obj`/`arr`/`jstr`/`num`/`int`/`bool`/`null` — the same tree as the raw `Json.J*` constructors, named for what they build (`jstr`, not `str`: this module's own code calls the builtin `str()`, and a same-named local function would shadow it for every unqualified call in the file — hit and fixed while writing this) |
+
+### Heard, and declined — with reasons
+
+- **A counting-map helper** (checkers). One demo, and `m.insert(k,
+  m.get(k).unwrap_or(0) + 1)` is a single line with no repeated pattern
+  across the codebase to justify a named primitive. `std` grows reluctantly
+  (v0.6/v0.7's own rule) — revisit if more than one demo asks.

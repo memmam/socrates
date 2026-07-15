@@ -1,0 +1,34 @@
+// Bitwise compound assignment (v0.8): `&= |= ^= <<= >>=`, matching the
+// arithmetic set (`+= -= *= /= %=`). Int-only, like the plain operators —
+// compound assignment never dispatches to an operator method (SPEC § 3.1).
+
+let mut m = 0b1010;
+m |= 0b0101;
+println(m);                        //? expect: 15
+
+let mut a = 0xFF;
+a &= 0x0F;
+println(a);                        //? expect: 15
+
+let mut x = 5;
+x ^= 3;
+println(x);                        //? expect: 6
+
+let mut s = 1;
+s <<= 4;
+println(s);                        //? expect: 16
+
+let mut t = -256;
+t >>= 4;
+println(t);                        //? expect: -16
+
+// Struct fields and list/map elements are valid targets too, exactly like
+// the arithmetic compound assignments.
+struct Flags { bits: Int }
+let f = Flags { bits: 0b0011 };
+f.bits |= 0b1100;
+println(f.bits);                   //? expect: 15
+
+let xs = [1, 2, 4];
+xs[1] ^= 7;
+println(xs);                        //? expect: [1, 5, 4]

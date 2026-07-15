@@ -1,0 +1,9 @@
+// `if let`/`while let` (v0.8) desugar to `match`, so a non-Unit body in
+// either position surfaces through the ordinary match/loop diagnostics:
+// `while let`'s body is a loop body (E0306, same as plain `while`/`for`);
+// `if let` with no `else` desugars to a two-arm match whose arms must
+// unify (E0323), the match-flavored twin of plain `if`'s E0316.
+//? error: loop body must not produce a value
+while let Some(x) = [1, 2, 3].pop() {
+    x
+}
