@@ -315,8 +315,9 @@ impl Checker {
     }
 
     fn predeclare_types(&mut self, program: &Program) {
-        const RESERVED: &[&str] =
-            &["Int", "Float", "Bool", "String", "Unit", "List", "Map", "Range", "Bytes"];
+        const RESERVED: &[&str] = &[
+            "Int", "Float", "Bool", "String", "Unit", "List", "Map", "Range", "Bytes", "Worker",
+        ];
         for stmt in &program.stmts {
             let (name, span, is_struct, generics, is_pub) = match &stmt.kind {
                 StmtKind::Struct(s) => (&s.name, s.name.span, true, &s.generics, s.is_pub),
@@ -562,8 +563,8 @@ impl Checker {
             _ => {
                 let msg = if matches!(
                     tname,
-                    "Int" | "Float" | "Bool" | "String" | "Unit" | "Range" | "Bytes" | "List"
-                        | "Map" | "Option" | "Result"
+                    "Int" | "Float" | "Bool" | "String" | "Unit" | "Range" | "Bytes" | "Worker"
+                        | "List" | "Map" | "Option" | "Result"
                 ) {
                     format!("cannot define methods on the built-in type `{tname}`")
                 } else {
@@ -3706,7 +3707,9 @@ impl Checker {
     }
 
     fn suggest_type(&self, name: &str) -> Option<String> {
-        let builtin = ["Int", "Float", "Bool", "String", "Unit", "List", "Map", "Range", "Bytes"];
+        let builtin = [
+            "Int", "Float", "Bool", "String", "Unit", "List", "Map", "Range", "Bytes", "Worker",
+        ];
         let candidates = builtin
             .iter()
             .copied()
