@@ -1,0 +1,57 @@
+// SPEC §7.1 (v0.7): std.lists — free-function list helpers.
+import std.lists;
+
+// fill
+println(lists.fill(3, "x"));                 //? expect: ["x", "x", "x"]
+println(lists.fill(1, 0));                   //? expect: [0]
+println(lists.fill(0, 7));                   //? expect: []
+println(lists.fill(-2, 7));                  //? expect: []
+// The copies are one reference: mutate the fill value, see it everywhere.
+let rows = lists.fill(2, [0]);
+rows[0].push(1);
+println(rows);                               //? expect: [[0, 1], [0, 1]]
+
+// sum / sum_float
+println(lists.sum([1, 2, 3]));               //? expect: 6
+println(lists.sum([-5]));                    //? expect: -5
+println(lists.sum([]));                      //? expect: 0
+println(lists.sum_float([0.5, 1.25]));       //? expect: 1.75
+println(lists.sum_float([]));                //? expect: 0.0
+
+// min / max return None on empty input.
+println(lists.min([3, 1, 2]));               //? expect: Some(1)
+println(lists.max([3, 1, 2]));               //? expect: Some(3)
+println(lists.min([5]));                     //? expect: Some(5)
+println(lists.max([5]));                     //? expect: Some(5)
+println(lists.min([]));                      //? expect: None
+println(lists.max([]));                      //? expect: None
+println(lists.min([2, -2, 2]));              //? expect: Some(-2)
+
+// Float variants.
+println(lists.min_float([2.5, -1.0, 0.0]));  //? expect: Some(-1.0)
+println(lists.max_float([2.5, -1.0, 0.0]));  //? expect: Some(2.5)
+println(lists.min_float([]));                //? expect: None
+println(lists.max_float([]));                //? expect: None
+
+// min_by / max_by use the sort_by comparator convention
+// (negative / zero / positive).
+let by_len = |a: String, b: String| a.len() - b.len();
+let words = ["bb", "a", "ccc", "d"];
+println(lists.min_by(words, by_len));        //? expect: Some("a")
+println(lists.max_by(words, by_len));        //? expect: Some("ccc")
+println(lists.min_by([], by_len));           //? expect: None
+println(lists.max_by([], by_len));           //? expect: None
+println(lists.min_by(["solo"], by_len));     //? expect: Some("solo")
+
+// Ties keep the FIRST winner, for min_by and max_by alike.
+println(lists.min_by(["aa", "b", "c"], by_len));   //? expect: Some("b")
+println(lists.max_by(["aa", "bb", "c"], by_len));  //? expect: Some("aa")
+
+// Comparators over structured elements.
+let pairs = [(2, "two"), (1, "one"), (1, "uno"), (3, "three")];
+println(lists.min_by(pairs, |a, b| a.0 - b.0));  //? expect: Some((1, "one"))
+println(lists.max_by(pairs, |a, b| a.0 - b.0));  //? expect: Some((3, "three"))
+
+// A reversed comparator flips min and max.
+println(lists.min_by([3, 1, 2], |a, b| b - a));  //? expect: Some(3)
+println(lists.max_by([3, 1, 2], |a, b| b - a));  //? expect: Some(1)

@@ -1,0 +1,84 @@
+// std.deque — a double-ended queue with amortized O(1) at both ends.
+//
+// Two-stack representation: the deque reads as reverse(front_rev) ++ rear,
+// so both ends are the *tails* of plain lists and every push/pop is a list
+// push/pop. When a pop finds its side empty, the other side is reversed
+// across in one O(n) move — each element crosses at most once, so a
+// sequence of n operations does O(n) total work.
+//
+//   import std.deque;
+//   let q = deque.from_list(seeds);
+//   while !q.is_empty() { visit(q.pop_front().unwrap()); }
+
+pub struct Deque[T] {
+    front_rev: List[T], // the front half, reversed: the deque's front is its LAST element
+    rear: List[T],      // the back half in order: the deque's back is its last element
+}
+
+pub fn new[T]() -> Deque[T] {
+    Deque { front_rev: [], rear: [] }
+}
+
+// A deque of the list's elements, front to back. The list is copied.
+pub fn from_list[T](xs: List[T]) -> Deque[T] {
+    Deque { front_rev: [], rear: xs.clone() }
+}
+
+impl Deque[T] {
+    pub fn push_front(self, v: T) {
+        self.front_rev.push(v);
+    }
+
+    pub fn push_back(self, v: T) {
+        self.rear.push(v);
+    }
+
+    // Remove and return the front element (None when empty).
+    pub fn pop_front(self) -> Option[T] {
+        if self.front_rev.is_empty() {
+            self.front_rev = self.rear.reverse();
+            self.rear = [];
+        }
+        self.front_rev.pop()
+    }
+
+    // Remove and return the back element (None when empty).
+    pub fn pop_back(self) -> Option[T] {
+        if self.rear.is_empty() {
+            self.rear = self.front_rev.reverse();
+            self.front_rev = [];
+        }
+        self.rear.pop()
+    }
+
+    // The front element without removing it.
+    pub fn front(self) -> Option[T] {
+        if self.front_rev.is_empty() {
+            self.rear.first()
+        } else {
+            self.front_rev.last()
+        }
+    }
+
+    // The back element without removing it.
+    pub fn back(self) -> Option[T] {
+        if self.rear.is_empty() {
+            self.front_rev.first()
+        } else {
+            self.rear.last()
+        }
+    }
+
+    pub fn len(self) -> Int {
+        self.front_rev.len() + self.rear.len()
+    }
+
+    pub fn is_empty(self) -> Bool {
+        self.front_rev.is_empty() && self.rear.is_empty()
+    }
+
+    // The elements front to back, as a new list.
+    pub fn to_list(self) -> List[T] {
+        self.front_rev.reverse().concat(self.rear)
+    }
+}

@@ -586,9 +586,9 @@ Two more joined in v0.7:
 | `bytes(n)` | `fn(Int) -> Bytes` | zero-filled byte buffer (§ 8.4b) |
 | `bytes_of(xs)` | `fn(List[Int]) -> Bytes` | from byte values 0..255 |
 
-### 7.1 The standard library (v0.4)
+### 7.1 The standard library (v0.4; expanded in v0.7)
 
-Five modules written in Fable ship inside the interpreter, imported like any
+Eight modules written in Fable ship inside the interpreter, imported like any
 module (`import std.json;`, aliased with `as`). Everything below is `pub`;
 these modules follow the same visibility rules as user code.
 
@@ -597,8 +597,11 @@ these modules follow the same visibility rules as user code.
 | `std.json` | `parse(String) -> Result[Json, String]`, `stringify(Json) -> String`, `pretty(Json) -> String`; `enum Json { JNull, JBool, JNum, JStr, JArr, JObj }` with methods `get(key)`, `at(i)`, `as_str()`, `as_num()`, `as_bool()`, `is_null()`, `len()` |
 | `std.flags` | `flag(args, name) -> Bool`, `value(args, name) -> Option[String]` (only `--name=value` carries a value), `value_or(args, name, fallback)`, `positionals(args)`; a literal `--` ends flag parsing |
 | `std.path` | `join`, `base_name`, `dir_name`, `ext`, `strip_ext` — purely textual, slash-separated |
-| `std.strings` | `lines` (trailing-newline aware), `words`, `join_lines`, `ellipsize`, `strip_prefix`, `strip_suffix` |
+| `std.strings` | `lines` (trailing-newline aware), `words`, `join_lines`, `ellipsize`, `strip_prefix`, `strip_suffix`; a `Builder` for string accumulation (v0.7): `builder()` makes one, methods `push(s)`, `push_char(code)`, `len()` (characters so far, O(1)), `build()` (one join; non-consuming), `clear()` — `+=` in a loop is O(n²), a Builder is O(n) |
 | `std.iter` | lazy sequences: `of(list)`, `count_from(n)`, `from_fn(f)` build an `Iter[T]`; adapters `map`, `filter`, `take`, `chain`, `zip`; consumers `collect`, `fold`, `each`, `count`. Implemented entirely in Fable (an `Iter[T]` is a struct holding a `next` closure). |
+| `std.lists` | free-function list helpers (v0.7; builtins cannot gain methods): `fill(n, v)` (`n` aliases of one value), `sum` / `sum_float`, `min` / `max` / `min_float` / `max_float` (`Option`; `None` for `[]`), `min_by(xs, cmp)` / `max_by(xs, cmp)` under the `sort_by` comparator convention (negative/zero/positive) — ties keep the **first** winner |
+| `std.set` | `Set[T]` (v0.7), backed by `Map[T, Unit]`: structural membership, insertion-order iteration. `new()`, `from_list(xs)` (first occurrence wins); methods `insert(v) -> Bool` / `remove(v) -> Bool` (did anything change), `contains`, `len`, `is_empty`, `to_list`, and `union` / `intersect` / `difference` — each returns a **new** set ordered by the left operand's insertion order, then the right's |
+| `std.deque` | `Deque[T]` (v0.7), a double-ended queue with amortized O(1) ends (two-stack representation; a pop on an empty side reverses the other side across). `new()`, `from_list(xs)` (copies); methods `push_front` / `push_back`, `pop_front` / `pop_back` / `front` / `back` (all `Option[T]`), `len`, `is_empty`, `to_list` (front to back) |
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 

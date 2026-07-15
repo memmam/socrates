@@ -10,11 +10,23 @@ pub fn std_module(key: &str) -> Option<&'static str> {
         "std.iter" => include_str!("../std/iter.fable"),
         "std.path" => include_str!("../std/path.fable"),
         "std.strings" => include_str!("../std/strings.fable"),
+        "std.lists" => include_str!("../std/lists.fable"),
+        "std.set" => include_str!("../std/set.fable"),
+        "std.deque" => include_str!("../std/deque.fable"),
         _ => return None,
     })
 }
 
 /// Every embedded module key, for error messages and docs.
 pub fn std_module_names() -> Vec<&'static str> {
-    vec!["std.flags", "std.iter", "std.json", "std.path", "std.strings"]
+    vec![
+        "std.deque",
+        "std.flags",
+        "std.iter",
+        "std.json",
+        "std.lists",
+        "std.path",
+        "std.set",
+        "std.strings",
+    ]
 }
