@@ -1,1 +1,4 @@
 v0.7.0
+# The first line is the release tag (read via `head -1`). The Release workflow
+# fires on any push to main that changes this file, so editing the tag — or
+# just touching this comment — re-cuts the release against the current commit.

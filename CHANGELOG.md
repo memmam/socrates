@@ -35,7 +35,6 @@ introduced it, and `CLAUDE.md` keeps the release ledger.
   string building −55%, map ops −37%, dispatch micros −14..19%,
   GC-stress suite time −67% on the heaviest demo. All 294 spec and 71
   demo goldens byte-identical throughout.
-
 - Fast-idiom natives (the efficiency pass, batch 1): every bit-heavy
   demo in the v0.7 round hand-rolled the same primitives, so they are
   now intrinsics. `Int` grew `count_ones` / `leading_zeros` /
