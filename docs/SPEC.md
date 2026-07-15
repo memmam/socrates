@@ -854,7 +854,13 @@ A struct-literal field is `IDENT ":" expr` or the shorthand `IDENT` — § 2.3.)
 - `fable check file.fable` — compile only; print diagnostics.
 - `fable dis file.fable` — print disassembled bytecode.
 - `fable fmt file.fable` — print the canonically formatted source
-  (`--write` to modify in place). Formatting is idempotent.
+  (`--write` to modify in place). Formatting is width-aware: constructs
+  that fit within 100 columns keep a one-line layout, longer ones break
+  (call arguments one per line with a trailing comma, method chains
+  before each `.` after the first, binary expressions before each
+  operator, and so on); `--width N` overrides the limit. A single token
+  longer than the width (usually a string literal) is never split.
+  Formatting is idempotent.
 - `fable test [paths...]` (v0.4) — run golden tests: every `.fable` file
   found is a test, checked against `//? expect:` / `//? error:` /
   `//? panic:` directives in its comments (a file with no directives must
