@@ -1,0 +1,12 @@
+// Bench: closure allocation churn (the v0.4 GC pacing benchmark's shape).
+fn make_adder(n: Int) -> fn(Int) -> Int {
+    |x| x + n
+}
+let mut acc = 0;
+let mut i = 0;
+while i < 400000 {
+    let f = make_adder(i % 97);
+    acc = (acc + f(i)) % 1000003;
+    i += 1;
+}
+println(acc);

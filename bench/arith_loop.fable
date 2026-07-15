@@ -1,0 +1,8 @@
+// Bench: tight integer arithmetic loop (opcode dispatch floor).
+let mut acc = 0;
+let mut i = 0;
+while i < 5000000 {
+    acc = (acc + i * 3) % 1000003;
+    i += 1;
+}
+println(acc);

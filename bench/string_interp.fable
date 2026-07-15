@@ -1,0 +1,9 @@
+// Bench: interpolation + short-string churn.
+let mut n = 0;
+let mut i = 0;
+while i < 200000 {
+    let s = "row {i}: value = {i * 7 % 93}";
+    n += s.len();
+    i += 1;
+}
+println(n);

@@ -1,0 +1,20 @@
+// Bench: enum construction + match dispatch.
+enum Op { Add(Int), Mul(Int), Neg, Nop }
+let mut acc = 7;
+let mut i = 0;
+while i < 800000 {
+    let op = match i & 3 {
+        0 -> Op.Add(i & 255),
+        1 -> Op.Mul(3),
+        2 -> Op.Neg,
+        _ -> Op.Nop,
+    };
+    acc = match op {
+        Op.Add(n) -> (acc + n) % 1000003,
+        Op.Mul(n) -> acc * n % 1000003,
+        Op.Neg -> 1000003 - acc,
+        Op.Nop -> acc,
+    };
+    i += 1;
+}
+println(acc);

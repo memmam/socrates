@@ -1,0 +1,21 @@
+// Bench: 9-bit mask idioms (the ISA workload shape) + SWAR popcount.
+fn popcount(v: Int) -> Int {
+    let mut x = v;
+    let mut c = 0;
+    while x != 0 {
+        c += x & 1;
+        x = x >> 1;
+    }
+    c
+}
+let mut acc = 0;
+let mut i = 0;
+while i < 400000 {
+    let word = i * 2654435761 & 134217727;
+    let op = word >> 18 & 511;
+    let a = word >> 9 & 511;
+    let b = word & 511;
+    acc = (acc + popcount(op ^ a & b)) % 1000003;
+    i += 1;
+}
+println(acc);
