@@ -322,6 +322,11 @@ impl Formatter {
                     Some(BinOp::Mul) => "*=",
                     Some(BinOp::Div) => "/=",
                     Some(BinOp::Rem) => "%=",
+                    Some(BinOp::BitAnd) => "&=",
+                    Some(BinOp::BitOr) => "|=",
+                    Some(BinOp::BitXor) => "^=",
+                    Some(BinOp::Shl) => "<<=",
+                    Some(BinOp::Shr) => ">>=",
                     Some(_) => "=",
                 };
                 self.out.push(' ');
@@ -343,10 +348,19 @@ impl Formatter {
                 self.out.push('\n');
             }
             StmtKind::While { cond, body } => {
-                self.out.push_str("while ");
-                self.expr(cond, 0, 2);
-                self.out.push(' ');
-                self.block(body);
+                if let Some((pattern, scrutinee, user_body)) = while_let_sugar(cond, body) {
+                    self.out.push_str("while let ");
+                    self.pattern(pattern);
+                    self.out.push_str(" = ");
+                    self.expr(scrutinee, 0, 2);
+                    self.out.push(' ');
+                    self.block(user_body);
+                } else {
+                    self.out.push_str("while ");
+                    self.expr(cond, 0, 2);
+                    self.out.push(' ');
+                    self.block(body);
+                }
                 self.out.push('\n');
             }
             StmtKind::For { pattern, iter, body } => {
@@ -1084,7 +1098,29 @@ impl Formatter {
                 }
             }
             ExprKind::Block(b) => self.block(b),
-            ExprKind::Match { scrutinee, arms } => {
+            ExprKind::Match { scrutinee, arms, sugar: MatchSugar::IfLet } => {
+                // `if let PATTERN = SCRUTINEE { THEN } [else ...]` — the
+                // parser's desugared shape (arm[0] = user pattern/then,
+                // arm[1] = synthetic wildcard/else-or-Unit), printed back in
+                // its original sugar form.
+                self.out.push_str("if let ");
+                self.pattern(&arms[0].pattern);
+                self.out.push_str(" = ");
+                self.expr(scrutinee, 0, 2);
+                self.out.push(' ');
+                let ExprKind::Block(then) = &arms[0].body.kind else {
+                    unreachable!("if-let sugar always wraps THEN in a block")
+                };
+                self.block(then);
+                if !matches!(arms[1].body.kind, ExprKind::Unit) {
+                    self.out.push_str(" else ");
+                    match &arms[1].body.kind {
+                        ExprKind::Block(b) => self.block(b),
+                        _ => self.expr_broken(&arms[1].body, rider),
+                    }
+                }
+            }
+            ExprKind::Match { scrutinee, arms, sugar: _ } => {
                 self.out.push_str("match ");
                 self.expr(scrutinee, 0, 2);
                 self.out.push_str(" {\n");
@@ -1506,6 +1542,25 @@ impl Formatter {
             }
         }
     }
+}
+
+/// Recognizes the parser's `while let` desugaring — `while true { match
+/// SCRUTINEE { PATTERN -> BODY, _ -> break } }`, tagged `MatchSugar::WhileLet`
+/// — so the formatter can print it back in its original sugar form. Keyed
+/// off the explicit tag rather than the shape, so a hand-written loop that
+/// merely looks the same is never reinterpreted.
+fn while_let_sugar<'a>(cond: &Expr, body: &'a Block) -> Option<(&'a Pattern, &'a Expr, &'a Block)> {
+    if !matches!(cond.kind, ExprKind::Bool(true)) {
+        return None;
+    }
+    let [stmt] = body.stmts.as_slice() else { return None };
+    let StmtKind::Expr { expr, tail: true } = &stmt.kind else { return None };
+    let ExprKind::Match { scrutinee, arms, sugar: MatchSugar::WhileLet } = &expr.kind else {
+        return None;
+    };
+    let [user_arm, _fallback] = arms.as_slice() else { return None };
+    let ExprKind::Block(user_body) = &user_arm.body.kind else { return None };
+    Some((&user_arm.pattern, scrutinee, user_body))
 }
 
 /// A leaf the formatter can never split across lines.

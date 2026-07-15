@@ -62,23 +62,33 @@ fn real_main() -> ExitCode {
         Some("run") | Some("check") | Some("dis") | Some("fmt") | Some("tokens")
         | Some("ast") => (args[0].as_str(), &args[1..]),
         Some("test") => {
-            // `fable test` takes no flags; silently swallowing `--help` (and
-            // then walking the whole cwd) helps no one. A literal `--` ends
-            // flag checking so dash-prefixed paths can still be named.
+            // `fable test` takes only `--bless`; silently swallowing
+            // `--help` (and then walking the whole cwd) helps no one. A
+            // literal `--` ends flag checking so dash-prefixed paths can
+            // still be named.
             let rest = &args[1..];
             let sep = rest.iter().position(|a| a == "--");
             let flag_zone = &rest[..sep.unwrap_or(rest.len())];
-            if let Some(flag) = flag_zone.iter().find(|a| a.starts_with('-')) {
+            let bless = flag_zone.iter().any(|a| a == "--bless");
+            if let Some(flag) =
+                flag_zone.iter().find(|a| a.starts_with('-') && *a != "--bless")
+            {
                 eprintln!("fable test: unknown flag `{flag}`");
                 eprintln!(
-                    "usage: fable test [paths...]   (files or directories; default `.`; `--` ends flags)"
+                    "usage: fable test [--bless] [paths...]   (files or directories; default `.`; `--` ends flags)"
                 );
                 return ExitCode::from(64);
             }
             let paths: Vec<std::path::PathBuf> = rest
                 .iter()
                 .enumerate()
-                .filter(|(i, _)| sep != Some(*i))
+                .filter(|(i, a)| {
+                    if Some(*i) == sep {
+                        return false; // the `--` separator itself
+                    }
+                    let in_flag_zone = sep.is_none_or(|s| *i < s);
+                    !(in_flag_zone && *a == "--bless")
+                })
                 .map(|(_, a)| std::path::PathBuf::from(a))
                 .collect();
             let paths = if paths.is_empty() {
@@ -92,7 +102,7 @@ fn real_main() -> ExitCode {
             } else {
                 ("", "", "", "")
             };
-            let report = fable::testing::run_test_paths(&paths);
+            let report = fable::testing::run_test_paths_bless(&paths, bless);
             if report.total == 0 {
                 eprintln!("fable test: no .fable files found");
                 return ExitCode::from(64);
@@ -103,9 +113,19 @@ fn real_main() -> ExitCode {
                     eprintln!("     {line}");
                 }
             }
-            let passed = report.total - report.failures.len();
+            for (path, n) in &report.blessed {
+                eprintln!(
+                    "{green}BLESSED{reset} {bold}{}{reset} ({n} line{} rewritten)",
+                    path.display(),
+                    if *n == 1 { "" } else { "s" }
+                );
+            }
+            let passed = report.total - report.failures.len() - report.blessed.len();
             if report.failures.is_empty() {
                 eprintln!("{green}ok{reset}: {passed} test{} passed", if passed == 1 { "" } else { "s" });
+                if !report.blessed.is_empty() {
+                    eprintln!("{green}blessed{reset}: {} test{}", report.blessed.len(), if report.blessed.len() == 1 { "" } else { "s" });
+                }
                 return ExitCode::SUCCESS;
             }
             eprintln!(
@@ -671,8 +691,12 @@ USAGE:
     fable fmt <file.fable>... [-w] [--width N]
                                   format each file (print, or -w to rewrite;
                                   N: max line width, default 100)
-    fable test [paths...]         run golden tests (//? expect/error/panic
-                                  directives in .fable files; default: .)
+    fable test [--bless] [paths...]
+                                  run golden tests (//? expect/error/panic
+                                  directives in .fable files; default: .).
+                                  --bless rewrites mismatched //? expect:
+                                  lines to match actual output (only when
+                                  the line count already agrees)
     fable tokens <file.fable>     dump tokens (debug)
     fable ast <file.fable>        dump the AST (debug)
     fable repl                    interactive session

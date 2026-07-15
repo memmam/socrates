@@ -151,12 +151,33 @@ pub fn collect_fable_files(dir: &Path, out: &mut Vec<PathBuf>) {
 
 /// Run one test file and check it against its directives.
 pub fn check_one(path: &Path) -> Result<(), String> {
+    check_or_bless(path, false).map(|_| ())
+}
+
+/// What `check_or_bless` did.
+pub enum CheckOutcome {
+    /// Everything already matched.
+    Passed,
+    /// Bless mode rewrote `expect:` lines to match actual output.
+    Blessed(usize),
+}
+
+/// Run one test file and check it against its directives. When `bless` is
+/// true, a stdout-only mismatch whose actual/expected line counts already
+/// agree is silently fixed by rewriting the file's `//? expect:` lines
+/// in place instead of failing — the automatable half of "generate long pin
+/// blocks mechanically" (demos/STYLE.md § 1). A line-count change means a
+/// print statement was added or removed, which directive lines correspond
+/// to which output is then ambiguous, so that case still fails normally
+/// (compile-error and panic-message mismatches are never blessed either —
+/// `expect:` is the only directive this rewrites).
+pub fn check_or_bless(path: &Path, bless: bool) -> Result<CheckOutcome, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("read failed: {e}"))?;
     let d = parse_directives(&text);
     // Path-based so `import` resolves sibling files and FABLE_PATH.
     let outcome = crate::run_capture_path(path);
 
-    match outcome {
+    let stdout = match outcome {
         RunOutcome::CompileError(diags) => {
             if d.errors.is_empty() {
                 let mut msg = String::from("unexpected compile error(s):\n");
@@ -178,7 +199,7 @@ pub fn check_one(path: &Path) -> Result<(), String> {
                     return Err(msg);
                 }
             }
-            Ok(())
+            return Ok(CheckOutcome::Passed);
         }
         RunOutcome::Panic { stdout, error } => {
             if d.panics.is_empty() {
@@ -195,7 +216,7 @@ pub fn check_one(path: &Path) -> Result<(), String> {
                     ));
                 }
             }
-            check_stdout(&d.expect, &stdout)
+            stdout
         }
         RunOutcome::Ok { stdout, .. } => {
             if !d.errors.is_empty() {
@@ -210,9 +231,62 @@ pub fn check_one(path: &Path) -> Result<(), String> {
                     d.panics
                 ));
             }
-            check_stdout(&d.expect, &stdout)
+            stdout
+        }
+    };
+
+    match check_stdout(&d.expect, &stdout) {
+        Ok(()) => Ok(CheckOutcome::Passed),
+        Err(msg) => {
+            if bless {
+                if let Some(n) = bless_expect(path, &text, &d.expect, &stdout)? {
+                    return Ok(CheckOutcome::Blessed(n));
+                }
+            }
+            Err(msg)
         }
     }
+}
+
+/// Rewrite every `//? expect:` line's payload to the corresponding actual
+/// output line, in file order. `None` (not an error) when the line counts
+/// differ — nothing is written, and the caller keeps the original mismatch
+/// message, which already shows both lengths.
+fn bless_expect(
+    path: &Path,
+    text: &str,
+    expect: &[String],
+    stdout: &str,
+) -> Result<Option<usize>, String> {
+    let got: Vec<&str> = stdout.lines().collect();
+    if got.len() != expect.len() {
+        return Ok(None);
+    }
+    let mut block_depth = 0u32;
+    let mut k = 0usize;
+    let mut changed = 0usize;
+    let mut out_lines: Vec<String> = Vec::with_capacity(text.lines().count());
+    for line in text.lines() {
+        if let Some(idx) = directive_start(line, &mut block_depth) {
+            if line[idx + 3..].trim_start().starts_with("expect:") {
+                let new_val = got[k].trim_end();
+                let new_line = format!("{}//? expect: {}", &line[..idx], new_val);
+                if new_line != line {
+                    changed += 1;
+                }
+                out_lines.push(new_line);
+                k += 1;
+                continue;
+            }
+        }
+        out_lines.push(line.to_string());
+    }
+    let mut new_text = out_lines.join("\n");
+    if text.ends_with('\n') {
+        new_text.push('\n');
+    }
+    std::fs::write(path, new_text).map_err(|e| format!("bless: write failed: {e}"))?;
+    Ok(Some(changed))
 }
 
 fn check_stdout(expect: &[String], stdout: &str) -> Result<(), String> {
@@ -241,11 +315,19 @@ fn check_stdout(expect: &[String], stdout: &str) -> Result<(), String> {
 pub struct TestReport {
     pub total: usize,
     pub failures: Vec<(PathBuf, String)>,
+    /// Files whose `//? expect:` lines were rewritten (`--bless`), with the
+    /// count of lines changed in each. Always empty unless bless mode ran.
+    pub blessed: Vec<(PathBuf, usize)>,
 }
 
 /// Run every `.fable` file under the given paths (files are taken as-is,
 /// directories are walked) and report failures.
 pub fn run_test_paths(paths: &[PathBuf]) -> TestReport {
+    run_test_paths_bless(paths, false)
+}
+
+/// `run_test_paths`, optionally in `--bless` mode (§ `check_or_bless`).
+pub fn run_test_paths_bless(paths: &[PathBuf], bless: bool) -> TestReport {
     let mut files = Vec::new();
     for p in paths {
         if p.is_dir() {
@@ -255,10 +337,13 @@ pub fn run_test_paths(paths: &[PathBuf]) -> TestReport {
         }
     }
     let mut failures = Vec::new();
+    let mut blessed = Vec::new();
     for f in &files {
-        if let Err(msg) = check_one(f) {
-            failures.push((f.clone(), msg));
+        match check_or_bless(f, bless) {
+            Ok(CheckOutcome::Passed) => {}
+            Ok(CheckOutcome::Blessed(n)) => blessed.push((f.clone(), n)),
+            Err(msg) => failures.push((f.clone(), msg)),
         }
     }
-    TestReport { total: files.len(), failures }
+    TestReport { total: files.len(), failures, blessed }
 }

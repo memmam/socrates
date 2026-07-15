@@ -78,6 +78,48 @@ impl Json {
     }
 }
 
+// ---- construction (v0.8) ----
+//
+// The variant constructors work directly (`Json.JStr("hi")`), but building
+// a document by hand means writing `Json.JObj([("k", Json.JStr("v"))])`
+// even for a single string field. These free functions are exactly as
+// direct, just named for what they build instead of how it's tagged:
+//
+//   json.obj([("name", json.jstr(who)), ("count", json.int(n))])
+
+pub fn obj(entries: List[(String, Json)]) -> Json {
+    Json.JObj(entries)
+}
+
+pub fn arr(items: List[Json]) -> Json {
+    Json.JArr(items)
+}
+
+// Named `jstr`, not `str`: this module's own code calls the builtin
+// `str()` (num_str, quote); a same-named local function would shadow it
+// for every unqualified call inside this file.
+pub fn jstr(s: String) -> Json {
+    Json.JStr(s)
+}
+
+pub fn num(f: Float) -> Json {
+    Json.JNum(f)
+}
+
+// A JSON number from an Int — JSON has one number type, so this is just
+// `num(i.to_float())` spelled for the common case of starting from an Int.
+pub fn int(i: Int) -> Json {
+    Json.JNum(i.to_float())
+}
+
+pub fn bool(b: Bool) -> Json {
+    Json.JBool(b)
+}
+
+pub fn null() -> Json {
+    Json.JNull
+}
+
 // ---- parsing ----
 //
 // The parser walks the text's UTF-8 bytes (all JSON structure is ASCII;

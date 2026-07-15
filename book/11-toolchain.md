@@ -27,6 +27,18 @@ whole example directory can be a test suite. The exit code is 1 on any
 failure, so it drops into CI unchanged — Fable's own spec suite (294 tests)
 and this book's snippets both run through this exact path.
 
+When a value changes but the print statements around it don't — after a
+computation is fixed, say — `--bless` re-pins the mismatched `expect:`
+lines in place instead of making you retype them:
+
+```sh
+fable test --bless src/          # rewrite mismatched //? expect: lines
+```
+
+It only rewrites lines it can match one-to-one with actual output; if a
+print statement was added or removed, that file still fails normally, since
+which new line goes with which directive is no longer unambiguous.
+
 ## `fable fmt`
 
 The formatter rewrites source into a canonical layout — comments and `//?`

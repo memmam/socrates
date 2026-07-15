@@ -1,0 +1,36 @@
+// SPEC §7.1 (v0.8): std.lazy — deferred, memoized computation.
+import std.lazy;
+
+// Not yet forced, and the thunk hasn't run.
+let mut calls = 0;
+let l = lazy.of(|| {
+    calls += 1;
+    42
+});
+println(l.is_forced());        //? expect: false
+println(calls);                //? expect: 0
+
+// First get() runs the thunk and caches the result.
+println(l.get());              //? expect: 42
+println(calls);                //? expect: 1
+println(l.is_forced());        //? expect: true
+
+// Every later get() (on any reference) returns the cached value without
+// calling the thunk again — structs are references, so `alias` shares it.
+println(l.get());              //? expect: 42
+println(l.get());              //? expect: 42
+println(calls);                //? expect: 1
+let alias = l;
+println(alias.get());          //? expect: 42
+println(calls);                //? expect: 1
+
+// A never-used Lazy never runs its thunk at all.
+let mut unused_calls = 0;
+let unused = lazy.of(|| { unused_calls += 1; "never" });
+println(unused.is_forced());   //? expect: false
+println(unused_calls);         //? expect: 0
+
+// Works for any type, including a built (heap-allocated) structure.
+let table = lazy.of(|| [("a", 1), ("b", 2)]);
+println(table.get());          //? expect: [("a", 1), ("b", 2)]
+println(table.get() == table.get());   //? expect: true

@@ -1,0 +1,40 @@
+// 64-bit Bytes push/read (v0.8): the same LE/BE pusher-reader pattern as
+// the 16/32-bit family, but at 8 bytes. No range check on push — `Int` is
+// already the 64-bit two's-complement value, so its own bit pattern is
+// exactly what gets written; reads interpret the 8 bytes back as `Int`
+// (which can be negative when bit 63 is set, unlike the 16/32-bit reads).
+
+let w = bytes(0);
+w.push_u64le(-1);
+println(w.to_list());                      //? expect: [255, 255, 255, 255, 255, 255, 255, 255]
+println(w.read_u64le(0));                  //? expect: -1
+
+let b = bytes(0);
+b.push_u64be(0x0102030405060708);
+println(b.to_list());                      //? expect: [1, 2, 3, 4, 5, 6, 7, 8]
+println(b.read_u64be(0));                  //? expect: 72623859790382856
+
+// The other endianness swaps the lanes.
+println(b.read_u64le(0));                  //? expect: 578437695752307201
+
+// Bit 63 set round-trips as a negative Int, matching to_hex()/parse_hex().
+let m = bytes(0);
+m.push_u64le(0x8000000000000000);
+println(m.read_u64le(0));                  //? expect: -9223372036854775808
+println(m.read_u64be(0));                  //? expect: 128
+
+// Zero round-trips; reads do not consume.
+let z = bytes(0);
+z.push_u64be(0);
+println("{z.read_u64be(0)} {z.read_u64be(0)}"); //? expect: 0 0
+
+// Mixing widths at successive offsets, like a real wire format header.
+let h = bytes(0);
+h.push_u32be(1);        // a 4-byte tag
+h.push_u64be(1000000);  // an 8-byte length/id
+println(h.len());                          //? expect: 12
+println(h.read_u32be(0));                  //? expect: 1
+println(h.read_u64be(4));                  //? expect: 1000000
+
+// A reader at the exact end of the buffer still works.
+println(h.read_u64le(h.len() - 8));        //? expect: 4630279859564707840

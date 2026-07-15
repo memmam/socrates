@@ -233,8 +233,13 @@ impl<'a> Lexer<'a> {
         let raw: String =
             self.text[digits_start..self.pos].chars().filter(|&c| c != '_').collect();
         let span = Span::new(start as u32, self.pos as u32);
-        match i64::from_str_radix(&raw, radix) {
-            Ok(i) => self.push(TokenKind::Int(i), start, self.pos),
+        // Parsed as the raw 64-bit bit pattern (u64), then reinterpreted as
+        // the two's-complement Int it names — so `0x8080808080808080` and
+        // `0xffffffffffffffff` (bit 63 set) are expressible, matching
+        // `to_hex`'s round trip (`(-1).to_hex() == "ffffffffffffffff"`).
+        // Decimal literals are unaffected (`number` above uses `i64::parse`).
+        match u64::from_str_radix(&raw, radix) {
+            Ok(u) => self.push(TokenKind::Int(u as i64), start, self.pos),
             Err(_) => {
                 let base = if radix == 16 { "hex" } else { "binary" };
                 self.error_at(span, "E0105", format!("invalid {base} integer literal"));
@@ -461,7 +466,7 @@ impl<'a> Lexer<'a> {
             '<' => {
                 self.pos += 1;
                 let k = if self.eat(b'<') {
-                    TokenKind::Shl
+                    if self.eat(b'=') { TokenKind::ShlEq } else { TokenKind::Shl }
                 } else if self.eat(b'=') {
                     TokenKind::Le
                 } else {
@@ -472,7 +477,7 @@ impl<'a> Lexer<'a> {
             '>' => {
                 self.pos += 1;
                 let k = if self.eat(b'>') {
-                    TokenKind::Shr
+                    if self.eat(b'=') { TokenKind::ShrEq } else { TokenKind::Shr }
                 } else if self.eat(b'=') {
                     TokenKind::Ge
                 } else {
@@ -482,16 +487,29 @@ impl<'a> Lexer<'a> {
             }
             '&' => {
                 self.pos += 1;
-                let k = if self.eat(b'&') { TokenKind::AmpAmp } else { TokenKind::Amp };
+                let k = if self.eat(b'&') {
+                    TokenKind::AmpAmp
+                } else if self.eat(b'=') {
+                    TokenKind::AmpEq
+                } else {
+                    TokenKind::Amp
+                };
                 self.push(k, start, self.pos);
             }
             '^' => {
                 self.pos += 1;
-                self.push(TokenKind::Caret, start, self.pos);
+                let k = if self.eat(b'=') { TokenKind::CaretEq } else { TokenKind::Caret };
+                self.push(k, start, self.pos);
             }
             '|' => {
                 self.pos += 1;
-                let k = if self.eat(b'|') { TokenKind::PipePipe } else { TokenKind::Pipe };
+                let k = if self.eat(b'|') {
+                    TokenKind::PipePipe
+                } else if self.eat(b'=') {
+                    TokenKind::PipeEq
+                } else {
+                    TokenKind::Pipe
+                };
                 self.push(k, start, self.pos);
             }
             '.' => {

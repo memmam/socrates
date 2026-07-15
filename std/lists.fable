@@ -119,3 +119,21 @@ pub fn max_by[T](xs: List[T], cmp: fn(T, T) -> Int) -> Option[T] {
         Some(b) -> if cmp(x, b) > 0 { Some(x) } else { best },
     })
 }
+
+// The element with the smallest Int key (e.g. `min_by_key(xs, |x| x.dist)`,
+// no comparator to write). Ties keep the FIRST winner. None for [].
+pub fn min_by_key[T](xs: List[T], key: fn(T) -> Int) -> Option[T] {
+    xs.fold(None, |best, x| match best {
+        None -> Some(x),
+        Some(b) -> if key(x) < key(b) { Some(x) } else { best },
+    })
+}
+
+// The element with the largest Int key. Ties keep the FIRST winner,
+// mirroring min_by_key. None for [].
+pub fn max_by_key[T](xs: List[T], key: fn(T) -> Int) -> Option[T] {
+    xs.fold(None, |best, x| match best {
+        None -> Some(x),
+        Some(b) -> if key(x) > key(b) { Some(x) } else { best },
+    })
+}

@@ -1,0 +1,58 @@
+// `while let PATTERN = EXPR { .. }` (v0.8): sugar for the drain-loop idiom
+// already documented in demos/STYLE.md § 5 — `while true { match EXPR {
+// PATTERN -> .., _ -> break } }` — without writing the wrapper by hand.
+
+import std.deque;
+
+let dq = deque.from_list([1, 2, 3, 4]);
+let mut total = 0;
+while let Some(x) = dq.pop_front() {
+    total += x;
+}
+println(total);                        //? expect: 10
+println(dq.is_empty());                //? expect: true
+
+// A `List` used as a stack via `pop()`.
+let stack = [1, 2, 3];
+let mut popped = [];
+while let Some(x) = stack.pop() {
+    popped.push(x);
+}
+println(popped);                       //? expect: [3, 2, 1]
+
+// Nested: nested `while let` drains an inner deque per outer iteration.
+let outer = deque.from_list([deque.from_list([1, 2]), deque.from_list([3])]);
+let mut flat = [];
+while let Some(inner) = outer.pop_front() {
+    while let Some(v) = inner.pop_front() {
+        flat.push(v);
+    }
+}
+println(flat);                         //? expect: [1, 2, 3]
+
+// `break`/`continue` inside the body still refer to the `while let` loop.
+let src = deque.from_list([1, 2, 3, 4, 5]);
+let mut kept = [];
+while let Some(x) = src.pop_front() {
+    if x == 4 {
+        break;
+    }
+    if x == 2 {
+        continue;
+    }
+    kept.push(x);
+}
+println(kept);                         //? expect: [1, 3]
+
+// An irrefutable pattern makes the synthetic fallback arm unreachable —
+// no spurious "unreachable match arm" warning should fire (the user never
+// wrote that arm). The loop only ends via an explicit inner `break`.
+let mut xs = [1, 2, 3];
+let mut count = 0;
+while let next = xs.pop() {
+    match next {
+        Some(_) -> { count += 1; }
+        None -> break,
+    }
+}
+println(count);                        //? expect: 3

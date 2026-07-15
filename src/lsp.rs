@@ -943,7 +943,7 @@ fn walk_expr(e: &Expr, f: &mut impl FnMut(NodeId, Span)) {
             }
         }
         ExprKind::Block(b) => walk_block(b, f),
-        ExprKind::Match { scrutinee, arms } => {
+        ExprKind::Match { scrutinee, arms, .. } => {
             walk_expr(scrutinee, f);
             for arm in arms {
                 walk_pattern(&arm.pattern, f);

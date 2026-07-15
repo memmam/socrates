@@ -55,3 +55,17 @@ println(lists.max_by(pairs, |a, b| a.0 - b.0));  //? expect: Some((3, "three"))
 // A reversed comparator flips min and max.
 println(lists.min_by([3, 1, 2], |a, b| b - a));  //? expect: Some(3)
 println(lists.max_by([3, 1, 2], |a, b| b - a));  //? expect: Some(1)
+
+// min_by_key / max_by_key (v0.8): a key extractor instead of a comparator.
+println(lists.min_by_key(words, |w| w.len()));   //? expect: Some("a")
+println(lists.max_by_key(words, |w| w.len()));   //? expect: Some("ccc")
+println(lists.min_by_key([], |w: String| w.len()));  //? expect: None
+println(lists.max_by_key([], |w: String| w.len()));  //? expect: None
+
+// Ties keep the FIRST winner, for min_by_key and max_by_key alike.
+println(lists.min_by_key(["aa", "b", "c"], |w| w.len()));   //? expect: Some("b")
+println(lists.max_by_key(["aa", "bb", "c"], |w| w.len()));  //? expect: Some("aa")
+
+// Keys over structured elements.
+println(lists.min_by_key(pairs, |p| p.0));       //? expect: Some((1, "one"))
+println(lists.max_by_key(pairs, |p| p.0));       //? expect: Some((3, "three"))

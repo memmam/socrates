@@ -1,0 +1,5 @@
+// Bitwise compound assignment (v0.8) is Int-only, exactly like the plain
+// `&`/`|`/`^`/`<<`/`>>` operators (E0321, SPEC § 3.1/8.5).
+//? error: operator `&` is not defined for `String`
+let mut bad = "hi";
+bad &= "there";

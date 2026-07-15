@@ -66,3 +66,29 @@ match json.parse("\{\"broken\": ") {
     Ok(_) -> println("parsed?!"),
     Err(e) -> println("error: {e}"),               //? expect: error: unexpected end of input
 }
+
+// Ergonomic construction (v0.8): json.obj/arr/str/num/int/bool/null build
+// the same tree as the raw Json.J* constructors, just named for what they
+// build. A round trip through stringify proves it.
+let built = json.obj([
+    ("name", json.jstr("fable")),
+    ("count", json.int(3)),
+    ("ratio", json.num(0.5)),
+    ("tags", json.arr([json.jstr("vm"), json.jstr("gc")])),
+    ("stable", json.bool(true)),
+    ("parent", json.null()),
+]);
+println(json.stringify(built));
+//? expect: {"name":"fable","count":3,"ratio":0.5,"tags":["vm","gc"],"stable":true,"parent":null}
+
+// json.int is exactly json.num(i.to_float()) for the common integral case.
+println(json.int(3) == json.num(3.0));             //? expect: true
+
+// Parsing the built document back gives the same field values.
+match json.parse(json.stringify(built)) {
+    Ok(j) -> {
+        println(j.get("name"));                     //? expect: Some(JStr("fable"))
+        println(j.get("count"));                     //? expect: Some(JNum(3.0))
+    }
+    Err(e) -> println("error: {e}"),
+}

@@ -229,6 +229,22 @@ println((-8).ushr(1));     // logical: zeros from the top
 9223372036854775804
 ```
 
+The bitwise operators have compound-assignment forms too — `&=`, `|=`,
+`^=`, `<<=`, `>>=` — matching the arithmetic set (`+=` and friends):
+
+```fable
+let mut flags = 0b0011;
+flags |= 0b1100;     // set bits
+println(flags);
+flags &= 0b1010;     // keep only these bits
+println(flags);
+```
+
+```text
+15
+10
+```
+
 `Int` carries the rest of the bit toolbox as methods: `count_ones()`,
 `leading_zeros()`, `trailing_zeros()`, `rotate_left(n)`/`rotate_right(n)`,
 and `to_hex()` for the two's-complement hex string. A `Set`-of-small-ints as

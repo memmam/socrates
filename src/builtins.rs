@@ -44,12 +44,21 @@ pub enum Native {
     /// Big-endian pushers — same range checks as the LE trio.
     BytesPushU16be,
     BytesPushU32be,
+    /// 64-bit pushers (v0.8): no range check needed — `Int` already IS the
+    /// 64-bit two's-complement value, so its own bit pattern is what gets
+    /// written (one push, not a u64/i64 pair: at 64 bits the two are the
+    /// same operation, unlike push_u16le/push_i16le's differing ranges).
+    BytesPushU64le,
+    BytesPushU64be,
     /// Multi-byte readers at a byte offset; OOB panics match `get`.
     BytesReadU16le,
     BytesReadI16le,
     BytesReadU32le,
     BytesReadU16be,
     BytesReadU32be,
+    /// 64-bit readers (v0.8): the 8 bytes reinterpreted as `Int` directly.
+    BytesReadU64le,
+    BytesReadU64be,
     BytesSlice,
     BytesConcat,
     BytesToList,
@@ -97,6 +106,9 @@ pub enum Native {
     FftFft,
     FftIfft,
     FftRfft,
+    /// `fft.magnitude(re, im)` (v0.8): every `rfft` consumer wrote the same
+    /// `re.zip(im).map(|p| sqrt(p.0*p.0 + p.1*p.1))` line.
+    FftMagnitude,
     // worker.* + Worker handle methods (v0.7)
     WorkerSpawn,
     WorkerSelfSend,
@@ -105,6 +117,11 @@ pub enum Native {
     WorkerHandleSend,
     WorkerHandleRecv,
     WorkerHandleJoin,
+    /// Non-blocking `recv` (v0.8): `Option[Option[String]]` — outer `None`
+    /// means no message ready right now, distinct from the inner `None`
+    /// (the worker finished) that a blocking `recv` also reports.
+    WorkerHandleTryRecv,
+    WorkerSelfTryRecv,
 
     // os.* — process environment (v0.3).
     OsArgs,
@@ -174,6 +191,7 @@ pub enum Native {
     StrPadRight,
     StrParseInt,
     StrParseFloat,
+    StrParseHex,
     StrToString,
     // Map methods
     MapLen,
@@ -206,6 +224,14 @@ pub enum Native {
     IntRotateRight,
     /// Lowercase minimal hex of the two's-complement bit pattern.
     IntToHex,
+    /// Wrapping (v0.8) arithmetic — the checked `+ - *` operators panic on
+    /// overflow; these truncate to the low 64 bits instead, for hash
+    /// finalizers and the like. A 32-bit wrap is just `.wrapping_mul(y) &
+    /// 0xFFFFFFFF` — one primitive covers both widths, no separate 32-bit
+    /// intrinsic needed.
+    IntWrappingAdd,
+    IntWrappingSub,
+    IntWrappingMul,
     // Float methods
     FloatToInt,
     FloatToString,
@@ -242,6 +268,10 @@ pub enum Native {
     RangeEach,
     RangeFold,
     RangeRev,
+    /// Short-circuiting (v0.8): stop at the first true (`any`) / false
+    /// (`all`), like `List`'s. Previously only reachable via `.to_list()`.
+    RangeAny,
+    RangeAll,
 }
 
 /// The type scheme of a native. `params` excludes the receiver for methods.
@@ -383,12 +413,14 @@ impl Native {
                 "fft" => FftFft,
                 "ifft" => FftIfft,
                 "rfft" => FftRfft,
+                "magnitude" => FftMagnitude,
                 _ => return None,
             })),
             "worker" => Some(MathMember::Fn(match member {
                 "spawn" => WorkerSpawn,
                 "send" => WorkerSelfSend,
                 "recv" => WorkerSelfRecv,
+                "try_recv" => WorkerSelfTryRecv,
                 "is_worker" => WorkerIsWorker,
                 _ => return None,
             })),
@@ -491,11 +523,15 @@ impl Native {
             BytesPushStr => "push_str",
             BytesPushU16be => "push_u16be",
             BytesPushU32be => "push_u32be",
+            BytesPushU64le => "push_u64le",
+            BytesPushU64be => "push_u64be",
             BytesReadU16le => "read_u16le",
             BytesReadI16le => "read_i16le",
             BytesReadU32le => "read_u32le",
             BytesReadU16be => "read_u16be",
             BytesReadU32be => "read_u32be",
+            BytesReadU64le => "read_u64le",
+            BytesReadU64be => "read_u64be",
             BytesSlice => "slice",
             BytesConcat => "concat",
             BytesToList => "to_list",
@@ -537,13 +573,16 @@ impl Native {
             WorkerSpawn => "worker.spawn",
             WorkerSelfSend => "worker.send",
             WorkerSelfRecv => "worker.recv",
+            WorkerSelfTryRecv => "worker.try_recv",
             WorkerIsWorker => "worker.is_worker",
             WorkerHandleSend => "send",
             WorkerHandleRecv => "recv",
+            WorkerHandleTryRecv => "try_recv",
             WorkerHandleJoin => "join",
             FftFft => "fft.fft",
             FftIfft => "fft.ifft",
             FftRfft => "fft.rfft",
+            FftMagnitude => "fft.magnitude",
             FsRemove => "fs.remove",
             OsArgs => "os.args",
             OsEnv => "os.env",
@@ -606,6 +645,7 @@ impl Native {
             StrPadRight => "pad_right",
             StrParseInt => "parse_int",
             StrParseFloat => "parse_float",
+            StrParseHex => "parse_hex",
             StrToString => "to_string",
             MapLen => "len",
             MapIsEmpty => "is_empty",
@@ -631,6 +671,9 @@ impl Native {
             IntRotateLeft => "rotate_left",
             IntRotateRight => "rotate_right",
             IntToHex => "to_hex",
+            IntWrappingAdd => "wrapping_add",
+            IntWrappingSub => "wrapping_sub",
+            IntWrappingMul => "wrapping_mul",
             FloatToInt => "to_int",
             FloatToString => "to_string",
             FloatAbs => "abs",
@@ -663,6 +706,8 @@ impl Native {
             RangeEach => "each",
             RangeFold => "fold",
             RangeRev => "rev",
+            RangeAny => "any",
+            RangeAll => "all",
         }
     }
 
@@ -706,11 +751,11 @@ impl Native {
             BytesSet => (vec![Int, Int], Unit, 0),
             BytesPush => (vec![Int], Unit, 0),
             BytesPushU16le | BytesPushI16le | BytesPushU32le | BytesPushU16be
-            | BytesPushU32be => (vec![Int], Unit, 0),
+            | BytesPushU32be | BytesPushU64le | BytesPushU64be => (vec![Int], Unit, 0),
             BytesPushBytes => (vec![Type::Bytes], Unit, 0),
             BytesPushStr => (vec![TStr], Unit, 0),
             BytesReadU16le | BytesReadI16le | BytesReadU32le | BytesReadU16be
-            | BytesReadU32be => (vec![Int], Int, 0),
+            | BytesReadU32be | BytesReadU64le | BytesReadU64be => (vec![Int], Int, 0),
             BytesSlice => (vec![Int, Int], Type::Bytes, 0),
             BytesConcat => (vec![Type::Bytes], Type::Bytes, 0),
             BytesToList => (vec![], list(Int), 0),
@@ -730,6 +775,7 @@ impl Native {
                 0,
             ),
             FftRfft => (vec![list(Float)], tup(vec![list(Float), list(Float)]), 0),
+            FftMagnitude => (vec![list(Float), list(Float)], list(Float), 0),
 
             // worker.* (v0.7). Only Strings cross threads; spawn resolves
             // the file like an import (relative to the spawning script) and
@@ -737,9 +783,11 @@ impl Native {
             WorkerSpawn => (vec![TStr, list(TStr)], res(Type::Worker, TStr), 0),
             WorkerSelfSend => (vec![TStr], Bool, 0),
             WorkerSelfRecv => (vec![], opt(TStr), 0),
+            WorkerSelfTryRecv => (vec![], opt(opt(TStr)), 0),
             WorkerIsWorker => (vec![], Bool, 0),
             WorkerHandleSend => (vec![TStr], Bool, 0),
             WorkerHandleRecv => (vec![], opt(TStr), 0),
+            WorkerHandleTryRecv => (vec![], opt(opt(TStr)), 0),
             WorkerHandleJoin => (vec![], res(Unit, TStr), 0),
             OsArgs => (vec![], list(TStr), 0),
             OsEnv => (vec![TStr], opt(TStr), 0),
@@ -804,6 +852,7 @@ impl Native {
             StrPadLeft | StrPadRight => (vec![Int, TStr], TStr, 0),
             StrParseInt => (vec![], opt(Int), 0),
             StrParseFloat => (vec![], opt(Float), 0),
+            StrParseHex => (vec![], opt(Int), 0),
             StrToString => (vec![], TStr, 0),
 
             // Map[K, V] — receiver args at P0 (K), P1 (V).
@@ -827,6 +876,7 @@ impl Native {
             IntCountOnes | IntLeadingZeros | IntTrailingZeros => (vec![], Int, 0),
             IntUshr | IntRotateLeft | IntRotateRight => (vec![Int], Int, 0),
             IntToHex => (vec![], TStr, 0),
+            IntWrappingAdd | IntWrappingSub | IntWrappingMul => (vec![Int], Int, 0),
 
             FloatToInt => (vec![], Int, 0),
             FloatToString => (vec![], TStr, 0),
@@ -859,6 +909,7 @@ impl Native {
             RangeEach => (vec![func(vec![Int], Unit)], Unit, 0),
             RangeFold => (vec![p4(), func(vec![p4(), Int], p4())], p4(), 5),
             RangeRev => (vec![], list(Int), 0),
+            RangeAny | RangeAll => (vec![func(vec![Int], Bool)], Bool, 0),
         };
         NativeSig { params, ret, max_param }
     }
@@ -926,6 +977,7 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Str, "pad_right", Native::StrPadRight),
     (Recv::Str, "parse_int", Native::StrParseInt),
     (Recv::Str, "parse_float", Native::StrParseFloat),
+    (Recv::Str, "parse_hex", Native::StrParseHex),
     (Recv::Str, "to_string", Native::StrToString),
     (Recv::Map, "len", Native::MapLen),
     (Recv::Map, "is_empty", Native::MapIsEmpty),
@@ -951,6 +1003,9 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Int, "rotate_left", Native::IntRotateLeft),
     (Recv::Int, "rotate_right", Native::IntRotateRight),
     (Recv::Int, "to_hex", Native::IntToHex),
+    (Recv::Int, "wrapping_add", Native::IntWrappingAdd),
+    (Recv::Int, "wrapping_sub", Native::IntWrappingSub),
+    (Recv::Int, "wrapping_mul", Native::IntWrappingMul),
     (Recv::Float, "to_int", Native::FloatToInt),
     (Recv::Float, "to_string", Native::FloatToString),
     (Recv::Float, "abs", Native::FloatAbs),
@@ -972,17 +1027,22 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Bytes, "push_str", Native::BytesPushStr),
     (Recv::Bytes, "push_u16be", Native::BytesPushU16be),
     (Recv::Bytes, "push_u32be", Native::BytesPushU32be),
+    (Recv::Bytes, "push_u64le", Native::BytesPushU64le),
+    (Recv::Bytes, "push_u64be", Native::BytesPushU64be),
     (Recv::Bytes, "read_u16le", Native::BytesReadU16le),
     (Recv::Bytes, "read_i16le", Native::BytesReadI16le),
     (Recv::Bytes, "read_u32le", Native::BytesReadU32le),
     (Recv::Bytes, "read_u16be", Native::BytesReadU16be),
     (Recv::Bytes, "read_u32be", Native::BytesReadU32be),
+    (Recv::Bytes, "read_u64le", Native::BytesReadU64le),
+    (Recv::Bytes, "read_u64be", Native::BytesReadU64be),
     (Recv::Bytes, "slice", Native::BytesSlice),
     (Recv::Bytes, "concat", Native::BytesConcat),
     (Recv::Bytes, "to_list", Native::BytesToList),
     (Recv::Bytes, "utf8", Native::BytesUtf8),
     (Recv::Worker, "send", Native::WorkerHandleSend),
     (Recv::Worker, "recv", Native::WorkerHandleRecv),
+    (Recv::Worker, "try_recv", Native::WorkerHandleTryRecv),
     (Recv::Worker, "join", Native::WorkerHandleJoin),
     (Recv::Option_, "is_some", Native::OptIsSome),
     (Recv::Option_, "is_none", Native::OptIsNone),
@@ -1007,6 +1067,8 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Range, "each", Native::RangeEach),
     (Recv::Range, "fold", Native::RangeFold),
     (Recv::Range, "rev", Native::RangeRev),
+    (Recv::Range, "any", Native::RangeAny),
+    (Recv::Range, "all", Native::RangeAll),
 ];
 
 #[cfg(test)]
