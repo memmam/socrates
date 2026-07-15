@@ -1515,7 +1515,11 @@ impl Vm {
         match v {
             Value::Unit => return Ok("()".to_string()),
             Value::Bool(b) => return Ok((if b { "true" } else { "false" }).to_string()),
-            Value::Int(i) => return Ok(i.to_string()),
+            Value::Int(i) => {
+                let mut s = String::new();
+                push_int(&mut s, i);
+                return Ok(s);
+            }
             Value::Float(f) => return Ok(fmt_float(f)),
             Value::Obj(h) => {
                 if let Obj::Str(s) = self.heap.get(h) {
@@ -1539,7 +1543,6 @@ impl Vm {
         out: &mut String,
         depth: u32,
     ) -> Result<(), String> {
-        use std::fmt::Write;
         if depth > 10_000 {
             out.push_str("...");
             return Ok(());
@@ -1550,7 +1553,9 @@ impl Vm {
             Value::Int(i) => push_int(out, i),
             Value::Float(f) => out.push_str(&fmt_float(f)),
             Value::Native(n) => {
-                let _ = write!(out, "<fn {}>", n.name());
+                out.push_str("<fn ");
+                out.push_str(n.name());
+                out.push('>');
             }
             Value::Undefined => out.push_str("<undefined>"),
             Value::Obj(h) => {
@@ -1560,7 +1565,9 @@ impl Vm {
                 }
                 match self.heap.get(h) {
                     Obj::Bytes(bs) => {
-                        let _ = write!(out, "<bytes {}>", bs.len());
+                        out.push_str("<bytes ");
+                        push_int(out, bs.len() as i64);
+                        out.push('>');
                         return Ok(());
                     }
                     Obj::Worker(_) => {
@@ -1642,12 +1649,14 @@ impl Vm {
                         else {
                             return Err("internal: bad struct def (VM bug)".into());
                         };
-                        let _ = write!(out, "{name} {{ ");
+                        out.push_str(name);
+                        out.push_str(" { ");
                         for (i, (fv, fname)) in fields.iter().zip(fnames).enumerate() {
                             if i > 0 {
                                 out.push_str(", ");
                             }
-                            let _ = write!(out, "{fname}: ");
+                            out.push_str(fname);
+                            out.push_str(": ");
                             self.display_inner(*fv, false, seen, out, depth + 1)?;
                         }
                         out.push_str(" }");
@@ -1673,14 +1682,18 @@ impl Vm {
                         seen.pop();
                     }
                     Obj::Range { lo, hi, inclusive } => {
-                        let _ = write!(out, "{}..{}{}", lo, if *inclusive { "=" } else { "" }, hi);
+                        push_int(out, *lo);
+                        out.push_str(if *inclusive { "..=" } else { ".." });
+                        push_int(out, *hi);
                     }
                     Obj::Closure { proto, .. } => {
                         let name = &self.program.protos[*proto as usize].name;
                         if name == "<lambda>" {
                             out.push_str("<fn>");
                         } else {
-                            let _ = write!(out, "<fn {name}>");
+                            out.push_str("<fn ");
+                            out.push_str(name);
+                            out.push('>');
                         }
                     }
                     Obj::Upvalue(_) | Obj::Free => out.push_str("<internal>"),
