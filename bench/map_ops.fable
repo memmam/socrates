@@ -1,0 +1,17 @@
+// Bench: map insert/get with string keys (structural hashing).
+let m = {:};
+let mut i = 0;
+while i < 120000 {
+    m.insert("key_{i % 40000}", i);
+    i += 1;
+}
+let mut hits = 0;
+let mut j = 0;
+while j < 120000 {
+    match m.get("key_{j % 50000}") {
+        Some(_) -> { hits += 1; }
+        None -> {}
+    }
+    j += 1;
+}
+println("{m.len()} {hits}");

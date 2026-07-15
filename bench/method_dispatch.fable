@@ -1,0 +1,16 @@
+// Bench: user impl-method dispatch in a hot loop.
+struct Counter { n: Int }
+impl Counter {
+    pub fn bump(self, k: Int) -> Int {
+        self.n = self.n + k;
+        self.n
+    }
+}
+let c = Counter { n: 0 };
+let mut acc = 0;
+let mut i = 0;
+while i < 1000000 {
+    acc = (acc + c.bump(i % 13)) % 1000003;
+    i += 1;
+}
+println("{acc} {c.n}");

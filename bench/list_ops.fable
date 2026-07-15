@@ -1,0 +1,17 @@
+// Bench: list push/index/map/filter/fold.
+let mut xs = [];
+let mut i = 0;
+while i < 300000 {
+    xs.push(i);
+    i += 1;
+}
+let ys = xs.map(|x| x * 2 + 1);
+let zs = ys.filter(|x| x % 3 != 0);
+let total = zs.fold(0, |a, x| (a + x) % 1000003);
+let mut idx_sum = 0;
+let mut j = 0;
+while j < 300000 {
+    idx_sum = (idx_sum + xs[j]) % 1000003;
+    j += 1;
+}
+println("{total} {idx_sum}");
