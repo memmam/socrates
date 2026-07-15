@@ -315,9 +315,14 @@ impl Vm {
 
     /// Pop a native call's arguments and push its result.
     pub fn finish_native(&mut self, argc: u8, result: Value) {
-        let n = self.stack.len() - argc as usize;
-        self.stack.truncate(n);
-        self.stack.push(result);
+        if argc == 0 {
+            self.stack.push(result);
+        } else {
+            // Overwrite the first argument's slot, drop the rest.
+            let n = self.stack.len() - argc as usize;
+            self.stack[n] = result;
+            self.stack.truncate(n + 1);
+        }
     }
 
     pub fn str_of(&self, v: Value) -> Result<String, VmError> {
@@ -685,10 +690,9 @@ impl Vm {
                         Value::Native(n) => {
                             self.sync_ip(ip);
                             crate::natives::call_native(self, n, argc)?;
-                            // Remove the callee slot beneath the result.
+                            // Overwrite the callee slot beneath the result.
                             let result = self.pop();
-                            self.pop();
-                            self.stack.push(result);
+                            *self.stack.last_mut().expect("stack underflow (VM bug)") = result;
                         }
                         _ => return Err(self.err_at(ip, "value is not callable")),
                     }
@@ -729,7 +733,8 @@ impl Vm {
                             self.sync_ip(ip);
                             crate::natives::call_native(self, n, argc)?;
                             let result = self.pop();
-                            self.pop(); // the callee slot
+                            // (The callee slot beneath is removed by the
+                            // truncate below.)
                             let f = self.frames.pop().unwrap();
                             self.close_upvalues(f.base);
                             let cut = f.base - usize::from(f.callee_slot);
@@ -801,12 +806,13 @@ impl Vm {
                     let b = self.peek(0);
                     let a = self.peek(1);
                     let eq = self.value_eq(a, b, 0).map_err(|m| self.err_at(ip, m))?;
-                    self.stack.truncate(self.stack.len() - 2);
-                    self.stack.push(Value::Bool(eq));
+                    let n = self.stack.len() - 2;
+                    self.stack[n] = Value::Bool(eq);
+                    self.stack.truncate(n + 1);
                 }
                 Op::Lt | Op::Le | Op::Gt | Op::Ge => {
-                    let b = self.pop();
-                    let a = self.pop();
+                    let b = self.peek(0);
+                    let a = self.peek(1);
                     // Floats get direct IEEE-754 comparisons (every ordered
                     // comparison involving NaN is false).
                     let r = if let (Value::Float(x), Value::Float(y)) = (a, b) {
@@ -825,7 +831,9 @@ impl Vm {
                             _ => ord.is_ge(),
                         }
                     };
-                    self.stack.push(Value::Bool(r));
+                    let n = self.stack.len() - 2;
+                    self.stack[n] = Value::Bool(r);
+                    self.stack.truncate(n + 1);
                 }
 
                 Op::ToString => {
@@ -1133,14 +1141,15 @@ impl Vm {
             }
             _ => return Err(self.err_at(ip, "internal: bad `+` operands (VM bug)")),
         };
-        self.stack.truncate(self.stack.len() - 2);
-        self.stack.push(r);
+        let n = self.stack.len() - 2;
+        self.stack[n] = r;
+        self.stack.truncate(n + 1);
         Ok(())
     }
 
     fn op_arith(&mut self, op: Op, ip: usize) -> Result<(), VmError> {
-        let b = self.pop();
-        let a = self.pop();
+        let b = self.peek(0);
+        let a = self.peek(1);
         let r = match (a, b) {
             (Value::Int(x), Value::Int(y)) => {
                 let v = match op {
@@ -1170,7 +1179,9 @@ impl Vm {
             }),
             _ => return Err(self.err_at(ip, "internal: bad arithmetic operands (VM bug)")),
         };
-        self.stack.push(r);
+        let n = self.stack.len() - 2;
+        self.stack[n] = r;
+        self.stack.truncate(n + 1);
         Ok(())
     }
 
@@ -1178,8 +1189,8 @@ impl Vm {
     /// (sign-extending), matching the two's-complement Int; shift counts
     /// outside 0..=63 panic rather than quietly wrapping.
     fn op_bitwise(&mut self, op: Op, ip: usize) -> Result<(), VmError> {
-        let b = self.pop();
-        let a = self.pop();
+        let b = self.peek(0);
+        let a = self.peek(1);
         let (Value::Int(x), Value::Int(y)) = (a, b) else {
             return Err(self.err_at(ip, "internal: bad bitwise operands (VM bug)"));
         };
@@ -1202,7 +1213,9 @@ impl Vm {
             }
             _ => unreachable!(),
         };
-        self.stack.push(Value::Int(v));
+        let n = self.stack.len() - 2;
+        self.stack[n] = Value::Int(v);
+        self.stack.truncate(n + 1);
         Ok(())
     }
 
