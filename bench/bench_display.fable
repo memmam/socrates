@@ -1,0 +1,19 @@
+// Bench: container display — str() of large lists of strings (with and
+// without escapes) and ints exercises display_inner's quoting and number
+// formatting paths.
+let mut words = [];
+let mut nums = [];
+let mut i = 0;
+while i < 2000 {
+    words.push("w{i} plain");
+    words.push("q{i} \"quoted\"\nline");
+    nums.push(i * 7919 % 1000000);
+    i += 1;
+}
+let mut total = 0;
+let mut k = 0;
+while k < 600 {
+    total += str(words).len() + str(nums).len();
+    k += 1;
+}
+println(total);

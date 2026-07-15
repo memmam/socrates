@@ -1546,12 +1546,8 @@ impl Vm {
         }
         match v {
             Value::Unit => out.push_str("()"),
-            Value::Bool(b) => {
-                let _ = write!(out, "{b}");
-            }
-            Value::Int(i) => {
-                let _ = write!(out, "{i}");
-            }
+            Value::Bool(b) => out.push_str(if b { "true" } else { "false" }),
+            Value::Int(i) => push_int(out, i),
             Value::Float(f) => out.push_str(&fmt_float(f)),
             Value::Native(n) => {
                 let _ = write!(out, "<fn {}>", n.name());
@@ -1575,17 +1571,25 @@ impl Vm {
                         if top {
                             out.push_str(s);
                         } else {
+                            // Copy escape-free runs whole; the escaped
+                            // characters are all ASCII, so slicing one byte
+                            // past a match stays on a char boundary.
                             out.push('"');
-                            for c in s.chars() {
-                                match c {
-                                    '\n' => out.push_str("\\n"),
-                                    '\t' => out.push_str("\\t"),
-                                    '\r' => out.push_str("\\r"),
-                                    '"' => out.push_str("\\\""),
-                                    '\\' => out.push_str("\\\\"),
-                                    _ => out.push(c),
-                                }
+                            let mut rest = s.as_str();
+                            while let Some(i) =
+                                rest.find(['\n', '\t', '\r', '"', '\\'])
+                            {
+                                out.push_str(&rest[..i]);
+                                out.push_str(match rest.as_bytes()[i] {
+                                    b'\n' => "\\n",
+                                    b'\t' => "\\t",
+                                    b'\r' => "\\r",
+                                    b'"' => "\\\"",
+                                    _ => "\\\\",
+                                });
+                                rest = &rest[i + 1..];
                             }
+                            out.push_str(rest);
                             out.push('"');
                         }
                     }
@@ -1738,6 +1742,28 @@ impl Vm {
         z ^= z >> 31;
         self.rng = if z == 0 { 0x9E3779B97F4A7C15 } else { z };
     }
+}
+
+/// Append `n`'s decimal form — byte-identical to `write!(out, "{n}")` —
+/// without going through `fmt`'s `Arguments` machinery (hot in container
+/// display).
+fn push_int(out: &mut String, n: i64) {
+    let mut buf = [0u8; 20]; // i64::MIN is 20 bytes: 19 digits + sign
+    let mut i = buf.len();
+    let mut m = n.unsigned_abs();
+    loop {
+        i -= 1;
+        buf[i] = b'0' + (m % 10) as u8;
+        m /= 10;
+        if m == 0 {
+            break;
+        }
+    }
+    if n < 0 {
+        i -= 1;
+        buf[i] = b'-';
+    }
+    out.push_str(std::str::from_utf8(&buf[i..]).expect("ASCII digits"));
 }
 
 /// Float display: shortest round-trip digits; positional notation (`123.5`,
