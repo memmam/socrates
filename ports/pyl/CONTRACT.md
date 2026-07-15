@@ -27,7 +27,8 @@ Constructors: `zeros(n)`, `zeros2(n)` (stereo), `ones(n)`, `full(n, v)`,
 `arange(n)` (0..n-1 as floats), `linspace(a, b, n)` (numpy semantics:
 endpoint included; n==1 → [a]; n==0 → empty; step = (b-a)/(n-1)),
 `concat(parts)`, `stack2(l, r)` (two mono → stereo), `mono2(x)`
-(duplicate mono to both channels).
+(duplicate mono to both channels), `geomspace(a, b, n)` (numpy
+semantics: n log-spaced points, endpoints included).
 
 Elementwise (same shape): `+ - * /`. Scalar: `adds(k)`, `muls(k)`,
 `divs(k)`; `k_minus(k)` for `k - x`. Unary maps: `sinv`, `cosv`, `expv`,
@@ -58,8 +59,12 @@ it is plain `*`.
 
 ## Filters (`pyl.signal`)
 
-Only what upstream uses: Butterworth designs of order 2 and 3, `low` and
-`band`, as second-order sections, plus `sosfilt`.
+Only what upstream uses — which a full call-site enumeration puts at:
+Butterworth orders 2–4, btypes `low`, `band`, AND `high` (the hi-hat is
+an order-3 highpass; the vocoder builds eighteen order-4 bandpasses over
+`geomspace(80, 9000, 19)` band edges), as second-order sections, plus
+`sosfilt`. An earlier revision of this contract claimed only orders 2–3
+low/band; the freeze (33 designs) is the accurate inventory.
 
 `butter(order, wn_low, wn_high, btype)` → `List[Sos]` where each `Sos`
 is `{b0, b1, b2, a1, a2}` (a0 normalized to 1). Pinned algorithm:
@@ -89,7 +94,10 @@ is `{b0, b1, b2, a1, a2}` (a0 normalized to 1). Pinned algorithm:
    `zpk2sos` output for these designs — note scipy places an odd
    order's real-pole section first and carries the overall gain in the
    first emitted section); where an implementation's natural emission
-   order differs, it must permute to match the freeze.
+   order differs, it must permute to match the freeze. The shim
+   implements scipy's `zpk2sos('nearest')` pairing (including
+   `_cplxreal` run-sorting) outright; the Fable side must reproduce the
+   freeze however it gets there.
 6. **The per-filter freeze (authoritative):** prose descriptions of SOS
    pairing conventions are error-prone, so the binding artifact is a
    coefficient dump. The shim author implements steps 1–5, then writes
