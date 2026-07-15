@@ -54,6 +54,11 @@ fn describe(op: &Op, at: usize, program: &CompiledProgram) -> String {
         Op::JumpIfFalsePeek(o) => format!("jmp_false&  -> {}", target(*o)),
         Op::JumpIfTruePeek(o) => format!("jmp_true&   -> {}", target(*o)),
         Op::ForNext(o) => format!("for_next    done -> {}", target(*o)),
+        Op::ForNextRange { off, inclusive } => format!(
+            "for_range{}  done -> {}",
+            if *inclusive { "=" } else { " " },
+            target(*off)
+        ),
         Op::GetLocal(s) => format!("get_local   {s}"),
         Op::SetLocal(s) => format!("set_local   {s}"),
         Op::GetGlobal(g) => format!(

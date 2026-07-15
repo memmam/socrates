@@ -127,6 +127,12 @@ pub enum Op {
     ForPrep,
     /// Advance: push next element, or jump (popping nothing) when done.
     ForNext(i32),
+    /// `for` over an Int range *literal*, allocation-free: the compiler
+    /// pushes the two bounds directly as the loop slots `[cur, hi]` (no
+    /// heap Range, no ForPrep). Advance: push `cur` and step it, or jump
+    /// when done; `cur` becomes Unit past `i64::MAX`, exactly like the
+    /// heap Range's iteration state.
+    ForNextRange { off: i32, inclusive: bool },
 
     /// A `match` fell through all arms (unreachable if the checker passed).
     MatchFail,

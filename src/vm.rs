@@ -1111,6 +1111,34 @@ impl Vm {
                         }
                     }
                 }
+                Op::ForNextRange { off, inclusive } => {
+                    let hi_v = self.peek(0);
+                    let cur_v = self.peek(1);
+                    match (cur_v, hi_v) {
+                        (Value::Int(cur), Value::Int(hi)) => {
+                            let in_range = if inclusive { cur <= hi } else { cur < hi };
+                            if in_range {
+                                let next_state = cur
+                                    .checked_add(1)
+                                    .map(Value::Int)
+                                    .unwrap_or(Value::Unit);
+                                let n = self.stack.len();
+                                self.stack[n - 2] = next_state;
+                                self.stack.push(Value::Int(cur));
+                            } else {
+                                ip = (ip as i64 + off as i64) as usize;
+                            }
+                        }
+                        (Value::Unit, _) => {
+                            ip = (ip as i64 + off as i64) as usize;
+                        }
+                        _ => {
+                            return Err(
+                                self.err_at(ip, "internal: bad range loop state (VM bug)")
+                            )
+                        }
+                    }
+                }
 
                 Op::MatchFail => {
                     return Err(self.err_at(

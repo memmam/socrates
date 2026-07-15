@@ -236,7 +236,8 @@ impl<'a> Compiler<'a> {
             | Op::JumpIfFalse(o)
             | Op::JumpIfFalsePeek(o)
             | Op::JumpIfTruePeek(o)
-            | Op::ForNext(o) => *o = offset,
+            | Op::ForNext(o)
+            | Op::ForNextRange { off: o, .. } => *o = offset,
             other => unreachable!("patch_jump on non-jump {other:?}"),
         }
     }
@@ -476,8 +477,22 @@ impl<'a> Compiler<'a> {
             StmtKind::For { pattern, iter, body } => {
                 let locals_at_entry = self.ctx().locals.len();
                 let depth_at_entry = self.depth();
-                self.expr(iter);
-                self.emit(Op::ForPrep, iter.span);
+                // A range *literal* iterates allocation-free: its two Int
+                // bounds are pushed directly as the loop slots ([cur, hi] —
+                // no heap Range, no ForPrep) and ForNextRange steps them.
+                // Bounds still evaluate in source order; empty-range and
+                // i64::MAX-overflow semantics match the heap Range exactly.
+                let range_lit = match &iter.kind {
+                    ExprKind::Range { lo, hi, inclusive } => Some((lo, hi, *inclusive)),
+                    _ => None,
+                };
+                if let Some((lo, hi, _)) = &range_lit {
+                    self.expr(lo);
+                    self.expr(hi);
+                } else {
+                    self.expr(iter);
+                    self.emit(Op::ForPrep, iter.span);
+                }
                 // The iterator + its state occupy two anonymous local slots.
                 let d = self.depth();
                 self.ctx().locals.push(LocalSlot { local_id: ANON, slot: d - 2, captured: false });
@@ -485,7 +500,13 @@ impl<'a> Compiler<'a> {
 
                 let depth_at_body = self.depth(); // [.., iter, state]
                 let next = self.here();
-                let done = self.emit(Op::ForNext(0), pattern.span);
+                let done = match &range_lit {
+                    Some((_, _, inclusive)) => self.emit(
+                        Op::ForNextRange { off: 0, inclusive: *inclusive },
+                        pattern.span,
+                    ),
+                    None => self.emit(Op::ForNext(0), pattern.span),
+                };
                 // ForNext pushed the element on the fall-through path.
                 let d = self.depth();
                 self.set_depth(d + 1);
@@ -1582,6 +1603,6 @@ fn stack_effect(op: &Op) -> i32 {
         IndexSet => -3,
         ForPrep => 1,
         // ForNext's push is accounted manually at the call site.
-        ForNext(_) => 0,
+        ForNext(_) | ForNextRange { .. } => 0,
     }
 }
