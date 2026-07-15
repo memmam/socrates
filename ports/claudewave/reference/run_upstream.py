@@ -9,7 +9,8 @@ Usage:
 
 Environment:
     CLAUDEWAVE_SRC     path to the upstream claudewave lib/ directory
-                       (default: the scratchpad clone path below)
+                       (default: the vendored byte-for-byte copy in
+                       ports/claudewave/upstream/)
     CLAUDEWAVE_STREAM  path to rand_stream.txt (default: alongside this
                        script; generate it with gen_stream.py — it is a
                        runtime artifact, never committed)
@@ -57,8 +58,10 @@ sys.path.insert(0, HERE)
 
 import pynp  # noqa: E402
 
-DEFAULT_SRC = ('/tmp/claude-0/-home-user-fable/'
-               '4bdccfad-c698-5791-b6b7-13ba3d2113cf/scratchpad/claudewave/lib')
+# The vendored byte-for-byte upstream copy (ports/claudewave/upstream/),
+# so CI needs no network fetch; override with CLAUDEWAVE_SRC to run
+# against a fresh upstream clone's lib/ directory instead.
+DEFAULT_SRC = os.path.join(HERE, '..', 'upstream')
 
 ITEM_STRIDE = 100000  # stream offset per battery item
 
