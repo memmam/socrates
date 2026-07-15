@@ -15,6 +15,15 @@ use crate::value::{FMap, Handle, Heap, Obj, Upval, Value};
 
 const DEFAULT_MAX_FRAMES: usize = 4096;
 
+// FNV-1a, the structural-hash primitive (`Vm::hash_value`).
+const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+const FNV_PRIME: u64 = 0x100000001b3;
+
+#[inline]
+fn mix(h: u64, x: u64) -> u64 {
+    (h ^ x).wrapping_mul(FNV_PRIME)
+}
+
 /// The call-depth cap. `FABLE_MAX_DEPTH` overrides the default (floor 64 —
 /// below that the prelude itself couldn't run); recursive tree-walking
 /// workloads on deep data legitimately want more headroom than the default.
@@ -1515,6 +1524,28 @@ impl Vm {
     /// other doesn't). Cyclic or absurdly large keys exhaust the node budget
     /// and error; map entries combine order-insensitively via nested calls.
     pub fn hash_value(&self, v: Value, _depth: u32) -> Result<u64, String> {
+        // Scalar/string fast path: identical hashes to the worklist walk
+        // below, without allocating it (Int and Str keys dominate hot maps).
+        match v {
+            Value::Unit => return Ok(mix(FNV_OFFSET, 1)),
+            Value::Bool(b) => return Ok(mix(FNV_OFFSET, 2 + b as u64)),
+            Value::Int(i) => return Ok(mix(mix(FNV_OFFSET, 4), i as u64)),
+            Value::Float(f) => {
+                let bits = if f == 0.0 { 0u64 } else { f.to_bits() };
+                return Ok(mix(mix(FNV_OFFSET, 5), bits));
+            }
+            Value::Undefined => return Ok(mix(FNV_OFFSET, 6)),
+            Value::Native(_) => return Err("functions cannot be used as map keys".into()),
+            Value::Obj(h) => {
+                if let Obj::Str(s) = self.heap.get(h) {
+                    let mut acc = mix(FNV_OFFSET, 7);
+                    for b in s.bytes() {
+                        acc = mix(acc, b as u64);
+                    }
+                    return Ok(acc);
+                }
+            }
+        }
         let mut budget: u32 = 4_000_000;
         self.hash_value_impl(v, 0, &mut budget)
     }
@@ -1527,11 +1558,6 @@ impl Vm {
     ) -> Result<u64, String> {
         if map_depth > 64 {
             return Err("map nesting exceeds 64 levels in key".into());
-        }
-        const FNV_OFFSET: u64 = 0xcbf29ce484222325;
-        const FNV_PRIME: u64 = 0x100000001b3;
-        fn mix(h: u64, x: u64) -> u64 {
-            (h ^ x).wrapping_mul(FNV_PRIME)
         }
         let mut acc = FNV_OFFSET;
         let mut work: Vec<Value> = vec![v];
