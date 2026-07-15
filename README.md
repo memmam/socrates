@@ -312,14 +312,15 @@ the core language and toolchain (v0.1–v0.5), a field-test pass that removed
 the walls real demo programs hit (v0.6), and an infrastructure release that
 added `Bytes`, native FFT, worker isolates, bitwise operators, a GPU path,
 and a standard-library collections layer, then a measured efficiency pass
-over the interpreter (v0.7). Features are pulled in by real use, not pushed
-by a roadmap; the per-release detail is in [`CHANGELOG.md`](CHANGELOG.md),
-and the project's purpose and invariants in [`CLAUDE.md`](CLAUDE.md).
+over the interpreter and `fable build` — self-contained single-file binaries,
+shipped as a demo zoo cross-compiled for Linux, Windows, and macOS (v0.7).
+Features are pulled in by real use, not pushed by a roadmap; the per-release
+detail is in [`CHANGELOG.md`](CHANGELOG.md), and the project's purpose and
+invariants in [`CLAUDE.md`](CLAUDE.md).
 
 What remains out of scope — full traits, per-field visibility, a package
-manager, a debugger, Windows paths — stays out until real programs demand
-it; a language grows better from the pull of its users than the push of
-its builder.
+manager, a debugger — stays out until real programs demand it; a language
+grows better from the pull of its users than the push of its builder.
 
 ## License
 
