@@ -151,12 +151,6 @@ jobs:
             label: aarch64-windows
             ext: ".exe"
             run: false
-          - os: macos-14
-            target: aarch64-apple-darwin
-            label: aarch64-macos
-            ext: ""
-            codesign: true
-            run: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -176,20 +170,9 @@ jobs:
         run: |
           host="target/release/fable${{ matrix.ext }}"
           launcher="target/${{ matrix.target }}/release/fable${{ matrix.ext }}"
-          # macOS: strip the launcher's linker-applied ad-hoc signature so the
-          # stapled binary can be signed as a whole — the signature has to
-          # cover the appended payload, and `read_self` scans past the trailing
-          # signature for the magic.
-          if [ "${{ matrix.codesign }}" = "true" ]; then
-            codesign --remove-signature "$launcher" || true
-          fi
           for demo in csvql parmandel; do
             "$host" build "demos/$demo" --launcher "$launcher" -o "${demo}${{ matrix.ext }}"
             test -s "${demo}${{ matrix.ext }}" || { echo "no binary produced for $demo" >&2; exit 1; }
-            if [ "${{ matrix.codesign }}" = "true" ]; then
-              codesign --force --sign - "${demo}${{ matrix.ext }}"
-              codesign --verify --strict "${demo}${{ matrix.ext }}"
-            fi
           done
           if [ "${{ matrix.run }}" = "true" ]; then
             # Native arch: the stapled binary runs here — prove it reproduces
@@ -203,3 +186,19 @@ jobs:
           else
             echo "cross-built and stapled ${{ matrix.label }} (no native execution)"
           fi
+
+  macos-source:
+    # macOS single-file binaries can't be code-signed (a payload appended past
+    # the Mach-O __LINKEDIT fails codesign's strict validation), so the release
+    # ships the interpreter + demo sources for Apple Silicon. This proves that
+    # combination actually runs on arm64 macOS — the only macOS coverage in CI.
+    name: macOS Apple Silicon (interpreter + demos)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - name: Spec + demo golden suites on Apple Silicon
+        run: |
+          ./target/release/fable test tests/spec demos > /dev/null
+          echo "interpreter + all demos run on aarch64-macos"

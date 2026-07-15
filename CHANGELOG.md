@@ -14,9 +14,12 @@ introduced it, and `CLAUDE.md` keeps the release ledger.
   runs — so its output is byte-identical to `fable <path>` from source.
   Stapling is target-independent (`--launcher` supplies cross-compiled
   interpreter bytes), so one host assembles binaries for every target. The
-  release now ships the whole **demo zoo**: all seventeen demos cross-built
-  for `x86_64`/`aarch64` Linux and Windows and Apple-Silicon macOS, as
-  `fable-demozoo-<version>-<target>.tar.gz`.
+  release ships the whole **demo zoo**: all seventeen demos cross-built for
+  `x86_64`/`aarch64` Linux and Windows, as
+  `fable-demozoo-<version>-<target>.tar.gz`. (Apple-Silicon macOS ships the
+  interpreter + demo sources instead — a payload appended past the Mach-O
+  `__LINKEDIT` can't be code-signed, and arm64 macOS won't run an unsigned
+  binary; single-file macOS is a follow-up.)
 - The efficiency pass: a measured, benchmark-gated optimization sweep
   (`bench/` is the yardstick; every change was interleaved-A/B'd, and
   negative results are recorded in the audit trail). Interpreter: frame-

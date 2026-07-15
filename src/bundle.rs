@@ -64,9 +64,9 @@ pub fn read_self() -> Option<Bundle> {
     if let Ok(Some(b)) = read_from(&exe) {
         return Some(b);
     }
-    // Fallback: on Apple Silicon the binary must be code-signed to run, and
-    // the signature is re-applied *after* stapling, so it sits past our
-    // trailer. Scan the whole image backward for the magic.
+    // Fallback: tolerate trailing bytes after the trailer (e.g. a code
+    // signature appended past our payload) by scanning the whole image
+    // backward for the magic.
     let data = std::fs::read(&exe).ok()?;
     scan(&data)
 }
