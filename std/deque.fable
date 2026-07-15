@@ -36,6 +36,11 @@ impl Deque[T] {
     // Remove and return the front element (None when empty).
     pub fn pop_front(self) -> Option[T] {
         if self.front_rev.is_empty() {
+            if self.rear.len() <= 1 {
+                // Steady-state queue: one element (or none) to cross —
+                // pop it directly instead of reversing across.
+                return self.rear.pop();
+            }
             self.front_rev = self.rear.reverse();
             self.rear = [];
         }
@@ -45,6 +50,9 @@ impl Deque[T] {
     // Remove and return the back element (None when empty).
     pub fn pop_back(self) -> Option[T] {
         if self.rear.is_empty() {
+            if self.front_rev.len() <= 1 {
+                return self.front_rev.pop();
+            }
             self.rear = self.front_rev.reverse();
             self.front_rev = [];
         }

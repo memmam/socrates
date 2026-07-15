@@ -1,0 +1,32 @@
+// Bench: std.deque queue churn — the BFS-frontier shape (alternating
+// push_back/pop_front, where every pop finds the front stack empty) plus
+// a mixed phase that batches elements across the rebalance.
+import std.deque;
+
+let q = deque.new();
+let mut acc = 0;
+let mut i = 0;
+while i < 400000 {
+    q.push_back(i);
+    acc = (acc + q.pop_front().unwrap()) % 1000003;
+    i += 1;
+}
+let mut j = 0;
+while j < 200000 {
+    q.push_back(j);
+    if j % 3 != 0 {
+        acc = (acc + q.pop_front().unwrap()) % 1000003;
+    }
+    j += 1;
+}
+while !q.is_empty() {
+    acc = (acc + q.pop_front().unwrap()) % 1000003;
+}
+let r = deque.new();
+let mut k = 0;
+while k < 200000 {
+    r.push_front(k);
+    acc = (acc + r.pop_back().unwrap()) % 1000003;
+    k += 1;
+}
+println(acc);
