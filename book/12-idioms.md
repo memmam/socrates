@@ -54,7 +54,9 @@ usually already exists:
 - Count set bits with `Int.count_ones()`, shift unsigned with `ushr`, format
   hex with `to_hex()` — the intrinsics are both faster and clearer than the
   bit-twiddling they replace, and they sidestep the traps of a
-  signed-64-bit, panic-on-overflow `Int`.
+  signed-64-bit, panic-on-overflow `Int`. When a hash finalizer or bit
+  mixer needs arithmetic to overflow on purpose, `wrapping_add`/`sub`/`mul`
+  say so directly instead of a workaround that fights the checked operators.
 - Pack binary with the `Bytes` pushers and readers, not manual arithmetic.
 
 When you do need a shape the standard library lacks, wrap the fast primitive

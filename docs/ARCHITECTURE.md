@@ -414,6 +414,91 @@ anything captured into the `Err` message. `run`'s I/O rides on the v0.7
 `Bytes` heap object (`Obj::Bytes`, a GC leaf) introduced with the binary-I/O
 work — the gpu natives reuse its existing helpers in `natives.rs`.
 
+## v0.8 additions
+
+**`if let` / `while let`** are parser-only sugar, desugared fully to
+existing AST at parse time — no new bytecode ops, and no new cases in
+`check.rs` or `compiler.rs`. `if let PAT = E { T } else { F }` builds an
+ordinary two-arm `ExprKind::Match` (`PAT -> T`, a synthetic `_ -> F`, or `_
+-> Unit` with no `else`); `while let PAT = E { B }` builds `StmtKind::While
+{ cond: true, body: [PAT -> B, _ -> break] }` — textually the exact
+hand-rolled idiom STYLE.md already documented, so no new compiler logic is
+needed: it's an ordinary `Match` (generic arm-body compilation) nested in an
+ordinary `While` (generic loop compilation), and `break` inside a match arm
+already compiles correctly because match arms are compiled as regular
+expressions/blocks, unrelated to which construct encloses them. A new
+`ExprKind::Match` field, `sugar: MatchSugar` (`None`/`IfLet`/`WhileLet`), is
+purely for two consumers: `fmt.rs` prints the sugar back instead of the
+desugared `match`/`while true`, and `check.rs`'s deferred reachability pass
+(`analyze_matches`) skips the "unreachable match arm" warning on a sugar
+match's synthetic fallback arm — an irrefutable user pattern makes that arm
+genuinely unreachable, but the user never wrote it, so warning on it would
+point at invisible compiler-generated code. One correctness subtlety: the
+desugared `while let`'s `Match` statement must be the loop body block's
+*tail* expression (`StmtKind::Expr { tail: true }`), not a bare `tail:
+false` statement — otherwise `check.rs`'s existing `expect_unit_body` call
+on the `While`'s body block never sees the match's type, silently bypassing
+the same "loop body must not produce a value" check (E0306) that a
+hand-written `while`/`for` already gets.
+
+**Bitwise compound assignment** (`&= |= ^= <<= >>=`) reuses the existing
+`StmtKind::Assign { target, op: Option<BinOp>, value }` machinery wholesale
+— `lexer.rs` grows five tokens (disambiguated the same way `&&`/`||`
+already are: `&` then peek `&` then peek `=`, etc.), `parser.rs` maps them
+to `BinOp::BitAnd/BitOr/BitXor/Shl/Shr` in the same match arm that handles
+`+=`/`-=`/etc., and `compiler.rs`'s `bin_op()` already had cases for those
+`BinOp` variants (from the v0.7 binary bitwise operators), so codegen needed
+no changes at all. The one real change is in `check.rs`'s
+`check_arith_operand`: the bitwise variants previously fell into its
+permissive `_ => true` catch-all (meaning a compound bitwise assign on a
+non-`Int` would have silently type-checked), so they're now routed to the
+same `Int`-only rule the plain bitwise binary operators already enforce.
+
+**Hex/binary literal bit patterns.** `lexer.rs`'s `radix_number` parsed via
+`i64::from_str_radix`, rejecting any pattern needing bit 63 (`>=
+2^63`) even though `to_hex()`/the bitwise operators already treat `Int` as
+a raw 64-bit two's-complement value. Switched to `u64::from_str_radix` then
+`as i64` (a bit-pattern reinterpret, not a range-checked parse) — decimal
+literals are untouched, still `i64`-range-checked. `String.parse_hex()` is
+the same reinterpret in the other direction (`u64::from_str_radix` on the
+string minus an optional `0x`/`0X` prefix, then `as i64`), a new native
+alongside `parse_int`/`parse_float`.
+
+**Bytes 64-bit accessors and wrapping arithmetic** are ordinary natives
+following the established one-variant/one-`sig()`/one-`METHOD_TABLE`-row
+pattern. `push_u64le`/`be` need no range check (unlike the 16/32-bit
+pushers) since `Int` already occupies exactly 64 bits — every value is
+representable; the reads (`read_u64le`/`be`) reinterpret the 8 bytes as
+`i64` directly, so unlike the 32-bit reads they can come back negative.
+`wrapping_add`/`sub`/`mul` are direct `i64::wrapping_*` calls — deliberately
+64-bit only (Rust's own naming), since a 32-bit wrap is one mask away
+(`a.wrapping_mul(b) & 0xFFFFFFFF`) rather than a second intrinsic.
+`fft.magnitude` and `Range.any`/`all` (the latter short-circuiting, mirroring
+`ListAny`/`ListAll`) and `worker.try_recv` (a `TryRecvError`-to-nested-`Option`
+translation on the same `mpsc::Receiver` both `WorkerHandle::recv` and
+`WorkerCtx::rx` already wrap) are the same pattern again.
+
+**`std.lazy`, `std.json` construction, `Builder`/`lists` ergonomics** are
+pure Fable — no Rust changes beyond `stdlib.rs`'s embedded-module table
+gaining `std.lazy`. `Lazy[T]` holds `value: Option[T]` and `thunk: fn() ->
+T`; calling a function stored in a field requires binding it to a local
+first (`let f = self.thunk; f()`), since `self.thunk()` parses as a method
+call attempt and fails to resolve — the same pattern `std.iter`'s
+`Iter[T].next` already uses. `std.json`'s new constructors are named
+`jstr`, not `str`, because a module-local `pub fn str` would shadow the
+prelude's `str()` for every unqualified call inside that same file (it did,
+breaking `num_str`'s internal `str(f.to_int())` call, until renamed).
+
+**`fable test --bless`** (`testing.rs`): `check_one` is now a thin wrapper
+over `check_or_bless(path, bless: bool)`. On a stdout-only mismatch, when
+`bless` is set and the actual/expected line counts already agree, it
+re-scans the file with the same `directive_start` line scanner
+`parse_directives` uses, replaces the *n*-th `//? expect:` line's payload
+with the *n*-th actual output line in file order, and writes the file back
+— a line-count mismatch (a print statement added or removed) returns `Ok`
+untouched, leaving the original mismatch as a normal failure. `error:`/
+`panic:` directives are never rewritten.
+
 ## Testing strategy
 
 - Unit tests per module (lexer shapes, parser precedence, checker

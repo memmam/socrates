@@ -334,7 +334,8 @@ is written out, and the runtime panics if one sneaks in through a generic.
 You met `a..b` (half-open) and `a..=b` (inclusive) as `for`-loop fodder in
 chapter 2, but ranges are ordinary values of type `Range` — bind them,
 pass them, call methods on them. `map`, `filter`, and `fold` work directly
-on a range and produce lists:
+on a range and produce lists; `any`/`all` short-circuit and return a `Bool`
+without materializing one:
 
 ```fable
 let r = 1..=5;          // ranges are ordinary values
@@ -344,6 +345,8 @@ println((1..5).contains(5));
 println((1..=10).filter(|n| n % 3 == 0));
 println((1..=4).map(|n| n * n));
 println((1..=5).rev());
+println((1..=10).any(|n| n % 7 == 0));
+println((1..=10).all(|n| n > 0));
 ```
 
 ```text
@@ -353,6 +356,8 @@ false
 [3, 6, 9]
 [1, 4, 9, 16]
 [5, 4, 3, 2, 1]
+true
+true
 ```
 
 Endpoints are always `Int`. `rev()` returns a reversed *list*, so counting
@@ -574,6 +579,22 @@ println(buf.get(0));          // the signature byte
 ```text
 13
 137
+```
+
+The same LE/BE pair exists at 64 bits (`push_u64le`/`be`, `read_u64le`/`be`)
+for wide fields like a file size or byte offset — no range check needed,
+since `Int` already *is* the 64-bit value being written:
+
+```fable
+let wide = bytes(0);
+wide.push_u64be(1000000000000);
+println(wide.len());
+println(wide.read_u64be(0));
+```
+
+```text
+8
+1000000000000
 ```
 
 `String` and `Bytes` bridge through UTF-8: `"hi".to_bytes()` encodes, and

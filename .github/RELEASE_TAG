@@ -1,5 +1,8 @@
-v0.7.0
+v0.8.0
 # First line is the release tag (read via `head -1`). Any push to main that
 # changes this file re-fires the Release workflow, re-cutting the draft against
 # the current commit — used here to re-point the draft target at current main.
-# Re-cut: release build now uploads via upload-artifact@v6 (Node 24 runtime).
+# v0.8.0: the v0.7 demo round's feature queue (if let/while let, bitwise
+# compound assignment, 64-bit hex literals, Bytes 64-bit accessors, wrapping
+# arithmetic, fft.magnitude, Range.any/all, worker.try_recv, std.lazy,
+# ergonomic std.json construction, fable test --bless).
