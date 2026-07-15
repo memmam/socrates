@@ -790,64 +790,54 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
         ListMap => {
             let f = vm.native_arg(argc, 1);
-            let src = snapshot_list(vm, argc)?;
-            let out = alloc_rooted_list(vm, Vec::new());
-            let len = snapshot_len(vm, src);
-            for i in 0..len {
-                let item = snapshot_get(vm, src, i);
+            let items = snapshot_items(vm, argc)?;
+            let out = alloc_rooted_list(vm, Vec::with_capacity(items.len()));
+            for &item in &items {
                 let r = vm.call_value(f, &[item])?;
                 push_into(vm, out, r);
             }
-            finish_rooted(vm, 2, Value::Obj(out))
+            finish_rooted(vm, items.len() + 1, Value::Obj(out))
         }
         ListFilter => {
             let f = vm.native_arg(argc, 1);
-            let src = snapshot_list(vm, argc)?;
+            let items = snapshot_items(vm, argc)?;
             let out = alloc_rooted_list(vm, Vec::new());
-            let len = snapshot_len(vm, src);
-            for i in 0..len {
-                let item = snapshot_get(vm, src, i);
+            for &item in &items {
                 let r = vm.call_value(f, &[item])?;
                 let keep = expect_bool(vm, r)?;
                 if keep {
                     push_into(vm, out, item);
                 }
             }
-            finish_rooted(vm, 2, Value::Obj(out))
+            finish_rooted(vm, items.len() + 1, Value::Obj(out))
         }
         ListEach => {
             let f = vm.native_arg(argc, 1);
-            let src = snapshot_list(vm, argc)?;
-            let len = snapshot_len(vm, src);
-            for i in 0..len {
-                let item = snapshot_get(vm, src, i);
+            let items = snapshot_items(vm, argc)?;
+            for &item in &items {
                 vm.call_value(f, &[item])?;
             }
-            finish_rooted(vm, 1, Value::Unit)
+            finish_rooted(vm, items.len(), Value::Unit)
         }
         ListFold => {
             let init = vm.native_arg(argc, 1);
             let f = vm.native_arg(argc, 2);
-            let src = snapshot_list(vm, argc)?;
+            let items = snapshot_items(vm, argc)?;
             vm.temp_roots.push(init);
-            let len = snapshot_len(vm, src);
             let mut acc = init;
-            for i in 0..len {
-                let item = snapshot_get(vm, src, i);
+            for &item in &items {
                 acc = vm.call_value(f, &[acc, item])?;
                 // Keep the fresh accumulator rooted across the next call.
                 let top = vm.temp_roots.len() - 1;
                 vm.temp_roots[top] = acc;
             }
-            finish_rooted(vm, 2, acc)
+            finish_rooted(vm, items.len() + 1, acc)
         }
         ListAny | ListAll => {
             let f = vm.native_arg(argc, 1);
-            let src = snapshot_list(vm, argc)?;
-            let len = snapshot_len(vm, src);
+            let items = snapshot_items(vm, argc)?;
             let mut result = matches!(n, ListAll);
-            for i in 0..len {
-                let item = snapshot_get(vm, src, i);
+            for &item in &items {
                 let r = vm.call_value(f, &[item])?;
                 let b = expect_bool(vm, r)?;
                 if matches!(n, ListAny) && b {
@@ -859,15 +849,13 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                     break;
                 }
             }
-            finish_rooted(vm, 1, Value::Bool(result))
+            finish_rooted(vm, items.len(), Value::Bool(result))
         }
         ListFind => {
             let f = vm.native_arg(argc, 1);
-            let src = snapshot_list(vm, argc)?;
-            let len = snapshot_len(vm, src);
+            let items = snapshot_items(vm, argc)?;
             let mut found = None;
-            for i in 0..len {
-                let item = snapshot_get(vm, src, i);
+            for &item in &items {
                 let r = vm.call_value(f, &[item])?;
                 if expect_bool(vm, r)? {
                     found = Some(item);
@@ -878,15 +866,13 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                 Some(v) => make_some(vm, v),
                 None => make_none(vm),
             };
-            finish_rooted(vm, 1, r)
+            finish_rooted(vm, items.len(), r)
         }
         ListFlatMap => {
             let f = vm.native_arg(argc, 1);
-            let src = snapshot_list(vm, argc)?;
+            let items = snapshot_items(vm, argc)?;
             let out = alloc_rooted_list(vm, Vec::new());
-            let len = snapshot_len(vm, src);
-            for i in 0..len {
-                let item = snapshot_get(vm, src, i);
+            for &item in &items {
                 let r = vm.call_value(f, &[item])?;
                 let Value::Obj(rh) = r else {
                     return Err(vm.error("internal: flat_map expects a List (VM bug)"));
@@ -899,7 +885,7 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                     push_into(vm, out, v);
                 }
             }
-            finish_rooted(vm, 2, Value::Obj(out))
+            finish_rooted(vm, items.len() + 1, Value::Obj(out))
         }
         ListZip => {
             let a = list_ref(vm, argc)?.clone();
@@ -1808,28 +1794,14 @@ fn make_tuple(vm: &mut Vm, items: Vec<Value>) -> Value {
     Value::Obj(h)
 }
 
-/// Snapshot the receiver list into a fresh (temp-rooted) list object, so the
-/// iteration source survives callbacks that mutate or drop the original.
-fn snapshot_list(vm: &mut Vm, argc: u8) -> Result<Handle, VmError> {
+/// Snapshot the receiver list into a Rust-local Vec whose elements are
+/// pushed onto `temp_roots`, so the iteration source survives callbacks
+/// that mutate or drop the original. The caller must pop `items.len()`
+/// roots when done (its `finish_rooted` count includes them).
+fn snapshot_items(vm: &mut Vm, argc: u8) -> Result<Vec<Value>, VmError> {
     let items = list_ref(vm, argc)?.clone();
-    let v = make_list(vm, items);
-    vm.temp_roots.push(v);
-    let Value::Obj(h) = v else { unreachable!() };
-    Ok(h)
-}
-
-fn snapshot_len(vm: &Vm, h: Handle) -> usize {
-    match vm.heap.get(h) {
-        Obj::List(items) => items.len(),
-        _ => 0,
-    }
-}
-
-fn snapshot_get(vm: &Vm, h: Handle, i: usize) -> Value {
-    match vm.heap.get(h) {
-        Obj::List(items) => items[i],
-        _ => Value::Unit,
-    }
+    vm.temp_roots.extend_from_slice(&items);
+    Ok(items)
 }
 
 /// Allocate a result list and temp-root it for the duration of a native.
