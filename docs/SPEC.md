@@ -75,6 +75,7 @@ error (E0106) pointing at the symbolic spelling.
 | `Bool`   | `true` / `false`.                               |
 | `String` | Immutable UTF-8 string.                         |
 | `Unit`   | The single value `()`.                          |
+| `Bytes`  | Mutable packed byte buffer (v0.7): binary I/O and wire formats. Reference semantics; `==` is structural; not orderable. Displays as `<bytes N>`. |
 
 There are **no implicit numeric conversions**. `1 + 2.0` is a type error; write
 `1.to_float() + 2.0` or `1.0 + 2.0`.
@@ -489,6 +490,8 @@ Fallible operations return `Result[_, String]` whose `Err` carries
 | `fs.list_dir(path)` | `fn(String) -> Result[List[String], String]` | entry names, sorted |
 | `fs.create_dir(path)` | `fn(String) -> Result[Unit, String]` | recursive (`mkdir -p`) |
 | `fs.remove(path)` | `fn(String) -> Result[Unit, String]` | file or empty directory |
+| `fs.read_bytes(path)` | `fn(String) -> Result[Bytes, String]` | whole file, raw bytes (v0.7) |
+| `fs.write_bytes(path, b)` | `fn(String, Bytes) -> Result[Unit, String]` | create/truncate, raw bytes (v0.7) |
 | `os.args()` | `fn() -> List[String]` | CLI args after the script path |
 | `os.env(name)` | `fn(String) -> Option[String]` | |
 | `os.run(cmd, args)` | `fn(String, List[String]) -> Result[(Int, String, String), String]` | `Ok((exit code, stdout, stderr))`; `Err` if the binary can't launch |
@@ -516,6 +519,13 @@ One more free function joined the prelude in v0.6:
 | Function | Type | Notes |
 |----------|------|-------|
 | `char(code)` | `fn(Int) -> String` | the one-character string for a Unicode scalar value; panics on surrogates/out-of-range. Inverse of `code_at` (§ 8.3). |
+
+Two more joined in v0.7:
+
+| Function | Type | Notes |
+|----------|------|-------|
+| `bytes(n)` | `fn(Int) -> Bytes` | zero-filled byte buffer (§ 8.4b) |
+| `bytes_of(xs)` | `fn(List[Int]) -> Bytes` | from byte values 0..255 |
 
 ### 7.1 The standard library (v0.4)
 
@@ -610,6 +620,21 @@ except that the empty pattern matches at the end),
 
 Iteration order is **insertion order** (deterministic). Map literals:
 `{"a": 1, "b": 2}`; the empty map literal is `{:}` (because `{}` is an empty block).
+
+### 8.4b `Bytes` methods (v0.7)
+
+Constructed by the free functions `bytes(n)` (zero-filled; negative n
+panics) and `bytes_of(List[Int])` (panics on values outside 0..255).
+
+`len() -> Int`, `get(Int) -> Int` (panics OOB), `set(Int, Int) -> Unit`
+(panics OOB or on non-byte values), `push(Int) -> Unit` (checked),
+`push_u16le(Int)` / `push_i16le(Int)` / `push_u32le(Int)` (little-endian
+multi-byte appends with range checks — wire formats need no bitwise
+operators), `slice(Int, Int) -> Bytes` (clamped copy, like `List.slice`),
+`concat(Bytes) -> Bytes` (new buffer), `to_list() -> List[Int]`,
+`utf8() -> Result[String, String]` (UTF-8 decode). `String.to_bytes() ->
+Bytes` is the inverse bridge. Bytes may be map keys (content-hashed);
+mutating a key afterward strands the entry, as with other mutable keys.
 
 ### 8.5 Numeric methods
 

@@ -1,0 +1,4 @@
+// Bytes range checking panics like list indexing.
+//? panic: bytes index out of bounds: index 5, length 2
+let b = bytes_of([1, 2]);
+println(b.get(5));

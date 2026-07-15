@@ -1256,6 +1256,11 @@ impl Vm {
                                 return Ok(false);
                             }
                         }
+                        (Obj::Bytes(bx), Obj::Bytes(by)) => {
+                            if bx != by {
+                                return Ok(false);
+                            }
+                        }
                         (
                             Obj::Range { lo: l1, hi: h1, inclusive: i1 },
                             Obj::Range { lo: l2, hi: h2, inclusive: i2 },
@@ -1372,6 +1377,12 @@ impl Vm {
                             acc = mix(acc, b as u64);
                         }
                     }
+                    Obj::Bytes(bs) => {
+                        acc = mix(mix(acc, 14), bs.len() as u64);
+                        for b in bs {
+                            acc = mix(acc, *b as u64);
+                        }
+                    }
                     Obj::List(items) => {
                         acc = mix(mix(acc, 8), items.len() as u64);
                         work.extend(items.iter().rev().copied());
@@ -1461,6 +1472,10 @@ impl Vm {
                     return Ok(());
                 }
                 match self.heap.get(h) {
+                    Obj::Bytes(bs) => {
+                        let _ = write!(out, "<bytes {}>", bs.len());
+                        return Ok(());
+                    }
                     Obj::Str(s) => {
                         if top {
                             out.push_str(s);

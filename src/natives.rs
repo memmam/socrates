@@ -139,6 +139,182 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         // ------------------------------------------------------------------
         // fs.* / os.* (v0.3)
         // ------------------------------------------------------------------
+
+        // ------------------------------------------------------------------
+        // Bytes (v0.7)
+        // ------------------------------------------------------------------
+        BytesNew => {
+            let n = int_arg(vm, argc, 0)?;
+            if n < 0 {
+                return Err(vm.error(format!("bytes: negative length {n}")));
+            }
+            Value::Obj(vm.heap.alloc(Obj::Bytes(vec![0u8; n as usize])))
+        }
+        BytesOf => {
+            let items = list_ref(vm, argc)?.clone();
+            let mut out = Vec::with_capacity(items.len());
+            for v in items {
+                match v {
+                    Value::Int(b) if (0..=255).contains(&b) => out.push(b as u8),
+                    Value::Int(b) => {
+                        return Err(vm.error(format!(
+                            "bytes_of: value {b} is not a byte (0..255)"
+                        )));
+                    }
+                    _ => return Err(vm.error("bytes_of: list must contain Ints")),
+                }
+            }
+            Value::Obj(vm.heap.alloc(Obj::Bytes(out)))
+        }
+        BytesLen => Value::Int(bytes_ref(vm, argc)?.len() as i64),
+        BytesGet => {
+            let i = int_arg(vm, argc, 1)?;
+            let bs = bytes_ref(vm, argc)?;
+            if i < 0 || i as usize >= bs.len() {
+                return Err(vm.error(format!(
+                    "bytes index out of bounds: index {i}, length {}",
+                    bs.len()
+                )));
+            }
+            Value::Int(bs[i as usize] as i64)
+        }
+        BytesSet => {
+            let i = int_arg(vm, argc, 1)?;
+            let v = int_arg(vm, argc, 2)?;
+            if !(0..=255).contains(&v) {
+                return Err(vm.error(format!("bytes set: value {v} is not a byte (0..255)")));
+            }
+            let h = bytes_handle(vm, argc)?;
+            let len = bytes_ref(vm, argc)?.len();
+            if i < 0 || i as usize >= len {
+                return Err(vm.error(format!(
+                    "bytes index out of bounds: index {i}, length {len}"
+                )));
+            }
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs[i as usize] = v as u8;
+            }
+            Value::Unit
+        }
+        BytesPush => {
+            let v = int_arg(vm, argc, 1)?;
+            if !(0..=255).contains(&v) {
+                return Err(vm.error(format!("bytes push: value {v} is not a byte (0..255)")));
+            }
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.push(v as u8);
+            }
+            Value::Unit
+        }
+        BytesPushU16le => {
+            let v = int_arg(vm, argc, 1)?;
+            if !(0..=65535).contains(&v) {
+                return Err(vm.error(format!("push_u16le: value {v} out of range 0..65535")));
+            }
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(&(v as u16).to_le_bytes());
+            }
+            Value::Unit
+        }
+        BytesPushI16le => {
+            let v = int_arg(vm, argc, 1)?;
+            if !(-32768..=32767).contains(&v) {
+                return Err(vm.error(format!(
+                    "push_i16le: value {v} out of range -32768..32767"
+                )));
+            }
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(&(v as i16).to_le_bytes());
+            }
+            Value::Unit
+        }
+        BytesPushU32le => {
+            let v = int_arg(vm, argc, 1)?;
+            if !(0..=4294967295).contains(&v) {
+                return Err(vm.error(format!(
+                    "push_u32le: value {v} out of range 0..4294967295"
+                )));
+            }
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(&(v as u32).to_le_bytes());
+            }
+            Value::Unit
+        }
+        BytesSlice => {
+            // Clamped copy, like List.slice: start inclusive, end exclusive.
+            let a = int_arg(vm, argc, 1)?;
+            let b = int_arg(vm, argc, 2)?;
+            let bs = bytes_ref(vm, argc)?;
+            let len = bs.len() as i64;
+            let start = a.clamp(0, len) as usize;
+            let end = b.clamp(0, len) as usize;
+            let out = if start >= end { Vec::new() } else { bs[start..end].to_vec() };
+            Value::Obj(vm.heap.alloc(Obj::Bytes(out)))
+        }
+        BytesConcat => {
+            let other = match vm.native_arg(argc, 1) {
+                Value::Obj(h) => match vm.heap.get(h) {
+                    Obj::Bytes(bs) => bs.clone(),
+                    _ => return Err(vm.error("concat: expected Bytes")),
+                },
+                _ => return Err(vm.error("concat: expected Bytes")),
+            };
+            let mut out = bytes_ref(vm, argc)?.clone();
+            out.extend_from_slice(&other);
+            Value::Obj(vm.heap.alloc(Obj::Bytes(out)))
+        }
+        BytesToList => {
+            let bs = bytes_ref(vm, argc)?.clone();
+            let items: Vec<Value> = bs.iter().map(|b| Value::Int(*b as i64)).collect();
+            let h = alloc_rooted_list(vm, items);
+            finish_rooted(vm, 1, Value::Obj(h))
+        }
+        BytesUtf8 => {
+            let bs = bytes_ref(vm, argc)?.clone();
+            match String::from_utf8(bs) {
+                Ok(text) => {
+                    let v = vm.alloc_str(text);
+                    make_ok(vm, v)
+                }
+                Err(e) => {
+                    let msg = vm.alloc_str(format!("invalid UTF-8: {e}"));
+                    make_err(vm, msg)
+                }
+            }
+        }
+        StrToBytes => {
+            let s = recv_str(vm, argc)?;
+            Value::Obj(vm.heap.alloc(Obj::Bytes(s.into_bytes())))
+        }
+        FsReadBytes => {
+            let path = str_arg(vm, argc, 0)?;
+            match std::fs::read(&path) {
+                Ok(data) => {
+                    let v = Value::Obj(vm.heap.alloc(Obj::Bytes(data)));
+                    make_ok(vm, v)
+                }
+                Err(e) => make_io_err(vm, &path, e),
+            }
+        }
+        FsWriteBytes => {
+            let path = str_arg(vm, argc, 0)?;
+            let data = match vm.native_arg(argc, 1) {
+                Value::Obj(h) => match vm.heap.get(h) {
+                    Obj::Bytes(bs) => bs.clone(),
+                    _ => return Err(vm.error("fs.write_bytes: expected Bytes")),
+                },
+                _ => return Err(vm.error("fs.write_bytes: expected Bytes")),
+            };
+            match std::fs::write(&path, data) {
+                Ok(()) => make_ok(vm, Value::Unit),
+                Err(e) => make_io_err(vm, &path, e),
+            }
+        }
+
         FsRead => {
             let path = str_arg(vm, argc, 0)?;
             match std::fs::read_to_string(&path) {
@@ -1143,6 +1319,25 @@ fn expect_list(vm: &Vm, v: Value) -> Result<Handle, VmError> {
     match v {
         Value::Obj(h) if matches!(vm.heap.get(h), Obj::List(_)) => Ok(h),
         _ => Err(vm.error("internal: expected List (VM bug)")),
+    }
+}
+
+
+fn bytes_handle(vm: &Vm, argc: u8) -> Result<Handle, VmError> {
+    match vm.native_arg(argc, 0) {
+        Value::Obj(h) => match vm.heap.get(h) {
+            Obj::Bytes(_) => Ok(h),
+            _ => Err(vm.error("expected Bytes")),
+        },
+        _ => Err(vm.error("expected Bytes")),
+    }
+}
+
+fn bytes_ref(vm: &Vm, argc: u8) -> Result<&Vec<u8>, VmError> {
+    let h = bytes_handle(vm, argc)?;
+    match vm.heap.get(h) {
+        Obj::Bytes(bs) => Ok(bs),
+        _ => unreachable!(),
     }
 }
 
