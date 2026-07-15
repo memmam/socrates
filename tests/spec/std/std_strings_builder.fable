@@ -1,0 +1,53 @@
+// SPEC §7.1 (v0.7): strings.Builder — O(n) string accumulation.
+import std.strings;
+
+let b = strings.builder();
+println(b.len());              //? expect: 0
+println(b.build() == "");      //? expect: true
+
+b.push("fee");
+b.push("fi");
+println(b.len());              //? expect: 5
+println(b.build());            //? expect: feefi
+
+// Pushing the empty string is a no-op in every observable way.
+b.push("");
+println(b.len());              //? expect: 5
+
+// push_char takes a Unicode scalar value, like the free `char()`.
+b.push_char(33);
+println(b.build());            //? expect: feefi!
+
+// build() does not consume: building twice agrees.
+println(b.build());            //? expect: feefi!
+
+// clear() empties for reuse.
+b.clear();
+println(b.len());              //? expect: 0
+println(b.build() == "");      //? expect: true
+b.push("re");
+println(b.build());            //? expect: re
+
+// len() counts characters (Unicode scalars), matching String.len().
+let u = strings.builder();
+u.push_char(955);              // λ
+u.push("x");
+u.push_char(128009);           // 🐉
+println(u.len());              //? expect: 3
+println(u.build());            //? expect: λx🐉
+println(u.build().len() == u.len());  //? expect: true
+
+// Builders compose with interpolation, both in and out.
+let name = "world";
+let g = strings.builder();
+g.push("hello, {name}");
+g.push_char(63);
+println("<{g.build()}>");      //? expect: <hello, world?>
+
+// The point of the type: accumulate in a loop, join once.
+let acc = strings.builder();
+for i in 1..=5 {
+    acc.push("{i},");
+}
+println(acc.build());          //? expect: 1,2,3,4,5,
+println(acc.len());            //? expect: 10

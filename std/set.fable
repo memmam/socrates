@@ -1,0 +1,93 @@
+// std.set — a Set[T] over structural map keys, in insertion order.
+//
+// Backed by Map[T, Unit]: membership is the map's structural key equality,
+// so anything a map can key (ints, strings, tuples, structs — no functions)
+// can be a set element. Iteration order is insertion order, deterministic.
+//
+//   import std.set;
+//   let seen = set.new();
+//   if seen.insert(word) { println("first sighting: {word}"); }
+
+pub struct Set[T] {
+    items: Map[T, Unit],
+}
+
+pub fn new[T]() -> Set[T] {
+    Set { items: {:} }
+}
+
+// A set of the list's elements; duplicates collapse to their first occurrence.
+pub fn from_list[T](xs: List[T]) -> Set[T] {
+    let s = new();
+    for x in xs {
+        s.insert(x);
+    }
+    s
+}
+
+impl Set[T] {
+    // Add `v`. Returns false (and changes nothing) if it was already present.
+    pub fn insert(self, v: T) -> Bool {
+        match self.items.insert(v, ()) {
+            None -> true,
+            Some(_) -> false,
+        }
+    }
+
+    // Remove `v`. Returns false if it was not present.
+    pub fn remove(self, v: T) -> Bool {
+        match self.items.remove(v) {
+            None -> false,
+            Some(_) -> true,
+        }
+    }
+
+    pub fn contains(self, v: T) -> Bool {
+        self.items.contains_key(v)
+    }
+
+    pub fn len(self) -> Int {
+        self.items.len()
+    }
+
+    pub fn is_empty(self) -> Bool {
+        self.items.is_empty()
+    }
+
+    // The elements in insertion order.
+    pub fn to_list(self) -> List[T] {
+        self.items.keys()
+    }
+
+    // Every element of either set: `self`'s elements in their insertion
+    // order, then `other`'s new ones in theirs. A new set; operands untouched.
+    pub fn union(self, other: Set[T]) -> Set[T] {
+        let out = from_list(self.to_list());
+        for v in other.to_list() {
+            out.insert(v);
+        }
+        out
+    }
+
+    // The elements of `self` that are also in `other`, in `self`'s order.
+    pub fn intersect(self, other: Set[T]) -> Set[T] {
+        let out = new();
+        for v in self.to_list() {
+            if other.contains(v) {
+                out.insert(v);
+            }
+        }
+        out
+    }
+
+    // The elements of `self` that are not in `other`, in `self`'s order.
+    pub fn difference(self, other: Set[T]) -> Set[T] {
+        let out = new();
+        for v in self.to_list() {
+            if !other.contains(v) {
+                out.insert(v);
+            }
+        }
+        out
+    }
+}

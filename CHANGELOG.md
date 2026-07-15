@@ -37,6 +37,15 @@ every feature listed here.
   it). Without the feature the namespace still typechecks and degrades
   gracefully (`available()` is `false`, `run` returns `Err`). Demo:
   `docs/assets/gpu_double.fable`.
+- `std` grows a collections layer: `std.set` (`Set[T]` over structural
+  map keys; `insert`/`remove` report change, `union`/`intersect`/
+  `difference` preserve insertion order), `std.deque` (two-stack
+  `Deque[T]`, amortized O(1) at both ends), `std.lists` (`fill`,
+  `sum`/`sum_float`, `min`/`max`/`min_float`/`max_float`,
+  `min_by`/`max_by` — `sort_by` comparators, first winner on ties),
+  and `strings.Builder` (`builder()`, `push`/`push_char`/`len`/
+  `build`/`clear`) for O(n) string accumulation where a `+=` loop
+  is O(n²).
 
 ## v0.6.0 — the field-test release
 

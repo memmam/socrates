@@ -1,0 +1,59 @@
+// std.lists — free-function list helpers. Builtin types cannot gain methods,
+// so these are plain functions: `lists.sum(xs)`, `lists.min_by(xs, cmp)`.
+
+// A list of `n` copies of `v` ([] when n <= 0). The copies are the same
+// value: filling with a list or struct repeats one reference, not clones.
+pub fn fill[T](n: Int, v: T) -> List[T] {
+    let out = [];
+    for _ in 0..n {
+        out.push(v);
+    }
+    out
+}
+
+pub fn sum(xs: List[Int]) -> Int {
+    xs.fold(0, |a, x| a + x)
+}
+
+pub fn sum_float(xs: List[Float]) -> Float {
+    xs.fold(0.0, |a, x| a + x)
+}
+
+// The smallest element (None for []).
+pub fn min(xs: List[Int]) -> Option[Int] {
+    min_by(xs, |a, b| if a < b { -1 } else if a > b { 1 } else { 0 })
+}
+
+// The largest element (None for []).
+pub fn max(xs: List[Int]) -> Option[Int] {
+    max_by(xs, |a, b| if a < b { -1 } else if a > b { 1 } else { 0 })
+}
+
+// Float variants. IEEE comparisons apply: a NaN never orders below (or
+// above) anything, so a NaN element is kept only if it comes first.
+pub fn min_float(xs: List[Float]) -> Option[Float] {
+    min_by(xs, |a, b| if a < b { -1 } else if a > b { 1 } else { 0 })
+}
+
+pub fn max_float(xs: List[Float]) -> Option[Float] {
+    max_by(xs, |a, b| if a < b { -1 } else if a > b { 1 } else { 0 })
+}
+
+// The smallest element under a `sort_by`-style comparator (negative /
+// zero / positive). Ties keep the FIRST winner: a later element replaces
+// the champion only when strictly smaller. None for [].
+pub fn min_by[T](xs: List[T], cmp: fn(T, T) -> Int) -> Option[T] {
+    xs.fold(None, |best, x| match best {
+        None -> Some(x),
+        Some(b) -> if cmp(x, b) < 0 { Some(x) } else { best },
+    })
+}
+
+// The largest element under the comparator; ties keep the FIRST winner,
+// mirroring min_by. None for [].
+pub fn max_by[T](xs: List[T], cmp: fn(T, T) -> Int) -> Option[T] {
+    xs.fold(None, |best, x| match best {
+        None -> Some(x),
+        Some(b) -> if cmp(x, b) > 0 { Some(x) } else { best },
+    })
+}

@@ -45,3 +45,54 @@ pub fn strip_suffix(s: String, suffix: String) -> String {
         s
     }
 }
+
+// ---- Builder: string accumulation without the quadratic tax ----
+//
+// Strings are immutable, so `acc += piece` in a loop copies the whole
+// accumulator every time — O(n²) overall. A Builder keeps the pieces in a
+// list and concatenates once in `build()`, for O(n) total.
+//
+//   let b = strings.builder();
+//   for w in words { b.push(w); }
+//   let s = b.build();
+
+pub struct Builder {
+    parts: List[String],
+    chars: Int,
+}
+
+pub fn builder() -> Builder {
+    Builder { parts: [], chars: 0 }
+}
+
+impl Builder {
+    // Append a string.
+    pub fn push(self, s: String) {
+        self.parts.push(s);
+        self.chars += s.len();
+    }
+
+    // Append one character by Unicode scalar value (`char(code)` rules:
+    // surrogates and out-of-range codes panic).
+    pub fn push_char(self, code: Int) {
+        self.parts.push(char(code));
+        self.chars += 1;
+    }
+
+    // Characters pushed so far. O(1) — tracked, not recounted.
+    pub fn len(self) -> Int {
+        self.chars
+    }
+
+    // The accumulated string, in one join. The builder is left intact:
+    // building twice gives the same string.
+    pub fn build(self) -> String {
+        self.parts.join("")
+    }
+
+    // Empty the builder for reuse.
+    pub fn clear(self) {
+        self.parts.clear();
+        self.chars = 0;
+    }
+}

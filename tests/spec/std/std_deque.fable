@@ -1,0 +1,88 @@
+// SPEC §7.1 (v0.7): std.deque — two-stack double-ended queue.
+import std.deque;
+
+let d = deque.new();
+println(d.is_empty());       //? expect: true
+d.push_back(1);
+d.push_back(2);
+d.push_front(0);
+println(d.to_list());        //? expect: [0, 1, 2]
+println(d.len());            //? expect: 3
+println(d.front());          //? expect: Some(0)
+println(d.back());           //? expect: Some(2)
+
+// Draining from both ends.
+println(d.pop_front());      //? expect: Some(0)
+println(d.pop_back());       //? expect: Some(2)
+println(d.pop_front());      //? expect: Some(1)
+println(d.pop_front());      //? expect: None
+println(d.pop_back());       //? expect: None
+println(d.is_empty());       //? expect: true
+println(d.front());          //? expect: None
+println(d.back());           //? expect: None
+
+// The empty deque, never touched.
+let e: deque.Deque[Int] = deque.new();
+println(e.len());            //? expect: 0
+println(e.pop_front());      //? expect: None
+println(e.pop_back());       //? expect: None
+println(e.to_list());        //? expect: []
+
+// Rebalancing across mixed pushes and pops: pop_front forces the rear
+// stack across to the front, later pop_backs force it back again.
+let m = deque.from_list([1, 2, 3]);
+println(m.pop_front());      //? expect: Some(1)
+m.push_back(4);
+m.push_front(0);
+println(m.to_list());        //? expect: [0, 2, 3, 4]
+println(m.len());            //? expect: 4
+println(m.pop_back());       //? expect: Some(4)
+println(m.pop_back());       //? expect: Some(3)
+println(m.pop_back());       //? expect: Some(2)
+println(m.front());          //? expect: Some(0)
+println(m.back());           //? expect: Some(0)
+println(m.pop_front());      //? expect: Some(0)
+println(m.is_empty());       //? expect: true
+
+// Used purely as a queue (FIFO) and purely as a stack (LIFO).
+let q = deque.new();
+for i in 1..=4 {
+    q.push_back(i);
+}
+let fifo = [];
+while !q.is_empty() {
+    fifo.push(q.pop_front().unwrap());
+}
+println(fifo);               //? expect: [1, 2, 3, 4]
+
+let st = deque.new();
+for i in 1..=4 {
+    st.push_back(i);
+}
+let lifo = [];
+while !st.is_empty() {
+    lifo.push(st.pop_back().unwrap());
+}
+println(lifo);               //? expect: [4, 3, 2, 1]
+
+// Alternating ends: pop the smaller-numbered end each time.
+let alt = deque.from_list([1, 2, 3, 4, 5]);
+println(alt.pop_front());    //? expect: Some(1)
+println(alt.pop_back());     //? expect: Some(5)
+println(alt.pop_front());    //? expect: Some(2)
+println(alt.pop_back());     //? expect: Some(4)
+println(alt.pop_front());    //? expect: Some(3)
+println(alt.pop_back());     //? expect: None
+
+// from_list copies: mutating the source list later does not reach the deque.
+let src = [1, 2];
+let indep = deque.from_list(src);
+src.push(99);
+println(indep.to_list());    //? expect: [1, 2]
+
+// A single element is visible from both ends.
+let single = deque.from_list(["only"]);
+println(single.front());     //? expect: Some("only")
+println(single.back());      //? expect: Some("only")
+println(single.pop_back());  //? expect: Some("only")
+println(single.front());     //? expect: None
