@@ -1,0 +1,19 @@
+// Bench: std.lists reductions (sum / min / max / min_by) on 300k ints.
+import std.lists;
+
+let mut xs = [];
+let mut i = 0;
+while i < 300000 {
+    xs.push(i * 7 % 1000003);
+    i += 1;
+}
+let mut total = 0;
+let mut k = 0;
+while k < 10 {
+    total = (total + lists.sum(xs)) % 1000003;
+    k += 1;
+}
+let lo = lists.min(xs).unwrap();
+let hi = lists.max(xs).unwrap();
+let first_even = lists.min_by(xs, |a, b| (a % 2) - (b % 2)).unwrap();
+println("{total} {lo} {hi} {first_even}");
