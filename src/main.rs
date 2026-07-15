@@ -4,8 +4,8 @@
 //!   fable <file.fable>          compile and run (also: fable run <file>)
 //!   fable check <file>          type-check only
 //!   fable dis <file>            disassemble compiled bytecode
-//!   fable fmt <file> [--write] [--width N]
-//!                               format (print, or rewrite in place)
+//!   fable fmt <file>... [--write] [--width N]
+//!                               format each file (print, or rewrite in place)
 //!   fable tokens <file>         debug: dump tokens
 //!   fable ast <file>            debug: dump the AST
 //!   fable repl                  interactive session
@@ -118,12 +118,14 @@ fn real_main() -> ExitCode {
         }
     };
 
-    // `fmt` takes `--width N` / `--width=N`; strip it (and its value) before
-    // the path scan below so the value is not mistaken for the file.
-    let mut rest: Vec<String> = rest.to_vec();
-    let mut fmt_width = fmt::DEFAULT_WIDTH;
+    // `fable fmt [-w] [--width N] <file.fable>...`: flags may appear anywhere
+    // among the files, and every named file is formatted. A file that fails
+    // to read or parse is reported and the rest still format; the exit code
+    // is then nonzero (65 for parse errors, 66 for I/O errors).
     if cmd == "fmt" {
-        let mut kept = Vec::with_capacity(rest.len());
+        let mut fmt_width = fmt::DEFAULT_WIDTH;
+        let mut write = false;
+        let mut files: Vec<String> = Vec::new();
         let mut i = 0;
         while i < rest.len() {
             let arg = &rest[i];
@@ -138,8 +140,15 @@ fn real_main() -> ExitCode {
                 }
             } else if let Some(v) = arg.strip_prefix("--width=") {
                 Some(v)
+            } else if arg == "--write" || arg == "-w" {
+                write = true;
+                None
+            } else if arg.starts_with('-') {
+                eprintln!("fable fmt: unknown flag `{arg}`");
+                eprintln!("usage: fable fmt [-w] [--width N] <file.fable>...");
+                return ExitCode::from(64);
             } else {
-                kept.push(arg.clone());
+                files.push(arg.clone());
                 None
             };
             if let Some(v) = value {
@@ -153,9 +162,53 @@ fn real_main() -> ExitCode {
             }
             i += 1;
         }
-        rest = kept;
+        if files.is_empty() {
+            eprintln!("fable fmt: needs at least one file argument");
+            eprintln!("usage: fable fmt [-w] [--width N] <file.fable>...");
+            return ExitCode::from(64);
+        }
+        let color = std::io::stderr().is_terminal();
+        let mut io_error = false;
+        let mut parse_error = false;
+        for path in &files {
+            let text = match std::fs::read_to_string(path) {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("fable: cannot read {path}: {e}");
+                    io_error = true;
+                    continue;
+                }
+            };
+            match fmt::format_source_width(path, &text, fmt_width) {
+                Ok(formatted) => {
+                    if write {
+                        if formatted != text {
+                            if let Err(e) = std::fs::write(path, &formatted) {
+                                eprintln!("fable: cannot write {path}: {e}");
+                                io_error = true;
+                                continue;
+                            }
+                            eprintln!("formatted {path}");
+                        }
+                    } else {
+                        print!("{formatted}");
+                    }
+                }
+                Err(diags) => {
+                    let source = Source::new(path.clone(), text);
+                    report(&diags, &source, color);
+                    parse_error = true;
+                }
+            }
+        }
+        return if parse_error {
+            ExitCode::from(65)
+        } else if io_error {
+            ExitCode::from(66)
+        } else {
+            ExitCode::SUCCESS
+        };
     }
-    let rest = &rest[..];
 
     let Some(path_pos) = rest.iter().position(|a| !a.starts_with('-')) else {
         eprintln!("fable: `{cmd}` needs a file argument");
@@ -193,26 +246,6 @@ fn real_main() -> ExitCode {
             report(&diags, &source, color);
             exit_for(&diags)
         }
-        "fmt" => match fmt::format_source_width(path, &text, fmt_width) {
-            Ok(formatted) => {
-                if rest.iter().any(|a| a == "--write" || a == "-w") {
-                    if formatted != text {
-                        if let Err(e) = std::fs::write(path, &formatted) {
-                            eprintln!("fable: cannot write {path}: {e}");
-                            return ExitCode::from(66);
-                        }
-                        eprintln!("formatted {path}");
-                    }
-                } else {
-                    print!("{formatted}");
-                }
-                ExitCode::SUCCESS
-            }
-            Err(diags) => {
-                report(&diags, &source, color);
-                ExitCode::from(65)
-            }
-        },
         "check" | "dis" | "run" => {
             // Load the root file and everything it imports (a single-file
             // program is just a one-module load).
@@ -296,8 +329,8 @@ USAGE:
     fable run <file.fable>        compile and run
     fable check <file.fable>      type-check only
     fable dis <file.fable>        show compiled bytecode
-    fable fmt <file.fable> [-w] [--width N]
-                                  format source (print, or -w to rewrite;
+    fable fmt <file.fable>... [-w] [--width N]
+                                  format each file (print, or -w to rewrite;
                                   N: max line width, default 100)
     fable test [paths...]         run golden tests (//? expect/error/panic
                                   directives in .fable files; default: .)

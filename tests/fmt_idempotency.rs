@@ -261,8 +261,8 @@ fn width_long_match_arm_and_scrutinee_break_in_place() {
 fn width_comments_survive_adjacent_breaks() {
     // A leading comment stays put, a trailing comment (and `//?` directives)
     // re-attach to the last line of the broken statement, and a comment
-    // trapped inside a broken literal moves after it — all byte-identical in
-    // content and stable under re-formatting.
+    // inside a broken literal stays attached to its element — all
+    // byte-identical in content and stable under re-formatting.
     golden(
         "// Leading comment stays put.
 let result = assemble(first_component, second_component, third_component, fourth_component, \
@@ -286,10 +286,144 @@ println(result); //? expect: assembled
         "let xs = [
     first_long_element_name,
     second_long_element_name,
-    third_long_element_name,
+    third_long_element_name, // note
     fourth_long_element_name,
 ];
-// note
+",
+    );
+}
+
+#[test]
+fn width_interior_comments_pin_list_layout() {
+    // A list with interior comments never flattens, even though `[1, 2, 3]`
+    // easily fits: own-line comments stay before their element, at element
+    // indent. This is also the escape hatch for meaning-bearing layout.
+    let src = "let xs = [
+    // group one
+    1,
+    2,
+    // group two
+    3,
+];
+println(str(xs.len()));
+";
+    golden(src, src);
+    // A joined source with an interior comment expands to one element per
+    // line, the trailing comment staying on its element's line.
+    golden(
+        "let xs = [1, // one\n2, 3];\n",
+        "let xs = [
+    1, // one
+    2,
+    3,
+];
+",
+    );
+}
+
+#[test]
+fn width_interior_comments_pin_call_args() {
+    // Own-line and trailing comments inside an argument list keep the
+    // one-argument-per-line layout and stay attached to their argument.
+    let src = "let r = configure(
+    // primary knob
+    alpha,
+    beta, // tuned by hand
+    gamma,
+);
+";
+    golden(src, src);
+    // Same inside a method call's argument list.
+    let src = "let s = grid.paint(
+    \"#\", // ink
+    \"~\",
+);
+";
+    golden(src, src);
+}
+
+#[test]
+fn width_interior_comments_pin_nested_layout() {
+    // Comments pin every enclosing bracket: the outer list cannot flatten
+    // (a comment lives inside it), the first inner list breaks with its own
+    // trailing comment attached, and the commentless inner list stays flat.
+    let src = "let table = [
+    [
+        1, // one
+        2,
+    ],
+    [3, 4], // pair
+];
+";
+    golden(src, src);
+    // A comment-bearing list nested in call arguments pins both layers.
+    let src = "let r = draw(
+    [
+        0, // origin
+        1,
+    ],
+    palette,
+);
+";
+    golden(src, src);
+}
+
+#[test]
+fn width_interior_comments_pin_map_tuple_and_struct_layout() {
+    let src = "struct Pt {
+    x: Int,
+    y: Int,
+}
+let m = {
+    // sea tiles
+    \"~\": 0,
+    \"#\": 1, // coast
+};
+let t = (
+    1, // row
+    2,
+);
+let p = Pt {
+    x: 1, // right
+    y: 2,
+};
+";
+    golden(src, src);
+}
+
+#[test]
+fn width_mid_line_block_comments_do_not_pin() {
+    // A `/* .. */` with code after it on the same line has no line-boundary
+    // position the formatter could pin it to: it re-attaches at the end of
+    // its statement (the old behavior) rather than forcing a break.
+    golden(
+        "println(1 /* mid */ + 2);\n",
+        "println(1 + 2); /* mid */\n",
+    );
+}
+
+#[test]
+fn width_if_else_if_chain_fits_on_one_line() {
+    // The whole chain is 56 columns: it stays on one line — never a
+    // half-broken chain with only the first branch blockified.
+    let src = "let q = if 1 < 2 { -1 } else if 2 < 3 { 1 } else { 0 };\n";
+    golden(src, src);
+}
+
+#[test]
+fn width_if_else_if_chain_breaks_every_branch() {
+    // An over-width chain breaks all branches consistently: every
+    // `} else if cond {` starts a line and every body is a block.
+    golden(
+        "let outcome = if first_measurement < second_measurement { \"ascending\" } \
+         else if second_measurement < third_measurement { \"mixed\" } else { \"descending\" };\n",
+        "let outcome = if first_measurement < second_measurement {
+    \"ascending\"
+} else if second_measurement < third_measurement {
+    \"mixed\"
+} else {
+    \"descending\"
+};
 ",
     );
 }
@@ -401,4 +535,61 @@ fn width_single_long_token_may_overflow() {
     let once = fmt_at(100, src);
     assert_eq!(once, src, "pointless breaks were added around a long token");
     assert_eq!(fmt_at(100, &once), once, "formatting is not idempotent");
+}
+
+// ---------------------------------------------------------------------------
+// CLI: `fable fmt` over multiple files
+// ---------------------------------------------------------------------------
+
+#[test]
+fn fmt_cli_formats_every_file_argument() {
+    let dir = std::env::temp_dir().join(format!("fable-fmt-cli-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let a = dir.join("a.fable");
+    let b = dir.join("b.fable");
+
+    // Every file named on the command line is rewritten, flags anywhere.
+    std::fs::write(&a, "let  x=1;\nprintln(str(x));\n").unwrap();
+    std::fs::write(&b, "let  y  =  2;\nprintln(str(y));\n").unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+        .args(["fmt", "-w"])
+        .args([&a, &b])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "fmt -w a b failed: {out:?}");
+    assert_eq!(std::fs::read_to_string(&a).unwrap(), "let x = 1;\nprintln(str(x));\n");
+    assert_eq!(std::fs::read_to_string(&b).unwrap(), "let y = 2;\nprintln(str(y));\n");
+
+    // Without -w, both files print to stdout, in argument order.
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+        .arg("fmt")
+        .args([&a, &b])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "let x = 1;\nprintln(str(x));\nlet y = 2;\nprintln(str(y));\n"
+    );
+
+    // A file that fails to parse yields a nonzero exit, but the other files
+    // are still formatted.
+    let bad = dir.join("bad.fable");
+    std::fs::write(&bad, "let = ;\n").unwrap();
+    std::fs::write(&a, "let  x=1;\n").unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+        .arg("fmt")
+        .arg(&bad)
+        .arg("-w")
+        .arg(&a)
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "parse failure must exit nonzero");
+    assert_eq!(
+        std::fs::read_to_string(&a).unwrap(),
+        "let x = 1;\n",
+        "files after the failing one must still be formatted"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
 }

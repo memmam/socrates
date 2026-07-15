@@ -857,14 +857,22 @@ A struct-literal field is `IDENT ":" expr` or the shorthand `IDENT` — § 2.3.)
   (colon-separated directories).
 - `fable check file.fable` — compile only; print diagnostics.
 - `fable dis file.fable` — print disassembled bytecode.
-- `fable fmt file.fable` — print the canonically formatted source
-  (`--write` to modify in place). Formatting is width-aware: constructs
-  that fit within 100 columns keep a one-line layout, longer ones break
-  (call arguments one per line with a trailing comma, method chains
-  before each `.` after the first, binary expressions before each
-  operator, and so on); `--width N` overrides the limit. A single token
-  longer than the width (usually a string literal) is never split.
-  Formatting is idempotent.
+- `fable fmt file.fable [more.fable ...]` — print the canonically
+  formatted source of every named file (`--write` to modify in place;
+  flags may appear anywhere among the files). A file that fails to parse
+  is reported, the remaining files still format, and the exit code is
+  nonzero. Formatting is width-aware: constructs that fit within 100
+  columns keep a one-line layout, longer ones break (call arguments one
+  per line with a trailing comma, method chains before each `.` after
+  the first, binary expressions before each operator, an `if`/`else if`
+  chain either fits entirely on one line or breaks every branch, and so
+  on); `--width N` overrides the limit. A single token longer than the
+  width (usually a string literal) is never split. A bracketed literal
+  or argument list with interior comments never collapses to one line:
+  each element keeps its own line, own-line comments stay before their
+  element and trailing comments stay on its line — so a comment doubles
+  as an escape hatch for meaning-bearing multi-line layout (e.g. a
+  hand-drawn 2-D grid). Formatting is idempotent.
 - `fable test [paths...]` (v0.4) — run golden tests: every `.fable` file
   found is a test, checked against `//? expect:` / `//? error:` /
   `//? panic:` directives in its comments (a file with no directives must
