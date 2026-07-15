@@ -1,0 +1,4 @@
+// The child-side namespace calls are hard errors outside a worker.
+//? panic: worker.recv: not inside a worker
+let m = worker.recv();
+println(m);

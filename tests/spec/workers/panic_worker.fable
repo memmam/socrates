@@ -1,0 +1,4 @@
+// Helper that always panics — run standalone the directive pins it; run as
+// a worker the panic is isolated to its thread and surfaces via join().
+//? panic: worker exploded
+panic("worker exploded");

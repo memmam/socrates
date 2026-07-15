@@ -1,0 +1,17 @@
+// Helper for the worker golden tests: echoes every message back with the
+// prefix given as its first spawn argument, until the parent hangs up.
+// Run directly by the harness it does nothing (the is_worker guard), which
+// satisfies the no-directive contract.
+
+if worker.is_worker() {
+    let prefix = match os.args().first() {
+        Some(p) -> p,
+        None -> "echo",
+    };
+    while true {
+        match worker.recv() {
+            Some(msg) -> { worker.send("{prefix}: {msg}"); }
+            None -> break,
+        }
+    }
+}

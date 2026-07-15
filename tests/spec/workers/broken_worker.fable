@@ -1,0 +1,4 @@
+// Helper with a type error — run standalone the directive pins it; spawned
+// as a worker the compile error comes back synchronously from spawn.
+//? error: E0301
+let n: Int = "not an int";

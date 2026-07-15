@@ -1,0 +1,13 @@
+// Helper: sums the inclusive integer range given by its two spawn args and
+// reports the total to the parent as a string.
+
+if worker.is_worker() {
+    let args = os.args();
+    let lo = args[0].parse_int().unwrap();
+    let hi = args[1].parse_int().unwrap();
+    let mut total = 0;
+    for i in lo..=hi {
+        total += i;
+    }
+    worker.send(str(total));
+}

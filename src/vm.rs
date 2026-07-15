@@ -95,6 +95,11 @@ pub struct Vm {
     /// Arguments after the script path on the CLI (`os.args()`).
     pub script_args: Vec<String>,
     pub out: Box<dyn Write>,
+    /// Set when this VM *is* a worker: its channel ends to the parent.
+    pub worker_ctx: Option<crate::worker::WorkerCtx>,
+    /// Where workers spawned by this VM write their output. `None` means
+    /// process stdout; the test harness routes it into its capture buffer.
+    pub worker_sink: Option<crate::worker::Sink>,
     start: Instant,
     rng: u64,
     /// Call-depth cap, read once from `FABLE_MAX_DEPTH` at construction.
@@ -123,6 +128,8 @@ impl Vm {
             temp_roots: Vec::new(),
             script_args: Vec::new(),
             out,
+            worker_ctx: None,
+            worker_sink: None,
             start: Instant::now(),
             max_frames: max_frames(),
             rng: 0x9E3779B97F4A7C15 ^ {
@@ -1251,6 +1258,9 @@ impl Vm {
                         (Obj::Closure { .. }, _) | (_, Obj::Closure { .. }) => {
                             return Err("cannot compare functions".into())
                         }
+                        (Obj::Worker(_), _) | (_, Obj::Worker(_)) => {
+                            return Err("cannot compare workers".into())
+                        }
                         (Obj::Str(sx), Obj::Str(sy)) => {
                             if sx != sy {
                                 return Ok(false);
@@ -1421,6 +1431,9 @@ impl Vm {
                     Obj::Closure { .. } => {
                         return Err("functions cannot be used as map keys".into())
                     }
+                    Obj::Worker(_) => {
+                        return Err("workers cannot be used as map keys".into())
+                    }
                     Obj::Upvalue(_) | Obj::Free => {
                         return Err("internal: bad map key (VM bug)".into())
                     }
@@ -1474,6 +1487,10 @@ impl Vm {
                 match self.heap.get(h) {
                     Obj::Bytes(bs) => {
                         let _ = write!(out, "<bytes {}>", bs.len());
+                        return Ok(());
+                    }
+                    Obj::Worker(_) => {
+                        out.push_str("<worker>");
                         return Ok(());
                     }
                     Obj::Str(s) => {

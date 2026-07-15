@@ -174,6 +174,91 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
 
         // ------------------------------------------------------------------
+        // worker.* (v0.7) — OS-thread isolates, string channels
+        // ------------------------------------------------------------------
+        WorkerSpawn => {
+            let file = str_arg(vm, argc, 0)?;
+            let raw = list_arg(vm, argc, 1)?;
+            let mut args = Vec::with_capacity(raw.len());
+            for v in raw {
+                args.push(vm.str_of(v)?);
+            }
+            let sink = vm
+                .worker_sink
+                .clone()
+                .unwrap_or_else(crate::worker::stdout_sink);
+            // Resolve relative to the entry script's directory, the same
+            // rule imports use (absolute paths pass through untouched).
+            let base = vm
+                .sources
+                .first()
+                .and_then(|s| std::path::Path::new(&s.name).parent())
+                .map(|p| p.to_path_buf())
+                .unwrap_or_default();
+            match crate::worker::spawn(&file, args, &base, sink) {
+                Ok(handle) => {
+                    let h = vm.heap.alloc(Obj::Worker(std::rc::Rc::new(
+                        std::cell::RefCell::new(handle),
+                    )));
+                    make_ok(vm, Value::Obj(h))
+                }
+                Err(msg) => {
+                    let m = vm.alloc_str(msg);
+                    make_err(vm, m)
+                }
+            }
+        }
+        WorkerHandleSend => {
+            let w = worker_rc(vm, argc)?;
+            let msg = str_arg(vm, argc, 1)?;
+            let delivered = w.borrow().send(msg);
+            Value::Bool(delivered)
+        }
+        WorkerHandleRecv => {
+            let w = worker_rc(vm, argc)?;
+            let got = w.borrow().recv(); // blocks until a message or hangup
+            match got {
+                Some(s) => {
+                    let v = vm.alloc_str(s);
+                    make_some(vm, v)
+                }
+                None => make_none(vm),
+            }
+        }
+        WorkerHandleJoin => {
+            let w = worker_rc(vm, argc)?;
+            let outcome = w.borrow_mut().join(); // blocks; idempotent
+            match outcome {
+                Ok(()) => make_ok(vm, Value::Unit),
+                Err(msg) => {
+                    let m = vm.alloc_str(msg);
+                    make_err(vm, m)
+                }
+            }
+        }
+        WorkerSelfSend => {
+            let msg = str_arg(vm, argc, 0)?;
+            match &vm.worker_ctx {
+                Some(ctx) => Value::Bool(ctx.tx.send(msg).is_ok()),
+                None => return Err(vm.error("worker.send: not inside a worker")),
+            }
+        }
+        WorkerSelfRecv => {
+            let got = match &vm.worker_ctx {
+                Some(ctx) => ctx.rx.recv().ok(), // blocks until a message or hangup
+                None => return Err(vm.error("worker.recv: not inside a worker")),
+            };
+            match got {
+                Some(s) => {
+                    let v = vm.alloc_str(s);
+                    make_some(vm, v)
+                }
+                None => make_none(vm),
+            }
+        }
+        WorkerIsWorker => Value::Bool(vm.worker_ctx.is_some()),
+
+        // ------------------------------------------------------------------
         // Bytes (v0.7)
         // ------------------------------------------------------------------
         BytesNew => {
@@ -1399,6 +1484,21 @@ fn bytes_ref(vm: &Vm, argc: u8) -> Result<&Vec<u8>, VmError> {
     match vm.heap.get(h) {
         Obj::Bytes(bs) => Ok(bs),
         _ => unreachable!(),
+    }
+}
+
+/// The receiver's worker handle, cloned out of the heap (`Rc`) so callers
+/// can block on it without holding a heap borrow.
+fn worker_rc(
+    vm: &Vm,
+    argc: u8,
+) -> Result<std::rc::Rc<std::cell::RefCell<crate::worker::WorkerHandle>>, VmError> {
+    match vm.native_arg(argc, 0) {
+        Value::Obj(h) => match vm.heap.get(h) {
+            Obj::Worker(rc) => Ok(rc.clone()),
+            _ => Err(vm.error("expected Worker")),
+        },
+        _ => Err(vm.error("expected Worker")),
     }
 }
 

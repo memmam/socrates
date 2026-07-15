@@ -28,6 +28,7 @@ pub mod token;
 pub mod types;
 pub mod value;
 pub mod vm;
+pub mod worker;
 
 use diag::Diagnostic;
 
@@ -64,6 +65,10 @@ fn run_capture_here(name: &str, text: &str) -> RunOutcome {
     let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
     let writer = SharedWriter(buf.clone());
     let mut vm = vm::Vm::new(program, source, Box::new(writer));
+    // Workers spawned by the program under test write into the same buffer.
+    vm.worker_sink = Some(std::sync::Arc::new(std::sync::Mutex::new(SharedWriter(
+        buf.clone(),
+    ))));
     let result = vm.run_entry();
     let output = String::from_utf8_lossy(&buf.lock().unwrap()).into_owned();
     match result {
@@ -139,6 +144,10 @@ fn run_units(units: Vec<modules::ModuleUnit>) -> RunOutcome {
     let mut units = units;
     let first_source = units.remove(0).source;
     let mut vm = vm::Vm::new(program, first_source, Box::new(writer));
+    // Workers spawned by the program under test write into the same buffer.
+    vm.worker_sink = Some(std::sync::Arc::new(std::sync::Mutex::new(SharedWriter(
+        buf.clone(),
+    ))));
     for unit in units {
         vm.sources.push(unit.source);
     }
