@@ -34,32 +34,20 @@ pub fn has(mask: Int, d: Int) -> Bool {
     mask >> d - 1 & 1 == 1
 }
 
-// Set-bit count by shift-and-add: peel the low bit with `& 1`, shift the
-// rest down. Masks are non-negative (bits 0..8 only), so the arithmetic
-// `>>` streams in zero bits and the loop terminates.
+// Set-bit count — the v0.7 `count_ones` intrinsic (the shift-and-add
+// loop it replaces lives in git history).
 pub fn popcount(mask: Int) -> Int {
-    let mut m = mask;
-    let mut n = 0;
-    while m != 0 {
-        n += m & 1;
-        m = m >> 1;
-    }
-    n
+    mask.count_ones()
 }
 
 // The digit named by the lowest set bit — *the* naked single whenever
-// popcount(mask) == 1. Panics on an empty mask.
+// popcount(mask) == 1. Panics on an empty mask (trailing_zeros(0) is 64,
+// which would silently name a phantom digit 65).
 pub fn lowest_digit(mask: Int) -> Int {
     if mask == 0 {
         panic("lowest_digit: empty mask");
     }
-    let mut m = mask;
-    let mut d = 1;
-    while m & 1 == 0 {
-        m = m >> 1;
-        d += 1;
-    }
-    d
+    mask.trailing_zeros() + 1
 }
 
 // The mask unpacked to digits, ascending — display and test helper.

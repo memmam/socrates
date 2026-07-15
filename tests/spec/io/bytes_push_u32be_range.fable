@@ -1,0 +1,4 @@
+// Negative values are out of range for the unsigned BE pushers.
+//? panic: push_u32be: value -1 out of range 0..4294967295
+let b = bytes(0);
+b.push_u32be(-1);

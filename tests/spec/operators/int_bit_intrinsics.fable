@@ -1,0 +1,69 @@
+// Int bit intrinsics (v0.7 efficiency pass): count_ones, leading_zeros,
+// trailing_zeros, ushr, rotate_left/rotate_right, to_hex. All operate on
+// the 64-bit two's-complement pattern. The bit-63-only value is built by
+// shifting (1 << 63) — literals above i64::MAX do not exist.
+
+// count_ones (popcount).
+println(0.count_ones());                    //? expect: 0
+println(1.count_ones());                    //? expect: 1
+println(0b1011.count_ones());               //? expect: 3
+println(255.count_ones());                  //? expect: 8
+println(0x7fffffffffffffff.count_ones());   //? expect: 63
+println((-1).count_ones());                 //? expect: 64
+println((1 << 63).count_ones());            //? expect: 1
+println((1 << 63 | 1).count_ones());        //? expect: 2
+
+// leading_zeros / trailing_zeros: the 0 case is 64 (matching Rust).
+println(0.leading_zeros());                 //? expect: 64
+println(0.trailing_zeros());                //? expect: 64
+println(1.leading_zeros());                 //? expect: 63
+println(1.trailing_zeros());                //? expect: 0
+println(256.trailing_zeros());              //? expect: 8
+println((1 << 63).leading_zeros());         //? expect: 0
+println((1 << 63).trailing_zeros());        //? expect: 63
+println((-1).leading_zeros());              //? expect: 0
+println((-1).trailing_zeros());             //? expect: 0
+println(0b101000.trailing_zeros());         //? expect: 3
+
+// ushr: logical (zero-filling) right shift, vs the arithmetic >>.
+println(-1 >> 1);                           //? expect: -1
+println((-1).ushr(1) == 0x7fffffffffffffff); //? expect: true
+println((-1).ushr(63));                     //? expect: 1
+println((-1).ushr(0));                      //? expect: -1
+println((1 << 63).ushr(60));                //? expect: 8
+println(256.ushr(4));                       //? expect: 16
+println(5.ushr(0));                         //? expect: 5
+
+// Rotates: count taken mod 64 — never panic, unlike shifts. A negative
+// count rotates the other way.
+println(1.rotate_left(1));                  //? expect: 2
+println(1.rotate_right(1) == 1 << 63);      //? expect: true
+println((1 << 63).rotate_left(1));          //? expect: 1
+println(5.rotate_left(0));                  //? expect: 5
+println(5.rotate_left(64));                 //? expect: 5
+println(5.rotate_left(70) == 5.rotate_left(6)); //? expect: true
+println(5.rotate_right(64));                //? expect: 5
+println(5.rotate_left(-1) == 5.rotate_right(1)); //? expect: true
+println((-1).rotate_left(17));              //? expect: -1
+// The rotated-by-32 pattern has bit 63 set, above i64::MAX — hex
+// literals can't spell it, so build it by shifting.
+let swapped = 0x89abcdef << 32 | 0x01234567;
+println(0x0123456789abcdef.rotate_left(32) == swapped); //? expect: true
+println(0x0123456789abcdef.rotate_right(32) == swapped); //? expect: true
+
+// to_hex: lowercase minimal hex of the two's-complement bit pattern;
+// widths come from pad_left.
+println(0.to_hex());                        //? expect: 0
+println(255.to_hex());                      //? expect: ff
+println((-1).to_hex());                     //? expect: ffffffffffffffff
+println((1 << 63).to_hex());                //? expect: 8000000000000000
+println(0xdeadbeef.to_hex());               //? expect: deadbeef
+println(255.to_hex().pad_left(8, "0"));     //? expect: 000000ff
+println((-2).to_hex());                     //? expect: fffffffffffffffe
+
+// Round trips tying the family together.
+println((1 << 63).ushr(63));                //? expect: 1
+let x = 0x00f0000000000000;
+println(x.leading_zeros());                 //? expect: 8
+println(x.trailing_zeros());                //? expect: 52
+println(x.count_ones());                    //? expect: 4

@@ -1,25 +1,26 @@
 // bits — 64-bit bitboard primitives: logical shift right, popcount, and
-// count-trailing-zeros, all built from shifts and masks.
+// count-trailing-zeros, now one-line delegations to the v0.7 Int
+// intrinsics (`ushr`, `count_ones`, `trailing_zeros`). The hand-rolled
+// versions this file used to demonstrate — SWAR popcount, binary-search
+// ctz, the mask-built ushr — moved to git history; this file is now the
+// documented reference for the intrinsics themselves.
 //
-// Fable's Int is 64-bit signed, `>>` is ARITHMETIC, and arithmetic
-// overflow panics. A full-board bitboard uses bit 63 (h8), so three
-// classic bit tricks are traps here:
+// The traps the intrinsics retire are still worth knowing, because any
+// NEW bit twiddling faces them. Fable's Int is 64-bit signed, `>>` is
+// ARITHMETIC, and arithmetic overflow panics. A full-board bitboard
+// uses bit 63 (h8), so three classic bit tricks are traps here:
 //
-//   x >> n        smears the sign bit when bit 63 is set — mask after
-//                 every right shift, or use `ushr` below;
+//   x >> n        smears the sign bit when bit 63 is set — use
+//                 `x.ushr(n)` for the zero-filling shift;
 //   x & (x - 1)   clear-lowest-bit panics when x == 1 << 63 (MIN - 1
 //                 overflows) — clear with `x ^ (1 << ctz(x))` instead;
 //   x & -x        isolate-lowest-bit panics the same way (-MIN
 //                 overflows) — same xor workaround.
-//
-// Even building the ushr mask is a trap: `(1 << 64 - n) - 1` panics at
-// n == 1 because `1 << 63` is already MIN. The safe spelling shifts
-// MAX down instead: `0x7fffffffffffffff >> (n - 1)`.
 
 // Logical (zero-filling) shift right: the top n bits of the result are
 // zero no matter the sign of x. n must be in 0..=63 (shift rule).
 pub fn ushr(x: Int, n: Int) -> Int {
-    if n == 0 { x } else { x >> n & 0x7fffffffffffffff >> n - 1 }
+    x.ushr(n)
 }
 
 // The bitboard with only square sq set (sq in 0..=63; a1 = 0, h8 = 63).
@@ -27,59 +28,20 @@ pub fn bit(sq: Int) -> Int {
     1 << sq
 }
 
-// Number of set bits, by SWAR halving — pairs, nibbles, bytes, then a
-// byte-sum by shifted adds (the usual `* 0x0101...` fold would overflow).
-// Bit 63 is masked off first and counted separately: with it in place the
-// very first pairwise add can carry into the sign bit and panic.
+// Number of set bits.
 pub fn popcount(x: Int) -> Int {
-    let top = ushr(x, 63);
-    let mut v = x & 0x7fffffffffffffff;
-    v = (v & 0x5555555555555555) + (v >> 1 & 0x5555555555555555);
-    v = (v & 0x3333333333333333) + (v >> 2 & 0x3333333333333333);
-    v = v + (v >> 4) & 0x0f0f0f0f0f0f0f0f;
-    v += v >> 8;
-    v += v >> 16;
-    v += v >> 32;
-    (v & 0x7f) + top
+    x.count_ones()
 }
 
-// Index of the lowest set bit (0..=63), by binary search over ushr'd
-// halves; ctz(0) is defined as 64. Iterating a bitboard low-to-high:
+// Index of the lowest set bit (0..=63); ctz(0) is defined as 64.
+// Iterating a bitboard low-to-high:
 //
 //   while bb != 0 { let sq = ctz(bb); bb = bb ^ bit(sq); ... }
 //
 // — ascending square order, which reversi uses as its deterministic
 // tie-break everywhere.
 pub fn ctz(x: Int) -> Int {
-    if x == 0 {
-        return 64;
-    }
-    let mut n = 0;
-    let mut v = x;
-    if v & 0xffffffff == 0 {
-        n += 32;
-        v = ushr(v, 32);
-    }
-    if v & 0xffff == 0 {
-        n += 16;
-        v = ushr(v, 16);
-    }
-    if v & 0xff == 0 {
-        n += 8;
-        v = ushr(v, 8);
-    }
-    if v & 0xf == 0 {
-        n += 4;
-        v = ushr(v, 4);
-    }
-    if v & 0x3 == 0 {
-        n += 2;
-        v = ushr(v, 2);
-    }
-    if v & 0x1 == 0 {
-        n += 1;
-    }
-    n
+    x.trailing_zeros()
 }
 
 // All squares of a bitboard, ascending.

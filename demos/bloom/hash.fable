@@ -12,8 +12,6 @@
 // `>>` is arithmetic, but all state here stays nonnegative, so no mask is
 // needed after right shifts.
 
-import std.strings;
-
 // FNV-1a, 32-bit: offset basis 0x811c9dc5, prime 0x01000193, xor-then-
 // multiply per byte. The published vectors ("" -> 811c9dc5, "a" ->
 // e40c292c, "foobar" -> bf9cf968) are pinned in spec.fable — constants
@@ -58,20 +56,15 @@ pub fn xs32(s: String) -> Int {
     mix32(h ^ s.len())
 }
 
-// Byte popcount by SWAR halving: pairs, then nibbles, then one sum —
-// three shift-mask steps, no table, no branch.
+// Byte popcount — the v0.7 `count_ones` intrinsic (the SWAR-halving
+// version this wrapped lives in git history). b must be a byte (0..255).
 pub fn popcount_byte(b: Int) -> Int {
-    let mut x = b - (b >> 1 & 0x55);
-    x = (x & 0x33) + (x >> 2 & 0x33);
-    x + (x >> 4) & 0x0F
+    b.count_ones()
 }
 
-// 32-bit popcount, one byte lane at a time.
+// 32-bit popcount: narrow to the low 32 bits, then count.
 pub fn popcount32(v: Int) -> Int {
-    popcount_byte(v & 255)
-        + popcount_byte(v >> 8 & 255)
-        + popcount_byte(v >> 16 & 255)
-        + popcount_byte(v >> 24 & 255)
+    (v & 0xFFFFFFFF).count_ones()
 }
 
 // Hamming distance between two 32-bit words — the avalanche meter.
@@ -79,12 +72,9 @@ pub fn hamming32(a: Int, b: Int) -> Int {
     popcount32((a ^ b) & 0xFFFFFFFF)
 }
 
-// Lowercase hex of the low `digits` nibbles: to_hex(0xe40c292c, 8) = "e40c292c".
+// Lowercase hex of the low `digits` nibbles: to_hex(0xe40c292c, 8) =
+// "e40c292c". Mask to the requested width, then the v0.7 `Int.to_hex`
+// intrinsic (minimal hex) zero-padded back up to it.
 pub fn to_hex(v: Int, digits: Int) -> String {
-    let sb = strings.builder();
-    for i in 0..digits {
-        let nib = v >> 4 * (digits - 1 - i) & 15;
-        sb.push_char(if nib < 10 { 48 + nib } else { 87 + nib });
-    }
-    sb.build()
+    (v & (1 << 4 * digits) - 1).to_hex().pad_left(digits, "0")
 }

@@ -1,0 +1,5 @@
+// A multi-byte read that straddles the end panics like a plain get of
+// the first out-of-range byte it would touch.
+//? panic: bytes index out of bounds: index 2, length 2
+let b = bytes_of([1, 2]);
+println(b.read_u16le(1));

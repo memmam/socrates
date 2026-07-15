@@ -169,23 +169,15 @@ fn bad_bounds() -> List[String] {
     ["a\{2,1}", "a\{999}"]
 }
 
-// The four 64-bit words of a class's 256-bit membership bitmap, read back
-// out of the Bytes buffer with shifts and ors (little-endian, like the
-// buffer itself). `>>` is arithmetic, so nibbles are masked with & 15
-// after the shift — when bit 63 is set the sign would otherwise smear.
+// The four 64-bit words of a class's 256-bit membership bitmap, read
+// back out of the Bytes buffer via the v0.7 natives: two little-endian
+// u32 reads make the word (the high half lands on bit 63 via `<<`, which
+// discards overflow), and `Int.to_hex` renders its two's-complement
+// pattern — zero-padded to the full 16 digits. The hand-rolled
+// shift-and-or / nibble loop lives in git history.
 fn word_hex(bm: Bytes, j: Int) -> String {
-    let mut w = 0;
-    for i in 0..8 {
-        w = w | bm.get(8 * j + i) << (8 * i);
-    }
-    let sb = strings.builder();
-    let mut shift = 60;
-    while shift >= 0 {
-        let nib = w >> shift & 15;
-        sb.push_char(if nib < 10 { 48 + nib } else { 87 + nib });
-        shift -= 4;
-    }
-    sb.build()
+    let w = bm.read_u32le(8 * j) | bm.read_u32le(8 * j + 4) << 32;
+    w.to_hex().pad_left(16, "0")
 }
 
 fn show_bitmap(pattern: String) {

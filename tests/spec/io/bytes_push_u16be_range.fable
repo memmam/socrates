@@ -1,0 +1,4 @@
+// The BE pushers carry the same range checks as the LE trio.
+//? panic: push_u16be: value 65536 out of range 0..65535
+let b = bytes(0);
+b.push_u16be(65536);

@@ -26,16 +26,11 @@ pub fn dir_name(d: Int) -> String {
     names[d]
 }
 
-// The number of set bits in a mask — the size of a tile set. Kernighan's
-// loop: `m & (m - 1)` clears the lowest set bit, so it runs once per member.
+// The number of set bits in a mask — the size of a tile set, via the
+// v0.7 `count_ones` intrinsic (the Kernighan loop it replaces lives in
+// git history).
 pub fn popcount(mask: Int) -> Int {
-    let mut m = mask;
-    let mut n = 0;
-    while m != 0 {
-        m = m & m - 1;
-        n += 1;
-    }
-    n
+    mask.count_ones()
 }
 
 pub struct Rules {

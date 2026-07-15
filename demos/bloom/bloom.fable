@@ -54,7 +54,7 @@ impl Bloom {
         self.indices(w).all(|i| self.get_bit(i))
     }
 
-    // Exact number of set bits: SWAR popcount, byte by byte.
+    // Exact number of set bits, byte by byte.
     pub fn popcount(self) -> Int {
         let mut n = 0;
         for i in 0..self.bits.len() {
@@ -95,14 +95,15 @@ impl Bloom {
     }
 }
 
-// Bytes ships little-endian pushers but no little-endian readers, so
-// deserialization reassembles the integers with shifts and ors.
+// Deserialization reads the integers back with the v0.7 little-endian
+// readers — the shift-and-or reassembly these wrapped lives in git
+// history.
 fn read_u16le(b: Bytes, off: Int) -> Int {
-    b.get(off) | b.get(off + 1) << 8
+    b.read_u16le(off)
 }
 
 fn read_u32le(b: Bytes, off: Int) -> Int {
-    b.get(off) | b.get(off + 1) << 8 | b.get(off + 2) << 16 | b.get(off + 3) << 24
+    b.read_u32le(off)
 }
 
 pub fn deserialize(b: Bytes) -> Result[Bloom, String] {

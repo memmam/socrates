@@ -1,22 +1,15 @@
 // bits — the demo's bit-twiddling toolbox: hex formatting and the
-// big-endian u32 accessors PNG needs (Bytes ships little-endian pushers;
-// network byte order is four shifts and three ors away).
+// big-endian u32 accessors PNG needs, now thin wrappers over the v0.7
+// natives (`Int.to_hex`, `push_u32be` / `read_u32be` / `read_u16le`).
+// The shift-and-or bodies these wrapped live in git history.
 //
-// Everything here works on Int values treated as unsigned 32-bit words.
-// Fable's Int is 64-bit signed and `>>` is arithmetic, so the rule is:
-// keep values in 0..2^32-1 and mask with `& 255` / `& 15` after shifting.
-
-import std.strings;
+// Everything here works on Int values treated as unsigned 32-bit words:
+// keep values in 0..2^32-1.
 
 // The lowercase hex spelling of the low `digits` nibbles of v.
 // to_hex(0xae426082, 8) == "ae426082"; to_hex(255, 2) == "ff".
 pub fn to_hex(v: Int, digits: Int) -> String {
-    let out = strings.builder();
-    for i in 0..digits {
-        let nib = v >> 4 * (digits - 1 - i) & 15;
-        out.push_char(if nib < 10 { 48 + nib } else { 87 + nib });
-    }
-    out.build()
+    (v & (1 << 4 * digits) - 1).to_hex().pad_left(digits, "0")
 }
 
 // A whole buffer as space-separated hex bytes: "78 01 05 00".
@@ -30,21 +23,15 @@ pub fn dump(b: Bytes) -> String {
 
 // Append v (0..2^32-1) big-endian — PNG lengths and CRCs are network order.
 pub fn push_u32be(b: Bytes, v: Int) {
-    if v < 0 || v > 0xFFFFFFFF {
-        panic("push_u32be: {v} out of u32 range");
-    }
-    b.push(v >> 24 & 255);
-    b.push(v >> 16 & 255);
-    b.push(v >> 8 & 255);
-    b.push(v & 255);
+    b.push_u32be(v);
 }
 
 // Read a big-endian u32 starting at off (panics if out of bounds).
 pub fn read_u32be(b: Bytes, off: Int) -> Int {
-    b.get(off) << 24 | b.get(off + 1) << 16 | b.get(off + 2) << 8 | b.get(off + 3)
+    b.read_u32be(off)
 }
 
 // Read a little-endian u16 starting at off — deflate's stored-block LEN/NLEN.
 pub fn read_u16le(b: Bytes, off: Int) -> Int {
-    b.get(off) | b.get(off + 1) << 8
+    b.read_u16le(off)
 }

@@ -733,9 +733,17 @@ panics) and `bytes_of(List[Int])` (panics on values outside 0..255).
 
 `len() -> Int`, `get(Int) -> Int` (panics OOB), `set(Int, Int) -> Unit`
 (panics OOB or on non-byte values), `push(Int) -> Unit` (checked),
-`push_u16le(Int)` / `push_i16le(Int)` / `push_u32le(Int)` (little-endian
-multi-byte appends with range checks — wire formats need no bitwise
-operators), `slice(Int, Int) -> Bytes` (clamped copy, like `List.slice`),
+`push_bytes(Bytes) -> Unit` / `push_str(String) -> Unit` (bulk appends:
+a whole buffer and a string's UTF-8 bytes; `push_bytes` snapshots its
+argument first, so appending a buffer to itself appends its old
+contents), `push_u16le(Int)` / `push_i16le(Int)` / `push_u32le(Int)`
+and the big-endian pair `push_u16be(Int)` / `push_u32be(Int)`
+(multi-byte appends with range checks — wire formats need no bitwise
+operators), `read_u16le(Int) -> Int` / `read_i16le(Int) -> Int` /
+`read_u32le(Int) -> Int` / `read_u16be(Int) -> Int` /
+`read_u32be(Int) -> Int` (the multi-byte reads back, at a byte offset;
+a read that would touch any byte outside the buffer panics like `get`),
+`slice(Int, Int) -> Bytes` (clamped copy, like `List.slice`),
 `concat(Bytes) -> Bytes` (new buffer), `to_list() -> List[Int]`,
 `utf8() -> Result[String, String]` (UTF-8 decode). `String.to_bytes() ->
 Bytes` is the inverse bridge. Bytes may be map keys (content-hashed);
@@ -762,6 +770,20 @@ worker sent before finishing can still be `recv`'d after `join`).
 `Int`: `to_float() -> Float`, `to_string() -> String`, `abs() -> Int`,
 `pow(Int) -> Int` (panics on negative exponent or overflow),
 `min(Int) -> Int`, `max(Int) -> Int`.
+
+Int bit intrinsics (v0.7), all over the 64-bit two's-complement
+pattern: `count_ones() -> Int` (popcount), `leading_zeros() -> Int`,
+`trailing_zeros() -> Int` (both zero-count methods define the 0 case as
+64, matching Rust), `ushr(Int) -> Int` (**logical** — zero-filling —
+right shift, the unsigned complement to the arithmetic `>>`; the count
+shares `>>`'s contract and panics outside 0..=63),
+`rotate_left(Int) -> Int` / `rotate_right(Int) -> Int` (the count is
+taken mod 64 — Rust rotate semantics — so unlike shifts they never
+panic; a negative count rotates the other way), `to_hex() -> String`
+(lowercase minimal hex of the two's-complement bit pattern:
+`(-1).to_hex() == "ffffffffffffffff"`, `255.to_hex() == "ff"`,
+`0.to_hex() == "0"`; fixed widths via `pad_left`).
+
 `Float`: `to_int() -> Int` (truncates toward zero; panics on NaN or out of Int
 range), `to_string() -> String`, `abs()`, `floor()`, `ceil()`, `round()`,
 `sqrt()`, `is_nan() -> Bool`, `to_fixed(Int) -> String` (v0.6: exactly n

@@ -1,10 +1,10 @@
 // wav.fable — RIFF/WAVE 16-bit mono PCM, encoded and decoded over Bytes.
 //
 // Encoding uses the v0.7 little-endian pushers (push_u32le / push_u16le /
-// push_i16le), so no bitwise arithmetic is needed to build the file.
-// Decoding goes the other way on purpose: it reassembles the fields from
-// raw get() bytes with shifts and ors, so the two directions check each
-// other.
+// push_i16le) and decoding the matching readers (read_u32le / read_u16le /
+// read_i16le) — the shift-and-or reassembly the readers replaced lives in
+// git history. Both directions are still cross-checked in checks.fable
+// against pinned raw bytes, so a lane swap in either cannot hide.
 
 // Build a complete WAV file: RIFF header, fmt chunk, data chunk, samples.
 pub fn encode(samples: List[Int], sample_rate: Int) -> Bytes {
@@ -30,12 +30,10 @@ pub fn encode(samples: List[Int], sample_rate: Int) -> Bytes {
 }
 
 fn push_tag(b: Bytes, tag: String) {
-    for v in tag.to_bytes().to_list() {
-        b.push(v);
-    }
+    b.push_str(tag);
 }
 
-// --- field readers (get() arithmetic) ---------------------------------------
+// --- field readers -----------------------------------------------------------
 
 // four ASCII bytes at `at` as a chunk tag
 pub fn tag_at(b: Bytes, at: Int) -> String {
@@ -43,15 +41,14 @@ pub fn tag_at(b: Bytes, at: Int) -> String {
 }
 
 pub fn u16_at(b: Bytes, at: Int) -> Int {
-    b.get(at) | b.get(at + 1) << 8
+    b.read_u16le(at)
 }
 
 pub fn u32_at(b: Bytes, at: Int) -> Int {
-    b.get(at) | b.get(at + 1) << 8 | b.get(at + 2) << 16 | b.get(at + 3) << 24
+    b.read_u32le(at)
 }
 
-// a signed 16-bit sample: sign-fold the unsigned read
+// a signed 16-bit sample
 pub fn i16_at(b: Bytes, at: Int) -> Int {
-    let raw = u16_at(b, at);
-    if raw >= 32768 { raw - 65536 } else { raw }
+    b.read_i16le(at)
 }

@@ -1,0 +1,66 @@
+// Bytes multi-byte readers and the big-endian pushers (v0.7 efficiency
+// pass): pusher/reader round-trips in both endiannesses, plus the bulk
+// appends push_bytes (snapshot semantics) and push_str.
+
+// Little-endian round trips through the existing LE pushers.
+let w = bytes(0);
+w.push_u16le(258);        // 0x0102 -> 02 01
+w.push_i16le(-2);         // 0xFFFE -> FE FF
+w.push_u32le(16909060);   // 0x01020304 -> 04 03 02 01
+println(w.read_u16le(0));                  //? expect: 258
+println(w.read_i16le(2));                  //? expect: -2
+println(w.read_u32le(4));                  //? expect: 16909060
+
+// read_u16le vs read_i16le on the same bytes: unsigned vs sign-folded.
+println(w.read_u16le(2));                  //? expect: 65534
+println(w.read_i16le(0));                  //? expect: 258
+
+// Big-endian pushers write network order; the BE readers fold it back.
+let b = bytes(0);
+b.push_u16be(258);        // 0x0102 -> 01 02
+b.push_u32be(168496141);  // 0x0A0B0C0D -> 0A 0B 0C 0D
+println(b.to_list());                      //? expect: [1, 2, 10, 11, 12, 13]
+println(b.read_u16be(0));                  //? expect: 258
+println(b.read_u32be(2));                  //? expect: 168496141
+
+// The same bytes read with the other endianness swap lanes.
+println(b.read_u16le(0));                  //? expect: 513
+println(b.read_u32le(2) == 0x0d0c0b0a);    //? expect: true
+
+// Extremes survive the round trip in both endiannesses.
+let x = bytes(0);
+x.push_u16le(65535);
+x.push_u16be(65535);
+x.push_u32le(4294967295);
+x.push_u32be(4294967295);
+x.push_i16le(-32768);
+println("{x.read_u16le(0)} {x.read_u16be(2)} {x.read_u32le(4)} {x.read_u32be(8)} {x.read_i16le(12)}");
+//? expect: 65535 65535 4294967295 4294967295 -32768
+println(x.read_u32be(0));                  //? expect: 4294967295
+
+// Zero round-trips too, and reads do not consume: same offset, same value.
+let z = bytes(0);
+z.push_u32be(0);
+println("{z.read_u32be(0)} {z.read_u32be(0)}"); //? expect: 0 0
+
+// push_bytes appends a whole buffer; the argument is snapshotted, so
+// appending a buffer to itself appends its old contents.
+let a = bytes_of([1, 2, 3]);
+a.push_bytes(bytes_of([4, 5]));
+println(a.to_list());                      //? expect: [1, 2, 3, 4, 5]
+a.push_bytes(bytes(0));
+println(a.len());                          //? expect: 5
+let s = bytes_of([7, 8]);
+s.push_bytes(s);
+println(s.to_list());                      //? expect: [7, 8, 7, 8]
+
+// push_str appends the string's UTF-8 bytes (like to_bytes + push_bytes).
+let t = bytes(0);
+t.push_str("hi");
+t.push_str("");
+t.push_str("é");
+println(t.to_list());                      //? expect: [104, 105, 195, 169]
+println(t.utf8());                         //? expect: Ok("hié")
+
+// A reader at the exact end of the buffer still works.
+println(t.read_u16le(t.len() - 2));        //? expect: 43459

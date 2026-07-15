@@ -85,16 +85,17 @@ behind these rules lives in `NOTES.md`.
   merely-clarifying parens, so precedence knowledge is not optional;
   comment intent instead.
 - **`>>` is arithmetic.** Any value that can carry bit 63 goes through
-  one helper: `ushr(x, n) = if n == 0 { x } else { (x >> n) &
-  (0x7fffffffffffffff >> (n - 1)) }`. Never the textbook mask
-  `(1 << 64 - n) - 1` — it panics at n = 1 (`reversi/bits.fable`
-  documents every trap).
+  the `Int.ushr(n)` intrinsic (logical shift, `>>`'s panic contract).
+  Never hand-build the mask — the textbook `(1 << 64 - n) - 1` panics
+  at n = 1 (`reversi/bits.fable` documents every trap; its hand-rolled
+  bodies live in git history).
 - **Overflow panics disable classic bit tricks.** `x & -x` and
   `x & (x - 1)` both panic on the bit-63-only value; iterate set bits
-  with ctz + `^` (which also yields ascending order — a free
-  deterministic tie-break). SWAR popcount must avoid the multiply fold.
-  When a bit algorithm assumes wrapping arithmetic, assume it is broken
-  in Fable until proven otherwise (`reversi`).
+  with `trailing_zeros` + `^` (which also yields ascending order — a
+  free deterministic tie-break). Counting is `count_ones()` — never
+  hand-roll a popcount. When a bit algorithm assumes wrapping
+  arithmetic, assume it is broken in Fable until proven otherwise
+  (`reversi`).
 - **32-bit hashing rules:** mask `& 0xFFFFFFFF` after every add/multiply
   that can exceed 32 bits; split full 32×32 multiplies into 16-bit
   halves; write the invariants in a header comment because the types

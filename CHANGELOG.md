@@ -6,6 +6,22 @@ every feature listed here.
 
 ## Unreleased (v0.7 — the infrastructure release, in progress)
 
+- Fast-idiom natives (the efficiency pass, batch 1): every bit-heavy
+  demo in the v0.7 round hand-rolled the same primitives, so they are
+  now intrinsics. `Int` grew `count_ones` / `leading_zeros` /
+  `trailing_zeros` (the 0 case is 64 for both zero-counts, matching
+  Rust), `ushr` (logical right shift, `>>`'s exact panic contract),
+  `rotate_left` / `rotate_right` (count mod 64; never panic), and
+  `to_hex` (lowercase minimal hex of the two's-complement pattern).
+  `Bytes` grew bulk appends `push_bytes` (snapshot semantics —
+  self-append works) / `push_str`, big-endian pushers `push_u16be` /
+  `push_u32be` (same range checks as the LE trio), and multi-byte
+  readers `read_u16le` / `read_i16le` / `read_u32le` / `read_u16be` /
+  `read_u32be` (OOB panics match `get`). **The wrappers rule:** the
+  demos' hand-rolled versions did not disappear — each became a
+  minimal wrapper over the native with the same name and byte-identical
+  observable behavior (`reversi/bits.fable` remains the documented
+  reference; the hand-rolled bodies live in git history).
 - The v0.7 demo round: six new demos (`synthwave`, `png`, `bloom`,
   `spectra`, `swarm`, `reversi`) built on the new infrastructure, all
   eleven existing demos modernized to it, seventeen writers plus

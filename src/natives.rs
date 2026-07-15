@@ -359,6 +359,76 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             }
             Value::Unit
         }
+        BytesPushBytes => {
+            // Snapshot the argument first: `b.push_bytes(b)` must append
+            // b's old contents, not loop over a buffer growing under it.
+            let other = bytes_arg(vm, argc, 1)?.clone();
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(&other);
+            }
+            Value::Unit
+        }
+        BytesPushStr => {
+            let s = str_arg(vm, argc, 1)?;
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(s.as_bytes());
+            }
+            Value::Unit
+        }
+        BytesPushU16be => {
+            let v = int_arg(vm, argc, 1)?;
+            if !(0..=65535).contains(&v) {
+                return Err(vm.error(format!("push_u16be: value {v} out of range 0..65535")));
+            }
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(&(v as u16).to_be_bytes());
+            }
+            Value::Unit
+        }
+        BytesPushU32be => {
+            let v = int_arg(vm, argc, 1)?;
+            if !(0..=4294967295).contains(&v) {
+                return Err(vm.error(format!(
+                    "push_u32be: value {v} out of range 0..4294967295"
+                )));
+            }
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(&(v as u32).to_be_bytes());
+            }
+            Value::Unit
+        }
+        BytesReadU16le | BytesReadI16le | BytesReadU16be | BytesReadU32le | BytesReadU32be => {
+            let off = int_arg(vm, argc, 1)?;
+            let width = match n {
+                BytesReadU32le | BytesReadU32be => 4i64,
+                _ => 2i64,
+            };
+            let bs = bytes_ref(vm, argc)?;
+            let len = bs.len() as i64;
+            if off < 0 || off > len - width {
+                // Panic naming the first out-of-range byte the read would
+                // touch, so the message matches a plain `get` of that index.
+                let i = if off < 0 { off } else { off.max(len) };
+                return Err(vm.error(format!(
+                    "bytes index out of bounds: index {i}, length {len}"
+                )));
+            }
+            let o = off as usize;
+            let v = match n {
+                BytesReadU16le => u16::from_le_bytes([bs[o], bs[o + 1]]) as i64,
+                BytesReadI16le => i16::from_le_bytes([bs[o], bs[o + 1]]) as i64,
+                BytesReadU16be => u16::from_be_bytes([bs[o], bs[o + 1]]) as i64,
+                BytesReadU32le => {
+                    u32::from_le_bytes([bs[o], bs[o + 1], bs[o + 2], bs[o + 3]]) as i64
+                }
+                _ => u32::from_be_bytes([bs[o], bs[o + 1], bs[o + 2], bs[o + 3]]) as i64,
+            };
+            Value::Int(v)
+        }
         BytesSlice => {
             // Clamped copy, like List.slice: start inclusive, end exclusive.
             let a = int_arg(vm, argc, 1)?;
@@ -1212,6 +1282,40 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
         IntMin => Value::Int(int_arg(vm, argc, 0)?.min(int_arg(vm, argc, 1)?)),
         IntMax => Value::Int(int_arg(vm, argc, 0)?.max(int_arg(vm, argc, 1)?)),
+
+        // Bit intrinsics (v0.7 efficiency pass): straight onto the Rust
+        // i64/u64 methods. Both zero-count methods return 64 for 0.
+        IntCountOnes => Value::Int(int_arg(vm, argc, 0)?.count_ones() as i64),
+        IntLeadingZeros => Value::Int(int_arg(vm, argc, 0)?.leading_zeros() as i64),
+        IntTrailingZeros => Value::Int(int_arg(vm, argc, 0)?.trailing_zeros() as i64),
+        IntUshr => {
+            // Logical (zero-filling) right shift — `>>`'s panic contract.
+            let x = int_arg(vm, argc, 0)?;
+            let sh = int_arg(vm, argc, 1)?;
+            if !(0..64).contains(&sh) {
+                return Err(vm.error(format!(
+                    "shift amount out of range: {sh} (must be 0..=63)"
+                )));
+            }
+            Value::Int(((x as u64) >> sh) as i64)
+        }
+        IntRotateLeft | IntRotateRight => {
+            let x = int_arg(vm, argc, 0)?;
+            // Counts wrap mod 64 (Rust rotate semantics) — unlike shifts,
+            // rotates never panic; a negative count rotates the other way.
+            let sh = int_arg(vm, argc, 1)?.rem_euclid(64) as u32;
+            Value::Int(if matches!(n, IntRotateLeft) {
+                x.rotate_left(sh)
+            } else {
+                x.rotate_right(sh)
+            })
+        }
+        IntToHex => {
+            // Lowercase minimal hex of the two's-complement bit pattern:
+            // (-1).to_hex() == "ffffffffffffffff", 0.to_hex() == "0".
+            let x = int_arg(vm, argc, 0)? as u64;
+            vm.alloc_str(format!("{x:x}"))
+        }
 
         FloatToInt => {
             let f = float_arg(vm, argc, 0)?;

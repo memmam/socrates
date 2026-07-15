@@ -1,0 +1,5 @@
+// The big-endian readers share the OOB contract: an offset entirely past
+// the end names itself in the panic.
+//? panic: bytes index out of bounds: index 9, length 4
+let b = bytes_of([1, 2, 3, 4]);
+println(b.read_u32be(9));
