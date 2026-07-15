@@ -1,0 +1,4 @@
+// fft.fft requires the re and im lists to be the same length.
+//? panic: fft: re and im lengths differ (2 vs 3)
+let (r, i) = fft.fft([1.0, 2.0], [0.0, 0.0, 0.0]);
+println(r);

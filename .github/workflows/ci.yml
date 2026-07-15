@@ -40,6 +40,10 @@ jobs:
           ./target/release/fable test tests/spec > /dev/null
       - name: Demo golden tests
         run: ./target/release/fable test demos > /dev/null
+      - name: FFT numpy cross-check
+        run: |
+          python3 -m pip install --quiet numpy
+          python3 tools/fft_crosscheck.py ./target/release/fable
       - name: ICAA port golden tests
         run: FABLE_PATH=ports ./target/release/fable test ports/icaa/spec.fable
       - name: ICAA port cross-validation (Fable vs JS reference)

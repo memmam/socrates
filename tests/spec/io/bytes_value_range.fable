@@ -1,0 +1,3 @@
+//? panic: bytes push: value 256 is not a byte (0..255)
+let b = bytes(0);
+b.push(256);

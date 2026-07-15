@@ -488,6 +488,7 @@ fn completion_for_type(a: &Analysis, ty: &crate::types::Type) -> Vec<J> {
         Type::Float => Some(Recv::Float),
         Type::Str => Some(Recv::Str),
         Type::Range => Some(Recv::Range),
+        Type::Bytes => Some(Recv::Bytes),
         Type::List(_) => Some(Recv::List),
         Type::Map(_, _) => Some(Recv::Map),
         Type::Named(d, _) if *d == OPTION_DEF => Some(Recv::Option_),

@@ -45,6 +45,8 @@ pub enum Obj {
     Closure { proto: u32, upvals: Vec<Handle> },
     Upvalue(Upval),
     Range { lo: i64, hi: i64, inclusive: bool },
+    /// Packed byte buffer (v0.7). A GC leaf: no traced children.
+    Bytes(Vec<u8>),
 }
 
 /// An insertion-ordered map with structural keys. Entries keep their insertion
@@ -184,7 +186,7 @@ impl Heap {
             let mut children: Vec<Handle> = Vec::new();
             let mut child_values: Vec<Value> = Vec::new();
             match &self.slots[h as usize].obj {
-                Obj::Free | Obj::Str(_) | Obj::Range { .. } => {}
+                Obj::Free | Obj::Str(_) | Obj::Range { .. } | Obj::Bytes(_) => {}
                 Obj::List(items) | Obj::Tuple(items) => child_values.extend(items.iter().copied()),
                 Obj::Map(m) => {
                     for (_, k, v) in &m.entries {

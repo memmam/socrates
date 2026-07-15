@@ -1,0 +1,228 @@
+// pyl.signal — the scipy.signal subset for ported DSP code.
+//
+// Part of the Python-to-Fable translation layer (see ports/README.md and
+// ports/pyl/CONTRACT.md §Filters): Butterworth designs of order 2 and 3,
+// `low` and `band`, as second-order sections, plus sosfilt. The mapping:
+//
+//   scipy.signal                                Fable
+//   -----------------------------------------   -----------------------------
+//   butter(N, wn, 'low', output='sos')          signal.butter(N, wn, 0.0, "low")
+//   butter(N, [w1, w2], 'band', output='sos')   signal.butter(N, w1, w2, "band")
+//   sosfilt(sos, x)          (zero state)       signal.sosfilt(sos, x)
+//   sosfilt(sos, x, axis=0)  (stereo)           signal.sosfilt(sos, x)  (per channel)
+//   (freeze dump for sos_freeze.txt)            signal.print_freeze(id, sos)
+//
+// butter implements the contract's pinned algorithm, steps 1-5:
+//   1. analog lowpass prototype poles p_k = -exp(i*pi*(2k - N + 1)/(2N)),
+//      k = 0..N-1 ascending — scipy buttap's arange(-N+1, N, 2) order,
+//      which is the reading of step 1 that actually lands every pole in
+//      the left half-plane (the contract's literal "(2k+1)" indexing
+//      does not; see the layer-decision list in the port report).
+//   2. prewarp: warped = 4*tan(pi*Wn/2)              (fs = 2)
+//   3. low: p *= warped, gain = warped^N.  band: bw = w2-w1,
+//      w0 = sqrt(w1*w2); each prototype pole becomes the pair
+//      p*bw/2 +- csqrt((p*bw/2)^2 - w0^2) (listed +branch then -branch,
+//      grouped per k), plus N zeros at s = 0; gain = bw^N.
+//   4. bilinear (fs = 2): z = (4 + s)/(4 - s); digital gain =
+//      gain * Re(prod(4 - analog_zeros)/prod(4 - analog_poles));
+//      the N zeros at s = infinity map to z = -1.
+//   5. sections: scan the digital pole list left to right; each unused
+//      pole grabs its complex conjugate (the nearest unused pole to
+//      conj(p)) to form a second-order section; a leftover real pole
+//      (odd-order low) becomes a first-order section, last. Zeros:
+//      low -> two z=-1 per section, b = [1, 2, 1] (first-order section
+//      takes one, b = [1, 1, 0]); band -> one z=+1 and one z=-1 per
+//      section, b = [1, 0, -1]. The overall gain multiplies the first
+//      section's b. Complex sqrt is the principal branch.
+//
+// sosfilt: cascade in section order, each section direct-form II
+// transposed with zero initial state:
+//     y  = b0*x + s1
+//     s1 = b1*x - a1*y + s2
+//     s2 = b2*x - a2*y
+// Stereo is filtered per channel, independently (axis=0 semantics).
+
+import pyl.nd;
+
+// One second-order section; a0 is normalized to 1.
+pub struct Sos {
+    b0: Float,
+    b1: Float,
+    b2: Float,
+    a1: Float,
+    a2: Float,
+}
+
+// ---- complex arithmetic (local; operators via add/sub/mul/div) ---------
+
+struct C { re: Float, im: Float }
+
+fn c(re: Float, im: Float) -> C { C { re, im } }
+
+impl C {
+    fn add(self, o: C) -> C { c(self.re + o.re, self.im + o.im) }
+    fn sub(self, o: C) -> C { c(self.re - o.re, self.im - o.im) }
+    fn mul(self, o: C) -> C {
+        c(self.re * o.re - self.im * o.im, self.re * o.im + self.im * o.re)
+    }
+    fn div(self, o: C) -> C {
+        let d = o.re * o.re + o.im * o.im;
+        c((self.re * o.re + self.im * o.im) / d, (self.im * o.re - self.re * o.im) / d)
+    }
+    fn scale(self, k: Float) -> C { c(self.re * k, self.im * k) }
+    fn mag(self) -> Float { math.sqrt(self.re * self.re + self.im * self.im) }
+    fn conj(self) -> C { c(self.re, -self.im) }
+}
+
+// principal-branch complex square root
+fn csqrt(z: C) -> C {
+    if z.re == 0.0 && z.im == 0.0 { return c(0.0, 0.0); }
+    let r = z.mag();
+    if z.re >= 0.0 {
+        let t = math.sqrt((r + z.re) / 2.0);
+        c(t, z.im / (2.0 * t))
+    } else {
+        let t = math.sqrt((r - z.re) / 2.0);
+        let re = z.im.abs() / (2.0 * t);
+        if z.im < 0.0 { c(re, -t) } else { c(re, t) }
+    }
+}
+
+// analog s -> digital z, fs = 2: z = (4 + s)/(4 - s)
+fn bilinear(s: C) -> C {
+    c(4.0 + s.re, s.im) / c(4.0 - s.re, -s.im)
+}
+
+// ---- butter -------------------------------------------------------------
+
+pub fn butter(order: Int, wn_low: Float, wn_high: Float, btype: String) -> List[Sos] {
+    if order < 1 { panic("pyl.signal: butter: order must be >= 1, got {order}"); }
+    if btype != "low" && btype != "band" {
+        panic("pyl.signal: butter: unsupported btype `{btype}` (use \"low\" or \"band\")");
+    }
+    if wn_low <= 0.0 || wn_low >= 1.0 {
+        panic("pyl.signal: butter: wn_low must be in (0, 1), got {wn_low}");
+    }
+    let band = btype == "band";
+    if band && (wn_high <= wn_low || wn_high >= 1.0) {
+        panic("pyl.signal: butter: band needs wn_low < wn_high < 1, got [{wn_low}, {wn_high}]");
+    }
+
+    // step 1: prototype poles, k ascending
+    let proto = [];
+    for k in 0..order {
+        let theta = math.pi * (2 * k - order + 1).to_float() / (2 * order).to_float();
+        proto.push(c(-math.cos(theta), -math.sin(theta)));
+    }
+
+    // steps 2-3: prewarp + analog transform
+    let mut analog_poles = [];
+    let analog_zeros = [];
+    let mut gain = 0.0;
+    if band {
+        let w1 = 4.0 * math.tan(math.pi * wn_low / 2.0);
+        let w2 = 4.0 * math.tan(math.pi * wn_high / 2.0);
+        let bw = w2 - w1;
+        let w0 = math.sqrt(w1 * w2);
+        for p in proto {
+            let half = p.scale(bw / 2.0);
+            let d = csqrt(half * half - c(w0 * w0, 0.0));
+            analog_poles.push(half + d);
+            analog_poles.push(half - d);
+        }
+        for _ in 0..order { analog_zeros.push(c(0.0, 0.0)); }
+        gain = math.pow(bw, order.to_float());
+    } else {
+        let warped = 4.0 * math.tan(math.pi * wn_low / 2.0);
+        analog_poles = proto.map(|p| p.scale(warped));
+        gain = math.pow(warped, order.to_float());
+    }
+
+    // step 4: bilinear transform + digital gain
+    let digital_poles = analog_poles.map(bilinear);
+    let mut num = c(1.0, 0.0);
+    for z in analog_zeros { num = num * c(4.0 - z.re, -z.im); }
+    let mut den = c(1.0, 0.0);
+    for p in analog_poles { den = den * c(4.0 - p.re, -p.im); }
+    let k_digital = gain * (num / den).re;
+
+    // step 5: pair conjugates in list order into sections
+    let np = digital_poles.len();
+    let used = (0..np).map(|_| false);
+    let secs = [];
+    for i in 0..np {
+        if used[i] { continue; }
+        used[i] = true;
+        let p1 = digital_poles[i];
+        let mut best = -1;
+        let mut bestd = 1e300;
+        let mut j = i + 1;
+        while j < np {
+            if !used[j] {
+                let d = (digital_poles[j] - p1.conj()).mag();
+                if d < bestd {
+                    bestd = d;
+                    best = j;
+                }
+            }
+            j += 1;
+        }
+        if best >= 0 && bestd <= 1e-6 * (1.0 + p1.mag()) {
+            used[best] = true;
+            let q = digital_poles[best];
+            let a1 = -(p1.re + q.re);
+            let a2 = p1.re * q.re - p1.im * q.im;
+            if band {
+                secs.push(Sos { b0: 1.0, b1: 0.0, b2: -1.0, a1, a2 });
+            } else {
+                secs.push(Sos { b0: 1.0, b1: 2.0, b2: 1.0, a1, a2 });
+            }
+        } else {
+            if p1.im.abs() > 1e-9 * (1.0 + p1.re.abs()) {
+                panic("pyl.signal: butter: unpaired complex pole ({p1.re}, {p1.im})");
+            }
+            // lone real pole (odd-order low): first-order section, one z=-1
+            secs.push(Sos { b0: 1.0, b1: 1.0, b2: 0.0, a1: -p1.re, a2: 0.0 });
+        }
+    }
+    let s0 = secs[0];
+    s0.b0 *= k_digital;
+    s0.b1 *= k_digital;
+    s0.b2 *= k_digital;
+    secs
+}
+
+// ---- sosfilt ------------------------------------------------------------
+
+pub fn sosfilt(sos: List[Sos], x: nd.Nd) -> nd.Nd {
+    let ch = x.ch;
+    let y = x.data.clone();
+    for s in sos {
+        for c0 in 0..ch {
+            let mut s1 = 0.0;
+            let mut s2 = 0.0;
+            let mut i = c0;
+            while i < y.len() {
+                let xi = y[i];
+                let yi = s.b0 * xi + s1;
+                s1 = s.b1 * xi - s.a1 * yi + s2;
+                s2 = s.b2 * xi - s.a2 * yi;
+                y[i] = yi;
+                i += ch;
+            }
+        }
+    }
+    nd.Nd { ch, data: y }
+}
+
+// ---- freeze format ------------------------------------------------------
+
+// One line per section: `<design-id> b0 b1 b2 1 a1 a2`, floats in
+// shortest round-trip form — the sos_freeze.txt cross-check format.
+pub fn freeze_lines(id: String, sections: List[Sos]) -> List[String] {
+    sections.map(|s| "{id} {s.b0} {s.b1} {s.b2} 1 {s.a1} {s.a2}")
+}
+
+pub fn print_freeze(id: String, sections: List[Sos]) {
+    for line in freeze_lines(id, sections) { println(line); }
+}

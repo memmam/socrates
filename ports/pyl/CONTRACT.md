@@ -1,0 +1,170 @@
+# pyl — the Python-to-Fable translation layer: numerical contract
+
+This file pins the semantics that BOTH implementations of the claudewave
+port must follow exactly:
+
+- `ports/claudewave/reference/pynp.py` — a **stdlib-only Python** shim
+  implementing the numpy/scipy.signal subset below. The upstream
+  claudewave `lib/*.py` files run **unmodified** against it (injected via
+  `sys.modules['numpy'] = ...` etc.), producing ground-truth output.
+- `ports/pyl/*.fable` — the Fable layer implementing the same subset.
+
+Where this contract and real numpy/scipy could disagree, CI (which can
+install the real packages) compares the shim against them; locally the
+shim is the executable contract. Parity between shim-run upstream code
+and the Fable port is judged **numerically**: arithmetic-only paths are
+expected bit-equal in f64; paths through libm transcendentals
+(sin/cos/exp/tanh/pow) get a documented allowance of max abs diff
+≤ 1e-9 per sample (report the actual max, always).
+
+## Arrays (`pyl.nd`)
+
+f64 throughout. An array is `{ ch: Int (1|2), data: List[Float] }`,
+interleaved when stereo; `n = len(data)/ch`. Mono ops on stereo arrays
+and vice versa are errors unless stated.
+
+Constructors: `zeros(n)`, `zeros2(n)` (stereo), `ones(n)`, `full(n, v)`,
+`arange(n)` (0..n-1 as floats), `linspace(a, b, n)` (numpy semantics:
+endpoint included; n==1 → [a]; n==0 → empty; step = (b-a)/(n-1)),
+`concat(parts)`, `stack2(l, r)` (two mono → stereo), `mono2(x)`
+(duplicate mono to both channels), `geomspace(a, b, n)` (numpy
+semantics: n log-spaced points, endpoints included).
+
+Elementwise (same shape): `+ - * /`. Scalar: `adds(k)`, `muls(k)`,
+`divs(k)`; `k_minus(k)` for `k - x`. Unary maps: `sinv`, `cosv`, `expv`,
+`tanhv`, `absv`, `floorv`, `sqrtv`. All apply per component (stereo
+included).
+
+Reductions/scans (mono): `mean`, `max_abs`, `cumsum` (running sum, same
+length, left to right, plain f64 accumulation).
+
+`clip(lo, hi)` = per-component `min(max(x, lo), hi)`.
+`where_lt(x, t, a, b)` = per-element `if x[i] < t { a[i] } else { b[i] }`.
+
+Slicing (copies): `slice(from, to)` (frame indices, clamped, `to`
+exclusive), `tail(k)` (last k frames), `pad_end(n)` (zero-pad to n
+frames, truncate if longer). In-place: `set_range(at, src)` (copy src
+frames in starting at frame `at`), `add_range(at, src, gain)`
+(accumulate, clipped to the destination's end — matches
+`out[si:ei] += chunk[:ei-si] * gain`).
+
+`take_lerp(pos)` — pos is a mono array of fractional frame positions,
+already clipped to `[0, n-2]` by the caller; result frame i =
+`x[i0]*(1-frac) + x[min(i0+1, n-1)]*frac` with `i0 = trunc(pos[i])`,
+`frac = pos[i] - i0`, per channel. (This is dsp.tape_wobble's fancy-index
+expression as a primitive.)
+
+`mul_env(env)` — stereo × mono broadcast (`y * env[:, None]`); on mono
+it is plain `*`.
+
+## Filters (`pyl.signal`)
+
+Only what upstream uses — which a full call-site enumeration puts at:
+Butterworth orders 2–4, btypes `low`, `band`, AND `high` (the hi-hat is
+an order-3 highpass; the vocoder builds eighteen order-4 bandpasses over
+`geomspace(80, 9000, 19)` band edges), as second-order sections, plus
+`sosfilt`. An earlier revision of this contract claimed only orders 2–3
+low/band; the freeze (33 designs) is the accurate inventory.
+
+`butter(order, wn_low, wn_high, btype)` → `List[Sos]` where each `Sos`
+is `{b0, b1, b2, a1, a2}` (a0 normalized to 1). Pinned algorithm:
+
+1. Analog lowpass prototype poles (scipy `buttap` ordering):
+   `p_k = -exp(i·π·(2k − N + 1)/(2N))` for k = 0..N-1 (unit circle,
+   left half-plane; an earlier revision of this contract wrote
+   `(2k+1)` which lands in the right half-plane for even N — caught
+   during implementation); gain 1; no zeros.
+2. Prewarp: `warped = 4·tan(π·Wn/2)` for each cutoff (fs = 2).
+3. `low`: `p ← warped · p`, overall analog gain `warped^N`. `band`: with `bw = w2 - w1`,
+   `w0 = sqrt(w1·w2)`: each prototype pole p becomes the pair
+   `p' = (p·bw/2) ± sqrt((p·bw/2)² − w0²)` (2N poles), plus N zeros at
+   s = 0; gain `bw^N`.
+4. Bilinear (fs = 2): `z = (4 + s) / (4 − s)` for poles and zeros; each
+   transform contributes gain `(4 − s)` to the denominator product —
+   full digital gain = `analog_gain · Re(Π(4 − z_analog_zeros) / Π(4 −
+   p_analog_poles))`; zeros at s = ∞ map to z = −1.
+5. SOS pairing: pair each complex-conjugate pole pair in the order
+   produced by steps 1–3 (scan the pole list left to right; each unused
+   pole takes its nearest unused conjugate). For odd-order `low`, the
+   leftover real pole forms a first-order section. Zeros: `low` → all
+   digital zeros at z = −1, two per second-order section (the
+   first-order section takes one); `band` → each second-order section
+   takes one z = +1 and one z = −1 (`b ∝ [1, 0, −1]`). Section order
+   and gain placement follow **the freeze file** (which follows scipy's
+   `zpk2sos` output for these designs — note scipy places an odd
+   order's real-pole section first and carries the overall gain in the
+   first emitted section); where an implementation's natural emission
+   order differs, it must permute to match the freeze. The shim
+   implements scipy's `zpk2sos('nearest')` pairing (including
+   `_cplxreal` run-sorting) outright; the Fable side must reproduce the
+   freeze however it gets there.
+6. **The per-filter freeze (authoritative):** prose descriptions of SOS
+   pairing conventions are error-prone, so the binding artifact is a
+   coefficient dump. The shim author implements steps 1–5, then writes
+   the SOS matrix of **every distinct design the ported files construct**
+   (all `signal.butter` call sites across synths/drums/dsp/ambience/
+   vocoder — enumerate them from the source, including the order-3
+   band-pass designs in `voice_whistle` and `render_crickets` and the
+   vocoder's per-band designs at its documented band edges) into
+   `ports/claudewave/reference/sos_freeze.txt`, one line per section:
+   `<design-id> b0 b1 b2 1 a1 a2` in shortest round-trip floats. The
+   Fable implementation must reproduce every frozen coefficient to
+   ≤ 1e-12 relative. CI additionally regenerates the same designs with
+   real scipy (`butter(..., output='sos')`) and fails if any frozen
+   coefficient differs from scipy's by more than 1e-9 relative — the
+   freeze cannot silently drift from the real library.
+
+`sosfilt(sos, x)`: cascade in section order; each section is direct-form
+II transposed with zero initial state:
+
+```
+y = b0·x + s1
+s1 = b1·x − a1·y + s2
+s2 = b2·x − a2·y
+```
+
+Stereo: filter channels independently (axis=0 semantics).
+
+## Randomness (`pyl.rand`)
+
+All randomness is a **pre-generated stream of unit floats** in a text
+file (one float per line, shortest round-trip repr, generated once by
+`ports/claudewave/reference/gen_stream.py` with Python's
+`random.Random(20260714).random()`). Both sides consume the same file
+with a cursor; running out of stream is a hard error.
+
+Derived draws (pinned, identical both sides):
+- `random()` = next unit float `u`.
+- `uniform(a, b)` = `a + (b − a)·u`.
+- `randint(a, b)` (inclusive) = `a + floor(u·(b − a + 1))`, clamped to b.
+- `choice_pm1()` = `−1.0 if u < 0.5 else 1.0`.
+- `gauss()` = Box–Muller: draw `u1, u2`;
+  `sqrt(−2·ln(max(u1, 1e-300))) · cos(2π·u2)` (the sine twin is
+  discarded). `randn(n)` = n successive `gauss()` calls.
+
+The shim monkeypatches upstream's `random` and `np.random` to these.
+
+## Audio I/O (`pyl.audio`) — the PAW format
+
+Audio travels between the two implementations as PAW, a PPM-spirited
+text format chosen for diffability. (The port initially surfaced a real
+language gap here — Fable had no binary file I/O — which became v0.7's
+`Bytes` type; the Fable side can now also emit WAV directly, but PAW
+remains the parity-comparison format.)
+
+```
+PAW1
+<sr> <ch> <n>
+<sample> [<sample>]     # one line per frame, ch floats per line
+```
+
+Floats are written in each side's shortest-round-trip form and compared
+numerically, never textually. `ports/claudewave/tools/paw2wav.py`
+(Python stdlib `wave` + `struct` only) converts to 16-bit PCM WAV for
+listening; `wav2paw.py` converts back.
+
+## Comparison (`ports/claudewave/reference/compare_paw.py`)
+
+`python3 compare_paw.py a.paw b.paw` → prints
+`max_abs_diff=<float> frames=<n> ch=<c>` and exits 0 iff
+`max_abs_diff ≤ 1e-9`. Shapes must match exactly.

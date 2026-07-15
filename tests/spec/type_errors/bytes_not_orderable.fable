@@ -1,0 +1,5 @@
+// Bytes support == but not ordering.
+//? error: E0322
+let a = bytes(1);
+let b = bytes(1);
+println(a < b);

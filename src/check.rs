@@ -646,7 +646,7 @@ impl Checker {
                     );
                 };
                 match n {
-                    "Int" | "Float" | "Bool" | "String" | "Unit" | "Range" => {
+                    "Int" | "Float" | "Bool" | "String" | "Unit" | "Range" | "Bytes" => {
                         if !args.is_empty() {
                             arity_error(self, 0);
                         }
@@ -656,6 +656,7 @@ impl Checker {
                             "Bool" => Type::Bool,
                             "String" => Type::Str,
                             "Unit" => Type::Unit,
+                            "Bytes" => Type::Bytes,
                             _ => Type::Range,
                         }
                     }
@@ -1786,6 +1787,7 @@ impl Checker {
             Type::Float => (Recv::Float, vec![]),
             Type::Str => (Recv::Str, vec![]),
             Type::Range => (Recv::Range, vec![]),
+            Type::Bytes => (Recv::Bytes, vec![]),
             Type::List(t) => (Recv::List, vec![(**t).clone()]),
             Type::Map(k, v) => (Recv::Map, vec![(**k).clone(), (**v).clone()]),
             Type::Named(d, args) if *d == OPTION_DEF => (Recv::Option_, args.clone()),

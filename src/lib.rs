@@ -10,6 +10,7 @@ pub mod check;
 pub mod compiler;
 pub mod diag;
 pub mod dis;
+pub mod fft;
 pub mod fmt;
 pub mod jsonlite;
 pub mod lsp;
