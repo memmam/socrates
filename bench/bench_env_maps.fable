@@ -1,0 +1,25 @@
+// Bench: small Map[String, _] create/insert/get churn, lisp-interpreter
+// environment style (one fresh map per apply; string-keyed get on a
+// parent chain). Exercises FMap hashing, map_find, and Variant (Option)
+// allocation in map.get.
+let mut acc = 0;
+let mut i = 0;
+while i < 150000 {
+    let env: Map[String, Int] = {:};
+    env["x"] = i;
+    env["y"] = i + 1;
+    env["acc"] = acc;
+    match env.get("x") {
+        Some(v) -> { acc = (acc + v) % 1000003; },
+        None -> { acc = 0; },
+    }
+    match env.get("missing") {
+        Some(_) -> { acc = 0; },
+        None -> { acc += 1; },
+    }
+    if env.contains_key("y") {
+        acc = (acc + env["y"]) % 1000003;
+    }
+    i += 1;
+}
+println("{acc}");
