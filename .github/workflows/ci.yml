@@ -176,13 +176,21 @@ jobs:
         run: |
           host="target/release/fable${{ matrix.ext }}"
           launcher="target/${{ matrix.target }}/release/fable${{ matrix.ext }}"
+          # macOS: strip the launcher's linker-applied ad-hoc signature so the
+          # stapled binary can be signed as a whole — the signature has to
+          # cover the appended payload, and `read_self` scans past the trailing
+          # signature for the magic.
+          if [ "${{ matrix.codesign }}" = "true" ]; then
+            codesign --remove-signature "$launcher" || true
+          fi
           for demo in csvql parmandel; do
             "$host" build "demos/$demo" --launcher "$launcher" -o "${demo}${{ matrix.ext }}"
             test -s "${demo}${{ matrix.ext }}" || { echo "no binary produced for $demo" >&2; exit 1; }
+            if [ "${{ matrix.codesign }}" = "true" ]; then
+              codesign --force --sign - "${demo}${{ matrix.ext }}"
+              codesign --verify --strict "${demo}${{ matrix.ext }}"
+            fi
           done
-          if [ "${{ matrix.codesign }}" = "true" ]; then
-            for b in csvql parmandel; do codesign --force --sign - "$b"; done
-          fi
           if [ "${{ matrix.run }}" = "true" ]; then
             # Native arch: the stapled binary runs here — prove it reproduces
             # the source run byte-for-byte.

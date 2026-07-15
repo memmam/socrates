@@ -120,18 +120,25 @@ jobs:
           # cross within an OS, so the host extension equals matrix.ext.
           host="target/release/fable${{ matrix.ext }}"
           launcher="target/${{ matrix.target }}/release/fable${{ matrix.ext }}"
+          # macOS: the stapled binary is signed as a whole below, so strip the
+          # launcher's linker signature first (the ad-hoc signature must cover
+          # the appended payload; `read_self` scans past the trailing
+          # signature for the magic).
+          if [ "${{ matrix.codesign }}" = "true" ]; then
+            codesign --remove-signature "$launcher" || true
+          fi
           mkdir -p zoo
           for d in demos/*/; do
             name="$(basename "$d")"
             [ -f "${d}main.fable" ] || continue
             "$host" build "demos/$name" --launcher "$launcher" -o "zoo/${name}${{ matrix.ext }}"
+            # arm64 macOS refuses to run an unsigned/tampered binary, so
+            # ad-hoc sign each stapled binary and verify the signature covers it.
+            if [ "${{ matrix.codesign }}" = "true" ]; then
+              codesign --force --sign - "zoo/${name}${{ matrix.ext }}"
+              codesign --verify --strict "zoo/${name}${{ matrix.ext }}"
+            fi
           done
-          # Stapling appends bytes after the Mach-O image, which invalidates
-          # the linker's ad-hoc signature; arm64 macOS refuses to run an
-          # unsigned/tampered binary, so re-sign each one ad-hoc.
-          if [ "${{ matrix.codesign }}" = "true" ]; then
-            for b in zoo/*; do codesign --force --sign - "$b"; done
-          fi
           cp demos/README.md LICENSE NOTICE zoo/
           ls -l zoo
 
