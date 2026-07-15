@@ -1,0 +1,51 @@
+// Bitwise operators (v0.7): & | ^ << >> on Int only. Relative precedence
+// follows Rust: shifts > & > ^ > | with all of them tighter than ranges
+// and comparisons, looser than arithmetic.
+
+println(6 & 3);                    //? expect: 2
+println(6 | 3);                    //? expect: 7
+println(6 ^ 3);                    //? expect: 5
+println(0 & 7);                    //? expect: 0
+println(-1 & 255);                 //? expect: 255
+
+// Shifts: << fills with zeros; >> is arithmetic (sign-extending).
+println(1 << 9);                   //? expect: 512
+println(3 << 4);                   //? expect: 48
+println(256 >> 4);                 //? expect: 16
+println(-16 >> 2);                 //? expect: -4
+println(-1 >> 63);                 //? expect: -1
+println(5 << 0);                   //? expect: 5
+
+// The 9-bit mask idiom.
+let mask9 = (1 << 9) - 1;
+println(mask9);                    //? expect: 511
+println(12345 & mask9);            //? expect: 57
+println(12345 >> 9);               //? expect: 24
+println((24 << 9) | 57);           //? expect: 12345
+
+// Precedence: shift looser than +, & tighter than ^ tighter than |,
+// and all of them tighter than == and ranges.
+println(1 << 9 - 1);               //? expect: 256
+println(5 & 3 | 4 ^ 1);            //? expect: 5
+println(1 | 2 ^ 3 & 2);            //? expect: 1
+println(1023 & 511 == 511);        //? expect: true
+println(0..8 | 2);                 //? expect: 0..10
+
+// Bit tricks: swap without a temp, parity, power-of-two test.
+let mut a = 13;
+let mut b = 6;
+a = a ^ b;
+b = a ^ b;
+a = a ^ b;
+println("{a} {b}");                //? expect: 6 13
+println(7 & 1);                    //? expect: 1
+println(64 & 63 == 0);             //? expect: true
+
+// Left shifts discard bits past the top (two's complement wrapping).
+println(1 << 63 == -9223372036854775807 - 1);   //? expect: true
+
+// Infix | coexists with lambda pipes.
+let masked = [1, 2, 3].map(|x| x | 8);
+println(masked);                   //? expect: [9, 10, 11]
+let all = [5, 3].fold(0, |acc, x| acc | x);
+println(all);                      //? expect: 7

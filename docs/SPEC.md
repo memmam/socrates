@@ -59,8 +59,11 @@ error (E0106) pointing at the symbolic spelling.
 ### 1.4 Operators and punctuation
 
 ```
-+ - * / %  == != < <= > >=  && || !  =  -> =>  . , : ; ( ) [ ] { }  .. ..=  |  _  ?
++ - * / %  == != < <= > >=  && || !  & | ^ << >>  =  -> =>  . , : ; ( ) [ ] { }  .. ..=  _  ?
 ```
+
+(`&` `|` `^` `<<` `>>` are the Int bitwise operators, v0.7; `|` also
+delimits lambda parameters, disambiguated by position.)
 
 ---
 
@@ -175,14 +178,28 @@ Fable is expression-oriented. Blocks are expressions; the last expression in a b
 | 3     | `==` `!=`                | none  | any type T = T (see § 3.2) |
 | 4     | `<` `<=` `>` `>=`        | none  | Int, Float, or String (both sides same) |
 | 5     | `..` `..=`               | none  | Int |
-| 6     | `+` `-`                  | left  | Int, Float; `+` also String ++ String |
-| 7     | `*` `/` `%`              | left  | Int, Float (`%` Int only) |
-| 8     | unary `-` `!`            | —     | Int/Float; Bool |
-| 9     | call `f(x)`, index `a[i]`, field `.x`, method `.m(x)`, tuple index `.0`, try `?` | left | |
+| 6     | `\|`                     | left  | Int (bitwise or, v0.7) |
+| 7     | `^`                      | left  | Int (bitwise xor, v0.7) |
+| 8     | `&`                      | left  | Int (bitwise and, v0.7) |
+| 9     | `<<` `>>`                | left  | Int (shifts, v0.7) |
+| 10    | `+` `-`                  | left  | Int, Float; `+` also String ++ String |
+| 11    | `*` `/` `%`              | left  | Int, Float (`%` Int only) |
+| 12    | unary `-` `!`            | —     | Int/Float; Bool |
+| 13    | call `f(x)`, index `a[i]`, field `.x`, method `.m(x)`, tuple index `.0`, try `?` | left | |
 
 Comparison operators are **non-associative**: `a < b < c` is a parse error.
 Integer division truncates toward zero; `/` or `%` by integer zero **panics**.
 Float division by zero yields `inf`/`nan` per IEEE-754.
+
+The bitwise operators (v0.7) are Int-only and follow Rust's relative
+precedence: shifts bind tighter than `&`, which binds tighter than `^`,
+then `\|`, with all four looser than arithmetic and tighter than ranges
+and comparisons — so `x & 511 == 0` tests the mask and `1 << n - 1`
+shifts by `n − 1`. `>>` is **arithmetic** (sign-extending, matching the
+two's-complement Int); `<<` discards bits shifted past the top. A shift
+count outside `0..=63` panics. Infix `\|` coexists with lambda syntax
+(`\|x\| ...`) because lambdas only begin in operand position. There is no
+unary complement: `x ^ -1` flips every bit.
 
 The arithmetic operators (and unary `-`) also apply to user types through
 **operator methods** (v0.3, § 5.1): `a + b` dispatches to `a.add(b)` when

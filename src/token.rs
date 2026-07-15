@@ -58,6 +58,14 @@ pub enum TokenKind {
     Ge,
     AmpAmp,
     PipePipe,
+    /// `&` — bitwise and (v0.7). `&&` stays logical and.
+    Amp,
+    /// `^` — bitwise xor (v0.7).
+    Caret,
+    /// `<<` — left shift (v0.7).
+    Shl,
+    /// `>>` — arithmetic right shift (v0.7).
+    Shr,
     Bang,
     Eq,
     Arrow,     // ->
@@ -130,6 +138,10 @@ impl TokenKind {
             Ge => "`>=`".into(),
             AmpAmp => "`&&`".into(),
             PipePipe => "`||`".into(),
+            Amp => "`&`".into(),
+            Caret => "`^`".into(),
+            Shl => "`<<`".into(),
+            Shr => "`>>`".into(),
             Bang => "`!`".into(),
             Eq => "`=`".into(),
             Arrow => "`->`".into(),

@@ -76,6 +76,12 @@ pub enum Op {
     Rem,
     Neg,
     Not,
+    /// Bitwise on Int (v0.7). Shifts panic when the count is outside 0..64.
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
     /// Structural equality.
     Eq,
     Lt,

@@ -16,6 +16,9 @@ every feature listed here.
   split-complex signals, any length ≥ 1 in O(n log n) (radix-2 for
   powers of two, Bluestein otherwise); numpy conventions,
   cross-checked against numpy in CI at 1e-9.
+- Bitwise operators on Int: `&` `|` `^` `<<` `>>` (Rust's relative
+  precedence; `>>` arithmetic; shift counts outside 0..=63 panic).
+  The v0.6 "no bitwise operators" diagnostics retired.
 - Workers: `worker.spawn(file, args)` runs a Fable program as an
   **isolate** — its own VM, heap, and GC on its own OS thread — joined
   to the parent by string channels (`send`/`recv`/`join` on the

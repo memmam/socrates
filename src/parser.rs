@@ -825,20 +825,106 @@ impl<'a> Parser<'a> {
     }
 
     fn range_expr(&mut self) -> PResult<Expr> {
-        let lhs = self.additive_expr()?;
+        let lhs = self.bitor_expr()?;
         let inclusive = match self.peek() {
             TokenKind::DotDot => false,
             TokenKind::DotDotEq => true,
             _ => return Ok(lhs),
         };
         self.advance();
-        let rhs = self.additive_expr()?;
+        let rhs = self.bitor_expr()?;
         let span = lhs.span.to(rhs.span);
         Ok(Expr {
             span,
             id: self.id(),
             kind: ExprKind::Range { lo: Box::new(lhs), hi: Box::new(rhs), inclusive },
         })
+    }
+
+    // Bitwise levels (v0.7), Rust's relative order: `|` < `^` < `&` < shifts,
+    // all tighter than ranges/comparisons and looser than arithmetic — so
+    // `x & 511 == 0` tests the mask and `1 << n - 1` shifts by `n - 1`.
+    // Infix `|` is unambiguous with lambda syntax: lambdas only start in
+    // prefix position (and `||` in prefix position is the empty param list).
+
+    fn bitor_expr(&mut self) -> PResult<Expr> {
+        let mut lhs = self.bitxor_expr()?;
+        while self.at(&TokenKind::Pipe) {
+            let op_span = self.advance().span;
+            let rhs = self.bitxor_expr()?;
+            let span = lhs.span.to(rhs.span);
+            lhs = Expr {
+                span,
+                id: self.id(),
+                kind: ExprKind::Binary {
+                    op: BinOp::BitOr,
+                    op_span,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                },
+            };
+        }
+        Ok(lhs)
+    }
+
+    fn bitxor_expr(&mut self) -> PResult<Expr> {
+        let mut lhs = self.bitand_expr()?;
+        while self.at(&TokenKind::Caret) {
+            let op_span = self.advance().span;
+            let rhs = self.bitand_expr()?;
+            let span = lhs.span.to(rhs.span);
+            lhs = Expr {
+                span,
+                id: self.id(),
+                kind: ExprKind::Binary {
+                    op: BinOp::BitXor,
+                    op_span,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                },
+            };
+        }
+        Ok(lhs)
+    }
+
+    fn bitand_expr(&mut self) -> PResult<Expr> {
+        let mut lhs = self.shift_expr()?;
+        while self.at(&TokenKind::Amp) {
+            let op_span = self.advance().span;
+            let rhs = self.shift_expr()?;
+            let span = lhs.span.to(rhs.span);
+            lhs = Expr {
+                span,
+                id: self.id(),
+                kind: ExprKind::Binary {
+                    op: BinOp::BitAnd,
+                    op_span,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                },
+            };
+        }
+        Ok(lhs)
+    }
+
+    fn shift_expr(&mut self) -> PResult<Expr> {
+        let mut lhs = self.additive_expr()?;
+        loop {
+            let op = match self.peek() {
+                TokenKind::Shl => BinOp::Shl,
+                TokenKind::Shr => BinOp::Shr,
+                _ => break,
+            };
+            let op_span = self.advance().span;
+            let rhs = self.additive_expr()?;
+            let span = lhs.span.to(rhs.span);
+            lhs = Expr {
+                span,
+                id: self.id(),
+                kind: ExprKind::Binary { op, op_span, lhs: Box::new(lhs), rhs: Box::new(rhs) },
+            };
+        }
+        Ok(lhs)
     }
 
     fn additive_expr(&mut self) -> PResult<Expr> {

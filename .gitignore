@@ -1,3 +1,6 @@
 /target
 scratch/
 *.ppm
+# Session-local agent state (settings, isolated worktrees) — never commit.
+.claude/
+__pycache__/

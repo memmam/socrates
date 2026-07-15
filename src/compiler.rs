@@ -1550,6 +1550,11 @@ fn bin_op(op: BinOp) -> Op {
         BinOp::Le => Op::Le,
         BinOp::Gt => Op::Gt,
         BinOp::Ge => Op::Ge,
+        BinOp::BitAnd => Op::BitAnd,
+        BinOp::BitOr => Op::BitOr,
+        BinOp::BitXor => Op::BitXor,
+        BinOp::Shl => Op::Shl,
+        BinOp::Shr => Op::Shr,
         BinOp::Ne | BinOp::And | BinOp::Or => unreachable!("lowered separately"),
     }
 }
@@ -1562,7 +1567,8 @@ fn stack_effect(op: &Op) -> i32 {
         | PushFn(_) | PushNative(_) | Closure(_) | TestVariant(_) | MakeStructEmpty(_) => 1,
         Dup2 => 2,
         Pop | SetLocal(_) | SetGlobal(_) | SetUpvalue(_) | JumpIfFalse(_) | Add | Sub | Mul
-        | Div | Rem | Eq | Lt | Le | Gt | Ge | StructSetField(_) | Index | MakeRange { .. } => -1,
+        | Div | Rem | BitAnd | BitOr | BitXor | Shl | Shr | Eq | Lt | Le | Gt | Ge
+        | StructSetField(_) | Index | MakeRange { .. } => -1,
         PopN(n) | EndBlock(n) | PopScope(n) => -(*n as i32),
         Jump(_) | JumpIfFalsePeek(_) | JumpIfTruePeek(_) | Neg | Not | ToString | GetField(_)
         | TupleGet(_) | GetVariantField(_) | MatchFail => 0,
