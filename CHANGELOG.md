@@ -6,6 +6,14 @@ every feature listed here.
 
 ## Unreleased (v0.7 — the infrastructure release, in progress)
 
+- `fable fmt` is now line-width-aware (v0.6 review note): constructs
+  that fit in 100 columns keep their one-line layout; longer ones break
+  the way an author would — call arguments one per line with a trailing
+  comma, method chains before each `.` after the first, binary
+  expressions before each operator, literals element-per-line, lambda
+  bodies to a block — composing outermost-first. `--width N` overrides
+  the limit; tokens are never split; comments and `//?` directives are
+  preserved; formatting stays idempotent and behavior-preserving.
 - `Bytes`: a packed byte-buffer primitive with checked accessors,
   little-endian multi-byte pushers (wire formats without bitwise
   operators), `slice`/`concat`/`to_list`, UTF-8 bridging to `String`,

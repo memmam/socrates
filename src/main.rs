@@ -4,7 +4,8 @@
 //!   fable <file.fable>          compile and run (also: fable run <file>)
 //!   fable check <file>          type-check only
 //!   fable dis <file>            disassemble compiled bytecode
-//!   fable fmt <file> [--write]  format (print, or rewrite in place)
+//!   fable fmt <file> [--write] [--width N]
+//!                               format (print, or rewrite in place)
 //!   fable tokens <file>         debug: dump tokens
 //!   fable ast <file>            debug: dump the AST
 //!   fable repl                  interactive session
@@ -117,6 +118,45 @@ fn real_main() -> ExitCode {
         }
     };
 
+    // `fmt` takes `--width N` / `--width=N`; strip it (and its value) before
+    // the path scan below so the value is not mistaken for the file.
+    let mut rest: Vec<String> = rest.to_vec();
+    let mut fmt_width = fmt::DEFAULT_WIDTH;
+    if cmd == "fmt" {
+        let mut kept = Vec::with_capacity(rest.len());
+        let mut i = 0;
+        while i < rest.len() {
+            let arg = &rest[i];
+            let value = if arg == "--width" {
+                i += 1;
+                match rest.get(i) {
+                    Some(v) => Some(v.as_str()),
+                    None => {
+                        eprintln!("fable fmt: `--width` needs a number");
+                        return ExitCode::from(64);
+                    }
+                }
+            } else if let Some(v) = arg.strip_prefix("--width=") {
+                Some(v)
+            } else {
+                kept.push(arg.clone());
+                None
+            };
+            if let Some(v) = value {
+                match v.parse::<usize>() {
+                    Ok(n) if n > 0 => fmt_width = n,
+                    _ => {
+                        eprintln!("fable fmt: invalid width `{v}` (need a positive integer)");
+                        return ExitCode::from(64);
+                    }
+                }
+            }
+            i += 1;
+        }
+        rest = kept;
+    }
+    let rest = &rest[..];
+
     let Some(path_pos) = rest.iter().position(|a| !a.starts_with('-')) else {
         eprintln!("fable: `{cmd}` needs a file argument");
         return ExitCode::from(64);
@@ -153,7 +193,7 @@ fn real_main() -> ExitCode {
             report(&diags, &source, color);
             exit_for(&diags)
         }
-        "fmt" => match fmt::format_source(path, &text) {
+        "fmt" => match fmt::format_source_width(path, &text, fmt_width) {
             Ok(formatted) => {
                 if rest.iter().any(|a| a == "--write" || a == "-w") {
                     if formatted != text {
@@ -254,7 +294,9 @@ USAGE:
     fable run <file.fable>        compile and run
     fable check <file.fable>      type-check only
     fable dis <file.fable>        show compiled bytecode
-    fable fmt <file.fable> [-w]   format source (print, or -w to rewrite)
+    fable fmt <file.fable> [-w] [--width N]
+                                  format source (print, or -w to rewrite;
+                                  N: max line width, default 100)
     fable test [paths...]         run golden tests (//? expect/error/panic
                                   directives in .fable files; default: .)
     fable tokens <file.fable>     dump tokens (debug)
