@@ -1,0 +1,5 @@
+// Zero-length transforms are rejected rather than returning nonsense.
+//? panic: fft: empty input
+let empty: List[Float] = [];
+let (r, i) = fft.fft(empty, empty);
+println(r);

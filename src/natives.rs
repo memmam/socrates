@@ -140,6 +140,39 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         // fs.* / os.* (v0.3)
         // ------------------------------------------------------------------
 
+
+        // ------------------------------------------------------------------
+        // fft.* (v0.7)
+        // ------------------------------------------------------------------
+        FftFft | FftIfft => {
+            let re = float_vec_arg(vm, argc, 0)?;
+            let im = float_vec_arg(vm, argc, 1)?;
+            if re.len() != im.len() {
+                return Err(vm.error(format!(
+                    "fft: re and im lengths differ ({} vs {})",
+                    re.len(),
+                    im.len()
+                )));
+            }
+            if re.is_empty() {
+                return Err(vm.error("fft: empty input"));
+            }
+            let (or_, oi) = if matches!(n, FftFft) {
+                crate::fft::fft(&re, &im)
+            } else {
+                crate::fft::ifft(&re, &im)
+            };
+            floats_pair(vm, or_, oi)
+        }
+        FftRfft => {
+            let x = float_vec_arg(vm, argc, 0)?;
+            if x.is_empty() {
+                return Err(vm.error("fft.rfft: empty input"));
+            }
+            let (or_, oi) = crate::fft::rfft(&x);
+            floats_pair(vm, or_, oi)
+        }
+
         // ------------------------------------------------------------------
         // Bytes (v0.7)
         // ------------------------------------------------------------------
@@ -1322,6 +1355,34 @@ fn expect_list(vm: &Vm, v: Value) -> Result<Handle, VmError> {
     }
 }
 
+
+
+fn float_vec_arg(vm: &Vm, argc: u8, i: u8) -> Result<Vec<f64>, VmError> {
+    match vm.native_arg(argc, i) {
+        Value::Obj(h) => match vm.heap.get(h) {
+            Obj::List(items) => {
+                let mut out = Vec::with_capacity(items.len());
+                for v in items {
+                    match v {
+                        Value::Float(f) => out.push(*f),
+                        _ => return Err(vm.error("expected a List[Float]")),
+                    }
+                }
+                Ok(out)
+            }
+            _ => Err(vm.error("expected a List[Float]")),
+        },
+        _ => Err(vm.error("expected a List[Float]")),
+    }
+}
+
+/// Allocate `(List[Float], List[Float])` with GC-safe rooting.
+fn floats_pair(vm: &mut Vm, a: Vec<f64>, b: Vec<f64>) -> Value {
+    let la = alloc_rooted_list(vm, a.into_iter().map(Value::Float).collect());
+    let lb = alloc_rooted_list(vm, b.into_iter().map(Value::Float).collect());
+    let t = vm.heap.alloc(Obj::Tuple(vec![Value::Obj(la), Value::Obj(lb)]));
+    finish_rooted(vm, 2, Value::Obj(t))
+}
 
 fn bytes_handle(vm: &Vm, argc: u8) -> Result<Handle, VmError> {
     match vm.native_arg(argc, 0) {

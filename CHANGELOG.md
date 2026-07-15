@@ -12,6 +12,10 @@ every feature listed here.
   structural equality, and map-key support.
 - `fs.read_bytes` / `fs.write_bytes` — binary file I/O, surfaced as a
   hard gap by the claudewave port (audio output needed WAV).
+- `fft` namespace: native `fft.fft` / `fft.ifft` / `fft.rfft` over
+  split-complex signals, any length ≥ 1 in O(n log n) (radix-2 for
+  powers of two, Bluestein otherwise); numpy conventions,
+  cross-checked against numpy in CI at 1e-9.
 - `ports/`: the porting programme — `jsl` (JS/TSL layer, ICAA port,
   cross-validated to pixel equality) and `pyl` (Python/numpy layer,
   claudewave DSP core, in progress).

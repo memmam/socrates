@@ -80,6 +80,10 @@ pub enum Native {
     FsRemove,
     FsReadBytes,
     FsWriteBytes,
+    // fft.* (v0.7)
+    FftFft,
+    FftIfft,
+    FftRfft,
 
     // os.* — process environment (v0.3).
     OsArgs,
@@ -312,7 +316,7 @@ impl Native {
 
     /// Is `name` a builtin namespace (usable only as `name.member`)?
     pub fn is_namespace(name: &str) -> bool {
-        matches!(name, "math" | "fs" | "os")
+        matches!(name, "math" | "fs" | "os" | "fft")
     }
 
     /// Resolve `<ns>.<member>` for any builtin namespace.
@@ -331,6 +335,12 @@ impl Native {
                 "remove" => FsRemove,
                 "read_bytes" => FsReadBytes,
                 "write_bytes" => FsWriteBytes,
+                _ => return None,
+            })),
+            "fft" => Some(MathMember::Fn(match member {
+                "fft" => FftFft,
+                "ifft" => FftIfft,
+                "rfft" => FftRfft,
                 _ => return None,
             })),
             "os" => Some(MathMember::Fn(match member {
@@ -359,6 +369,7 @@ impl Native {
                 "remove", "read_bytes", "write_bytes",
             ],
             "os" => &["args", "env", "run", "exit", "time"],
+            "fft" => &["fft", "ifft", "rfft"],
             _ => &[],
         }
     }
@@ -457,6 +468,9 @@ impl Native {
             FsCreateDir => "fs.create_dir",
             FsReadBytes => "fs.read_bytes",
             FsWriteBytes => "fs.write_bytes",
+            FftFft => "fft.fft",
+            FftIfft => "fft.ifft",
+            FftRfft => "fft.rfft",
             FsRemove => "fs.remove",
             OsArgs => "os.args",
             OsEnv => "os.env",
@@ -622,6 +636,12 @@ impl Native {
             FsCreateDir | FsRemove => (vec![TStr], res(Unit, TStr), 0),
             FsReadBytes => (vec![TStr], res(Type::Bytes, TStr), 0),
             FsWriteBytes => (vec![TStr, Type::Bytes], res(Unit, TStr), 0),
+            FftFft | FftIfft => (
+                vec![list(Float), list(Float)],
+                tup(vec![list(Float), list(Float)]),
+                0,
+            ),
+            FftRfft => (vec![list(Float)], tup(vec![list(Float), list(Float)]), 0),
             OsArgs => (vec![], list(TStr), 0),
             OsEnv => (vec![TStr], opt(TStr), 0),
             OsRun => (vec![TStr, list(TStr)], res(tup(vec![Int, TStr, TStr]), TStr), 0),

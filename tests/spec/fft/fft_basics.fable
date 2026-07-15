@@ -1,0 +1,75 @@
+// The fft namespace (v0.7): fft.fft / fft.ifft / fft.rfft over
+// split-complex signals (parallel List[Float] re/im). Small power-of-two
+// cases are exact in f64; everything else is pinned through to_fixed(9),
+// matching the 1e-9 tolerance used by the CI numpy cross-check.
+
+// Impulse: the DFT of [1, 0, 0, 0] is all-ones.
+let (re, im) = fft.fft([1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]);
+println(re);                       //? expect: [1.0, 1.0, 1.0, 1.0]
+println(im);                       //? expect: [0.0, 0.0, 0.0, 0.0]
+
+// Constant: all energy in bin 0.
+let (cr, ci) = fft.fft([1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 0.0]);
+println(cr);                       //? expect: [4.0, 0.0, 0.0, 0.0]
+println(ci);                       //? expect: [0.0, 0.0, 0.0, 0.0]
+
+// A textbook case: DFT([1, 2, 3, 4]) = [10, -2+2i, -2, -2-2i].
+// (Printed rounded: the last bin picks up a ~1-ulp twiddle residue whose
+// exact value depends on libm, so pinning raw floats would be fragile.)
+let (tr, ti) = fft.fft([1.0, 2.0, 3.0, 4.0], [0.0, 0.0, 0.0, 0.0]);
+println(tr.map(|v| v.to_fixed(6)));    //? expect: ["10.000000", "-2.000000", "-2.000000", "-2.000000"]
+println(ti.map(|v| v.to_fixed(6)));    //? expect: ["0.000000", "2.000000", "0.000000", "-2.000000"]
+
+// ifft normalizes by 1/n.
+let (br, bi) = fft.ifft(cr, ci);
+println(br);                       //? expect: [1.0, 1.0, 1.0, 1.0]
+println(bi);                       //? expect: [0.0, 0.0, 0.0, 0.0]
+
+// Non-power-of-two lengths route through Bluestein; n = 3 impulse.
+let (ur, ui) = fft.fft([1.0, 0.0, 0.0], [0.0, 0.0, 0.0]);
+println(ur.map(|v| v.to_fixed(9)));    //? expect: ["1.000000000", "1.000000000", "1.000000000"]
+println(ui.map(|v| v.to_fixed(9)));    //? expect: ["0.000000000", "0.000000000", "0.000000000"]
+
+// Round trip at an awkward length (n = 6): ifft(fft(x)) == x to 1e-9.
+let xs = [3.0, -1.5, 2.25, 0.5, -4.0, 1.0];
+let zs = [0.5, 1.0, -2.0, 0.0, 3.5, -1.25];
+let (fr, fi) = fft.fft(xs, zs);
+let (rr, ri) = fft.ifft(fr, fi);
+let mut worst = 0.0;
+for i in 0..xs.len() {
+    let dr = math.abs(rr[i] - xs[i]);
+    let di = math.abs(ri[i] - zs[i]);
+    if dr > worst { worst = dr; }
+    if di > worst { worst = di; }
+}
+println(worst < 0.000000001);      //? expect: true
+
+// Parseval: sum(|x|^2) == (1/n) * sum(|X|^2).
+let mut time_e = 0.0;
+let mut freq_e = 0.0;
+for i in 0..xs.len() {
+    time_e += xs[i] * xs[i] + zs[i] * zs[i];
+    freq_e += fr[i] * fr[i] + fi[i] * fi[i];
+}
+freq_e = freq_e / 6.0;
+println(math.abs(time_e - freq_e) < 0.000000001);   //? expect: true
+
+// rfft returns the first n/2 + 1 bins of the full transform.
+let sig = [1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0];
+let (hr, hi) = fft.rfft(sig);
+println(hr.len());                 //? expect: 5
+println(hi.len());                 //? expect: 5
+let (wr, wi) = fft.fft(sig, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+let mut prefix_ok = true;
+for k in 0..hr.len() {
+    if math.abs(hr[k] - wr[k]) > 0.000000001 { prefix_ok = false; }
+    if math.abs(hi[k] - wi[k]) > 0.000000001 { prefix_ok = false; }
+}
+println(prefix_ok);                //? expect: true
+// All energy of cos(pi*t/2)-ish alternation lands in bin 2 (freq n/4).
+println(hr[2]);                    //? expect: 4.0
+
+// A single sample is its own transform.
+let (one_r, one_i) = fft.fft([7.5], [0.25]);
+println(one_r);                    //? expect: [7.5]
+println(one_i);                    //? expect: [0.25]

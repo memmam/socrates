@@ -514,6 +514,23 @@ Float`, `math.random() -> Float` (uniform [0, 1), xorshift PRNG),
 reproduces the same stream within a release, but streams are **not** stable
 across releases.
 
+The `fft` namespace (v0.7) provides fast Fourier transforms over
+split-complex signals — a complex vector is a pair of equal-length
+`List[Float]`s (re, im):
+
+| Function | Type | Notes |
+|----------|------|-------|
+| `fft.fft(re, im)` | `fn(List[Float], List[Float]) -> (List[Float], List[Float])` | forward DFT, no normalization |
+| `fft.ifft(re, im)` | `fn(List[Float], List[Float]) -> (List[Float], List[Float])` | inverse DFT, normalized by `1/n` |
+| `fft.rfft(x)` | `fn(List[Float]) -> (List[Float], List[Float])` | real input; the first `n/2 + 1` bins of `fft(x, zeros)` |
+
+Any length `n >= 1` is supported in O(n log n): powers of two run an
+iterative radix-2 Cooley–Tukey; every other length goes through
+Bluestein's chirp-z algorithm. Conventions match `numpy.fft` (forward
+sign `e^{-2πikt/n}`, inverse carries the `1/n`); CI cross-checks against
+numpy at 1e-9 relative. Zero-length input and mismatched re/im lengths
+panic.
+
 One more free function joined the prelude in v0.6:
 
 | Function | Type | Notes |
