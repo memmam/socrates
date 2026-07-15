@@ -780,10 +780,29 @@ impl Vm {
                 }
                 Op::Concat(n) => {
                     let n = n as usize;
-                    let mut s = String::new();
+                    // Exact-size the result, then copy each part straight
+                    // out of the heap (no per-part clone).
+                    let mut cap = 0usize;
+                    for i in 0..n {
+                        match self.peek(i) {
+                            Value::Obj(h) => match self.heap.get(h) {
+                                Obj::Str(part) => cap += part.len(),
+                                _ => {
+                                    return Err(
+                                        self.error("internal: expected String (VM bug)")
+                                    )
+                                }
+                            },
+                            _ => {
+                                return Err(self.error("internal: expected String (VM bug)"))
+                            }
+                        }
+                    }
+                    let mut s = String::with_capacity(cap);
                     for i in (0..n).rev() {
-                        let part = self.peek(i);
-                        s.push_str(&self.str_of(part)?);
+                        let Value::Obj(h) = self.peek(i) else { unreachable!() };
+                        let Obj::Str(part) = self.heap.get(h) else { unreachable!() };
+                        s.push_str(part);
                     }
                     let sv = self.alloc_str(s);
                     let len = self.stack.len() - n;
