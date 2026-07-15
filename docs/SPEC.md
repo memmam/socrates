@@ -531,6 +531,31 @@ sign `e^{-2πikt/n}`, inverse carries the `1/n`); CI cross-checks against
 numpy at 1e-9 relative. Zero-length input and mismatched re/im lengths
 panic.
 
+The `worker` namespace (v0.7) runs Fable programs as **isolates**: each
+worker is a whole separate VM — its own heap, globals, and GC — on its
+own OS thread, so workers run in true parallel. Nothing is shared;
+the only things that cross the boundary are `String` messages
+(structured data goes as JSON by convention, `import std.json`):
+
+| Function | Type | Notes |
+|----------|------|-------|
+| `worker.spawn(file, args)` | `fn(String, List[String]) -> Result[Worker, String]` | compile + start `file` on a new thread |
+| `worker.send(s)` | `fn(String) -> Bool` | worker → parent; errors outside a worker |
+| `worker.recv()` | `fn() -> Option[String]` | parent → worker; **blocks**; `None` = parent hung up (joined or dropped the handle); errors outside a worker |
+| `worker.is_worker()` | `fn() -> Bool` | is this program running as a worker? |
+
+`spawn` resolves `file` relative to the entry script's directory (the
+same rule imports use; absolute paths pass through) and **blocks until
+the worker has compiled**, so a missing file or compile error comes back
+synchronously as `Err` — a worker never starts half-broken. Inside the
+worker, `os.args()` returns the spawn `args`. A worker's panic ends only
+its own thread; the parent sees it as `Err` from `join()` (§ 8.4c for
+the `Worker` handle methods). Workers may spawn workers. The process
+exits when the main script ends — detached workers are not waited for;
+`join` what you need. Worker `println` output goes to the same stdout as
+the parent (interleaving across threads is unordered; under `fable
+test`, worker output is captured with the parent's).
+
 One more free function joined the prelude in v0.6:
 
 | Function | Type | Notes |
@@ -652,6 +677,20 @@ operators), `slice(Int, Int) -> Bytes` (clamped copy, like `List.slice`),
 `utf8() -> Result[String, String]` (UTF-8 decode). `String.to_bytes() ->
 Bytes` is the inverse bridge. Bytes may be map keys (content-hashed);
 mutating a key afterward strands the entry, as with other mutable keys.
+
+### 8.4c `Worker` methods (v0.7)
+
+A `Worker` is the parent's handle to a spawned isolate (§ 7, the `worker`
+namespace). It displays as `<worker>`, cannot be compared with `==` or
+ordered, and cannot be a map key.
+
+`send(String) -> Bool` (`false` once the worker has finished),
+`recv() -> Option[String]` (**blocks**; `None` means the worker finished
+and every message it sent has been received), `join() -> Result[Unit,
+String]` (**blocks**: hangs up the parent's send side — a worker blocked
+in `worker.recv()` sees `None` — then waits; `Err` carries the worker's
+panic message; joining again returns the cached result; messages the
+worker sent before finishing can still be `recv`'d after `join`).
 
 ### 8.5 Numeric methods
 

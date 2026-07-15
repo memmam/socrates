@@ -84,6 +84,14 @@ pub enum Native {
     FftFft,
     FftIfft,
     FftRfft,
+    // worker.* + Worker handle methods (v0.7)
+    WorkerSpawn,
+    WorkerSelfSend,
+    WorkerSelfRecv,
+    WorkerIsWorker,
+    WorkerHandleSend,
+    WorkerHandleRecv,
+    WorkerHandleJoin,
 
     // os.* — process environment (v0.3).
     OsArgs,
@@ -222,6 +230,7 @@ pub enum Recv {
     Float,
     Str,
     Bytes,
+    Worker,
     List,
     Map,
     Range,
@@ -236,6 +245,7 @@ impl Recv {
             Recv::Float => "Float",
             Recv::Str => "String",
             Recv::Bytes => "Bytes",
+            Recv::Worker => "Worker",
             Recv::List => "List",
             Recv::Map => "Map",
             Recv::Range => "Range",
@@ -316,7 +326,7 @@ impl Native {
 
     /// Is `name` a builtin namespace (usable only as `name.member`)?
     pub fn is_namespace(name: &str) -> bool {
-        matches!(name, "math" | "fs" | "os" | "fft")
+        matches!(name, "math" | "fs" | "os" | "fft" | "worker")
     }
 
     /// Resolve `<ns>.<member>` for any builtin namespace.
@@ -341,6 +351,13 @@ impl Native {
                 "fft" => FftFft,
                 "ifft" => FftIfft,
                 "rfft" => FftRfft,
+                _ => return None,
+            })),
+            "worker" => Some(MathMember::Fn(match member {
+                "spawn" => WorkerSpawn,
+                "send" => WorkerSelfSend,
+                "recv" => WorkerSelfRecv,
+                "is_worker" => WorkerIsWorker,
                 _ => return None,
             })),
             "os" => Some(MathMember::Fn(match member {
@@ -370,6 +387,7 @@ impl Native {
             ],
             "os" => &["args", "env", "run", "exit", "time"],
             "fft" => &["fft", "ifft", "rfft"],
+            "worker" => &["spawn", "send", "recv", "is_worker"],
             _ => &[],
         }
     }
@@ -468,6 +486,13 @@ impl Native {
             FsCreateDir => "fs.create_dir",
             FsReadBytes => "fs.read_bytes",
             FsWriteBytes => "fs.write_bytes",
+            WorkerSpawn => "worker.spawn",
+            WorkerSelfSend => "worker.send",
+            WorkerSelfRecv => "worker.recv",
+            WorkerIsWorker => "worker.is_worker",
+            WorkerHandleSend => "send",
+            WorkerHandleRecv => "recv",
+            WorkerHandleJoin => "join",
             FftFft => "fft.fft",
             FftIfft => "fft.ifft",
             FftRfft => "fft.rfft",
@@ -642,6 +667,17 @@ impl Native {
                 0,
             ),
             FftRfft => (vec![list(Float)], tup(vec![list(Float), list(Float)]), 0),
+
+            // worker.* (v0.7). Only Strings cross threads; spawn resolves
+            // the file like an import (relative to the spawning script) and
+            // surfaces compile errors synchronously in the Err.
+            WorkerSpawn => (vec![TStr, list(TStr)], res(Type::Worker, TStr), 0),
+            WorkerSelfSend => (vec![TStr], Bool, 0),
+            WorkerSelfRecv => (vec![], opt(TStr), 0),
+            WorkerIsWorker => (vec![], Bool, 0),
+            WorkerHandleSend => (vec![TStr], Bool, 0),
+            WorkerHandleRecv => (vec![], opt(TStr), 0),
+            WorkerHandleJoin => (vec![], res(Unit, TStr), 0),
             OsArgs => (vec![], list(TStr), 0),
             OsEnv => (vec![TStr], opt(TStr), 0),
             OsRun => (vec![TStr, list(TStr)], res(tup(vec![Int, TStr, TStr]), TStr), 0),
@@ -854,6 +890,9 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Bytes, "concat", Native::BytesConcat),
     (Recv::Bytes, "to_list", Native::BytesToList),
     (Recv::Bytes, "utf8", Native::BytesUtf8),
+    (Recv::Worker, "send", Native::WorkerHandleSend),
+    (Recv::Worker, "recv", Native::WorkerHandleRecv),
+    (Recv::Worker, "join", Native::WorkerHandleJoin),
     (Recv::Option_, "is_some", Native::OptIsSome),
     (Recv::Option_, "is_none", Native::OptIsNone),
     (Recv::Option_, "unwrap", Native::OptUnwrap),

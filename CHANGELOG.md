@@ -16,6 +16,12 @@ every feature listed here.
   split-complex signals, any length ≥ 1 in O(n log n) (radix-2 for
   powers of two, Bluestein otherwise); numpy conventions,
   cross-checked against numpy in CI at 1e-9.
+- Workers: `worker.spawn(file, args)` runs a Fable program as an
+  **isolate** — its own VM, heap, and GC on its own OS thread — joined
+  to the parent by string channels (`send`/`recv`/`join` on the
+  `Worker` handle; `worker.send`/`worker.recv`/`worker.is_worker`
+  inside). Compile errors surface synchronously from `spawn`; a
+  worker's panic is isolated and comes back as `Err` from `join`.
 - `ports/`: the porting programme — `jsl` (JS/TSL layer, ICAA port,
   cross-validated to pixel equality) and `pyl` (Python/numpy layer,
   claudewave DSP core, in progress).

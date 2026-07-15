@@ -23,6 +23,9 @@ pub enum Type {
     Range,
     /// Packed byte buffer (v0.7): binary file I/O, wire formats.
     Bytes,
+    /// A worker handle (v0.7): an OS-thread isolate joined by string
+    /// channels. Opaque — sendable/receivable/joinable, nothing else.
+    Worker,
     List(Box<Type>),
     Map(Box<Type>, Box<Type>),
     Tuple(Vec<Type>),
@@ -297,7 +300,8 @@ impl Unifier {
             | (Type::Str, Type::Str)
             | (Type::Unit, Type::Unit)
             | (Type::Range, Type::Range)
-            | (Type::Bytes, Type::Bytes) => Ok(()),
+            | (Type::Bytes, Type::Bytes)
+            | (Type::Worker, Type::Worker) => Ok(()),
             (Type::Param(i), Type::Param(j)) if i == j => Ok(()),
             (Type::List(x), Type::List(y)) => self.unify(x, y),
             (Type::Map(k1, v1), Type::Map(k2, v2)) => {
@@ -342,6 +346,7 @@ pub fn display_type(t: &Type, defs: &Defs, param_names: &[String]) -> String {
         Type::Unit => "Unit".into(),
         Type::Range => "Range".into(),
         Type::Bytes => "Bytes".into(),
+        Type::Worker => "Worker".into(),
         Type::Var(_) => "_".into(),
         Type::Param(i) => param_names
             .get(*i as usize)
