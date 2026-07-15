@@ -944,15 +944,35 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             make_list(vm, items)
         }
         ListJoin => {
-            let sep = vm.str_of(vm.native_arg(argc, 1))?;
-            let items = list_ref(vm, argc)?.clone();
-            let mut s = String::new();
-            for (i, it) in items.into_iter().enumerate() {
-                if i > 0 {
-                    s.push_str(&sep);
+            // Borrow the separator and every element straight from the heap
+            // (no per-element String clones), sized exactly up front. Nothing
+            // allocates on the Fable heap until the borrows end.
+            let s = {
+                let sep = str_ref(vm, argc, 1)?;
+                let items = list_ref(vm, argc)?;
+                let mut cap = sep.len() * items.len().saturating_sub(1);
+                for &it in items {
+                    if let Value::Obj(h) = it {
+                        if let Obj::Str(t) = vm.heap.get(h) {
+                            cap += t.len();
+                        }
+                    }
                 }
-                s.push_str(&vm.str_of(it)?);
-            }
+                let mut s = String::with_capacity(cap);
+                for (i, &it) in items.iter().enumerate() {
+                    if i > 0 {
+                        s.push_str(sep);
+                    }
+                    match it {
+                        Value::Obj(h) => match vm.heap.get(h) {
+                            Obj::Str(t) => s.push_str(t),
+                            _ => return Err(vm.error("internal: expected String (VM bug)")),
+                        },
+                        _ => return Err(vm.error("internal: expected String (VM bug)")),
+                    }
+                }
+                s
+            };
             vm.alloc_str(s)
         }
         ListClone => {
@@ -1536,6 +1556,18 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
 
 fn str_arg(vm: &Vm, argc: u8, i: u8) -> Result<String, VmError> {
     vm.str_of(vm.native_arg(argc, i))
+}
+
+/// Borrow the String argument at position `i` straight from the heap — the
+/// no-clone counterpart of `str_arg` for natives that only need to read it.
+fn str_ref(vm: &Vm, argc: u8, i: u8) -> Result<&str, VmError> {
+    match vm.native_arg(argc, i) {
+        Value::Obj(h) => match vm.heap.get(h) {
+            Obj::Str(s) => Ok(s),
+            _ => Err(vm.error("internal: expected String (VM bug)")),
+        },
+        _ => Err(vm.error("internal: expected String (VM bug)")),
+    }
 }
 
 fn list_arg(vm: &Vm, argc: u8, i: u8) -> Result<Vec<Value>, VmError> {

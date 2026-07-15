@@ -1,0 +1,14 @@
+import std.strings;
+let b = strings.builder();
+let mut i = 0;
+while i < 1000000 {
+    b.push_char(97 + (i & 15));
+    i += 1;
+}
+let mut total = 0;
+let mut k = 0;
+while k < 20 {
+    total += b.build().byte_len();
+    k += 1;
+}
+println(total);
