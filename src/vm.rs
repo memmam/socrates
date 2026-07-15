@@ -98,6 +98,11 @@ pub struct Vm {
     pub sources: Vec<Source>,
     /// Pre-resolved constants (strings interned as permanent handles).
     interned: Vec<Value>,
+    /// Lazily interned single-character ASCII strings (GC roots once
+    /// filled): `char()`, string iteration, `chars()`/`at()` hit these
+    /// constantly in char-at-a-time code. Boxed so the table doesn't
+    /// bloat `Vm` itself (hot fields stay on nearby cache lines).
+    ascii_strs: Box<[Value; 128]>,
     /// Cached zero-upvalue closures for `PushFn`.
     fn_closures: Vec<Option<Value>>,
     pub temp_roots: Vec<Value>,
@@ -137,6 +142,7 @@ impl Vm {
             },
             sources: Vec::new(),
             interned: Vec::new(),
+            ascii_strs: Box::new([Value::Undefined; 128]),
             fn_closures: Vec::new(),
             temp_roots: Vec::new(),
             script_args: Vec::new(),
@@ -266,6 +272,9 @@ impl Vm {
         for v in &self.interned {
             self.heap.mark_value(*v);
         }
+        for v in self.ascii_strs.iter() {
+            self.heap.mark_value(*v);
+        }
         for v in self.fn_closures.iter().flatten() {
             self.heap.mark_value(*v);
         }
@@ -346,6 +355,23 @@ impl Vm {
 
     pub fn alloc_str(&mut self, s: String) -> Value {
         Value::Obj(self.alloc(Obj::Str(s)))
+    }
+
+    /// A single-character string. ASCII characters come from the interned
+    /// table (filled on first use) instead of allocating each time.
+    pub fn char_str(&mut self, c: char) -> Value {
+        if !c.is_ascii() {
+            return self.alloc_str(c.to_string());
+        }
+        let i = c as usize;
+        let v = self.ascii_strs[i];
+        if !matches!(v, Value::Undefined) {
+            return v;
+        }
+        let h = self.heap.alloc(Obj::Str(c.to_string()));
+        let v = Value::Obj(h);
+        self.ascii_strs[i] = v;
+        v
     }
 
     // ------------------------------------------------------------------
@@ -1068,7 +1094,7 @@ impl Vm {
                     enum Next {
                         Done,
                         Elem(Value, Value),
-                        Char(String, Value),
+                        Char(char, Value),
                     }
                     let next = match (self.heap.get(h), state) {
                         (Obj::List(items), Value::Int(i)) => {
@@ -1094,10 +1120,9 @@ impl Vm {
                         (Obj::Str(s), Value::Int(i)) => {
                             let i = i as usize;
                             match s[i..].chars().next() {
-                                Some(c) => Next::Char(
-                                    c.to_string(),
-                                    Value::Int((i + c.len_utf8()) as i64),
-                                ),
+                                Some(c) => {
+                                    Next::Char(c, Value::Int((i + c.len_utf8()) as i64))
+                                }
                                 None => Next::Done,
                             }
                         }
@@ -1113,7 +1138,7 @@ impl Vm {
                             self.stack.push(elem);
                         }
                         Next::Char(c, new_state) => {
-                            let sv = self.alloc_str(c);
+                            let sv = self.char_str(c);
                             let len = self.stack.len();
                             self.stack[len - 1] = new_state;
                             self.stack.push(sv);

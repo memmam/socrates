@@ -118,7 +118,7 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             let code = int_arg(vm, argc, 0)?;
             let c = u32::try_from(code).ok().and_then(char::from_u32);
             match c {
-                Some(c) => vm.alloc_str(c.to_string()),
+                Some(c) => vm.char_str(c),
                 None => {
                     return Err(vm.error(format!("char: invalid character code {code}")));
                 }
@@ -995,7 +995,7 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             let s = recv_str(vm, argc)?;
             let out = alloc_rooted_list(vm, Vec::new());
             for c in s.chars() {
-                let cv = vm.alloc_str(c.to_string());
+                let cv = vm.char_str(c);
                 push_into(vm, out, cv);
             }
             finish_rooted(vm, 1, Value::Obj(out))
@@ -1081,7 +1081,7 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             };
             match c {
                 Some(c) => {
-                    let cv = vm.alloc_str(c.to_string());
+                    let cv = vm.char_str(c);
                     make_some(vm, cv)
                 }
                 None => make_none(vm),
