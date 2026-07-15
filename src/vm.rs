@@ -245,31 +245,30 @@ impl Vm {
         if !self.heap.wants_gc() {
             return;
         }
-        let mut work: Vec<Handle> = Vec::new();
         for v in &self.stack {
-            self.heap.mark_value(*v, &mut work);
+            self.heap.mark_value(*v);
         }
         for v in &self.globals {
-            self.heap.mark_value(*v, &mut work);
+            self.heap.mark_value(*v);
         }
         for v in &self.temp_roots {
-            self.heap.mark_value(*v, &mut work);
+            self.heap.mark_value(*v);
         }
         for v in &self.interned {
-            self.heap.mark_value(*v, &mut work);
+            self.heap.mark_value(*v);
         }
         for v in self.fn_closures.iter().flatten() {
-            self.heap.mark_value(*v, &mut work);
+            self.heap.mark_value(*v);
         }
         for h in &self.open_upvalues {
-            self.heap.mark_handle(*h, &mut work);
+            self.heap.mark_handle(*h);
         }
         for f in &self.frames {
             if let Some(h) = f.closure {
-                self.heap.mark_handle(h, &mut work);
+                self.heap.mark_handle(h);
             }
         }
-        self.heap.trace(&mut work);
+        self.heap.trace();
         self.heap.sweep();
     }
 

@@ -107,14 +107,16 @@ impl FMap {
     }
 }
 
-struct Slot {
-    marked: bool,
-    obj: Obj,
-}
-
 pub struct Heap {
-    slots: Vec<Slot>,
+    /// Objects, indexed by `Handle`. Mark bits live in the parallel `marks`
+    /// vector so the mark phase can read an object's children while flagging
+    /// other slots (disjoint field borrows) — no copying, no per-object
+    /// allocation inside the trace loop.
+    objs: Vec<Obj>,
+    marks: Vec<bool>,
     free: Vec<Handle>,
+    /// Reusable mark-phase work list (kept across collections).
+    work: Vec<Handle>,
     live: usize,
     next_gc: usize,
     pub stress: bool,
@@ -133,8 +135,10 @@ impl Heap {
         let stress = std::env::var("FABLE_GC_STRESS").map(|v| v == "1").unwrap_or(false);
         let log = std::env::var("FABLE_GC_LOG").map(|v| v == "1").unwrap_or(false);
         Heap {
-            slots: Vec::new(),
+            objs: Vec::new(),
+            marks: Vec::new(),
             free: Vec::new(),
+            work: Vec::new(),
             live: 0,
             next_gc: 4096,
             stress,
@@ -147,69 +151,86 @@ impl Heap {
     pub fn alloc(&mut self, obj: Obj) -> Handle {
         self.live += 1;
         if let Some(h) = self.free.pop() {
-            self.slots[h as usize] = Slot { marked: false, obj };
+            self.objs[h as usize] = obj;
             h
         } else {
-            self.slots.push(Slot { marked: false, obj });
-            (self.slots.len() - 1) as Handle
+            self.objs.push(obj);
+            self.marks.push(false);
+            (self.objs.len() - 1) as Handle
         }
     }
 
     pub fn get(&self, h: Handle) -> &Obj {
-        &self.slots[h as usize].obj
+        &self.objs[h as usize]
     }
 
     pub fn get_mut(&mut self, h: Handle) -> &mut Obj {
-        &mut self.slots[h as usize].obj
+        &mut self.objs[h as usize]
     }
 
     pub fn wants_gc(&self) -> bool {
         self.stress || self.live >= self.next_gc
     }
 
-    /// Mark phase entry: mark a root value and everything reachable from it.
-    pub fn mark_value(&mut self, v: Value, work: &mut Vec<Handle>) {
+    /// Mark phase entry: flag a root value for tracing.
+    pub fn mark_value(&mut self, v: Value) {
         if let Value::Obj(h) = v {
-            self.mark_handle(h, work);
+            self.mark_handle(h);
         }
     }
 
-    pub fn mark_handle(&mut self, h: Handle, work: &mut Vec<Handle>) {
-        let slot = &mut self.slots[h as usize];
-        if !slot.marked {
-            slot.marked = true;
-            work.push(h);
+    pub fn mark_handle(&mut self, h: Handle) {
+        if !self.marks[h as usize] {
+            self.marks[h as usize] = true;
+            self.work.push(h);
         }
     }
 
-    /// Drain the work list, tracing children.
-    pub fn trace(&mut self, work: &mut Vec<Handle>) {
+    /// Drain the work list, tracing children. Mark bits live apart from the
+    /// objects, so children are flagged in place while the parent is borrowed
+    /// — no allocation inside the loop.
+    pub fn trace(&mut self) {
+        let Heap { objs, marks, work, .. } = self;
+        #[inline]
+        fn mark(marks: &mut [bool], work: &mut Vec<Handle>, h: Handle) {
+            if !marks[h as usize] {
+                marks[h as usize] = true;
+                work.push(h);
+            }
+        }
+        #[inline]
+        fn mark_v(marks: &mut [bool], work: &mut Vec<Handle>, v: Value) {
+            if let Value::Obj(h) = v {
+                mark(marks, work, h);
+            }
+        }
         while let Some(h) = work.pop() {
-            // Take the object's child handles without holding a borrow.
-            let mut children: Vec<Handle> = Vec::new();
-            let mut child_values: Vec<Value> = Vec::new();
-            match &self.slots[h as usize].obj {
+            match &objs[h as usize] {
                 Obj::Free | Obj::Str(_) | Obj::Range { .. } | Obj::Bytes(_)
                 | Obj::Worker(_) => {}
-                Obj::List(items) | Obj::Tuple(items) => child_values.extend(items.iter().copied()),
+                Obj::List(items) | Obj::Tuple(items) => {
+                    for &v in items {
+                        mark_v(marks, work, v);
+                    }
+                }
                 Obj::Map(m) => {
-                    for (_, k, v) in &m.entries {
-                        child_values.push(*k);
-                        child_values.push(*v);
+                    for &(_, k, v) in &m.entries {
+                        mark_v(marks, work, k);
+                        mark_v(marks, work, v);
                     }
                 }
                 Obj::Struct { fields, .. } | Obj::Variant { fields, .. } => {
-                    child_values.extend(fields.iter().copied())
+                    for &v in fields {
+                        mark_v(marks, work, v);
+                    }
                 }
-                Obj::Closure { upvals, .. } => children.extend(upvals.iter().copied()),
+                Obj::Closure { upvals, .. } => {
+                    for &c in upvals {
+                        mark(marks, work, c);
+                    }
+                }
                 Obj::Upvalue(Upval::Open(_)) => {}
-                Obj::Upvalue(Upval::Closed(v)) => child_values.push(*v),
-            }
-            for v in child_values {
-                self.mark_value(v, work);
-            }
-            for c in children {
-                self.mark_handle(c, work);
+                Obj::Upvalue(Upval::Closed(v)) => mark_v(marks, work, *v),
             }
         }
     }
@@ -217,11 +238,11 @@ impl Heap {
     /// Sweep phase: free unmarked slots, clear marks, retune the threshold.
     pub fn sweep(&mut self) {
         let before = self.live;
-        for (i, slot) in self.slots.iter_mut().enumerate() {
-            if slot.marked {
-                slot.marked = false;
-            } else if !matches!(slot.obj, Obj::Free) {
-                slot.obj = Obj::Free;
+        for (i, m) in self.marks.iter_mut().enumerate() {
+            if *m {
+                *m = false;
+            } else if !matches!(self.objs[i], Obj::Free) {
+                self.objs[i] = Obj::Free;
                 self.free.push(i as Handle);
                 self.live -= 1;
             }
