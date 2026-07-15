@@ -773,10 +773,17 @@ impl Vm {
 
                 Op::ToString => {
                     let v = self.peek(0);
-                    let s = self.display_value(v)?;
-                    let sv = self.alloc_str(s);
-                    self.pop();
-                    self.stack.push(sv);
+                    // A string already is its own display form; strings are
+                    // immutable and never identity-compared, so the handle
+                    // can stay in place as-is.
+                    if !matches!(v, Value::Obj(h)
+                        if matches!(self.heap.get(h), Obj::Str(_)))
+                    {
+                        let s = self.display_value(v)?;
+                        let sv = self.alloc_str(s);
+                        self.pop();
+                        self.stack.push(sv);
+                    }
                 }
                 Op::Concat(n) => {
                     let n = n as usize;
@@ -1503,6 +1510,20 @@ impl Vm {
     /// `str(x)` semantics: bare strings at the top level, quoted in containers.
     /// Nesting deeper than 10,000 levels renders as `...` (as do cycles).
     pub fn display_value(&self, v: Value) -> Result<String, VmError> {
+        // Scalar/string fast paths: byte-identical output to `display_inner`,
+        // skipping the fmt machinery and the seen-list plumbing.
+        match v {
+            Value::Unit => return Ok("()".to_string()),
+            Value::Bool(b) => return Ok((if b { "true" } else { "false" }).to_string()),
+            Value::Int(i) => return Ok(i.to_string()),
+            Value::Float(f) => return Ok(fmt_float(f)),
+            Value::Obj(h) => {
+                if let Obj::Str(s) = self.heap.get(h) {
+                    return Ok(s.clone());
+                }
+            }
+            _ => {}
+        }
         let mut out = String::new();
         let mut seen = Vec::new();
         self.display_inner(v, true, &mut seen, &mut out, 0)
