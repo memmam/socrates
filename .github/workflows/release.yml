@@ -212,7 +212,10 @@ jobs:
           tar -C zoo -czf "dist/fable-demozoo-${TAG}-${{ matrix.label }}.tar.gz" .
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        # v6 is the first upload-artifact major that ships on the Node 24
+        # runtime; v5 and earlier declare node20 and the runner warns as it
+        # force-runs them on 24. Input surface is unchanged from v4/v5.
+        uses: actions/upload-artifact@v6
         with:
           name: release-${{ matrix.label }}
           path: dist/*
@@ -241,6 +244,11 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Gather built artifacts
+        # download-artifact has no Node 24 major yet (v4/v5/v6 all declare
+        # node20), so pinning higher wouldn't silence the runner's node20
+        # warning here — and v6 changes the no-`name` multi-artifact layout
+        # this step relies on (each artifact under artifacts/<name>/). Stay on
+        # the validated v5 until an upstream node24 release exists.
         uses: actions/download-artifact@v5
         with:
           path: artifacts
