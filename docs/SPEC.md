@@ -600,6 +600,47 @@ these modules follow the same visibility rules as user code.
 | `std.strings` | `lines` (trailing-newline aware), `words`, `join_lines`, `ellipsize`, `strip_prefix`, `strip_suffix` |
 | `std.iter` | lazy sequences: `of(list)`, `count_from(n)`, `from_fn(f)` build an `Iter[T]`; adapters `map`, `filter`, `take`, `chain`, `zip`; consumers `collect`, `fold`, `each`, `count`. Implemented entirely in Fable (an `Iter[T]` is a struct holding a `next` closure). |
 
+### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
+
+The `gpu` namespace dispatches WGSL compute shaders. Its implementation is
+the interpreter's **only** dependency (the wgpu library), quarantined behind
+the `gpu` cargo feature: the default build stays zero-dependency (CI asserts
+`cargo tree` is a single line), and a `--features gpu` build opts in. The
+namespace itself always exists — programs using it typecheck and run in every
+build; without the feature the members degrade gracefully as described below.
+
+| Member | Type | Notes |
+|--------|------|-------|
+| `gpu.available()` | `fn() -> Bool` | is a GPU adapter usable? Always `false` without the feature |
+| `gpu.adapter_info()` | `fn() -> String` | `"<name> (<backend>)"`, `"no adapter"`, or `"gpu support not compiled in"`. Never empty |
+| `gpu.run(wgsl, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch (ABI below). Without the feature: `Err("gpu support not compiled in (build with --features gpu)")` |
+
+Every failure is an `Err` value, never a panic: bad arguments, no adapter,
+shader compile/validation errors (their messages pass through), device loss.
+
+**The `gpu.run` shader ABI.** The WGSL module must define a `@compute` entry
+point named `main` with two storage buffers in bind group 0:
+
+```wgsl
+@group(0) @binding(0) var<storage, read> input: array<f32>;        // or array<u32>, ...
+@group(0) @binding(1) var<storage, read_write> output: array<f32>;
+
+@compute @workgroup_size(1)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) { ... }
+```
+
+`input` is initialized with the argument bytes (which must be non-empty and
+a multiple of 4 bytes); `output` has `out_len` bytes (positive, a multiple
+of 4, at most 256 MiB), zero-initialized, and is returned as the `Ok` value
+after dispatching `(wx, wy, wz)` workgroups (each count in `1..=65535`).
+Byte order is the GPU's little-endian layout. A worked example —
+doubling an `array<f32>` — lives in `docs/assets/gpu_double.fable` (it
+prints `ok:`/`err:` and exits 0 with or without an adapter).
+
+`gpu.run`'s I/O rides on the `Bytes` buffer type (§ 8.4b), which ships in
+every build — `bytes(n)`/`bytes_of(..)` construct the input, and the LE
+pushers (`push_u32le`, ...) / `to_list()` bridge to and from numeric data.
+
 ---
 
 ## 8. Builtin methods

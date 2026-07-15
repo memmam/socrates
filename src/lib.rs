@@ -12,6 +12,7 @@ pub mod diag;
 pub mod dis;
 pub mod fft;
 pub mod fmt;
+pub mod gpu;
 pub mod jsonlite;
 pub mod lsp;
 pub mod modules;

@@ -99,6 +99,13 @@ pub enum Native {
     OsRun,
     OsExit,
     OsTime,
+
+    // gpu.* — compute-shader dispatch (v0.7, experimental). The natives are
+    // always registered; without the `gpu` cargo feature they degrade
+    // gracefully (see src/gpu.rs).
+    GpuAvailable,
+    GpuAdapterInfo,
+    GpuRun,
     // List methods
     ListLen,
     ListIsEmpty,
@@ -326,7 +333,7 @@ impl Native {
 
     /// Is `name` a builtin namespace (usable only as `name.member`)?
     pub fn is_namespace(name: &str) -> bool {
-        matches!(name, "math" | "fs" | "os" | "fft" | "worker")
+        matches!(name, "math" | "fs" | "os" | "fft" | "worker" | "gpu")
     }
 
     /// Resolve `<ns>.<member>` for any builtin namespace.
@@ -368,6 +375,12 @@ impl Native {
                 "time" => OsTime,
                 _ => return None,
             })),
+            "gpu" => Some(MathMember::Fn(match member {
+                "available" => GpuAvailable,
+                "adapter_info" => GpuAdapterInfo,
+                "run" => GpuRun,
+                _ => return None,
+            })),
             _ => None,
         }
     }
@@ -388,6 +401,7 @@ impl Native {
             "os" => &["args", "env", "run", "exit", "time"],
             "fft" => &["fft", "ifft", "rfft"],
             "worker" => &["spawn", "send", "recv", "is_worker"],
+            "gpu" => &["available", "adapter_info", "run"],
             _ => &[],
         }
     }
@@ -502,6 +516,9 @@ impl Native {
             OsRun => "os.run",
             OsExit => "os.exit",
             OsTime => "os.time",
+            GpuAvailable => "gpu.available",
+            GpuAdapterInfo => "gpu.adapter_info",
+            GpuRun => "gpu.run",
             ListLen => "len",
             ListIsEmpty => "is_empty",
             ListPush => "push",
@@ -685,6 +702,15 @@ impl Native {
             // an exit typechecks in any value position.
             OsExit => (vec![Int], p0(), 1),
             OsTime => (vec![], Float, 0),
+
+            GpuAvailable => (vec![], Bool, 0),
+            GpuAdapterInfo => (vec![], TStr, 0),
+            // gpu.run(wgsl, input, out_len, wx, wy, wz)
+            GpuRun => (
+                vec![TStr, Type::Bytes, Int, Int, Int, Int],
+                res(Type::Bytes, TStr),
+                0,
+            ),
 
             // List[T] — receiver args at P0.
             ListLen => (vec![], Int, 1),
@@ -924,7 +950,7 @@ mod namespace_tests {
 
     #[test]
     fn listed_namespace_members_resolve() {
-        for ns in ["math", "fs", "os"] {
+        for ns in ["math", "fs", "os", "fft", "worker", "gpu"] {
             for name in Native::namespace_members(ns) {
                 assert!(
                     Native::namespace_member(ns, name).is_some(),

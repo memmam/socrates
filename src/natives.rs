@@ -565,6 +565,47 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
 
         // ------------------------------------------------------------------
+        // gpu.* (v0.7, experimental) — implementations live in src/gpu.rs;
+        // without the `gpu` cargo feature they degrade gracefully.
+        // ------------------------------------------------------------------
+        GpuAvailable => Value::Bool(crate::gpu::available()),
+        GpuAdapterInfo => vm.alloc_str(crate::gpu::adapter_info()),
+        GpuRun => {
+            let wgsl = str_arg(vm, argc, 0)?;
+            let input = bytes_arg(vm, argc, 1)?.clone();
+            let out_len = int_arg(vm, argc, 2)?;
+            let wx = int_arg(vm, argc, 3)?;
+            let wy = int_arg(vm, argc, 4)?;
+            let wz = int_arg(vm, argc, 5)?;
+            // Argument-domain failures are Err values (the whole API returns
+            // Result), never panics.
+            let outcome = match (
+                usize::try_from(out_len),
+                u32::try_from(wx),
+                u32::try_from(wy),
+                u32::try_from(wz),
+            ) {
+                (Ok(out_len), Ok(wx), Ok(wy), Ok(wz)) => {
+                    crate::gpu::run(&wgsl, &input, out_len, wx, wy, wz)
+                }
+                (Err(_), ..) => Err(format!("gpu.run: out_len must be positive, got {out_len}")),
+                _ => Err(format!(
+                    "gpu.run: workgroup counts must be positive, got ({wx}, {wy}, {wz})"
+                )),
+            };
+            match outcome {
+                Ok(data) => {
+                    let b = Value::Obj(vm.alloc(Obj::Bytes(data)));
+                    make_ok(vm, b)
+                }
+                Err(msg) => {
+                    let m = vm.alloc_str(msg);
+                    make_err(vm, m)
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------
         // List methods (receiver = arg 0)
         // ------------------------------------------------------------------
         ListLen => Value::Int(list_ref(vm, argc)?.len() as i64),
@@ -1504,6 +1545,18 @@ fn worker_rc(
 
 fn list_handle(vm: &Vm, argc: u8) -> Result<Handle, VmError> {
     expect_list(vm, vm.native_arg(argc, 0))
+}
+
+/// The Bytes argument at position `i` — for natives whose Bytes parameter is
+/// not the receiver (e.g. `gpu.run`'s input). `bytes_ref` reads arg 0.
+fn bytes_arg(vm: &Vm, argc: u8, i: u8) -> Result<&Vec<u8>, VmError> {
+    match vm.native_arg(argc, i) {
+        Value::Obj(h) => match vm.heap.get(h) {
+            Obj::Bytes(bs) => Ok(bs),
+            _ => Err(vm.error("expected Bytes")),
+        },
+        _ => Err(vm.error("expected Bytes")),
+    }
 }
 
 fn list_ref(vm: &Vm, argc: u8) -> Result<&Vec<Value>, VmError> {

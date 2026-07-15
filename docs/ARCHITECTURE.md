@@ -339,6 +339,24 @@ pattern: one enum variant, one `sig()` scheme, one `METHOD_TABLE` row (the
 LSP completes them for free), one `natives.rs` arm. `FABLE_MAX_DEPTH` is
 read once at VM construction into a `max_frames` field.
 
+## v0.7 additions (in progress)
+
+**gpu.rs** is the home of the `gpu` builtin namespace's implementation and
+the project's only dependency boundary: wgpu (+ pollster) sit behind the
+`gpu` cargo feature, so the default build stays zero-dependency (CI asserts
+`cargo tree` is one line). The module is always compiled — only its
+internals are `#[cfg]`-gated — so `builtins.rs`/`natives.rs` register the
+natives unconditionally and feature-off builds degrade gracefully
+(`available()` false, `run()` an `Err`) instead of failing to resolve
+`gpu.*`. `run` is synchronous from the VM's point of view (pollster blocks
+on wgpu's futures), copies its input out of the heap before any device work
+and allocates the result after all of it, so the GC checkpoint discipline is
+untouched. wgpu reports validation failures (shader compile errors included)
+asynchronously; `run` brackets all device work in error scopes and converts
+anything captured into the `Err` message. `run`'s I/O rides on the v0.7
+`Bytes` heap object (`Obj::Bytes`, a GC leaf) introduced with the binary-I/O
+work — the gpu natives reuse its existing helpers in `natives.rs`.
+
 ## Testing strategy
 
 - Unit tests per module (lexer shapes, parser precedence, checker

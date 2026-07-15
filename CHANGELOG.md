@@ -28,6 +28,15 @@ every feature listed here.
 - `ports/`: the porting programme — `jsl` (JS/TSL layer, ICAA port,
   cross-validated to pixel equality) and `pyl` (Python/numpy layer,
   claudewave DSP core, in progress).
+- **`gpu` namespace (experimental, feature-gated)**: `gpu.available()`,
+  `gpu.adapter_info()`, and `gpu.run(wgsl, input, out_len, wx, wy, wz) ->
+  Result[Bytes, String]` dispatch WGSL compute shaders over `Bytes` I/O
+  (SPEC §7.2 documents the shader ABI). Implemented with wgpu behind the
+  `gpu` cargo feature — the project's first-ever dependency, deliberately
+  quarantined so the **default build stays zero-dependency** (CI asserts
+  it). Without the feature the namespace still typechecks and degrades
+  gracefully (`available()` is `false`, `run` returns `Err`). Demo:
+  `docs/assets/gpu_double.fable`.
 
 ## v0.6.0 — the field-test release
 

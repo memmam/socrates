@@ -19,6 +19,10 @@ jobs:
           components: clippy
       - name: Build
         run: cargo build --all-targets
+      - name: Zero dependencies in the default build
+        # The default build must stay dependency-free: the tree is exactly
+        # one line (this crate). The gpu feature is the only, opt-in exception.
+        run: test "$(cargo tree -e normal --prefix none | wc -l)" -eq 1
       - name: Unit + golden spec tests
         run: cargo test
       - name: Golden spec tests under GC stress
@@ -79,3 +83,27 @@ jobs:
               node ports/icaa/reference/compare.mjs "/tmp/icaa-scenes/${name}_${preset}_js.ppm" "/tmp/icaa-scenes/${name}_${preset}_fb.ppm"
             done
           done
+
+  gpu:
+    name: GPU feature (wgpu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Build (gpu)
+        run: cargo build --features gpu
+      - name: Clippy (gpu, deny warnings)
+        run: cargo clippy --features gpu --all-targets -- -D warnings
+      - name: Unit + golden spec tests (gpu)
+        run: cargo test --features gpu
+      - name: Software Vulkan adapter (lavapipe) — best effort
+        # The demo below must pass with or without this succeeding.
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers || true
+      - name: GPU demo (exits 0 with or without an adapter)
+        # Prints `ok: <bytes>` under lavapipe, `err: no adapter ...` when the
+        # driver install failed — both are expected; assert only exit 0.
+        run: |
+          cargo build --release --features gpu
+          ./target/release/fable docs/assets/gpu_double.fable

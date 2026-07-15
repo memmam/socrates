@@ -18,4 +18,13 @@ path = "src/lib.rs"
 lto = true
 codegen-units = 1
 
+# The DEFAULT build has zero dependencies (CI asserts `cargo tree` is one
+# line). The `gpu` feature is the deliberate, quarantined exception: it pulls
+# in wgpu (+ pollster to block on its futures) for `gpu.run(..)` compute.
+[features]
+default = []
+gpu = ["dep:wgpu", "dep:pollster"]
+
 [dependencies]
+wgpu = { version = "30", optional = true }
+pollster = { version = "1", optional = true }
