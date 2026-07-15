@@ -13,7 +13,7 @@ jobs:
     name: Test (stable)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -99,7 +99,7 @@ jobs:
     name: GPU feature (wgpu)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -152,7 +152,7 @@ jobs:
             ext: ".exe"
             run: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -196,7 +196,7 @@ jobs:
     name: macOS single-file demo (aarch64)
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - name: Spec + demo golden suites on Apple Silicon
         run: cargo build --release && ./target/release/fable test tests/spec demos > /dev/null
