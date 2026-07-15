@@ -154,7 +154,8 @@ jobs:
       # Phase B: upgrade the ad-hoc macOS signatures to Developer ID + Apple
       # notarization so downloaded binaries open with no Gatekeeper warning.
       # Dormant until the signing secrets are set — the ad-hoc binaries above
-      # ship as-is otherwise. Required repo secrets:
+      # ship as-is otherwise. Setup runbook: docs/RELEASING-macOS.md.
+      # Required repo secrets:
       #   MACOS_CERT_P12_BASE64   base64 of the Developer ID Application .p12
       #   MACOS_CERT_PASSWORD     the .p12 export password
       #   MACOS_SIGN_IDENTITY     e.g. "Developer ID Application: Name (TEAMID)"
