@@ -1,4 +1,4 @@
-// 32-bit float Bytes push/read (v0.9): `Float` is `f64`; these narrow to
+// 32-bit float Bytes push/read (v0.8): `Float` is `f64`; these narrow to
 // `f32` at the boundary, matching the wire format vertex/uniform/PCM data
 // actually uses. Known-exact IEEE-754 values pin the byte layout; a value
 // f32 can't represent exactly shows the narrowing happens on push, not

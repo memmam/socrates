@@ -51,7 +51,7 @@ pub enum Obj {
     /// A worker handle (v0.7). A GC leaf: channels and a join handle,
     /// never GC'd values (only `String`s cross the thread boundary).
     Worker(std::rc::Rc<std::cell::RefCell<crate::worker::WorkerHandle>>),
-    /// A window handle (v0.9, Linux-only for now). A GC leaf: OS/GL handles
+    /// A window handle (v0.8, Linux-only for now). A GC leaf: OS/GL handles
     /// only, never GC'd values.
     Window(std::rc::Rc<std::cell::RefCell<crate::window::WindowHandle>>),
 }

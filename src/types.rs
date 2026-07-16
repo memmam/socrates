@@ -26,7 +26,7 @@ pub enum Type {
     /// A worker handle (v0.7): an OS-thread isolate joined by string
     /// channels. Opaque — sendable/receivable/joinable, nothing else.
     Worker,
-    /// A window handle (v0.9, Linux-only for now): an OS window + GL
+    /// A window handle (v0.8, Linux-only for now): an OS window + GL
     /// context (the `window` namespace). Opaque, like `Worker`.
     Window,
     List(Box<Type>),

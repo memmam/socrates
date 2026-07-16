@@ -59,7 +59,7 @@ pub enum Native {
     /// 64-bit readers (v0.8): the 8 bytes reinterpreted as `Int` directly.
     BytesReadU64le,
     BytesReadU64be,
-    /// 32-bit float pushers/readers (v0.9): `Float` is `f64`; these narrow
+    /// 32-bit float pushers/readers (v0.8): `Float` is `f64`; these narrow
     /// to `f32` at the boundary — the wire format graphics/audio data
     /// actually uses (vertex attributes, uniforms, WAV/PCM samples, ...).
     BytesPushF32le,
@@ -144,7 +144,7 @@ pub enum Native {
     GpuAdapterInfo,
     GpuRun,
 
-    // window.* + Window handle methods (v0.9, Linux-only for now). The
+    // window.* + Window handle methods (v0.8, Linux-only for now). The
     // natives are always registered; without the `gl` cargo feature they
     // degrade gracefully (see src/window/mod.rs).
     WindowCreate,
@@ -853,7 +853,7 @@ impl Native {
                 0,
             ),
 
-            // window.* (v0.9, Linux-only for now). `create` mirrors
+            // window.* (v0.8, Linux-only for now). `create` mirrors
             // `worker.spawn`'s `Result[_, String]` shape.
             WindowCreate => (vec![TStr, Int, Int], res(Type::Window, TStr), 0),
             WindowHandlePoll => (vec![], Unit, 0),

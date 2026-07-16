@@ -1,4 +1,4 @@
-// std.glm — vector/matrix/quaternion math for real-time graphics (v0.9),
+// std.glm — vector/matrix/quaternion math for real-time graphics (v0.8),
 // named and shaped after GLM (OpenGL Mathematics) so C++/GLM fluency
 // transfers directly: `glm.vec3(x, y, z)`, `glm.perspective(fovy, aspect,
 // near, far)`, `glm.look_at(eye, center, up)`, `.normalize()`, `.cross()`.

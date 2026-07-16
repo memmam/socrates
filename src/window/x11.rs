@@ -585,19 +585,27 @@ impl Inner {
         // Safety: makes this window's context current before issuing GL
         // calls — necessary if another `Window` made itself current since
         // this one was created (GLX contexts are current per-thread, not
-        // per-window).
+        // per-window). `glXMakeCurrent` can fail (e.g. a display-driver
+        // reset) — skip the GL calls rather than issue them with no context
+        // bound, which the GL spec leaves undefined.
         unsafe {
-            (self.gl.make_current)(self.display, self.window as GlxDrawable, self.ctx);
-            (self.gl.clear_color)(r, g, b, a);
-            (self.gl.clear)(GL_COLOR_BUFFER_BIT);
+            if (self.gl.make_current)(self.display, self.window as GlxDrawable, self.ctx)
+                != X_FALSE
+            {
+                (self.gl.clear_color)(r, g, b, a);
+                (self.gl.clear)(GL_COLOR_BUFFER_BIT);
+            }
         }
     }
 
     pub fn swap_buffers(&mut self) {
         // Safety: same current-context caveat as `clear`.
         unsafe {
-            (self.gl.make_current)(self.display, self.window as GlxDrawable, self.ctx);
-            (self.gl.swap_buffers)(self.display, self.window as GlxDrawable);
+            if (self.gl.make_current)(self.display, self.window as GlxDrawable, self.ctx)
+                != X_FALSE
+            {
+                (self.gl.swap_buffers)(self.display, self.window as GlxDrawable);
+            }
         }
     }
 

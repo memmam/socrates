@@ -197,3 +197,11 @@ and the standing numbers.
 - Commit messages state what changed and (for perf) the measured delta.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
+- **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,
+  before the PR — not a separate follow-up "docs pass" PR after the fact.**
+  This matches `docs/SPEC.md`'s own same-PR rule (see Invariants) and now
+  extends to the rest of the documentation set: validate what you write
+  (run the book-snippet suite, re-check any counts/numbers you cite) before
+  shipping, in the same session that made the change, not after. A
+  dedicated later docs-pass PR is the exception for a batch of already-
+  shipped feature PRs that predate this rule, not the default going forward.

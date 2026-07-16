@@ -628,7 +628,7 @@ these modules follow the same visibility rules as user code.
 | `std.set` | `Set[T]` (v0.7), backed by `Map[T, Unit]`: structural membership, insertion-order iteration. `new()`, `from_list(xs)` (first occurrence wins); methods `insert(v) -> Bool` / `remove(v) -> Bool` (did anything change), `contains`, `len`, `is_empty`, `to_list`, and `union` / `intersect` / `difference` — each returns a **new** set ordered by the left operand's insertion order, then the right's |
 | `std.deque` | `Deque[T]` (v0.7), a double-ended queue with amortized O(1) ends (two-stack representation; a pop on an empty side reverses the other side across). `new()`, `from_list(xs)` (copies); methods `push_front` / `push_back`, `pop_front` / `pop_back` / `front` / `back` (all `Option[T]`), `len`, `is_empty`, `to_list` (front to back) |
 | `std.lazy` | `Lazy[T]` (v0.8): deferred, memoized computation. `of(thunk: fn() -> T) -> Lazy[T]` wraps a zero-argument thunk that doesn't run until needed; methods `get() -> T` (computes and caches on the first call, free on every later call — on any reference, since structs are references) and `is_forced() -> Bool`. For a module-level table that's expensive to build and not always needed — a plain top-level `let` already builds once at import (eagerly); `Lazy` defers that to first use. |
-| `std.glm` | Vector/matrix/quaternion math (v0.9), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Fable, no native code. |
+| `std.glm` | Vector/matrix/quaternion math (v0.8), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Fable, no native code. |
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
@@ -671,7 +671,7 @@ prints `ok:`/`err:` and exits 0 with or without an adapter).
 every build — `bytes(n)`/`bytes_of(..)` construct the input, and the LE
 pushers (`push_u32le`, ...) / `to_list()` bridge to and from numeric data.
 
-### 7.3 The window namespace (v0.9, Linux-only for now, feature-gated)
+### 7.3 The window namespace (v0.8, Linux + Windows + macOS (Apple Silicon), feature-gated)
 
 The `window` namespace is the GLFW-equivalent piece of the native-OpenGL
 roadmap (`std.glm`, § 7.1, shipped the math side): window creation, event
@@ -686,9 +686,11 @@ raw FFI to system libraries (X11 linked normally; GL/GLX resolved with
 `dlopen`/`dlsym` at runtime, since GL *dev* packages are far less reliably
 preinstalled than X11's), so `cargo tree` stays a single line with or
 without it. The namespace itself always exists — programs using it typecheck
-in every build; without the feature (or on a platform without a backend
-yet — Windows/macOS are separate follow-up PRs), `window.create` degrades to
-`Err`, the same way `gpu.run` does without `gpu`.
+in every build; without the feature (or on a platform without a backend —
+Windows, Linux, and Apple Silicon macOS are covered; **x86_64 macOS is not
+and has no plan to be** (see the macOS backend note below for why)),
+`window.create` degrades to `Err`, the same way `gpu.run` does without
+`gpu`.
 
 | Member | Type | Notes |
 |--------|------|-------|
@@ -696,6 +698,53 @@ yet — Windows/macOS are separate follow-up PRs), `window.create` degrades to
 
 `Window` is a nameable opaque type (§ 8.4d) — the handle `create` returns on
 success.
+
+### window namespace, Windows backend
+
+The Windows/WGL backend (`src/window/win32.rs`) has the same zero-Cargo-
+dependency shape as Linux/X11/GLX, but a simpler linking story: `user32`,
+`gdi32`, and `opengl32` ship on every Windows install, so they're linked
+normally, with no `dlopen`/`LoadLibrary` dance needed for GL entry points
+(unlike Linux, where GL dev packages vary enough to make dynamic resolution
+the safer default). Event handling is callback-driven (`WNDPROC` +
+`GWLP_USERDATA`) rather than poll-based like Xlib, but this is purely an
+internal implementation detail — `poll()`, `key_down()`, `mouse_pos()`,
+`width()`/`height()`, and `should_close()` behave identically to the Linux
+backend from Fable's point of view. `key_down` names on Windows are a small
+hand-written table (ASCII letters/digits plus common named keys like
+`"space"`/`"escape"`/`"left"`) rather than X11 keysym names, but the common
+single-character and named-key spellings used in practice (`"w"`, `"a"`,
+`"space"`, `"escape"`, arrow keys) work the same on both platforms.
+
+### window namespace, macOS backend (Apple Silicon only)
+
+The macOS backend (`src/window/macos.rs`) targets `aarch64-apple-darwin`
+only — **x86_64 Macs are not supported and none is planned**: an x86_64
+`objc_msgSend` call site must pick between the normal entry point and the
+separate `objc_msgSend_stret` one whenever the returned struct doesn't fit
+in registers, while Apple's arm64 ABI returns small aggregates (including
+the one struct-returning message this backend sends, `NSRect`) directly
+from plain `objc_msgSend`, with no `_stret` variant existing in the arm64
+SDK at all — one dispatch path to get right instead of two, and it matches
+the release matrix's `aarch64-apple-darwin`-only macOS target already. It
+links `Cocoa` (AppKit + Foundation) and the Objective-C runtime normally —
+both ship on every Mac — and resolves `OpenGL.framework`'s two `gl*` draw
+calls (`glClearColor`/`glClear`) via `dlopen`/`dlsym`, the same dynamic-
+resolution strategy the Linux backend uses for `libGL.so.1`; window/context
+creation itself goes through Cocoa's `NSWindow`/`NSOpenGLPixelFormat`/
+`NSOpenGLContext`, messaged via `objc_msgSend`. Event handling is poll-based
+like Xlib (`[NSApp nextEventMatchingMask:...untilDate:[NSDate distantPast]]`
+drains everything queued, once per frame, never blocking) rather than
+callback-driven like Win32. `key_down` names on macOS come from
+`NSEvent.charactersIgnoringModifiers` (text, not a hardware-independent
+keysym or scancode) — the common single-character and space-bar spellings
+used in practice (`"w"`, `"a"`, `" "`) work the same as on Linux/Windows,
+but this is layout/shift-sensitive in a way X11's keysym-name lookup is
+not. Close-button detection has no `NSWindowDelegate` callback installed
+(building one requires registering a runtime Objective-C class, which this
+poll-per-frame API deliberately avoids); instead `should_close` is set once
+`[window isVisible]` goes false after a click on the close box, which
+AppKit's default close path guarantees without a delegate.
 
 ---
 
@@ -808,7 +857,7 @@ offset; a read that would touch any byte outside the buffer panics like
 `get`; unlike the 16/32-bit reads, a 64-bit read can come back negative
 when bit 63 is set, matching `to_hex`/hex-literal semantics),
 `push_f32le(Float)` / `push_f32be(Float)` / `read_f32le(Int) -> Float` /
-`read_f32be(Int) -> Float` (v0.9: `Float` is `f64`; these narrow to `f32`
+`read_f32be(Int) -> Float` (v0.8: `Float` is `f64`; these narrow to `f32`
 at the boundary — the wire format vertex/uniform/PCM data actually uses —
 so a read-back is only accurate to `f32`'s precision, not bit-identical to
 whatever `f64` went in),
@@ -839,20 +888,24 @@ in `worker.recv()` sees `None` — then waits; `Err` carries the worker's
 panic message; joining again returns the cached result; messages the
 worker sent before finishing can still be `recv`'d after `join`).
 
-### 8.4d `Window` methods (v0.9, Linux-only for now)
+### 8.4d `Window` methods (v0.8, Linux + Windows + macOS (Apple Silicon))
 
 A `Window` is the handle `window.create` returns (§ 7.3) — an OS window
 plus a current GL context. `Window` is a nameable type usable in signatures
 and annotations, like `Worker`. It displays as `<window>`, cannot be
 compared with `==` or ordered, and cannot be a map key.
 
-`poll() -> Unit` (pumps the X event queue; updates should-close/key/mouse/
-size state — call this once per frame), `should_close() -> Bool` (`true`
-once the window manager's close button — caught via `WM_DELETE_WINDOW` —
-was clicked, or after `close()`), `close() -> Unit` (explicit early
-teardown: releases the GL context, destroys the window, and closes the
-display connection; idempotent — calling it again, or letting the `Window`
-be collected afterward, is a no-op).
+`poll() -> Unit` (pumps the platform event queue — the X event queue on
+Linux, the Win32 message queue on Windows, `NSApp`'s event queue on macOS;
+updates should-close/key/mouse/size state — call this once per frame),
+`should_close() -> Bool` (`true` once the window manager's close button —
+caught via `WM_DELETE_WINDOW` on Linux, `WM_CLOSE` on Windows, an
+`isVisible` check after the close box is clicked on macOS — was clicked, or
+after `close()`), `close() -> Unit` (explicit early teardown: releases the
+GL context, destroys the window, and closes the display connection (Linux)
+/ releases the device context (Windows) / releases the `NSOpenGLContext`
+and `NSWindow` (macOS); idempotent — calling it again, or letting the
+`Window` be collected afterward, is a no-op).
 
 Unlike `Worker` (cheap, plentiful OS threads — fine to leak a collected
 handle until process exit), a GL context + window is a comparatively scarce

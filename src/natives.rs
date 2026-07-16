@@ -800,7 +800,7 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
 
         // ------------------------------------------------------------------
-        // window.* (v0.9, Linux-only for now) — implementation lives in
+        // window.* (v0.8, Linux-only for now) — implementation lives in
         // src/window/; without the `gl` cargo feature it degrades
         // gracefully (see src/window/mod.rs).
         // ------------------------------------------------------------------

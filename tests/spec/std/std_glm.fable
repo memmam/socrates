@@ -1,4 +1,4 @@
-// SPEC §7.1 (v0.9): std.glm — GLM-shaped vector/matrix/quaternion math.
+// SPEC §7.1 (v0.8): std.glm — GLM-shaped vector/matrix/quaternion math.
 import std.glm;
 
 // --- Vec2 ---

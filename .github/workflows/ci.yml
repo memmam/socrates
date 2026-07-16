@@ -143,6 +143,46 @@ jobs:
           sleep 1
           DISPLAY=:99 cargo test --features gl
 
+  gl-windows:
+    name: window feature (Win32/WGL)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Build (gl)
+        run: cargo build --features gl
+      - name: Clippy (gl, deny warnings)
+        run: cargo clippy --features gl --all-targets -- -D warnings
+      - name: Unit + golden spec tests (gl)
+        # windows-latest is a real Windows machine (unlike the `gl` job's
+        # Xvfb-under-Linux stand-in), so `win32.rs`'s smoke test creates and
+        # drives an actual window/WGL context here.
+        run: cargo test --features gl
+
+  gl-macos:
+    # Real Apple Silicon hardware (unlike this repo's own dev/CI containers,
+    # which are Linux) — the only environment that can actually link and run
+    # `src/window/macos.rs`'s Cocoa/NSOpenGL FFI. Mirrors the `gl` (Linux)
+    # job's steps one-for-one; there's no equivalent of Xvfb needed here
+    # since `cargo test --features gl` on macOS runs against the real
+    # window server, and `macos.rs`'s test skips gracefully if that's
+    # restricted in this environment (see its module docs).
+    name: window feature (Cocoa/NSOpenGL, Apple Silicon)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Build (gl)
+        run: cargo build --features gl
+      - name: Clippy (gl, deny warnings)
+        run: cargo clippy --features gl --all-targets -- -D warnings
+      - name: Unit + golden spec tests (gl)
+        run: cargo test --features gl
+
   demo-zoo:
     # Proves the release's cross-compile + `fable build` stapling works on
     # every non-native target before a release is ever cut (x86_64-linux is
