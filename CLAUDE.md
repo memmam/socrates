@@ -73,6 +73,19 @@ their place fastest.
   correct (golden tests, pixel/numeric cross-checks — whatever the
   feature's own verification story is). Don't build an interim backend you
   already know will be thrown away once the better one is in scope.
+- **Target what each platform is actively doing before what it used to
+  do.** Scope to current OS versions/architectures first — Apple-Silicon-
+  only macOS support (sidestepping the x86_64-only `objc_msgSend_stret` ABI
+  split) is the current instance — and broaden to older versions of that
+  same platform only once a concrete capability need justifies it, not
+  preemptively as legacy-support insurance. This is a different axis from
+  the backend-supersession rule above (that one swaps backends for a single
+  platform; this one decides which platform/OS-version targets are in
+  scope at all): it follows from the AI-native trajectory (see "What Fable
+  is for") — build for where each platform's ecosystem is actively headed,
+  not for carrying yesterday's compatibility weight up front. Older
+  platforms broadly are still in scope long-term; the ordering is
+  capability-justified breadth, not defensive breadth-first.
 
 ## Invariants (do not break these)
 
