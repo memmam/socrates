@@ -1467,6 +1467,9 @@ impl Vm {
                         (Obj::Worker(_), _) | (_, Obj::Worker(_)) => {
                             return Err("cannot compare workers".into())
                         }
+                        (Obj::Window(_), _) | (_, Obj::Window(_)) => {
+                            return Err("cannot compare windows".into())
+                        }
                         (Obj::Str(sx), Obj::Str(sy)) => {
                             if sx != sy {
                                 return Ok(false);
@@ -1657,6 +1660,9 @@ impl Vm {
                     Obj::Worker(_) => {
                         return Err("workers cannot be used as map keys".into())
                     }
+                    Obj::Window(_) => {
+                        return Err("windows cannot be used as map keys".into())
+                    }
                     Obj::Upvalue(_) | Obj::Free => {
                         return Err("internal: bad map key (VM bug)".into())
                     }
@@ -1731,6 +1737,10 @@ impl Vm {
                     }
                     Obj::Worker(_) => {
                         out.push_str("<worker>");
+                        return Ok(());
+                    }
+                    Obj::Window(_) => {
+                        out.push_str("<window>");
                         return Ok(());
                     }
                     Obj::Str(s) => {

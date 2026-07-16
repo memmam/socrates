@@ -317,6 +317,7 @@ impl Checker {
     fn predeclare_types(&mut self, program: &Program) {
         const RESERVED: &[&str] = &[
             "Int", "Float", "Bool", "String", "Unit", "List", "Map", "Range", "Bytes", "Worker",
+            "Window",
         ];
         for stmt in &program.stmts {
             let (name, span, is_struct, generics, is_pub) = match &stmt.kind {
@@ -564,7 +565,7 @@ impl Checker {
                 let msg = if matches!(
                     tname,
                     "Int" | "Float" | "Bool" | "String" | "Unit" | "Range" | "Bytes" | "Worker"
-                        | "List" | "Map" | "Option" | "Result"
+                        | "Window" | "List" | "Map" | "Option" | "Result"
                 ) {
                     format!("cannot define methods on the built-in type `{tname}`")
                 } else {
@@ -648,7 +649,7 @@ impl Checker {
                 };
                 match n {
                     "Int" | "Float" | "Bool" | "String" | "Unit" | "Range" | "Bytes"
-                    | "Worker" => {
+                    | "Worker" | "Window" => {
                         if !args.is_empty() {
                             arity_error(self, 0);
                         }
@@ -660,6 +661,7 @@ impl Checker {
                             "Unit" => Type::Unit,
                             "Bytes" => Type::Bytes,
                             "Worker" => Type::Worker,
+                            "Window" => Type::Window,
                             _ => Type::Range,
                         }
                     }
@@ -1380,6 +1382,7 @@ impl Checker {
                 "math" => "use `math.sqrt(..)`, `math.pi`, ...",
                 "fs" => "use `fs.read(..)`, `fs.write(..)`, ...",
                 "gpu" => "use `gpu.available()`, `gpu.run(..)`, ...",
+                "window" => "use `window.create(..)`, ...",
                 _ => "use `os.args()`, `os.env(..)`, ...",
             };
             self.diags.push(
@@ -1822,6 +1825,7 @@ impl Checker {
             Type::Range => (Recv::Range, vec![]),
             Type::Bytes => (Recv::Bytes, vec![]),
             Type::Worker => (Recv::Worker, vec![]),
+            Type::Window => (Recv::Window, vec![]),
             Type::List(t) => (Recv::List, vec![(**t).clone()]),
             Type::Map(k, v) => (Recv::Map, vec![(**k).clone(), (**v).clone()]),
             Type::Named(d, args) if *d == OPTION_DEF => (Recv::Option_, args.clone()),
@@ -3747,6 +3751,7 @@ impl Checker {
     fn suggest_type(&self, name: &str) -> Option<String> {
         let builtin = [
             "Int", "Float", "Bool", "String", "Unit", "List", "Map", "Range", "Bytes", "Worker",
+            "Window",
         ];
         let candidates = builtin
             .iter()

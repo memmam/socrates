@@ -51,6 +51,9 @@ pub enum Obj {
     /// A worker handle (v0.7). A GC leaf: channels and a join handle,
     /// never GC'd values (only `String`s cross the thread boundary).
     Worker(std::rc::Rc<std::cell::RefCell<crate::worker::WorkerHandle>>),
+    /// A window handle (v0.9, Linux-only for now). A GC leaf: OS/GL handles
+    /// only, never GC'd values.
+    Window(std::rc::Rc<std::cell::RefCell<crate::window::WindowHandle>>),
 }
 
 /// An insertion-ordered map with structural keys. Entries keep their insertion
@@ -295,7 +298,7 @@ impl Heap {
         while let Some(h) = work.pop() {
             match &objs[h as usize] {
                 Obj::Free | Obj::Str(_) | Obj::Range { .. } | Obj::Bytes(_)
-                | Obj::Worker(_) => {}
+                | Obj::Worker(_) | Obj::Window(_) => {}
                 Obj::List(items) | Obj::Tuple(items) => {
                     for &v in items {
                         mark_v(marks, work, v);

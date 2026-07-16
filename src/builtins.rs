@@ -143,6 +143,21 @@ pub enum Native {
     GpuAvailable,
     GpuAdapterInfo,
     GpuRun,
+
+    // window.* + Window handle methods (v0.9, Linux-only for now). The
+    // natives are always registered; without the `gl` cargo feature they
+    // degrade gracefully (see src/window/mod.rs).
+    WindowCreate,
+    WindowHandlePoll,
+    WindowHandleShouldClose,
+    WindowHandleClose,
+    WindowHandleKeyDown,
+    WindowHandleMousePos,
+    WindowHandleWidth,
+    WindowHandleHeight,
+    WindowHandleClear,
+    WindowHandleSwapBuffers,
+
     // List methods
     ListLen,
     ListIsEmpty,
@@ -300,6 +315,7 @@ pub enum Recv {
     Str,
     Bytes,
     Worker,
+    Window,
     List,
     Map,
     Range,
@@ -315,6 +331,7 @@ impl Recv {
             Recv::Str => "String",
             Recv::Bytes => "Bytes",
             Recv::Worker => "Worker",
+            Recv::Window => "Window",
             Recv::List => "List",
             Recv::Map => "Map",
             Recv::Range => "Range",
@@ -395,7 +412,7 @@ impl Native {
 
     /// Is `name` a builtin namespace (usable only as `name.member`)?
     pub fn is_namespace(name: &str) -> bool {
-        matches!(name, "math" | "fs" | "os" | "fft" | "worker" | "gpu")
+        matches!(name, "math" | "fs" | "os" | "fft" | "worker" | "gpu" | "window")
     }
 
     /// Resolve `<ns>.<member>` for any builtin namespace.
@@ -445,6 +462,12 @@ impl Native {
                 "run" => GpuRun,
                 _ => return None,
             })),
+            "window" => Some(MathMember::Fn(match member {
+                // Only `create` is a namespace-level free function; the
+                // rest are methods on the `Window` receiver (METHOD_TABLE).
+                "create" => WindowCreate,
+                _ => return None,
+            })),
             _ => None,
         }
     }
@@ -466,6 +489,7 @@ impl Native {
             "fft" => &["fft", "ifft", "rfft"],
             "worker" => &["spawn", "send", "recv", "is_worker"],
             "gpu" => &["available", "adapter_info", "run"],
+            "window" => &["create"],
             _ => &[],
         }
     }
@@ -603,6 +627,16 @@ impl Native {
             GpuAvailable => "gpu.available",
             GpuAdapterInfo => "gpu.adapter_info",
             GpuRun => "gpu.run",
+            WindowCreate => "window.create",
+            WindowHandlePoll => "poll",
+            WindowHandleShouldClose => "should_close",
+            WindowHandleClose => "close",
+            WindowHandleKeyDown => "key_down",
+            WindowHandleMousePos => "mouse_pos",
+            WindowHandleWidth => "width",
+            WindowHandleHeight => "height",
+            WindowHandleClear => "clear",
+            WindowHandleSwapBuffers => "swap_buffers",
             ListLen => "len",
             ListIsEmpty => "is_empty",
             ListPush => "push",
@@ -818,6 +852,18 @@ impl Native {
                 res(Type::Bytes, TStr),
                 0,
             ),
+
+            // window.* (v0.9, Linux-only for now). `create` mirrors
+            // `worker.spawn`'s `Result[_, String]` shape.
+            WindowCreate => (vec![TStr, Int, Int], res(Type::Window, TStr), 0),
+            WindowHandlePoll => (vec![], Unit, 0),
+            WindowHandleShouldClose => (vec![], Bool, 0),
+            WindowHandleClose => (vec![], Unit, 0),
+            WindowHandleKeyDown => (vec![TStr], Bool, 0),
+            WindowHandleMousePos => (vec![], tup(vec![Float, Float]), 0),
+            WindowHandleWidth | WindowHandleHeight => (vec![], Int, 0),
+            WindowHandleClear => (vec![Float, Float, Float, Float], Unit, 0),
+            WindowHandleSwapBuffers => (vec![], Unit, 0),
 
             // List[T] — receiver args at P0.
             ListLen => (vec![], Int, 1),
@@ -1061,6 +1107,15 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Worker, "recv", Native::WorkerHandleRecv),
     (Recv::Worker, "try_recv", Native::WorkerHandleTryRecv),
     (Recv::Worker, "join", Native::WorkerHandleJoin),
+    (Recv::Window, "poll", Native::WindowHandlePoll),
+    (Recv::Window, "should_close", Native::WindowHandleShouldClose),
+    (Recv::Window, "close", Native::WindowHandleClose),
+    (Recv::Window, "key_down", Native::WindowHandleKeyDown),
+    (Recv::Window, "mouse_pos", Native::WindowHandleMousePos),
+    (Recv::Window, "width", Native::WindowHandleWidth),
+    (Recv::Window, "height", Native::WindowHandleHeight),
+    (Recv::Window, "clear", Native::WindowHandleClear),
+    (Recv::Window, "swap_buffers", Native::WindowHandleSwapBuffers),
     (Recv::Option_, "is_some", Native::OptIsSome),
     (Recv::Option_, "is_none", Native::OptIsNone),
     (Recv::Option_, "unwrap", Native::OptUnwrap),
@@ -1094,7 +1149,7 @@ mod namespace_tests {
 
     #[test]
     fn listed_namespace_members_resolve() {
-        for ns in ["math", "fs", "os", "fft", "worker", "gpu"] {
+        for ns in ["math", "fs", "os", "fft", "worker", "gpu", "window"] {
             for name in Native::namespace_members(ns) {
                 assert!(
                     Native::namespace_member(ns, name).is_some(),

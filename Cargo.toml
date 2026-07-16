@@ -21,9 +21,14 @@ codegen-units = 1
 # The DEFAULT build has zero dependencies (CI asserts `cargo tree` is one
 # line). The `gpu` feature is the deliberate, quarantined exception: it pulls
 # in wgpu (+ pollster to block on its futures) for `gpu.run(..)` compute.
+# The `gl` feature is a *different* kind of exception: it adds zero Cargo
+# dependencies (no `dep:` entries) — it's raw FFI to system libraries (X11
+# linked normally, GL/GLX `dlopen`ed at runtime), so `cargo tree` stays one
+# line with or without it. See src/window/ for the `window` namespace.
 [features]
 default = []
 gpu = ["dep:wgpu", "dep:pollster"]
+gl = []
 
 [dependencies]
 wgpu = { version = "30", optional = true }

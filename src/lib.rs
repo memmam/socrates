@@ -30,6 +30,7 @@ pub mod token;
 pub mod types;
 pub mod value;
 pub mod vm;
+pub mod window;
 pub mod worker;
 
 use diag::Diagnostic;

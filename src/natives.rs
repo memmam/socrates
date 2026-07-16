@@ -800,6 +800,79 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
 
         // ------------------------------------------------------------------
+        // window.* (v0.9, Linux-only for now) — implementation lives in
+        // src/window/; without the `gl` cargo feature it degrades
+        // gracefully (see src/window/mod.rs).
+        // ------------------------------------------------------------------
+        WindowCreate => {
+            let title = str_arg(vm, argc, 0)?;
+            let w = int_arg(vm, argc, 1)?;
+            let h = int_arg(vm, argc, 2)?;
+            match crate::window::create(&title, w as i32, h as i32) {
+                Ok(handle) => {
+                    let h = vm.heap.alloc(Obj::Window(std::rc::Rc::new(
+                        std::cell::RefCell::new(handle),
+                    )));
+                    make_ok(vm, Value::Obj(h))
+                }
+                Err(msg) => {
+                    let m = vm.alloc_str(msg);
+                    make_err(vm, m)
+                }
+            }
+        }
+        WindowHandlePoll => {
+            let w = window_rc(vm, argc)?;
+            w.borrow_mut().poll();
+            Value::Unit
+        }
+        WindowHandleShouldClose => {
+            let w = window_rc(vm, argc)?;
+            let b = w.borrow().should_close();
+            Value::Bool(b)
+        }
+        WindowHandleClose => {
+            let w = window_rc(vm, argc)?;
+            w.borrow_mut().close();
+            Value::Unit
+        }
+        WindowHandleKeyDown => {
+            let w = window_rc(vm, argc)?;
+            let name = str_arg(vm, argc, 1)?;
+            let b = w.borrow().key_down(&name);
+            Value::Bool(b)
+        }
+        WindowHandleMousePos => {
+            let w = window_rc(vm, argc)?;
+            let (x, y) = w.borrow().mouse_pos();
+            make_tuple(vm, vec![Value::Float(x), Value::Float(y)])
+        }
+        WindowHandleWidth => {
+            let w = window_rc(vm, argc)?;
+            let width = w.borrow().width();
+            Value::Int(i64::from(width))
+        }
+        WindowHandleHeight => {
+            let w = window_rc(vm, argc)?;
+            let height = w.borrow().height();
+            Value::Int(i64::from(height))
+        }
+        WindowHandleClear => {
+            let w = window_rc(vm, argc)?;
+            let r = float_arg(vm, argc, 1)?;
+            let g = float_arg(vm, argc, 2)?;
+            let b = float_arg(vm, argc, 3)?;
+            let a = float_arg(vm, argc, 4)?;
+            w.borrow_mut().clear(r, g, b, a);
+            Value::Unit
+        }
+        WindowHandleSwapBuffers => {
+            let w = window_rc(vm, argc)?;
+            w.borrow_mut().swap_buffers();
+            Value::Unit
+        }
+
+        // ------------------------------------------------------------------
         // List methods (receiver = arg 0)
         // ------------------------------------------------------------------
         ListLen => Value::Int(list_ref(vm, argc)?.len() as i64),
@@ -1844,6 +1917,21 @@ fn worker_rc(
             _ => Err(vm.error("expected Worker")),
         },
         _ => Err(vm.error("expected Worker")),
+    }
+}
+
+/// The receiver's window handle, cloned out of the heap (`Rc`), mirroring
+/// `worker_rc` exactly.
+fn window_rc(
+    vm: &Vm,
+    argc: u8,
+) -> Result<std::rc::Rc<std::cell::RefCell<crate::window::WindowHandle>>, VmError> {
+    match vm.native_arg(argc, 0) {
+        Value::Obj(h) => match vm.heap.get(h) {
+            Obj::Window(rc) => Ok(rc.clone()),
+            _ => Err(vm.error("expected Window")),
+        },
+        _ => Err(vm.error("expected Window")),
     }
 }
 

@@ -671,6 +671,32 @@ prints `ok:`/`err:` and exits 0 with or without an adapter).
 every build — `bytes(n)`/`bytes_of(..)` construct the input, and the LE
 pushers (`push_u32le`, ...) / `to_list()` bridge to and from numeric data.
 
+### 7.3 The window namespace (v0.9, Linux-only for now, feature-gated)
+
+The `window` namespace is the GLFW-equivalent piece of the native-OpenGL
+roadmap (`std.glm`, § 7.1, shipped the math side): window creation, event
+polling, keyboard/mouse state, and a trivial clear-color + swap-buffers —
+enough to prove the whole pipe end-to-end. A general `gl` draw-call
+namespace (a GL function-pointer loader with the usual few dozen entries) is
+a later addition; this namespace is deliberately just the GLFW-shaped part.
+
+Like `gpu`, its implementation is quarantined behind a cargo feature — here
+`gl` — but unlike `gpu`, the feature adds **zero** Cargo dependencies: it is
+raw FFI to system libraries (X11 linked normally; GL/GLX resolved with
+`dlopen`/`dlsym` at runtime, since GL *dev* packages are far less reliably
+preinstalled than X11's), so `cargo tree` stays a single line with or
+without it. The namespace itself always exists — programs using it typecheck
+in every build; without the feature (or on a platform without a backend
+yet — Windows/macOS are separate follow-up PRs), `window.create` degrades to
+`Err`, the same way `gpu.run` does without `gpu`.
+
+| Member | Type | Notes |
+|--------|------|-------|
+| `window.create(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | opens an OS window of size `w`×`h` with a current GL context. Without the feature (or backend): `Err("windowing support not compiled in (build with --features gl)")` |
+
+`Window` is a nameable opaque type (§ 8.4d) — the handle `create` returns on
+success.
+
 ---
 
 ## 8. Builtin methods
@@ -812,6 +838,38 @@ String]` (**blocks**: hangs up the parent's send side — a worker blocked
 in `worker.recv()` sees `None` — then waits; `Err` carries the worker's
 panic message; joining again returns the cached result; messages the
 worker sent before finishing can still be `recv`'d after `join`).
+
+### 8.4d `Window` methods (v0.9, Linux-only for now)
+
+A `Window` is the handle `window.create` returns (§ 7.3) — an OS window
+plus a current GL context. `Window` is a nameable type usable in signatures
+and annotations, like `Worker`. It displays as `<window>`, cannot be
+compared with `==` or ordered, and cannot be a map key.
+
+`poll() -> Unit` (pumps the X event queue; updates should-close/key/mouse/
+size state — call this once per frame), `should_close() -> Bool` (`true`
+once the window manager's close button — caught via `WM_DELETE_WINDOW` —
+was clicked, or after `close()`), `close() -> Unit` (explicit early
+teardown: releases the GL context, destroys the window, and closes the
+display connection; idempotent — calling it again, or letting the `Window`
+be collected afterward, is a no-op).
+
+Unlike `Worker` (cheap, plentiful OS threads — fine to leak a collected
+handle until process exit), a GL context + window is a comparatively scarce
+OS/GPU resource: a `Window` that is garbage-collected without an explicit
+`close()` tears down eagerly at collection time via the same teardown
+`close()` runs, so a program that opens and discards many windows in a loop
+actually reclaims them as it goes.
+
+`key_down(String) -> Bool` (is the named key currently held down; names are
+X11 keysym names — lowercase letters like `"w"`, `"a"`; an unrecognized name
+returns `false` rather than erroring), `mouse_pos() -> (Float, Float)` (last
+known pointer position within the window, updated by `poll()`; `(0.0, 0.0)`
+before the first pointer motion), `width() -> Int` / `height() -> Int`
+(current window size in pixels, updated by `poll()` on a resize),
+`clear(r: Float, g: Float, b: Float, a: Float) -> Unit` (`glClearColor` +
+`glClear(GL_COLOR_BUFFER_BIT)`), `swap_buffers() -> Unit` (presents the back
+buffer — the window is double-buffered).
 
 ### 8.5 Numeric methods
 

@@ -13,7 +13,13 @@ terse release ledger to draw on when writing changelogs and release posts.
 Fable is an **AI-native language**: its design mirrors the way current
 frontier models reason, so an AI writes it fluently and uses it as a
 recursive force multiplier — a substrate for building the tools that build
-more tools. The intended trajectory, in rough order:
+more tools. When AI-authorship fluency and human readability/ergonomics
+pull in different directions, AI-fluency wins — this is not a language
+optimized for a human encountering it cold. Naming that mirrors a
+well-known API an AI already has deep fluency in (GLM's `vec3`/`perspective`/
+`look_at`, GLSL/TSL shapes, POSIX/Win32 call shapes) beats naming chosen for
+human intuition every time the two conflict. The intended trajectory, in
+rough order:
 
 - **Agent tooling** — MCP servers, client/harness code, glue — written in a
   language an AI can produce correctly on the first pass and golden-test
@@ -50,6 +56,17 @@ their place fastest.
   spellings become minimal wrappers over it** (the efficiency-pass rule —
   hand-rolled popcount/ushr/hex became one-line wrappers over natives).
   Every such change stays byte-identical in observable behavior.
+- **This applies to whole backend implementations, not just algorithmic
+  idioms.** When a newer backend for the same capability is more optimal on
+  a platform (Metal over OpenGL on macOS; eventually Vulkan/DirectX over
+  GL elsewhere), the newer one supersedes rather than living alongside the
+  old one indefinitely — the older path is wrapped, thinned, or dropped as
+  the better one lands. The Fable-facing API is the stable surface across
+  that swap (a windowing layer shared across backends, e.g.); the backend
+  underneath it is free to change as long as the observable output stays
+  testably correct (golden tests, pixel/numeric cross-checks — whatever
+  the feature's own verification story is). Don't build an interim backend
+  you already know will be thrown away once the better one is in scope.
 
 ## Invariants (do not break these)
 
