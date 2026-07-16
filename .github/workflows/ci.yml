@@ -5,6 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+# Without this, every push to an open PR leaves its prior run's jobs
+# orphaned in `in_progress` forever instead of superseding them — confirmed
+# 2026-07-16: a dozen-plus stale runs piled up across a single PR's iterative
+# debugging session, several windows-latest jobs among them (2x-billed
+# runner minutes). One push per (workflow, ref) may run at a time; a new
+# push cancels whatever's still going for that same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -12,6 +22,7 @@ jobs:
   test:
     name: Test (stable)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -98,6 +109,7 @@ jobs:
   gpu:
     name: GPU feature (wgpu)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -122,6 +134,7 @@ jobs:
   gl:
     name: window feature (X11/GLX)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -146,6 +159,13 @@ jobs:
   gl-windows:
     name: window feature (Win32/WGL)
     runs-on: windows-latest
+    # This job has hung indefinitely (no output, no timeout for hours) on
+    # every run since the Win32/WGL backend first merged — see win32.rs's
+    # test-module `SetErrorMode` doc comment for the leading theory (an
+    # unclickable WER crash dialog on a headless runner). This hard cap
+    # turns that into a fast, visible failure instead of a multi-hour,
+    # 2x-billed windows-latest hang.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -171,6 +191,7 @@ jobs:
     # restricted in this environment (see its module docs).
     name: window feature (Cocoa/NSOpenGL, Apple Silicon)
     runs-on: macos-14
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -194,6 +215,7 @@ jobs:
     # aarch64 GNU); rustc locates the MSVC ARM64 tools itself.
     name: Demo zoo (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -259,6 +281,7 @@ jobs:
     # emit the payload, link it in, sign, and run — matching the source run.
     name: macOS single-file demo (aarch64)
     runs-on: macos-14
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
