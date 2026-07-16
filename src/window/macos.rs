@@ -195,6 +195,20 @@ unsafe fn send1_ptr_ret(recv: *mut Object, s: SEL, arg: *const c_char) -> *mut O
         std::mem::transmute(objc_msgSend as *const ());
     f(recv, s, arg)
 }
+/// `[NSMenu addItemWithTitle:action:keyEquivalent:]` — used once, to give
+/// the process's main-menu bar its one required item (see `ensure_app_init`
+/// for why a bare item-less `NSMenu` isn't a valid `mainMenu`).
+unsafe fn send_add_item_with_title(
+    recv: *mut Object,
+    s: SEL,
+    title: *mut Object,
+    action: SEL,
+    key_equivalent: *mut Object,
+) -> *mut Object {
+    let f: unsafe extern "C" fn(*mut Object, SEL, *mut Object, SEL, *mut Object) -> *mut Object =
+        std::mem::transmute(objc_msgSend as *const ());
+    f(recv, s, title, action, key_equivalent)
+}
 unsafe fn send_init_window(
     recv: *mut Object,
     s: SEL,
@@ -371,26 +385,49 @@ fn ensure_app_init() {
             NS_APPLICATION_ACTIVATION_POLICY_REGULAR,
         );
 
-        // Hand NSApp an explicit (empty) main menu *before* `finishLaunching`.
-        // This process is a bare Mach-O binary, not a `.app` bundle — it has
-        // no Info.plist/CFBundleName. With `mainMenu` still nil, a regular-
+        // Hand NSApp an explicit main menu *before* `finishLaunching`. This
+        // process is a bare Mach-O binary, not a `.app` bundle — it has no
+        // Info.plist/CFBundleName. With `mainMenu` still nil, a regular-
         // policy app's `finishLaunching` walks AppKit's own automatic
         // Main-Menu bootstrap path to build one, and that path fatally
         // asserts (`-[NSMenu _setMenuName:]`) on an unbundled process — a
         // process-aborting SIGABRT, not a recoverable Objective-C exception
         // (confirmed the hard way: it took down the whole `cargo test`
-        // binary, mid-suite, on a real macOS runner). GLFW/SDL/winit all
-        // avoid the exact same AppKit code path the same way: give NSApp a
-        // menu of its own first, so the automatic bootstrap never runs.
+        // binary, mid-suite, on a real macOS runner).
+        //
+        // A *bare, item-less* `NSMenu` set as `mainMenu` hits the exact same
+        // assertion (confirmed the same way, a second time): AppKit's
+        // bootstrap still reaches for `[[mainMenu itemAtIndex:0] submenu]`
+        // to install/rename the app's "Apple menu" placeholder, and an empty
+        // bar has no item 0 to find. `mainMenu` needs at least one item
+        // whose submenu stands in as that placeholder — GLFW/SDL/winit all
+        // build exactly this minimal skeleton (an empty-titled item with an
+        // empty submenu) rather than a truly empty menu, for this reason.
         let menu_class = class("NSMenu");
-        let menu_alloc = send0(menu_class, sel("alloc"));
-        let menu = send0(menu_alloc, sel("init"));
-        send1_obj(app, sel("setMainMenu:"), menu);
-        // `setMainMenu:` retains it; release our own +1 `alloc`/`init`
-        // reference now that NSApp holds one (mirrors this file's
-        // release-right-after-consumption convention elsewhere, e.g. `fmt`
-        // in `Inner::create`).
-        send0_void(menu, sel("release"));
+        let no_sel: SEL = std::ptr::null_mut();
+
+        let bar_alloc = send0(menu_class, sel("alloc"));
+        let bar = send0(bar_alloc, sel("init"));
+
+        let app_item = send_add_item_with_title(
+            bar,
+            sel("addItemWithTitle:action:keyEquivalent:"),
+            ns_string(""),
+            no_sel,
+            ns_string(""),
+        );
+        let app_menu_alloc = send0(menu_class, sel("alloc"));
+        let app_menu = send0(app_menu_alloc, sel("init"));
+        send1_obj(app_item, sel("setSubmenu:"), app_menu);
+        // `setSubmenu:` retains it; release our own +1 reference (mirrors
+        // this file's release-right-after-consumption convention elsewhere,
+        // e.g. `fmt` in `Inner::create`). `app_item` itself is an
+        // autoreleased return from `addItemWithTitle:...:` (added to `bar`,
+        // which owns it) — nothing for this file to release.
+        send0_void(app_menu, sel("release"));
+
+        send1_obj(app, sel("setMainMenu:"), bar);
+        send0_void(bar, sel("release"));
 
         send0_void(app, sel("finishLaunching"));
     });
