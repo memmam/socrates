@@ -1383,6 +1383,7 @@ impl Checker {
                 "fs" => "use `fs.read(..)`, `fs.write(..)`, ...",
                 "gpu" => "use `gpu.available()`, `gpu.run(..)`, ...",
                 "window" => "use `window.create(..)`, ...",
+                "gfx" => "use `gfx.compile_program(..)`, `gfx.draw_arrays(..)`, ...",
                 _ => "use `os.args()`, `os.env(..)`, ...",
             };
             self.diags.push(

@@ -54,7 +54,12 @@ jobs:
           ./target/release/fable check examples/raytracer.fable
           ./target/release/fable test tests/spec > /dev/null
       - name: Demo golden tests
-        run: ./target/release/fable test demos > /dev/null
+        # demos/glcube/main.fable needs a live GL context (see the `gl` job's
+        # own Xvfb step below) — every other .fable file under demos/,
+        # including glcube's own GL-free cube.fable/spec.fable, runs here.
+        run: |
+          shopt -s extglob
+          ./target/release/fable test demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable > /dev/null
       - name: Self-contained demo binary (fable build)
         # Staple a data-reading demo and a worker demo into standalone
         # binaries and prove each reproduces its source run byte-for-byte
@@ -155,6 +160,14 @@ jobs:
           Xvfb :99 -screen 0 1024x768x24 &
           sleep 1
           DISPLAY=:99 cargo test --features gl
+      - name: glcube demo golden tests (gl, under Xvfb, real rendered pixels)
+        # The one demo whose golden test needs an actual GL context (SPEC
+        # § 7.4's own verification convention: pixel spot-checks, not a
+        # framebuffer hash — see demos/glcube/README.md). Xvfb from the step
+        # above is still running on :99.
+        run: |
+          cargo build --release --features gl
+          DISPLAY=:99 ./target/release/fable test demos/glcube
 
   gl-windows:
     name: window feature (Win32/WGL)
@@ -286,7 +299,13 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - name: Spec + demo golden suites on Apple Silicon
-        run: cargo build --release && ./target/release/fable test tests/spec demos > /dev/null
+        # demos/glcube/main.fable needs a live GL context (this job builds
+        # without --features gl) — see the `gl`/`gl-macos` jobs' own
+        # exclusion of the same demo for the same reason.
+        run: |
+          shopt -s extglob
+          cargo build --release
+          ./target/release/fable test tests/spec demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable > /dev/null
       - name: Build, sign, and run a section-embedded demo binary
         run: |
           host="target/release/fable"                       # payload emitter

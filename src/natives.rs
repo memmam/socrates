@@ -871,6 +871,263 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             w.borrow_mut().swap_buffers();
             Value::Unit
         }
+        WindowHandleMakeCurrent => {
+            let w = window_rc(vm, argc)?;
+            w.borrow_mut().make_current();
+            vm.gfx_current_window = Some(w);
+            Value::Unit
+        }
+
+        // ------------------------------------------------------------------
+        // gfx.* (v0.8) — OpenGL draw calls against "whichever window is
+        // currently current" (see `Vm::gfx_current_window`, set by
+        // `win.make_current()` above). Implementation lives in
+        // `src/window/`; without the `gl` cargo feature, or before any
+        // window has ever called `make_current()`, every member panics
+        // with a clear message (`gfx_window`, below) — except
+        // `compile_program`, whose failures are `Err` values instead,
+        // matching its `Result` return (the only fallible `gfx.*` member).
+        // ------------------------------------------------------------------
+        GfxCompileProgram => {
+            let vsrc = str_arg(vm, argc, 0)?;
+            let fsrc = str_arg(vm, argc, 1)?;
+            match gfx_window_msg(vm) {
+                Ok(w) => {
+                    let compiled = w.borrow_mut().gl_compile_program(&vsrc, &fsrc);
+                    match compiled {
+                        Ok(p) => make_ok(vm, Value::Int(p as i64)),
+                        Err(msg) => {
+                            let m = vm.alloc_str(msg);
+                            make_err(vm, m)
+                        }
+                    }
+                }
+                Err(msg) => {
+                    let m = vm.alloc_str(msg);
+                    make_err(vm, m)
+                }
+            }
+        }
+        GfxUseProgram => {
+            let w = gfx_window(vm)?;
+            let p = u32_arg(vm, argc, 0)?;
+            w.borrow_mut().gl_use_program(p);
+            Value::Unit
+        }
+        GfxDeleteProgram => {
+            let w = gfx_window(vm)?;
+            let p = u32_arg(vm, argc, 0)?;
+            w.borrow_mut().gl_delete_program(p);
+            Value::Unit
+        }
+        GfxCreateBuffer => {
+            let w = gfx_window(vm)?;
+            let name = w.borrow_mut().gl_create_buffer();
+            Value::Int(name as i64)
+        }
+        GfxDeleteBuffer => {
+            let w = gfx_window(vm)?;
+            let b = u32_arg(vm, argc, 0)?;
+            w.borrow_mut().gl_delete_buffer(b);
+            Value::Unit
+        }
+        GfxBindBuffer => {
+            let w = gfx_window(vm)?;
+            let kind = buffer_kind_arg(vm, argc, 0)?;
+            let b = u32_arg(vm, argc, 1)?;
+            w.borrow_mut().gl_bind_buffer(kind, b);
+            Value::Unit
+        }
+        GfxUploadBuffer => {
+            let w = gfx_window(vm)?;
+            let kind = buffer_kind_arg(vm, argc, 0)?;
+            let data = bytes_arg(vm, argc, 1)?.clone();
+            let dynamic = expect_bool(vm, vm.native_arg(argc, 2))?;
+            w.borrow_mut().gl_upload_buffer(kind, &data, dynamic);
+            Value::Unit
+        }
+        GfxCreateVertexArray => {
+            let w = gfx_window(vm)?;
+            let name = w.borrow_mut().gl_create_vertex_array();
+            Value::Int(name as i64)
+        }
+        GfxBindVertexArray => {
+            let w = gfx_window(vm)?;
+            let v = u32_arg(vm, argc, 0)?;
+            w.borrow_mut().gl_bind_vertex_array(v);
+            Value::Unit
+        }
+        GfxDeleteVertexArray => {
+            let w = gfx_window(vm)?;
+            let v = u32_arg(vm, argc, 0)?;
+            w.borrow_mut().gl_delete_vertex_array(v);
+            Value::Unit
+        }
+        GfxSetVertexAttrib => {
+            let w = gfx_window(vm)?;
+            let index = u32_arg(vm, argc, 0)?;
+            let size = i32_arg(vm, argc, 1)?;
+            let stride = i32_arg(vm, argc, 2)?;
+            let offset = i32_arg(vm, argc, 3)?;
+            w.borrow_mut()
+                .gl_set_vertex_attrib(index, size, stride, offset);
+            Value::Unit
+        }
+        GfxDisableVertexAttrib => {
+            let w = gfx_window(vm)?;
+            let index = u32_arg(vm, argc, 0)?;
+            w.borrow_mut().gl_disable_vertex_attrib(index);
+            Value::Unit
+        }
+        GfxCreateTexture => {
+            let w = gfx_window(vm)?;
+            let name = w.borrow_mut().gl_create_texture();
+            Value::Int(name as i64)
+        }
+        GfxDeleteTexture => {
+            let w = gfx_window(vm)?;
+            let t = u32_arg(vm, argc, 0)?;
+            w.borrow_mut().gl_delete_texture(t);
+            Value::Unit
+        }
+        GfxBindTexture => {
+            let w = gfx_window(vm)?;
+            let t = u32_arg(vm, argc, 0)?;
+            w.borrow_mut().gl_bind_texture(t);
+            Value::Unit
+        }
+        GfxActiveTextureUnit => {
+            let w = gfx_window(vm)?;
+            let unit = u32_arg(vm, argc, 0)?;
+            w.borrow_mut().gl_active_texture_unit(unit);
+            Value::Unit
+        }
+        GfxUploadTexture => {
+            let w = gfx_window(vm)?;
+            let data = bytes_arg(vm, argc, 0)?.clone();
+            let width = i32_arg(vm, argc, 1)?;
+            let height = i32_arg(vm, argc, 2)?;
+            let has_alpha = expect_bool(vm, vm.native_arg(argc, 3))?;
+            // `width`/`height` come straight from the caller and drive how
+            // many bytes `glTexImage2D` reads from `data.as_ptr()` -- with
+            // no check here, a too-short buffer is an out-of-bounds heap
+            // read reaching the GL driver (demos/png/png.fable's own
+            // `pixels.len() != w * h * 3` check is the same guard one
+            // directory over; this native had none).
+            let bpp: i64 = if has_alpha { 4 } else { 3 };
+            let expected = (width as i64) * (height as i64) * bpp;
+            if width < 0 || height < 0 || data.len() as i64 != expected {
+                return Err(vm.error(format!(
+                    "gfx.upload_texture: data has {} bytes, but {width}x{height}x{bpp} \
+                     ({has_alpha}) requires exactly {expected}",
+                    data.len()
+                )));
+            }
+            w.borrow_mut()
+                .gl_upload_texture(&data, width, height, has_alpha);
+            Value::Unit
+        }
+        GfxSetUniformInt => {
+            let w = gfx_window(vm)?;
+            let p = u32_arg(vm, argc, 0)?;
+            let name = str_arg(vm, argc, 1)?;
+            let v = i32_arg(vm, argc, 2)?;
+            w.borrow_mut().gl_set_uniform_int(p, &name, v);
+            Value::Unit
+        }
+        GfxSetUniformFloat => {
+            let w = gfx_window(vm)?;
+            let p = u32_arg(vm, argc, 0)?;
+            let name = str_arg(vm, argc, 1)?;
+            let v = float_arg(vm, argc, 2)? as f32;
+            w.borrow_mut().gl_set_uniform_float(p, &name, v);
+            Value::Unit
+        }
+        GfxSetUniformVec2 => {
+            let w = gfx_window(vm)?;
+            let p = u32_arg(vm, argc, 0)?;
+            let name = str_arg(vm, argc, 1)?;
+            let x = float_arg(vm, argc, 2)? as f32;
+            let y = float_arg(vm, argc, 3)? as f32;
+            w.borrow_mut().gl_set_uniform_vec2(p, &name, x, y);
+            Value::Unit
+        }
+        GfxSetUniformVec3 => {
+            let w = gfx_window(vm)?;
+            let p = u32_arg(vm, argc, 0)?;
+            let name = str_arg(vm, argc, 1)?;
+            let x = float_arg(vm, argc, 2)? as f32;
+            let y = float_arg(vm, argc, 3)? as f32;
+            let z = float_arg(vm, argc, 4)? as f32;
+            w.borrow_mut().gl_set_uniform_vec3(p, &name, x, y, z);
+            Value::Unit
+        }
+        GfxSetUniformVec4 => {
+            let w = gfx_window(vm)?;
+            let p = u32_arg(vm, argc, 0)?;
+            let name = str_arg(vm, argc, 1)?;
+            let x = float_arg(vm, argc, 2)? as f32;
+            let y = float_arg(vm, argc, 3)? as f32;
+            let z = float_arg(vm, argc, 4)? as f32;
+            let w4 = float_arg(vm, argc, 5)? as f32;
+            w.borrow_mut().gl_set_uniform_vec4(p, &name, x, y, z, w4);
+            Value::Unit
+        }
+        GfxSetUniformMat4 => {
+            let w = gfx_window(vm)?;
+            let p = u32_arg(vm, argc, 0)?;
+            let name = str_arg(vm, argc, 1)?;
+            let values = mat4_arg(vm, argc, 2)?;
+            w.borrow_mut().gl_set_uniform_mat4(p, &name, &values);
+            Value::Unit
+        }
+        GfxDrawArrays => {
+            let w = gfx_window(vm)?;
+            let first = i32_arg(vm, argc, 0)?;
+            let count = i32_arg(vm, argc, 1)?;
+            w.borrow_mut().gl_draw_arrays(first, count);
+            Value::Unit
+        }
+        GfxDrawElements => {
+            let w = gfx_window(vm)?;
+            let count = i32_arg(vm, argc, 0)?;
+            let byte_offset = i32_arg(vm, argc, 1)?;
+            w.borrow_mut().gl_draw_elements(count, byte_offset);
+            Value::Unit
+        }
+        GfxClear => {
+            let w = gfx_window(vm)?;
+            let r = float_arg(vm, argc, 0)? as f32;
+            let g = float_arg(vm, argc, 1)? as f32;
+            let b = float_arg(vm, argc, 2)? as f32;
+            let a = float_arg(vm, argc, 3)? as f32;
+            w.borrow_mut().gl_clear(r, g, b, a);
+            Value::Unit
+        }
+        GfxSetDepthTest => {
+            let w = gfx_window(vm)?;
+            let enabled = expect_bool(vm, vm.native_arg(argc, 0))?;
+            w.borrow_mut().gl_set_depth_test(enabled);
+            Value::Unit
+        }
+        GfxViewport => {
+            let w = gfx_window(vm)?;
+            let x = i32_arg(vm, argc, 0)?;
+            let y = i32_arg(vm, argc, 1)?;
+            let width = i32_arg(vm, argc, 2)?;
+            let height = i32_arg(vm, argc, 3)?;
+            w.borrow_mut().gl_viewport(x, y, width, height);
+            Value::Unit
+        }
+        GfxReadPixels => {
+            let w = gfx_window(vm)?;
+            let x = i32_arg(vm, argc, 0)?;
+            let y = i32_arg(vm, argc, 1)?;
+            let width = i32_arg(vm, argc, 2)?;
+            let height = i32_arg(vm, argc, 3)?;
+            let data = w.borrow_mut().gl_read_pixels(x, y, width, height);
+            Value::Obj(vm.heap.alloc(Obj::Bytes(data)))
+        }
 
         // ------------------------------------------------------------------
         // List methods (receiver = arg 0)
@@ -1937,6 +2194,111 @@ fn window_rc(
 
 fn list_handle(vm: &Vm, argc: u8) -> Result<Handle, VmError> {
     expect_list(vm, vm.native_arg(argc, 0))
+}
+
+// ---------------------------------------------------------------------------
+// gfx.* (v0.8) argument helpers
+// ---------------------------------------------------------------------------
+
+/// Resolve the currently-current GL window as a plain `String` error —
+/// shared by every `gfx.*` native. `compile_program` folds this straight
+/// into its own `Result` (it's the one member with a `Result` return);
+/// `gfx_window` below wraps it as a `VmError` (panic) for everything else,
+/// matching `window`'s own methods' "assumes valid state" shape.
+///
+/// Distinguishes two causes with two distinct messages: the `gl` cargo
+/// feature being off entirely (`cfg!` is a compile-time constant, so this
+/// check costs nothing and is accurate for the running binary) vs. no
+/// window ever having called `win.make_current()` yet.
+fn gfx_window_msg(
+    vm: &Vm,
+) -> Result<std::rc::Rc<std::cell::RefCell<crate::window::WindowHandle>>, String> {
+    if !cfg!(feature = "gl") {
+        return Err("gfx support not compiled in (build with --features gl)".to_string());
+    }
+    match &vm.gfx_current_window {
+        Some(w) => Ok(w.clone()),
+        None => Err("gfx: no current GL context -- call window.make_current() first".to_string()),
+    }
+}
+
+/// `gfx_window_msg`, panicking (`vm.error`) instead of returning a `String`
+/// — every `gfx.*` native except `compile_program` uses this, since they
+/// have no `Result` to carry an `Err` through.
+fn gfx_window(
+    vm: &Vm,
+) -> Result<std::rc::Rc<std::cell::RefCell<crate::window::WindowHandle>>, VmError> {
+    gfx_window_msg(vm).map_err(|m| vm.error(m))
+}
+
+/// A GL object handle (`Int` on the Fable side) as `u32` — every
+/// `gfx.*` shader/program/buffer/VAO/texture parameter.
+fn u32_arg(vm: &Vm, argc: u8, i: u8) -> Result<u32, VmError> {
+    let v = int_arg(vm, argc, i)?;
+    u32::try_from(v).map_err(|_| vm.error(format!("gfx: Int {v} is out of range for a GL handle")))
+}
+
+/// A GL size/offset/count (`Int` on the Fable side) as `i32`.
+fn i32_arg(vm: &Vm, argc: u8, i: u8) -> Result<i32, VmError> {
+    let v = int_arg(vm, argc, i)?;
+    i32::try_from(v).map_err(|_| vm.error(format!("gfx: Int {v} is out of i32 range")))
+}
+
+/// `gfx.bind_buffer`/`gfx.upload_buffer`'s `kind: String` ("vertex" or
+/// "index") as the platform-neutral `GfxBufferKind` tag.
+fn buffer_kind_arg(vm: &Vm, argc: u8, i: u8) -> Result<crate::window::GfxBufferKind, VmError> {
+    let s = str_arg(vm, argc, i)?;
+    match s.as_str() {
+        "vertex" => Ok(crate::window::GfxBufferKind::Vertex),
+        "index" => Ok(crate::window::GfxBufferKind::Index),
+        other => Err(vm.error(format!(
+            "gfx: buffer kind must be \"vertex\" or \"index\", got {other:?}"
+        ))),
+    }
+}
+
+/// A struct value's fields, cloned out of the heap — `None` if `v` isn't a
+/// struct at all (used by `mat4_arg` to duck-type `Mat4`'s shape without
+/// referencing its `DefId`, which natives can't name; see
+/// `Native::GfxSetUniformMat4`'s doc comment).
+fn struct_fields(vm: &Vm, v: Value) -> Option<Vec<Value>> {
+    match v {
+        Value::Obj(h) => match vm.heap.get(h) {
+            Obj::Struct { fields, .. } => Some(fields.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Flatten a `Mat4` argument (`std/glm.fable`: 4 `Vec4` columns `c0..c3`,
+/// each an `{x, y, z, w}` struct of `Float`s — already column-major,
+/// matching GL's own convention) into 16 column-major `f32`s for
+/// `glUniformMatrix4fv`. `gfx.set_uniform_mat4`'s third parameter is a
+/// fresh scheme variable, not a concrete `Mat4` (natives can't reference a
+/// `std` module struct's `DefId`), so this duck-types the runtime shape
+/// instead of relying on the static type — anything else is a clear panic,
+/// not a silently wrong upload.
+fn mat4_arg(vm: &Vm, argc: u8, i: u8) -> Result<[f32; 16], VmError> {
+    let bad = || vm.error("gfx.set_uniform_mat4: expected a Mat4 (4 Vec4 columns of 4 Floats)");
+    let cols = struct_fields(vm, vm.native_arg(argc, i)).ok_or_else(bad)?;
+    if cols.len() != 4 {
+        return Err(bad());
+    }
+    let mut out = [0f32; 16];
+    for (ci, col) in cols.into_iter().enumerate() {
+        let comps = struct_fields(vm, col).ok_or_else(bad)?;
+        if comps.len() != 4 {
+            return Err(bad());
+        }
+        for (fi, comp) in comps.into_iter().enumerate() {
+            match comp {
+                Value::Float(f) => out[ci * 4 + fi] = f as f32,
+                _ => return Err(bad()),
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// The Bytes argument at position `i` — for natives whose Bytes parameter is

@@ -676,9 +676,9 @@ pushers (`push_u32le`, ...) / `to_list()` bridge to and from numeric data.
 The `window` namespace is the GLFW-equivalent piece of the native-OpenGL
 roadmap (`std.glm`, § 7.1, shipped the math side): window creation, event
 polling, keyboard/mouse state, and a trivial clear-color + swap-buffers —
-enough to prove the whole pipe end-to-end. A general `gl` draw-call
-namespace (a GL function-pointer loader with the usual few dozen entries) is
-a later addition; this namespace is deliberately just the GLFW-shaped part.
+enough to prove the whole pipe end-to-end. This namespace is deliberately
+just the GLFW-shaped part; the backend-neutral GL draw-call layer built on
+top of it is the separate `gfx` namespace (§ 7.4).
 
 Like `gpu`, its implementation is quarantined behind a cargo feature — here
 `gl` — but unlike `gpu`, the feature adds **zero** Cargo dependencies: it is
@@ -745,6 +745,77 @@ not. Close-button detection has no `NSWindowDelegate` callback installed
 poll-per-frame API deliberately avoids); instead `should_close` is set once
 `[window isVisible]` goes false after a click on the close box, which
 AppKit's default close path guarantees without a delegate.
+
+### 7.4 The gfx namespace (v0.8, feature-gated)
+
+`gfx` is a backend-neutral OpenGL 3.3 core-profile draw-call layer on top of
+`window`'s per-platform GL function-pointer table (§ 7.3): shaders,
+programs, buffers, vertex arrays, textures, uniforms, and draw calls.
+Rather than taking a `Window` receiver per call, every `gfx.*` member
+operates against "whichever window is currently current" — the same
+single-current-context model `glfwMakeContextCurrent` uses. `Window` gained
+one more method for this (§ 8.4d): `make_current() -> Unit` marks a window
+as the one every subsequent `gfx.*` call targets, and is idempotent — the
+same make-current call `clear()`/`swap_buffers()` already issue internally
+per call, just exposed on its own.
+
+Like `window`, `gfx` is quarantined behind the `gl` cargo feature and adds
+**zero** Cargo dependencies (raw FFI only); the namespace always exists —
+programs using it typecheck in every build. Every member degrades
+gracefully: without the `gl` feature, every `gfx.*` call panics with
+`"gfx support not compiled in (build with --features gl)"`; with the
+feature but before any window has ever called `make_current()`, every call
+panics with `"gfx: no current GL context -- call window.make_current()
+first"`. The one exception is `compile_program`, whose failures — including
+both of the above — are `Err` values instead of panics, matching its
+`Result` return; every other member "assumes valid GL state" once a
+program is validly linked and bound, the same no-`Result`-plumbing shape
+`Window`'s own methods use (§ 8.4d).
+
+| Member | Type | Notes |
+|---|---|---|
+| `gfx.compile_program(vertex_src, fragment_src)` | `fn(String, String) -> Result[Int, String]` | compiles + links a GLSL vertex/fragment pair; `Err` carries the driver's shader/link info log, sized via `GL_INFO_LOG_LENGTH` (never a guessed fixed buffer) — and any shader/program object already created is deleted before returning |
+| `gfx.use_program(p)` | `fn(Int) -> Unit` | `glUseProgram` |
+| `gfx.delete_program(p)` | `fn(Int) -> Unit` | `glDeleteProgram` |
+| `gfx.create_buffer()` | `fn() -> Int` | `glGenBuffers(1, ...)` |
+| `gfx.delete_buffer(b)` | `fn(Int) -> Unit` | `glDeleteBuffers(1, ...)` |
+| `gfx.bind_buffer(kind, b)` | `fn(String, Int) -> Unit` | `kind` is `"vertex"` or `"index"` → `GL_ARRAY_BUFFER` / `GL_ELEMENT_ARRAY_BUFFER` |
+| `gfx.upload_buffer(kind, data, dynamic)` | `fn(String, Bytes, Bool) -> Unit` | `glBufferData` on `kind`'s currently bound buffer; `dynamic` picks `GL_DYNAMIC_DRAW` over `GL_STATIC_DRAW` |
+| `gfx.create_vertex_array()` | `fn() -> Int` | `glGenVertexArrays(1, ...)` |
+| `gfx.bind_vertex_array(v)` | `fn(Int) -> Unit` | `glBindVertexArray` |
+| `gfx.delete_vertex_array(v)` | `fn(Int) -> Unit` | `glDeleteVertexArrays(1, ...)` |
+| `gfx.set_vertex_attrib(index, size, stride, offset)` | `fn(Int, Int, Int, Int) -> Unit` | `glVertexAttribPointer` (fixed to `GL_FLOAT`, `normalized = false` — `f32` vertex data only, v1 scope) + `glEnableVertexAttribArray`; `stride`/`offset` are byte counts |
+| `gfx.disable_vertex_attrib(index)` | `fn(Int) -> Unit` | `glDisableVertexAttribArray` |
+| `gfx.create_texture()` | `fn() -> Int` | `glGenTextures(1, ...)` |
+| `gfx.delete_texture(t)` | `fn(Int) -> Unit` | `glDeleteTextures(1, ...)` |
+| `gfx.bind_texture(t)` | `fn(Int) -> Unit` | `glBindTexture(GL_TEXTURE_2D, t)` |
+| `gfx.active_texture_unit(unit)` | `fn(Int) -> Unit` | `glActiveTexture(GL_TEXTURE0 + unit)` |
+| `gfx.upload_texture(data, width, height, has_alpha)` | `fn(Bytes, Int, Int, Bool) -> Unit` | `glTexImage2D` onto the bound `GL_TEXTURE_2D` (`GL_RGBA`/`GL_RGB` by `has_alpha`, always `GL_UNSIGNED_BYTE`); also sets `GL_LINEAR` filtering and `GL_CLAMP_TO_EDGE` wrapping (fixed defaults, v1 scope) |
+| `gfx.set_uniform_int(p, name, v)` | `fn(Int, String, Int) -> Unit` | binds `p`, then `glUniform1i` |
+| `gfx.set_uniform_float(p, name, v)` | `fn(Int, String, Float) -> Unit` | `glUniform1f` |
+| `gfx.set_uniform_vec2(p, name, x, y)` | `fn(Int, String, Float, Float) -> Unit` | `glUniform2f` |
+| `gfx.set_uniform_vec3(p, name, x, y, z)` | `fn(Int, String, Float, Float, Float) -> Unit` | `glUniform3f` |
+| `gfx.set_uniform_vec4(p, name, x, y, z, w)` | `fn(Int, String, Float, Float, Float, Float) -> Unit` | `glUniform4f` |
+| `gfx.set_uniform_mat4(p, name, m)` | `fn(Int, String, Mat4) -> Unit` | flattens `std.glm`'s `Mat4` (§ 7.1: 4 `Vec4` columns `c0..c3`, itself already column-major) into 16 `f32`s; `glUniformMatrix4fv(..., transpose=GL_FALSE, ...)` |
+| `gfx.draw_arrays(first, count)` | `fn(Int, Int) -> Unit` | `glDrawArrays(GL_TRIANGLES, first, count)` |
+| `gfx.draw_elements(count, byte_offset)` | `fn(Int, Int) -> Unit` | `glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, byte_offset)` — `u32` indices fixed; `byte_offset` into the bound element-array buffer |
+| `gfx.clear(r, g, b, a)` | `fn(Float, Float, Float, Float) -> Unit` | `glClearColor` + `glClear(GL_COLOR_BUFFER_BIT \| GL_DEPTH_BUFFER_BIT)` — unlike `Window.clear` (§ 8.4d, color only), also clears depth |
+| `gfx.set_depth_test(enabled)` | `fn(Bool) -> Unit` | `glEnable`/`glDisable(GL_DEPTH_TEST)` |
+| `gfx.viewport(x, y, w, h)` | `fn(Int, Int, Int, Int) -> Unit` | `glViewport` |
+| `gfx.read_pixels(x, y, w, h)` | `fn(Int, Int, Int, Int) -> Bytes` | `glReadPixels(..., GL_RGBA, GL_UNSIGNED_BYTE, ...)` into a freshly allocated `w * h * 4`-byte buffer — for pixel-spot-check golden tests, this repo's verification convention for rendered output (rather than full-framebuffer hashing) |
+
+`gfx.set_uniform_mat4`'s `m` parameter is typed as a fresh scheme variable
+in the native signature, not a concrete `Mat4` — natives can't reference a
+`std` module struct's `DefId`, which isn't assigned until `std.glm` is
+imported. Passing anything other than an actual `Mat4` (4 `Vec4` fields,
+each 4 `Float`s) is therefore a runtime panic (a clear message naming the
+expected shape), not a compile error.
+
+Every GL object handle this namespace hands back or takes (programs,
+buffers, vertex arrays, textures — shaders are internal to
+`compile_program` and never surfaced) is a plain `Int`, matching every
+other GL-object convention in this namespace; there is no dedicated handle
+type.
 
 ---
 
@@ -923,6 +994,13 @@ before the first pointer motion), `width() -> Int` / `height() -> Int`
 `clear(r: Float, g: Float, b: Float, a: Float) -> Unit` (`glClearColor` +
 `glClear(GL_COLOR_BUFFER_BIT)`), `swap_buffers() -> Unit` (presents the back
 buffer — the window is double-buffered).
+
+`make_current() -> Unit` (v0.8): makes this window's GL context current on
+this thread. Idempotent, and the same call `clear()`/`swap_buffers()`
+already make internally per call — this just exposes it as its own public
+method, so the `gfx` namespace (§ 7.4) has an explicit window to target:
+every `gfx.*` call operates against whichever window last called
+`make_current()`.
 
 ### 8.5 Numeric methods
 
