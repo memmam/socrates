@@ -181,30 +181,52 @@ jobs:
       - name: Clippy (gl, deny warnings)
         run: cargo clippy --features gl --all-targets -- -D warnings
       - name: Unit + golden spec tests (gl)
-        # [debug]: bisecting a real-hardware-only abort (see
-        # src/window/macos.rs's debug_step markers, which narrowed it to
-        # somewhere inside NSWindow's initWithContentRect:... call). This
-        # crash is a genuine Objective-C exception unwind that Rust's
-        # runtime can't catch (a hard SIGABRT) -- but NSSetUncaughtExceptionHandler
-        # never fires for it: that hook only runs once an exception has
-        # fully unwound to the top uncaught-exception handler, and Rust's
-        # own foreign-exception guard aborts the process mid-unwind, before
-        # that point is ever reached (unlike this file's own debug_step
-        # eprintln!s, which run on the way IN, before anything can throw).
-        #
-        # objc_exception_throw() is the one universal, synchronous
-        # interception point every Objective-C raise funnels through
-        # (regardless of entry point) BEFORE any unwinding starts -- the
-        # same technique crash reporters (PLCrashReporter etc.) use. Run
-        # the test binary under lldb with a breakpoint there so we can
-        # print the exception's own description and a backtrace before
-        # letting it continue to the same abort as always.
-        #
-        # Revert to plain `cargo test --features gl` once the crash site is
-        # found and permanently fixed.
+        # This is the real pass/fail gate -- plain `cargo test --features gl`,
+        # normal exit-code semantics, no masking. A previous [debug] version
+        # of this step wrapped the run in `lldb ... || true` for diagnostics
+        # and that `|| true` silently converted a real failure to green: the
+        # `find`-based TEST_BIN lookup matched a stray incremental-build
+        # `*.rcgu.o` object file instead of the actual test executable (an
+        # object file isn't runnable -- lldb's `run` failed with "Permission
+        # denied"), so the crashing test never actually ran that time, and
+        # the job reported success on a run that tested nothing. Keep this
+        # step honest and ungated; do the lldb bisection separately below.
+        run: cargo test --features gl
+      - name: "Unit + golden spec tests (gl) [debug: lldb re-run on failure]"
+        # Only runs if the real gate above failed. Re-identifies the test
+        # binary robustly via --message-format=json (the target.kind=="lib"
+        # compiler-artifact's own `executable` field -- unambiguous, unlike
+        # a `find`/`head -1` glob over target/debug/deps, which also
+        # contains per-codegen-unit *.rcgu.o objects and a second, unrelated
+        # `fable-*` binary for src/main.rs's own unit tests). Breaks on
+        # objc_exception_throw() -- the one universal, synchronous
+        # interception point every Objective-C raise funnels through, before
+        # any unwinding starts (the same technique crash reporters use) --
+        # since NSSetUncaughtExceptionHandler doesn't work here: that hook
+        # only fires once an exception has fully unwound to the top
+        # uncaught-exception handler, and Rust's own foreign-exception guard
+        # aborts the process mid-unwind before that point is ever reached.
+        if: failure()
         run: |
-          cargo test --features gl --no-run
-          TEST_BIN=$(find target/debug/deps -maxdepth 1 -type f -name 'fable-*' ! -name '*.d' | head -1)
+          cargo test --features gl --no-run --message-format=json > /tmp/cargo-test-build.json
+          TEST_BIN=$(python3 -c "
+          import json
+          with open('/tmp/cargo-test-build.json') as f:
+              for line in f:
+                  line = line.strip()
+                  if not line:
+                      continue
+                  obj = json.loads(line)
+                  if obj.get('reason') != 'compiler-artifact' or not obj.get('executable'):
+                      continue
+                  target = obj.get('target', {})
+                  if target.get('name') == 'fable' and 'lib' in target.get('kind', []):
+                      print(obj['executable'])
+          ")
+          if [ -z "$TEST_BIN" ]; then
+            echo "::error::could not identify the lib-unittests binary from cargo's build metadata"
+            exit 1
+          fi
           echo "test binary: $TEST_BIN"
           lldb -b \
             -o "breakpoint set -n objc_exception_throw" \
@@ -212,7 +234,7 @@ jobs:
             -o "po \$x0" \
             -o "bt" \
             -o "continue" \
-            -- "$TEST_BIN" || true
+            -- "$TEST_BIN"
 
   demo-zoo:
     # Proves the release's cross-compile + `fable build` stapling works on
