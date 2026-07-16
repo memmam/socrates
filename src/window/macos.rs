@@ -370,6 +370,28 @@ fn ensure_app_init() {
             sel("setActivationPolicy:"),
             NS_APPLICATION_ACTIVATION_POLICY_REGULAR,
         );
+
+        // Hand NSApp an explicit (empty) main menu *before* `finishLaunching`.
+        // This process is a bare Mach-O binary, not a `.app` bundle — it has
+        // no Info.plist/CFBundleName. With `mainMenu` still nil, a regular-
+        // policy app's `finishLaunching` walks AppKit's own automatic
+        // Main-Menu bootstrap path to build one, and that path fatally
+        // asserts (`-[NSMenu _setMenuName:]`) on an unbundled process — a
+        // process-aborting SIGABRT, not a recoverable Objective-C exception
+        // (confirmed the hard way: it took down the whole `cargo test`
+        // binary, mid-suite, on a real macOS runner). GLFW/SDL/winit all
+        // avoid the exact same AppKit code path the same way: give NSApp a
+        // menu of its own first, so the automatic bootstrap never runs.
+        let menu_class = class("NSMenu");
+        let menu_alloc = send0(menu_class, sel("alloc"));
+        let menu = send0(menu_alloc, sel("init"));
+        send1_obj(app, sel("setMainMenu:"), menu);
+        // `setMainMenu:` retains it; release our own +1 `alloc`/`init`
+        // reference now that NSApp holds one (mirrors this file's
+        // release-right-after-consumption convention elsewhere, e.g. `fmt`
+        // in `Inner::create`).
+        send0_void(menu, sel("release"));
+
         send0_void(app, sel("finishLaunching"));
     });
 }
