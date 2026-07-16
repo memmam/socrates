@@ -352,24 +352,9 @@ impl GlFns {
 // (see the module doc comment) is created.
 // ---------------------------------------------------------------------------
 
-/// Prints a step marker to stderr and flushes immediately. **Temporary**
-/// bisection instrumentation for the macos.rs Cocoa-abort investigation
-/// (see the CI failure history in PR #45): the AppKit crash this file has
-/// hit so far is an unrecoverable process abort (`SIGABRT` via a foreign
-/// exception Rust can't catch), which gives no Rust-level unwind/backtrace
-/// to inspect — only whatever reached stderr before the abort. `eprintln!`
-/// alone isn't provably enough (a `SIGABRT` can still race a buffered
-/// write), hence the explicit flush after every marker. Remove once the
-/// crashing call is identified and permanently fixed.
-fn debug_step(label: &str) {
-    eprintln!("[macos debug] {label}");
-    let _ = std::io::Write::flush(&mut std::io::stderr());
-}
-
 fn ensure_app_init() {
     static INIT: OnceLock<()> = OnceLock::new();
     INIT.get_or_init(|| unsafe {
-        debug_step("ensure_app_init: start");
         // Process-lifetime autorelease pool — see the module doc comment on
         // memory management for why this is the deliberately coarse choice
         // here instead of per-frame pool push/pop.
@@ -380,11 +365,9 @@ fn ensure_app_init() {
         // enough to leak it for the process's lifetime (see the module doc
         // comment on memory management).
         send0(pool, sel("init"));
-        debug_step("ensure_app_init: autorelease pool ready");
 
         let app_class = class("NSApplication");
         let app = send0(app_class, sel("sharedApplication"));
-        debug_step("ensure_app_init: sharedApplication returned");
         // Return value (did the policy change take effect) intentionally
         // ignored — this mirrors x11.rs's "only check calls whose failure
         // blocks progress" convention; a regular-policy app that somehow
@@ -394,7 +377,6 @@ fn ensure_app_init() {
             sel("setActivationPolicy:"),
             NS_APPLICATION_ACTIVATION_POLICY_REGULAR,
         );
-        debug_step("ensure_app_init: setActivationPolicy: returned");
 
         // Deliberately *not* calling `[NSApp finishLaunching]`. Three
         // different attempts at giving `mainMenu` a value before that call
@@ -420,8 +402,23 @@ fn ensure_app_init() {
         // bringing the app/window to the front so it can become key and
         // receive keyboard events — is requested directly instead.
         send1_bool_void(app, sel("activateIgnoringOtherApps:"), OBJC_YES);
-        debug_step("ensure_app_init: activateIgnoringOtherApps: returned");
     });
+}
+
+/// `+[NSThread isMainThread]` — AppKit enforces, unconditionally, that
+/// `NSWindow` (and UI objects generally) only ever get created on the
+/// process's actual main thread; anything else raises an uncatchable
+/// Objective-C exception (confirmed on real macos-14 hardware: `NSWindow
+/// should only be instantiated on the main thread!`, via `-[NSWindow
+/// _initContent:styleMask:backing:defer:contentView:]`). `Inner::create`
+/// checks this before touching any Cocoa API so that calling it from the
+/// wrong thread is a clean, catchable `Err` instead of a process abort —
+/// this isn't just a test-environment quirk (`cargo test` runs every test
+/// body on its own spawned thread, never the real main thread, which is
+/// how this was first found), a real Fable program calling `window.create`
+/// from inside a `worker` isolate would hit the identical crash.
+fn is_main_thread() -> bool {
+    unsafe { send0_bool(class("NSThread"), sel("isMainThread")) != OBJC_NO }
 }
 
 fn shared_app() -> *mut Object {
@@ -461,6 +458,14 @@ pub struct Inner {
 
 impl Inner {
     pub fn create(title: &str, w: i32, h: i32) -> Result<Inner, String> {
+        if !is_main_thread() {
+            return Err(
+                "window.create: must run on the process's main thread (macOS requires all \
+                 NSWindow/AppKit calls there); this fires from a `worker` isolate, or from \
+                 any thread other than the one that started the program"
+                    .to_string(),
+            );
+        }
         let gl = GlFns::load()?;
         ensure_app_init();
 
@@ -500,10 +505,8 @@ impl Inner {
                     "window.create: NSWindow initWithContentRect:... returned nil".to_string(),
                 );
             }
-            debug_step("create: NSWindow initWithContentRect:... returned");
 
             send1_obj(window, sel("setTitle:"), ns_string(title));
-            debug_step("create: setTitle: returned");
 
             // Pixel format attribute array: `{ ColorSize, 24, DepthSize, 24,
             // DoubleBuffer, 0 }` — boolean flags (DoubleBuffer) take no
@@ -533,7 +536,6 @@ impl Inner {
                         .to_string(),
                 );
             }
-            debug_step("create: NSOpenGLPixelFormat initWithAttributes: returned");
 
             let ctx_class = class("NSOpenGLContext");
             let ctx_alloc = send0(ctx_class, sel("alloc"));
@@ -559,17 +561,12 @@ impl Inner {
                         .to_string(),
                 );
             }
-            debug_step("create: NSOpenGLContext initWithFormat:shareContext: returned");
 
             let content_view = send0(window, sel("contentView"));
-            debug_step("create: contentView returned");
             send1_obj(ctx, sel("setView:"), content_view);
-            debug_step("create: setView: returned");
             send0_void(ctx, sel("makeCurrentContext"));
-            debug_step("create: makeCurrentContext returned");
 
             send1_obj(window, sel("makeKeyAndOrderFront:"), std::ptr::null_mut());
-            debug_step("create: makeKeyAndOrderFront: returned");
 
             Ok(Inner {
                 window,
@@ -761,7 +758,13 @@ mod tests {
     /// restricting window-server access) — mirrors `x11.rs`'s
     /// `create_clear_swap_poll_close` test's graceful-skip style, since
     /// `cargo test --features gl` must stay green even in constrained
-    /// environments.
+    /// environments. In practice this always skips under `cargo test`
+    /// itself: `Inner::create`'s main-thread check (see [`is_main_thread`])
+    /// correctly rejects it, since `libtest` runs every test body on its
+    /// own spawned thread, never the process's real main thread — a real
+    /// Fable program (whose interpreter runs on the actual main thread
+    /// unless the script explicitly uses `worker`) hits neither this check
+    /// nor the AppKit crash it exists to prevent.
     #[test]
     fn create_clear_swap_poll_close() {
         let inner = match Inner::create("fable window test", 320, 240) {
