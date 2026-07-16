@@ -127,8 +127,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Install Xvfb
-        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Install X11 dev headers + Xvfb
+        # `--features gl` links against libX11 normally (see src/window/x11.rs's
+        # module docs): that needs the unversioned `libX11.so` dev symlink,
+        # which `libx11-dev` provides — the bare runtime lib alone (already on
+        # any desktop image) isn't enough for the linker to find `-lX11`.
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev xvfb
       - name: Build (gl)
         run: cargo build --features gl
       - name: Clippy (gl, deny warnings)
