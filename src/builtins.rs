@@ -157,6 +157,52 @@ pub enum Native {
     WindowHandleHeight,
     WindowHandleClear,
     WindowHandleSwapBuffers,
+    /// `win.make_current()` (v0.8): binds this window's GL context as the
+    /// one every subsequent `gfx.*` native operates against (mirrors
+    /// `glfwMakeContextCurrent`) — see `Vm::gfx_current_window`.
+    WindowHandleMakeCurrent,
+
+    // gfx.* (v0.8, feature-gated on `gl`, same as `window`) — OpenGL 3.3
+    // core-profile draw calls against "whichever window is currently
+    // current" (`win.make_current()`, above). The natives are always
+    // registered; without the `gl` feature, or before any window has ever
+    // called `make_current()`, they degrade gracefully (see
+    // `natives::gfx_window` and `src/window/mod.rs`).
+    GfxCompileProgram,
+    GfxUseProgram,
+    GfxDeleteProgram,
+    GfxCreateBuffer,
+    GfxDeleteBuffer,
+    GfxBindBuffer,
+    GfxUploadBuffer,
+    GfxCreateVertexArray,
+    GfxBindVertexArray,
+    GfxDeleteVertexArray,
+    GfxSetVertexAttrib,
+    GfxDisableVertexAttrib,
+    GfxCreateTexture,
+    GfxDeleteTexture,
+    GfxBindTexture,
+    GfxActiveTextureUnit,
+    GfxUploadTexture,
+    GfxSetUniformInt,
+    GfxSetUniformFloat,
+    GfxSetUniformVec2,
+    GfxSetUniformVec3,
+    GfxSetUniformVec4,
+    /// `gfx.set_uniform_mat4(p, name, m)`: `m`'s scheme type is `Param(0)`
+    /// (a fresh type variable), not a concrete `Mat4` — natives can't name
+    /// a `std` module struct's `DefId` (`std.glm.Mat4` isn't assigned one
+    /// until `std.glm` is imported). Passing anything but a real `Mat4`
+    /// (4 `Vec4` fields, each 4 `Float`s) is a runtime panic, not a type
+    /// error (see `natives::mat4_arg`).
+    GfxSetUniformMat4,
+    GfxDrawArrays,
+    GfxDrawElements,
+    GfxClear,
+    GfxSetDepthTest,
+    GfxViewport,
+    GfxReadPixels,
 
     // List methods
     ListLen,
@@ -412,7 +458,7 @@ impl Native {
 
     /// Is `name` a builtin namespace (usable only as `name.member`)?
     pub fn is_namespace(name: &str) -> bool {
-        matches!(name, "math" | "fs" | "os" | "fft" | "worker" | "gpu" | "window")
+        matches!(name, "math" | "fs" | "os" | "fft" | "worker" | "gpu" | "window" | "gfx")
     }
 
     /// Resolve `<ns>.<member>` for any builtin namespace.
@@ -468,6 +514,38 @@ impl Native {
                 "create" => WindowCreate,
                 _ => return None,
             })),
+            "gfx" => Some(MathMember::Fn(match member {
+                "compile_program" => GfxCompileProgram,
+                "use_program" => GfxUseProgram,
+                "delete_program" => GfxDeleteProgram,
+                "create_buffer" => GfxCreateBuffer,
+                "delete_buffer" => GfxDeleteBuffer,
+                "bind_buffer" => GfxBindBuffer,
+                "upload_buffer" => GfxUploadBuffer,
+                "create_vertex_array" => GfxCreateVertexArray,
+                "bind_vertex_array" => GfxBindVertexArray,
+                "delete_vertex_array" => GfxDeleteVertexArray,
+                "set_vertex_attrib" => GfxSetVertexAttrib,
+                "disable_vertex_attrib" => GfxDisableVertexAttrib,
+                "create_texture" => GfxCreateTexture,
+                "delete_texture" => GfxDeleteTexture,
+                "bind_texture" => GfxBindTexture,
+                "active_texture_unit" => GfxActiveTextureUnit,
+                "upload_texture" => GfxUploadTexture,
+                "set_uniform_int" => GfxSetUniformInt,
+                "set_uniform_float" => GfxSetUniformFloat,
+                "set_uniform_vec2" => GfxSetUniformVec2,
+                "set_uniform_vec3" => GfxSetUniformVec3,
+                "set_uniform_vec4" => GfxSetUniformVec4,
+                "set_uniform_mat4" => GfxSetUniformMat4,
+                "draw_arrays" => GfxDrawArrays,
+                "draw_elements" => GfxDrawElements,
+                "clear" => GfxClear,
+                "set_depth_test" => GfxSetDepthTest,
+                "viewport" => GfxViewport,
+                "read_pixels" => GfxReadPixels,
+                _ => return None,
+            })),
             _ => None,
         }
     }
@@ -490,6 +568,37 @@ impl Native {
             "worker" => &["spawn", "send", "recv", "is_worker"],
             "gpu" => &["available", "adapter_info", "run"],
             "window" => &["create"],
+            "gfx" => &[
+                "compile_program",
+                "use_program",
+                "delete_program",
+                "create_buffer",
+                "delete_buffer",
+                "bind_buffer",
+                "upload_buffer",
+                "create_vertex_array",
+                "bind_vertex_array",
+                "delete_vertex_array",
+                "set_vertex_attrib",
+                "disable_vertex_attrib",
+                "create_texture",
+                "delete_texture",
+                "bind_texture",
+                "active_texture_unit",
+                "upload_texture",
+                "set_uniform_int",
+                "set_uniform_float",
+                "set_uniform_vec2",
+                "set_uniform_vec3",
+                "set_uniform_vec4",
+                "set_uniform_mat4",
+                "draw_arrays",
+                "draw_elements",
+                "clear",
+                "set_depth_test",
+                "viewport",
+                "read_pixels",
+            ],
             _ => &[],
         }
     }
@@ -637,6 +746,36 @@ impl Native {
             WindowHandleHeight => "height",
             WindowHandleClear => "clear",
             WindowHandleSwapBuffers => "swap_buffers",
+            WindowHandleMakeCurrent => "make_current",
+            GfxCompileProgram => "gfx.compile_program",
+            GfxUseProgram => "gfx.use_program",
+            GfxDeleteProgram => "gfx.delete_program",
+            GfxCreateBuffer => "gfx.create_buffer",
+            GfxDeleteBuffer => "gfx.delete_buffer",
+            GfxBindBuffer => "gfx.bind_buffer",
+            GfxUploadBuffer => "gfx.upload_buffer",
+            GfxCreateVertexArray => "gfx.create_vertex_array",
+            GfxBindVertexArray => "gfx.bind_vertex_array",
+            GfxDeleteVertexArray => "gfx.delete_vertex_array",
+            GfxSetVertexAttrib => "gfx.set_vertex_attrib",
+            GfxDisableVertexAttrib => "gfx.disable_vertex_attrib",
+            GfxCreateTexture => "gfx.create_texture",
+            GfxDeleteTexture => "gfx.delete_texture",
+            GfxBindTexture => "gfx.bind_texture",
+            GfxActiveTextureUnit => "gfx.active_texture_unit",
+            GfxUploadTexture => "gfx.upload_texture",
+            GfxSetUniformInt => "gfx.set_uniform_int",
+            GfxSetUniformFloat => "gfx.set_uniform_float",
+            GfxSetUniformVec2 => "gfx.set_uniform_vec2",
+            GfxSetUniformVec3 => "gfx.set_uniform_vec3",
+            GfxSetUniformVec4 => "gfx.set_uniform_vec4",
+            GfxSetUniformMat4 => "gfx.set_uniform_mat4",
+            GfxDrawArrays => "gfx.draw_arrays",
+            GfxDrawElements => "gfx.draw_elements",
+            GfxClear => "gfx.clear",
+            GfxSetDepthTest => "gfx.set_depth_test",
+            GfxViewport => "gfx.viewport",
+            GfxReadPixels => "gfx.read_pixels",
             ListLen => "len",
             ListIsEmpty => "is_empty",
             ListPush => "push",
@@ -864,6 +1003,43 @@ impl Native {
             WindowHandleWidth | WindowHandleHeight => (vec![], Int, 0),
             WindowHandleClear => (vec![Float, Float, Float, Float], Unit, 0),
             WindowHandleSwapBuffers => (vec![], Unit, 0),
+            WindowHandleMakeCurrent => (vec![], Unit, 0),
+
+            // gfx.* (v0.8). Only `compile_program` can meaningfully fail
+            // (bad shader source); everything else assumes valid GL state
+            // once a program is validly linked and bound, matching
+            // `window`'s own methods' shape (no `Result` plumbing).
+            GfxCompileProgram => (vec![TStr, TStr], res(Int, TStr), 0),
+            GfxUseProgram => (vec![Int], Unit, 0),
+            GfxDeleteProgram => (vec![Int], Unit, 0),
+            GfxCreateBuffer => (vec![], Int, 0),
+            GfxDeleteBuffer => (vec![Int], Unit, 0),
+            GfxBindBuffer => (vec![TStr, Int], Unit, 0),
+            GfxUploadBuffer => (vec![TStr, Type::Bytes, Bool], Unit, 0),
+            GfxCreateVertexArray => (vec![], Int, 0),
+            GfxBindVertexArray => (vec![Int], Unit, 0),
+            GfxDeleteVertexArray => (vec![Int], Unit, 0),
+            GfxSetVertexAttrib => (vec![Int, Int, Int, Int], Unit, 0),
+            GfxDisableVertexAttrib => (vec![Int], Unit, 0),
+            GfxCreateTexture => (vec![], Int, 0),
+            GfxDeleteTexture => (vec![Int], Unit, 0),
+            GfxBindTexture => (vec![Int], Unit, 0),
+            GfxActiveTextureUnit => (vec![Int], Unit, 0),
+            GfxUploadTexture => (vec![Type::Bytes, Int, Int, Bool], Unit, 0),
+            GfxSetUniformInt => (vec![Int, TStr, Int], Unit, 0),
+            GfxSetUniformFloat => (vec![Int, TStr, Float], Unit, 0),
+            GfxSetUniformVec2 => (vec![Int, TStr, Float, Float], Unit, 0),
+            GfxSetUniformVec3 => (vec![Int, TStr, Float, Float, Float], Unit, 0),
+            GfxSetUniformVec4 => (vec![Int, TStr, Float, Float, Float, Float], Unit, 0),
+            // `m`'s type is a fresh scheme variable, not a concrete `Mat4` —
+            // see the `Native::GfxSetUniformMat4` doc comment above.
+            GfxSetUniformMat4 => (vec![Int, TStr, p0()], Unit, 1),
+            GfxDrawArrays => (vec![Int, Int], Unit, 0),
+            GfxDrawElements => (vec![Int, Int], Unit, 0),
+            GfxClear => (vec![Float, Float, Float, Float], Unit, 0),
+            GfxSetDepthTest => (vec![Bool], Unit, 0),
+            GfxViewport => (vec![Int, Int, Int, Int], Unit, 0),
+            GfxReadPixels => (vec![Int, Int, Int, Int], Type::Bytes, 0),
 
             // List[T] — receiver args at P0.
             ListLen => (vec![], Int, 1),
@@ -1116,6 +1292,7 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Window, "height", Native::WindowHandleHeight),
     (Recv::Window, "clear", Native::WindowHandleClear),
     (Recv::Window, "swap_buffers", Native::WindowHandleSwapBuffers),
+    (Recv::Window, "make_current", Native::WindowHandleMakeCurrent),
     (Recv::Option_, "is_some", Native::OptIsSome),
     (Recv::Option_, "is_none", Native::OptIsNone),
     (Recv::Option_, "unwrap", Native::OptUnwrap),
@@ -1149,7 +1326,7 @@ mod namespace_tests {
 
     #[test]
     fn listed_namespace_members_resolve() {
-        for ns in ["math", "fs", "os", "fft", "worker", "gpu", "window"] {
+        for ns in ["math", "fs", "os", "fft", "worker", "gpu", "window", "gfx"] {
             for name in Native::namespace_members(ns) {
                 assert!(
                     Native::namespace_member(ns, name).is_some(),

@@ -499,6 +499,60 @@ with the *n*-th actual output line in file order, and writes the file back
 untouched, leaving the original mismatch as a normal failure. `error:`/
 `panic:` directives are never rewritten.
 
+**`gfx`** is a backend-neutral OpenGL 3.3 core-profile draw-call namespace
+built on top of `window`'s per-platform `GlFns` function-pointer table
+(each of `x11.rs`/`win32.rs`/`macos.rs` already carries the full shader/
+program/buffer/VAO/texture/uniform/draw-call table, resolved at `Window`
+creation time). Two design choices make this a thin layer rather than a
+new subsystem:
+
+- **Single current context, VM-level.** `gfx.*` calls take no `Window`
+  receiver — they operate against "whichever window is currently current",
+  mirroring `glfwMakeContextCurrent`. `Vm` gained one field for this,
+  `gfx_current_window: Option<Rc<RefCell<WindowHandle>>>`, set by the new
+  `win.make_current()` method and read by every `gfx.*` native
+  (`natives::gfx_window`/`gfx_window_msg`) — the same `Rc<RefCell<_>>`
+  shape `Obj::Window`/`Obj::Worker` already wrap on the heap (`window_rc`/
+  `worker_rc` clone it out for callers that need to release the borrow
+  before blocking or recursing); `gfx_current_window` just holds one more
+  clone of that `Rc`, so a window stays alive as "current" even if the
+  Fable-level binding that created it goes out of scope.
+- **`WindowHandle` gained one `gl_*` method per `gfx.*` member** (not one
+  per raw GL entry point): `gfx.compile_program` is a single
+  `WindowHandle::gl_compile_program` that internally drives
+  create/compile/link/status-check/info-log/cleanup, not four separate
+  wrapper calls a native would otherwise have to sequence itself. Each
+  platform's `Inner` implements the same set of method names
+  (`compile_program`, `bind_buffer`, `set_uniform_mat4`, ...) — mirroring
+  how `poll`/`clear`/`swap_buffers` are already one name across all three
+  backends — so `natives.rs` never touches a raw GL enum or FFI pointer
+  type; `GfxBufferKind` (a plain two-variant enum in `window/mod.rs`) is
+  the only vocabulary crossing that boundary, keeping every actual
+  `GL_ARRAY_BUFFER`/`GL_ELEMENT_ARRAY_BUFFER`-style constant private to
+  each platform file. Every `gl_*` method re-asserts the context is current
+  before issuing GL calls (`ensure_current`), exactly like `clear`/
+  `swap_buffers` already did, and no-ops (returning a zero/default) rather
+  than issuing GL calls with nothing bound if that fails.
+
+`gfx.set_uniform_mat4`'s third parameter can't be typed as `Mat4` in the
+native's `NativeSig` — natives are registered before any program is parsed,
+so there's no `DefId` yet for a `std` module's struct (unlike `OPTION_DEF`/
+`RESULT_DEF`, which are prelude constants fixed at startup). It's typed as
+a fresh scheme variable instead (the same trick `print`/`assert_eq` already
+use to accept any `T`), and `natives::mat4_arg` duck-types the runtime
+value's shape (a 4-field struct of 4-field-of-`Float` structs, matching
+`std.glm`'s `Mat4 { c0, c1, c2, c3 }`/`Vec4 { x, y, z, w }`) — anything else
+is a clear panic, not a silently wrong upload or a compile error.
+
+`compile_program` is the one fallible member (`Result[Int, String]`);
+its `Err` sizes the info-log buffer from a prior `GL_INFO_LOG_LENGTH`
+query rather than guessing a fixed size, and deletes any shader/program
+object already created before returning. Every other member panics
+(`vm.error`, catchable via `try`) instead of threading a `Result`,
+matching `window`'s own methods — two fixed messages depending on cause
+(`gl` feature off at compile time, checked via `cfg!` — vs. no window
+having called `make_current()` yet).
+
 ## Testing strategy
 
 - Unit tests per module (lexer shapes, parser precedence, checker

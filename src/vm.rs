@@ -118,6 +118,13 @@ pub struct Vm {
     /// Where workers spawned by this VM write their output. `None` means
     /// process stdout; the test harness routes it into its capture buffer.
     pub worker_sink: Option<crate::worker::Sink>,
+    /// The window `win.make_current()` (v0.8) most recently bound as
+    /// "current" — mirrors `glfwMakeContextCurrent`'s single-current-context
+    /// model. Every `gfx.*` native reads this (see `natives::gfx_window`);
+    /// `None` means either no window has ever called `make_current()`, or
+    /// the `gl` cargo feature is off (no `WindowHandle` can be constructed
+    /// in that build, so this stays `None` for the process's whole life).
+    pub gfx_current_window: Option<std::rc::Rc<std::cell::RefCell<crate::window::WindowHandle>>>,
     start: Instant,
     rng: u64,
     /// Call-depth cap, read once from `FABLE_MAX_DEPTH` at construction.
@@ -150,6 +157,7 @@ impl Vm {
             entry_dir: None,
             worker_ctx: None,
             worker_sink: None,
+            gfx_current_window: None,
             start: Instant::now(),
             max_frames: max_frames(),
             rng: 0x9E3779B97F4A7C15 ^ {
