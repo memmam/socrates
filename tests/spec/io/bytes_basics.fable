@@ -47,7 +47,7 @@ let m = {bytes_of([1]): "one"};
 println(m[bytes_of([1])]);                 //? expect: one
 
 // Binary file round-trip.
-let path = "/tmp/fable_spec_bytes_rt.bin";
+let path = "target/fable_spec_bytes_rt.bin";
 fs.write_bytes(path, w).unwrap();
 let back = fs.read_bytes(path).unwrap();
 println(back == w);                        //? expect: true
