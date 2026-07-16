@@ -561,10 +561,8 @@ impl Inner {
                         self.width = ev.configure.width;
                         self.height = ev.configure.height;
                     }
-                    CLIENT_MESSAGE => {
-                        if ev.client.data_l[0] as u64 == self.wm_delete {
-                            self.should_close = true;
-                        }
+                    CLIENT_MESSAGE if ev.client.data_l[0] as u64 == self.wm_delete => {
+                        self.should_close = true;
                     }
                     _ => {}
                 }
