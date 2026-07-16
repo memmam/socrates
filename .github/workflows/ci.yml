@@ -172,12 +172,19 @@ jobs:
   gl-windows:
     name: window feature (Win32/WGL)
     runs-on: windows-latest
-    # This job has hung indefinitely (no output, no timeout for hours) on
-    # every run since the Win32/WGL backend first merged — see win32.rs's
-    # test-module `SetErrorMode` doc comment for the leading theory (an
-    # unclickable WER crash dialog on a headless runner). This hard cap
-    # turns that into a fast, visible failure instead of a multi-hour,
-    # 2x-billed windows-latest hang.
+    # This job hung indefinitely (no output, no timeout for hours) on every
+    # run since the Win32/WGL backend first merged. Root-caused via a
+    # temporary watchdog-thread instrumentation of tests/lsp_smoke.rs (see
+    # its git history / PR #47): window/win32.rs was never the problem --
+    # all 79 lib unit tests, including window::win32::tests::
+    # create_clear_swap_poll_close, pass in well under a second on real
+    # windows-latest hardware. lsp_smoke.rs's own uri_for() helper built
+    # file:// URIs from raw Windows backslash paths, which broke the JSON
+    # framing (\U/\A aren't valid JSON escapes) and got silently dropped by
+    # lsp.rs's parse-error handling -- so the test hung forever awaiting a
+    # publishDiagnostics notification the server had already discarded.
+    # Fixed by percent-encoding the URI properly. timeout-minutes stays as
+    # a general safety net regardless of cause.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5

@@ -1286,16 +1286,20 @@ mod tests {
     /// SEH exception anywhere in this file's raw FFI (a bad struct layout, a
     /// wrong calling convention, an invalid transmuted function pointer)
     /// shows a modal dialog instead of terminating — on a headless CI runner
-    /// nothing can ever click it, so the process (and the `cargo test` job
-    /// hosting it) hangs forever with no output instead of failing fast with
-    /// a visible error. Confirmed on real windows-latest CI hardware: the
-    /// `window feature (Win32/WGL)` job's "Unit + golden spec tests (gl)"
-    /// step has hung indefinitely (never producing so much as a `running N
-    /// tests` line) on every run since this backend first merged, including
-    /// runs of code that predates this session — this call exists to turn
-    /// that silent hang into a real, diagnosable failure on the next run.
-    /// Scoped to `#[cfg(test)]` since this is a CI-diagnostic measure, not a
-    /// production behavior change for real Fable programs.
+    /// nothing can ever click it, so the process hangs forever with no
+    /// output instead of failing fast with a visible error.
+    ///
+    /// This was originally added as the leading theory for the
+    /// `window feature (Win32/WGL)` job hanging indefinitely on every run.
+    /// It turned out to be the wrong subsystem: job-log evidence showed all
+    /// 79 lib unit tests, including this file's own
+    /// `create_clear_swap_poll_close` below, pass in 0.04s — the real hang
+    /// was in `tests/lsp_smoke.rs`'s `diagnostics_hover_definition` (a URI-
+    /// escaping bug in that test's own harness, since fixed). Left in place
+    /// anyway since it's a reasonable defensive measure regardless — it
+    /// just wasn't "the fix" for that bug. Scoped to `#[cfg(test)]` since
+    /// this is a CI-diagnostic measure, not a production behavior change
+    /// for real Fable programs.
     const SEM_FAILCRITICALERRORS: u32 = 0x0001;
     const SEM_NOGPFAULTERRORBOX: u32 = 0x0002;
 

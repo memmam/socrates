@@ -86,11 +86,41 @@ impl Client {
     }
 }
 
+/// Percent-encode a filesystem path into a `file://` URI. Mirrors
+/// `lsp.rs`'s own (private, so not reusable across this integration test's
+/// crate boundary) `path_to_uri` exactly: encode everything outside the
+/// unreserved URI charset. This matters on Windows specifically --
+/// `path.display()` embeds raw `\` separators, and a naive `format!("file://
+/// {}", path.display())` used to send those straight into a JSON string
+/// unescaped. `\U`/`\A`/etc. (as in `C:\Users\...\AppData\...`) aren't valid
+/// JSON escapes, so `jsonlite::parse` correctly rejected the message -- and
+/// `lsp.rs`'s dispatch loop silently drops anything that fails to parse (no
+/// error, no logging), so the very first `didOpen` was discarded server-side
+/// and this test hung forever waiting for a `publishDiagnostics` that had
+/// already been thrown away. Passed on Linux/macOS purely because `/tmp/...`
+/// paths have no backslashes to break on.
+fn path_to_uri(path: &std::path::Path) -> String {
+    let mut out = String::from("file://");
+    for c in path.display().to_string().chars() {
+        match c {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '/' | '.' | '-' | '_' | '~' => out.push(c),
+            c => {
+                let mut buf = [0u8; 4];
+                for b in c.encode_utf8(&mut buf).bytes() {
+                    out.push_str(&format!("%{b:02X}"));
+                }
+            }
+        }
+    }
+    out
+}
+
 fn uri_for(name: &str) -> (std::path::PathBuf, String) {
     let dir = std::env::temp_dir().join("fable-lsp-smoke");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join(name);
-    (path.clone(), format!("file://{}", path.display()))
+    let uri = path_to_uri(&path);
+    (path, uri)
 }
 
 #[test]
