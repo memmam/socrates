@@ -352,9 +352,24 @@ impl GlFns {
 // (see the module doc comment) is created.
 // ---------------------------------------------------------------------------
 
+/// Prints a step marker to stderr and flushes immediately. **Temporary**
+/// bisection instrumentation for the macos.rs Cocoa-abort investigation
+/// (see the CI failure history in PR #45): the AppKit crash this file has
+/// hit so far is an unrecoverable process abort (`SIGABRT` via a foreign
+/// exception Rust can't catch), which gives no Rust-level unwind/backtrace
+/// to inspect — only whatever reached stderr before the abort. `eprintln!`
+/// alone isn't provably enough (a `SIGABRT` can still race a buffered
+/// write), hence the explicit flush after every marker. Remove once the
+/// crashing call is identified and permanently fixed.
+fn debug_step(label: &str) {
+    eprintln!("[macos debug] {label}");
+    let _ = std::io::Write::flush(&mut std::io::stderr());
+}
+
 fn ensure_app_init() {
     static INIT: OnceLock<()> = OnceLock::new();
     INIT.get_or_init(|| unsafe {
+        debug_step("ensure_app_init: start");
         // Process-lifetime autorelease pool — see the module doc comment on
         // memory management for why this is the deliberately coarse choice
         // here instead of per-frame pool push/pop.
@@ -365,9 +380,11 @@ fn ensure_app_init() {
         // enough to leak it for the process's lifetime (see the module doc
         // comment on memory management).
         send0(pool, sel("init"));
+        debug_step("ensure_app_init: autorelease pool ready");
 
         let app_class = class("NSApplication");
         let app = send0(app_class, sel("sharedApplication"));
+        debug_step("ensure_app_init: sharedApplication returned");
         // Return value (did the policy change take effect) intentionally
         // ignored — this mirrors x11.rs's "only check calls whose failure
         // blocks progress" convention; a regular-policy app that somehow
@@ -377,6 +394,7 @@ fn ensure_app_init() {
             sel("setActivationPolicy:"),
             NS_APPLICATION_ACTIVATION_POLICY_REGULAR,
         );
+        debug_step("ensure_app_init: setActivationPolicy: returned");
 
         // Deliberately *not* calling `[NSApp finishLaunching]`. Three
         // different attempts at giving `mainMenu` a value before that call
@@ -402,6 +420,7 @@ fn ensure_app_init() {
         // bringing the app/window to the front so it can become key and
         // receive keyboard events — is requested directly instead.
         send1_bool_void(app, sel("activateIgnoringOtherApps:"), OBJC_YES);
+        debug_step("ensure_app_init: activateIgnoringOtherApps: returned");
     });
 }
 
@@ -481,8 +500,10 @@ impl Inner {
                     "window.create: NSWindow initWithContentRect:... returned nil".to_string(),
                 );
             }
+            debug_step("create: NSWindow initWithContentRect:... returned");
 
             send1_obj(window, sel("setTitle:"), ns_string(title));
+            debug_step("create: setTitle: returned");
 
             // Pixel format attribute array: `{ ColorSize, 24, DepthSize, 24,
             // DoubleBuffer, 0 }` — boolean flags (DoubleBuffer) take no
@@ -512,6 +533,7 @@ impl Inner {
                         .to_string(),
                 );
             }
+            debug_step("create: NSOpenGLPixelFormat initWithAttributes: returned");
 
             let ctx_class = class("NSOpenGLContext");
             let ctx_alloc = send0(ctx_class, sel("alloc"));
@@ -537,12 +559,17 @@ impl Inner {
                         .to_string(),
                 );
             }
+            debug_step("create: NSOpenGLContext initWithFormat:shareContext: returned");
 
             let content_view = send0(window, sel("contentView"));
+            debug_step("create: contentView returned");
             send1_obj(ctx, sel("setView:"), content_view);
+            debug_step("create: setView: returned");
             send0_void(ctx, sel("makeCurrentContext"));
+            debug_step("create: makeCurrentContext returned");
 
             send1_obj(window, sel("makeKeyAndOrderFront:"), std::ptr::null_mut());
+            debug_step("create: makeKeyAndOrderFront: returned");
 
             Ok(Inner {
                 window,
