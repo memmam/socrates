@@ -59,6 +59,13 @@ pub enum Native {
     /// 64-bit readers (v0.8): the 8 bytes reinterpreted as `Int` directly.
     BytesReadU64le,
     BytesReadU64be,
+    /// 32-bit float pushers/readers (v0.9): `Float` is `f64`; these narrow
+    /// to `f32` at the boundary — the wire format graphics/audio data
+    /// actually uses (vertex attributes, uniforms, WAV/PCM samples, ...).
+    BytesPushF32le,
+    BytesPushF32be,
+    BytesReadF32le,
+    BytesReadF32be,
     BytesSlice,
     BytesConcat,
     BytesToList,
@@ -532,6 +539,10 @@ impl Native {
             BytesReadU32be => "read_u32be",
             BytesReadU64le => "read_u64le",
             BytesReadU64be => "read_u64be",
+            BytesPushF32le => "push_f32le",
+            BytesPushF32be => "push_f32be",
+            BytesReadF32le => "read_f32le",
+            BytesReadF32be => "read_f32be",
             BytesSlice => "slice",
             BytesConcat => "concat",
             BytesToList => "to_list",
@@ -756,6 +767,8 @@ impl Native {
             BytesPushStr => (vec![TStr], Unit, 0),
             BytesReadU16le | BytesReadI16le | BytesReadU32le | BytesReadU16be
             | BytesReadU32be | BytesReadU64le | BytesReadU64be => (vec![Int], Int, 0),
+            BytesPushF32le | BytesPushF32be => (vec![Float], Unit, 0),
+            BytesReadF32le | BytesReadF32be => (vec![Int], Float, 0),
             BytesSlice => (vec![Int, Int], Type::Bytes, 0),
             BytesConcat => (vec![Type::Bytes], Type::Bytes, 0),
             BytesToList => (vec![], list(Int), 0),
@@ -1036,6 +1049,10 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Bytes, "read_u32be", Native::BytesReadU32be),
     (Recv::Bytes, "read_u64le", Native::BytesReadU64le),
     (Recv::Bytes, "read_u64be", Native::BytesReadU64be),
+    (Recv::Bytes, "push_f32le", Native::BytesPushF32le),
+    (Recv::Bytes, "push_f32be", Native::BytesPushF32be),
+    (Recv::Bytes, "read_f32le", Native::BytesReadF32le),
+    (Recv::Bytes, "read_f32be", Native::BytesReadF32be),
     (Recv::Bytes, "slice", Native::BytesSlice),
     (Recv::Bytes, "concat", Native::BytesConcat),
     (Recv::Bytes, "to_list", Native::BytesToList),

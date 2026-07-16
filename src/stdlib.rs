@@ -14,6 +14,7 @@ pub fn std_module(key: &str) -> Option<&'static str> {
         "std.set" => include_str!("../std/set.fable"),
         "std.deque" => include_str!("../std/deque.fable"),
         "std.lazy" => include_str!("../std/lazy.fable"),
+        "std.glm" => include_str!("../std/glm.fable"),
         _ => return None,
     })
 }
@@ -23,6 +24,7 @@ pub fn std_module_names() -> Vec<&'static str> {
     vec![
         "std.deque",
         "std.flags",
+        "std.glm",
         "std.iter",
         "std.json",
         "std.lazy",

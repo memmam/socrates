@@ -1,0 +1,129 @@
+// SPEC §7.1 (v0.9): std.glm — GLM-shaped vector/matrix/quaternion math.
+import std.glm;
+
+// --- Vec2 ---
+let a2 = glm.vec2(1.0, 2.0);
+let b2 = glm.vec2(4.0, 5.0);
+println(a2.add(b2).x);           //? expect: 5.0
+println(a2.add(b2).y);           //? expect: 7.0
+println(b2.sub(a2).x);           //? expect: 3.0
+println(a2.mul(2.0).x);          //? expect: 2.0
+println(a2.mul(2.0).y);          //? expect: 4.0
+println(a2.mul(2.0).div(2.0).x); //? expect: 1.0
+println(a2.neg().x);             //? expect: -1.0
+println(a2.dot(b2));             //? expect: 14.0
+println(glm.vec2(3.0, 4.0).length()); //? expect: 5.0
+println(glm.vec2(3.0, 4.0).normalize().x); //? expect: 0.6
+println(glm.vec2(3.0, 4.0).normalize().y); //? expect: 0.8
+println(glm.vec2(0.0, 0.0).lerp(glm.vec2(10.0, 10.0), 0.5).x); //? expect: 5.0
+
+// --- Vec3 ---
+let a3 = glm.vec3(1.0, 2.0, 3.0);
+let b3 = glm.vec3(4.0, 5.0, 6.0);
+println(a3.add(b3).x);           //? expect: 5.0
+println(a3.add(b3).z);           //? expect: 9.0
+println(b3.sub(a3).x);           //? expect: 3.0
+println(a3.mul(2.0).z);          //? expect: 6.0
+println(a3.neg().y);             //? expect: -2.0
+println(a3.dot(b3));             //? expect: 32.0
+let x_axis = glm.vec3(1.0, 0.0, 0.0);
+let y_axis = glm.vec3(0.0, 1.0, 0.0);
+println(x_axis.cross(y_axis).z); //? expect: 1.0
+println(glm.vec3(3.0, 4.0, 0.0).length()); //? expect: 5.0
+println(glm.vec3(3.0, 4.0, 0.0).normalize().x); //? expect: 0.6
+println(glm.vec3(0.0, 0.0, 0.0).lerp(glm.vec3(10.0, 10.0, 10.0), 0.5).z); //? expect: 5.0
+println(a3.to4(1.0).w);          //? expect: 1.0
+
+// --- Vec4 ---
+let a4 = glm.vec4(1.0, 2.0, 3.0, 4.0);
+let b4 = glm.vec4(4.0, 3.0, 2.0, 1.0);
+println(a4.add(b4).x);           //? expect: 5.0
+println(a4.dot(b4));             //? expect: 20.0
+println(a4.xyz().z);             //? expect: 3.0
+
+// --- Mat4: identity, translation, scaling leave/transform as expected ---
+let ident = glm.mat4_identity();
+println(ident.mul_vec4(a4).x);   //? expect: 1.0
+println(ident.mul_vec4(a4).w);   //? expect: 4.0
+
+let t = glm.translation(glm.vec3(1.0, 2.0, 3.0));
+let p_origin = glm.vec4(0.0, 0.0, 0.0, 1.0);
+println(t.mul_vec4(p_origin).x); //? expect: 1.0
+println(t.mul_vec4(p_origin).y); //? expect: 2.0
+println(t.mul_vec4(p_origin).z); //? expect: 3.0
+// A direction (w = 0) is untouched by translation.
+let dir = glm.vec4(1.0, 0.0, 0.0, 0.0);
+println(t.mul_vec4(dir).x);      //? expect: 1.0
+
+let s = glm.scaling(glm.vec3(2.0, 3.0, 4.0));
+let ones = glm.vec4(1.0, 1.0, 1.0, 1.0);
+println(s.mul_vec4(ones).x);     //? expect: 2.0
+println(s.mul_vec4(ones).y);     //? expect: 3.0
+println(s.mul_vec4(ones).z);     //? expect: 4.0
+
+// Composition: translate-then-scale vs scale-then-translate differ, and
+// `mul` composes right-to-left like matrix notation (`(t * s) * v == t *
+// (s * v)`).
+let ts = t.mul(s);
+println(ts.mul_vec4(ones).x);    //? expect: 3.0
+println(ts.mul_vec4(ones).y);    //? expect: 5.0
+println(ts.mul_vec4(ones).z);    //? expect: 7.0
+
+// --- Mat4 rotation (rounded — trig irrationals aren't exact) ---
+let quarter_turn = math.pi / 2.0;
+let rz = glm.rotation_z(quarter_turn);
+let rotated = rz.mul_vec4(glm.vec4(1.0, 0.0, 0.0, 0.0));
+println(rotated.x.to_fixed(4));  //? expect: 0.0000
+println(rotated.y.to_fixed(4));  //? expect: 1.0000
+
+let rx = glm.rotation_x(quarter_turn);
+let rotated_x = rx.mul_vec4(glm.vec4(0.0, 1.0, 0.0, 0.0));
+println(rotated_x.y.to_fixed(4)); //? expect: 0.0000
+println(rotated_x.z.to_fixed(4)); //? expect: 1.0000
+
+// A full turn about an arbitrary axis is the identity.
+let full_turn = rz;
+let axis_full = glm.rotation_axis(glm.vec3(0.0, 0.0, 1.0), math.pi * 2.0);
+println(axis_full.mul_vec4(glm.vec4(1.0, 0.0, 0.0, 0.0)).x.to_fixed(4)); //? expect: 1.0000
+println(axis_full.mul_vec4(glm.vec4(1.0, 0.0, 0.0, 0.0)).y.to_fixed(4)); //? expect: 0.0000
+
+println(glm.mat4_identity().transpose().mul_vec4(a4).x); //? expect: 1.0
+
+// --- Mat4 projection/view (spot-check known coordinates) ---
+let proj = glm.perspective(math.pi / 2.0, 1.0, 1.0, 100.0);
+let clip = proj.mul_vec4(glm.vec4(0.0, 0.0, -1.0, 1.0));
+println(clip.z.to_fixed(4));     //? expect: -1.0000
+println(clip.w.to_fixed(4));     //? expect: 1.0000
+
+let view = glm.look_at(glm.vec3(0.0, 0.0, 5.0), glm.vec3(0.0, 0.0, 0.0), glm.vec3(0.0, 1.0, 0.0));
+let eye_space = view.mul_vec4(glm.vec4(0.0, 0.0, 0.0, 1.0));
+println(eye_space.z.to_fixed(4)); //? expect: -5.0000
+
+let ortho_m = glm.ortho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+println(ortho_m.mul_vec4(glm.vec4(1.0, 1.0, 1.0, 1.0)).x.to_fixed(4)); //? expect: 1.0000
+
+// --- Quaternion ---
+let q_ident = glm.quat_identity();
+println(q_ident.to_mat4().mul_vec4(a4).x); //? expect: 1.0
+
+let q_rz = glm.from_axis_angle(glm.vec3(0.0, 0.0, 1.0), quarter_turn);
+let q_rotated = q_rz.to_mat4().mul_vec4(glm.vec4(1.0, 0.0, 0.0, 0.0));
+println(q_rotated.x.to_fixed(4)); //? expect: 0.0000
+println(q_rotated.y.to_fixed(4)); //? expect: 1.0000
+
+// Composition matches rotation matrix composition: two quarter-turns
+// about Z compose to a half-turn.
+let q_half = q_rz.mul(q_rz);
+let half_rotated = q_half.to_mat4().mul_vec4(glm.vec4(1.0, 0.0, 0.0, 0.0));
+println(half_rotated.x.to_fixed(4)); //? expect: -1.0000
+println(half_rotated.y.to_fixed(4)); //? expect: 0.0000
+
+// slerp midpoint between identity and a half-turn about Z is the quarter
+// turn (up to sign/normalization, both unit quaternions).
+let mid = q_ident.slerp(q_half, 0.5);
+let mid_rotated = mid.to_mat4().mul_vec4(glm.vec4(1.0, 0.0, 0.0, 0.0));
+println(mid_rotated.x.to_fixed(4)); //? expect: 0.0000
+println(mid_rotated.y.to_fixed(4)); //? expect: 1.0000
+println(mid.length().to_fixed(4));  //? expect: 1.0000
+
+println(q_rz.conjugate().mul(q_rz).to_mat4().mul_vec4(a4).x); //? expect: 1.0

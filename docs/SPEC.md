@@ -613,7 +613,7 @@ Two more joined in v0.7:
 
 ### 7.1 The standard library (v0.4; expanded in v0.7)
 
-Nine modules written in Fable ship inside the interpreter, imported like any
+Ten modules written in Fable ship inside the interpreter, imported like any
 module (`import std.json;`, aliased with `as`). Everything below is `pub`;
 these modules follow the same visibility rules as user code.
 
@@ -628,6 +628,7 @@ these modules follow the same visibility rules as user code.
 | `std.set` | `Set[T]` (v0.7), backed by `Map[T, Unit]`: structural membership, insertion-order iteration. `new()`, `from_list(xs)` (first occurrence wins); methods `insert(v) -> Bool` / `remove(v) -> Bool` (did anything change), `contains`, `len`, `is_empty`, `to_list`, and `union` / `intersect` / `difference` — each returns a **new** set ordered by the left operand's insertion order, then the right's |
 | `std.deque` | `Deque[T]` (v0.7), a double-ended queue with amortized O(1) ends (two-stack representation; a pop on an empty side reverses the other side across). `new()`, `from_list(xs)` (copies); methods `push_front` / `push_back`, `pop_front` / `pop_back` / `front` / `back` (all `Option[T]`), `len`, `is_empty`, `to_list` (front to back) |
 | `std.lazy` | `Lazy[T]` (v0.8): deferred, memoized computation. `of(thunk: fn() -> T) -> Lazy[T]` wraps a zero-argument thunk that doesn't run until needed; methods `get() -> T` (computes and caches on the first call, free on every later call — on any reference, since structs are references) and `is_forced() -> Bool`. For a module-level table that's expensive to build and not always needed — a plain top-level `let` already builds once at import (eagerly); `Lazy` defers that to first use. |
+| `std.glm` | Vector/matrix/quaternion math (v0.9), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Fable, no native code. |
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
@@ -780,6 +781,11 @@ Int` (v0.8 for the 64-bit pair; the multi-byte reads back, at a byte
 offset; a read that would touch any byte outside the buffer panics like
 `get`; unlike the 16/32-bit reads, a 64-bit read can come back negative
 when bit 63 is set, matching `to_hex`/hex-literal semantics),
+`push_f32le(Float)` / `push_f32be(Float)` / `read_f32le(Int) -> Float` /
+`read_f32be(Int) -> Float` (v0.9: `Float` is `f64`; these narrow to `f32`
+at the boundary — the wire format vertex/uniform/PCM data actually uses —
+so a read-back is only accurate to `f32`'s precision, not bit-identical to
+whatever `f64` went in),
 `slice(Int, Int) -> Bytes` (clamped copy, like `List.slice`),
 `concat(Bytes) -> Bytes` (new buffer), `to_list() -> List[Int]`,
 `utf8() -> Result[String, String]` (UTF-8 decode). `String.to_bytes() ->

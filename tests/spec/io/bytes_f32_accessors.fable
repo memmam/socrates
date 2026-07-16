@@ -1,0 +1,57 @@
+// 32-bit float Bytes push/read (v0.9): `Float` is `f64`; these narrow to
+// `f32` at the boundary, matching the wire format vertex/uniform/PCM data
+// actually uses. Known-exact IEEE-754 values pin the byte layout; a value
+// f32 can't represent exactly shows the narrowing happens on push, not
+// just on read.
+
+let a = bytes(0);
+a.push_f32le(1.0);
+println(a.to_list());                 //? expect: [0, 0, 128, 63]
+println(a.read_f32le(0));             //? expect: 1.0
+
+let b = bytes(0);
+b.push_f32be(1.0);
+println(b.to_list());                 //? expect: [63, 128, 0, 0]
+println(b.read_f32be(0));             //? expect: 1.0
+
+// The other endianness reads the same bytes back scrambled, not the
+// original value (same relationship push_u32le/read_u32be already have).
+println(a.read_f32be(0).is_nan());    //? expect: false
+
+let neg = bytes(0);
+neg.push_f32le(-1.0);
+println(neg.to_list());               //? expect: [0, 0, 128, 191]
+
+let half = bytes(0);
+half.push_f32le(0.5);
+println(half.to_list());              //? expect: [0, 0, 0, 63]
+half.push_f32le(-0.5);
+println(half.to_list());              //? expect: [0, 0, 0, 63, 0, 0, 0, 191]
+
+let two = bytes(0);
+two.push_f32le(2.0);
+println(two.to_list());               //? expect: [0, 0, 0, 64]
+
+let zero = bytes(0);
+zero.push_f32be(0.0);
+println(zero.to_list());              //? expect: [0, 0, 0, 0]
+
+// A value f32 can't represent exactly: the push narrows to f32 precision,
+// so the read-back isn't bit-identical to the f64 that went in, but it's
+// identical to within f32's ~7 significant decimal digits.
+let pi = bytes(0);
+pi.push_f32le(3.14159265358979);
+println(pi.read_f32le(0).to_fixed(5)); //? expect: 3.14159
+
+// Mixing widths at successive offsets, like a real vertex buffer: a u32
+// index tag followed by 3 packed f32 position components.
+let v = bytes(0);
+v.push_u32le(7);
+v.push_f32le(1.5);
+v.push_f32le(-2.5);
+v.push_f32le(0.0);
+println(v.len());                     //? expect: 16
+println(v.read_u32le(0));             //? expect: 7
+println(v.read_f32le(4));             //? expect: 1.5
+println(v.read_f32le(8));             //? expect: -2.5
+println(v.read_f32le(12));            //? expect: 0.0

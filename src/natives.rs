@@ -477,6 +477,41 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             }
             Value::Unit
         }
+        BytesPushF32le => {
+            let v = float_arg(vm, argc, 1)?;
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(&(v as f32).to_le_bytes());
+            }
+            Value::Unit
+        }
+        BytesPushF32be => {
+            let v = float_arg(vm, argc, 1)?;
+            let h = bytes_handle(vm, argc)?;
+            if let Obj::Bytes(bs) = vm.heap.get_mut(h) {
+                bs.extend_from_slice(&(v as f32).to_be_bytes());
+            }
+            Value::Unit
+        }
+        BytesReadF32le | BytesReadF32be => {
+            let off = int_arg(vm, argc, 1)?;
+            let bs = bytes_ref(vm, argc)?;
+            let len = bs.len() as i64;
+            if off < 0 || off > len - 4 {
+                let i = if off < 0 { off } else { off.max(len) };
+                return Err(vm.error(format!(
+                    "bytes index out of bounds: index {i}, length {len}"
+                )));
+            }
+            let o = off as usize;
+            let bytes4 = [bs[o], bs[o + 1], bs[o + 2], bs[o + 3]];
+            let v = if n == BytesReadF32le {
+                f32::from_le_bytes(bytes4)
+            } else {
+                f32::from_be_bytes(bytes4)
+            };
+            Value::Float(v as f64)
+        }
         BytesReadU16le | BytesReadI16le | BytesReadU16be | BytesReadU32le | BytesReadU32be
         | BytesReadU64le | BytesReadU64be => {
             let off = int_arg(vm, argc, 1)?;
