@@ -148,6 +148,12 @@ pub enum Native {
     // natives are always registered; without the `gl` cargo feature they
     // degrade gracefully (see src/window/mod.rs).
     WindowCreate,
+    /// `window.create_metal(title, w, h)` (v0.9, macOS aarch64 only): a
+    /// Metal-backed sibling of `window.create` — additive alongside the
+    /// OpenGL/CGL path, never a replacement (see CLAUDE.md's standing
+    /// exception). Without the `metal` cargo feature it degrades
+    /// gracefully, same as `WindowCreate` without `gl`.
+    WindowCreateMetal,
     WindowHandlePoll,
     WindowHandleShouldClose,
     WindowHandleClose,
@@ -161,6 +167,11 @@ pub enum Native {
     /// one every subsequent `gfx.*` native operates against (mirrors
     /// `glfwMakeContextCurrent`) — see `Vm::gfx_current_window`.
     WindowHandleMakeCurrent,
+    /// `win.backend_name()` (v0.9): `"opengl"` | `"metal"` — the one
+    /// deliberate escape hatch for backend-specific behavior (shader
+    /// source text is inherently GLSL vs. MSL); everything else about the
+    /// `gfx.*` call shape stays identical across backends.
+    WindowHandleBackendName,
 
     // gfx.* (v0.8, feature-gated on `gl`, same as `window`) — OpenGL 3.3
     // core-profile draw calls against "whichever window is currently
@@ -509,9 +520,11 @@ impl Native {
                 _ => return None,
             })),
             "window" => Some(MathMember::Fn(match member {
-                // Only `create` is a namespace-level free function; the
-                // rest are methods on the `Window` receiver (METHOD_TABLE).
+                // Only `create`/`create_metal` are namespace-level free
+                // functions; the rest are methods on the `Window` receiver
+                // (METHOD_TABLE).
                 "create" => WindowCreate,
+                "create_metal" => WindowCreateMetal,
                 _ => return None,
             })),
             "gfx" => Some(MathMember::Fn(match member {
@@ -737,6 +750,7 @@ impl Native {
             GpuAdapterInfo => "gpu.adapter_info",
             GpuRun => "gpu.run",
             WindowCreate => "window.create",
+            WindowCreateMetal => "window.create_metal",
             WindowHandlePoll => "poll",
             WindowHandleShouldClose => "should_close",
             WindowHandleClose => "close",
@@ -747,6 +761,7 @@ impl Native {
             WindowHandleClear => "clear",
             WindowHandleSwapBuffers => "swap_buffers",
             WindowHandleMakeCurrent => "make_current",
+            WindowHandleBackendName => "backend_name",
             GfxCompileProgram => "gfx.compile_program",
             GfxUseProgram => "gfx.use_program",
             GfxDeleteProgram => "gfx.delete_program",
@@ -992,9 +1007,11 @@ impl Native {
                 0,
             ),
 
-            // window.* (v0.8, Linux-only for now). `create` mirrors
+            // window.* (v0.8; macOS also gained a Metal-backed sibling
+            // entry point in v0.9). `create`/`create_metal` mirror
             // `worker.spawn`'s `Result[_, String]` shape.
             WindowCreate => (vec![TStr, Int, Int], res(Type::Window, TStr), 0),
+            WindowCreateMetal => (vec![TStr, Int, Int], res(Type::Window, TStr), 0),
             WindowHandlePoll => (vec![], Unit, 0),
             WindowHandleShouldClose => (vec![], Bool, 0),
             WindowHandleClose => (vec![], Unit, 0),
@@ -1004,6 +1021,7 @@ impl Native {
             WindowHandleClear => (vec![Float, Float, Float, Float], Unit, 0),
             WindowHandleSwapBuffers => (vec![], Unit, 0),
             WindowHandleMakeCurrent => (vec![], Unit, 0),
+            WindowHandleBackendName => (vec![], TStr, 0),
 
             // gfx.* (v0.8). Only `compile_program` can meaningfully fail
             // (bad shader source); everything else assumes valid GL state
@@ -1293,6 +1311,7 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Window, "clear", Native::WindowHandleClear),
     (Recv::Window, "swap_buffers", Native::WindowHandleSwapBuffers),
     (Recv::Window, "make_current", Native::WindowHandleMakeCurrent),
+    (Recv::Window, "backend_name", Native::WindowHandleBackendName),
     (Recv::Option_, "is_some", Native::OptIsSome),
     (Recv::Option_, "is_none", Native::OptIsNone),
     (Recv::Option_, "unwrap", Native::OptUnwrap),

@@ -25,10 +25,18 @@ codegen-units = 1
 # dependencies (no `dep:` entries) — it's raw FFI to system libraries (X11
 # linked normally, GL/GLX `dlopen`ed at runtime), so `cargo tree` stays one
 # line with or without it. See src/window/ for the `window` namespace.
+# `metal` is the same zero-dependency shape as `gl` (raw FFI to Metal.
+# framework/QuartzCore.framework, both linked normally, no `dep:` entries) --
+# a *sibling* of `gl`, not nested under or replacing it: both are
+# independently toggleable and combinable on macOS (`--features gl,metal`
+# builds a single binary that can open either kind of window), matching the
+# standing "Metal ships additive alongside OpenGL/CGL, never replacing it"
+# principle in CLAUDE.md. On Linux/Windows `metal` compiles to nothing.
 [features]
 default = []
 gpu = ["dep:wgpu", "dep:pollster"]
 gl = []
+metal = []
 
 [dependencies]
 wgpu = { version = "30", optional = true }

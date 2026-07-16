@@ -913,6 +913,31 @@ impl Inner {
         keysym != 0 && self.pressed.contains(&keysym)
     }
 
+    // Method-shaped accessors alongside the public fields above: macOS's
+    // `Inner` is a two-backend enum (see `macos/mod.rs`), which can't expose
+    // shared state via dot-field syntax across variants the way a plain
+    // struct can — `window/mod.rs`'s generic `WindowHandle` code calls these
+    // uniformly across all three platforms instead. Field and method share a
+    // name safely (separate namespaces: `.should_close` is the field,
+    // `.should_close()` is this method).
+    pub fn mouse(&self) -> (f64, f64) {
+        self.mouse
+    }
+    pub fn width(&self) -> i32 {
+        self.width
+    }
+    pub fn height(&self) -> i32 {
+        self.height
+    }
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+    /// This backend is always OpenGL/GLX — no Metal-equivalent exists on
+    /// Linux, so unlike macOS's `Inner` enum this never varies.
+    pub fn backend_name(&self) -> &'static str {
+        "opengl"
+    }
+
     pub fn clear(&mut self, r: f32, g: f32, b: f32, a: f32) {
         // Safety: makes this window's context current before issuing GL
         // calls — necessary if another `Window` made itself current since

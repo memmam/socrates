@@ -695,6 +695,7 @@ and has no plan to be** (see the macOS backend note below for why)),
 | Member | Type | Notes |
 |--------|------|-------|
 | `window.create(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | opens an OS window of size `w`×`h` with a current GL context. Without the feature (or backend): `Err("windowing support not compiled in (build with --features gl)")` |
+| `window.create_metal(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | (v0.9, macOS/Apple Silicon only) opens a Metal-backed window — a sibling of `create`, additive alongside it, never a replacement (see the macOS Metal backend note below). Without the feature (or off Apple Silicon macOS): `Err("Metal windowing support not compiled in (build with --features metal, aarch64-apple-darwin only)")` |
 
 `Window` is a nameable opaque type (§ 8.4d) — the handle `create` returns on
 success.
@@ -718,7 +719,7 @@ single-character and named-key spellings used in practice (`"w"`, `"a"`,
 
 ### window namespace, macOS backend (Apple Silicon only)
 
-The macOS backend (`src/window/macos.rs`) targets `aarch64-apple-darwin`
+The macOS backend (`src/window/macos/gl.rs`) targets `aarch64-apple-darwin`
 only — **x86_64 Macs are not supported and none is planned**: an x86_64
 `objc_msgSend` call site must pick between the normal entry point and the
 separate `objc_msgSend_stret` one whenever the returned struct doesn't fit
@@ -745,6 +746,36 @@ not. Close-button detection has no `NSWindowDelegate` callback installed
 poll-per-frame API deliberately avoids); instead `should_close` is set once
 `[window isVisible]` goes false after a click on the close box, which
 AppKit's default close path guarantees without a delegate.
+
+### window namespace, macOS Metal backend (v0.9, Apple Silicon only, additive)
+
+`window.create_metal` opens a Metal-backed window as a **sibling** to
+`create`'s OpenGL/CGL path (`src/window/macos/gl.rs`) — additive, never a
+replacement, per this project's standing exception for Metal on macOS (see
+`CLAUDE.md`'s engineering principles): both backends compile into the same
+binary under `--features gl,metal`, quarantined behind their own `metal`
+cargo feature with the same zero-Cargo-dependency shape `gl` already has,
+and a program picks per-window which one it wants by calling `create` or
+`create_metal`. A sibling entry point rather than a `backend` parameter on
+`create`: Fable has neither default parameters nor overloading, so a
+mandatory extra argument would break every existing `window.create(title,
+w, h)` call site for no ergonomic gain.
+
+`Window.backend_name()` (§ 8.4d) reports which backend a given window is
+running — the one place a Fable program needs to branch when targeting
+both, since shader *source text* is inherently backend-specific (GLSL vs.
+Metal Shading Language); every other `gfx`/`Window` member has the same
+call shape and behavior regardless of backend.
+
+Internally, `src/window/macos/mod.rs`'s `Inner` is a small enum
+(`Gl(gl::Inner)` / `Metal(metal::Inner)`, each gated on its own cargo
+feature) rather than the plain single-backend struct `x11`/`win32` each
+use — the only way one compiled binary can transparently hold either kind
+of live window. **Current status: scaffolding only** — `create_metal`
+always returns `Err("window.create_metal: Metal backend not yet
+implemented ...")` until the device/queue/pipeline plumbing lands in a
+follow-up; this section will gain real draw-call parity notes once `gfx.*`
+dispatch against a Metal-current window is implemented.
 
 ### 7.4 The gfx namespace (v0.8, feature-gated)
 
@@ -1001,6 +1032,10 @@ already make internally per call — this just exposes it as its own public
 method, so the `gfx` namespace (§ 7.4) has an explicit window to target:
 every `gfx.*` call operates against whichever window last called
 `make_current()`.
+
+`backend_name() -> String` (v0.9): `"opengl"` or `"metal"` — see the macOS
+Metal backend note above (§ 7.3). On Linux and Windows, where only the
+OpenGL backend exists, this always returns `"opengl"`.
 
 ### 8.5 Numeric methods
 
