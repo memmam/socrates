@@ -1291,14 +1291,13 @@ mod tests {
     ///
     /// This was originally added as the leading theory for the
     /// `window feature (Win32/WGL)` job hanging indefinitely on every run.
-    /// It turned out to be the wrong subsystem: job-log evidence (once the
-    /// CI job's own `timeout-minutes` let a hung run actually finish and
-    /// upload its log) showed all 79 lib unit tests, including this file's
-    /// own `create_clear_swap_poll_close` below, pass in 0.04s — the real
-    /// hang is in `tests/lsp_smoke.rs`'s `diagnostics_hover_definition`
-    /// (see that file's own watchdog-thread doc comment). Left in place
+    /// It turned out to be the wrong subsystem: job-log evidence showed all
+    /// 79 lib unit tests, including this file's own
+    /// `create_clear_swap_poll_close` below, pass in 0.04s — the real hang
+    /// was in `tests/lsp_smoke.rs`'s `diagnostics_hover_definition` (a URI-
+    /// escaping bug in that test's own harness, since fixed). Left in place
     /// anyway since it's a reasonable defensive measure regardless — it
-    /// just isn't "the fix" for that bug. Scoped to `#[cfg(test)]` since
+    /// just wasn't "the fix" for that bug. Scoped to `#[cfg(test)]` since
     /// this is a CI-diagnostic measure, not a production behavior change
     /// for real Fable programs.
     const SEM_FAILCRITICALERRORS: u32 = 0x0001;

@@ -172,15 +172,19 @@ jobs:
   gl-windows:
     name: window feature (Win32/WGL)
     runs-on: windows-latest
-    # This job has hung indefinitely (no output, no timeout for hours) on
-    # every run since the Win32/WGL backend first merged. Job-log evidence
-    # (once the 90-minute cap above let one of these actually finish)
-    # cleared window/win32.rs entirely: all 79 lib unit tests pass in
-    # 0.04s, including window::win32::tests::create_clear_swap_poll_close.
-    # The real hang is in tests/lsp_smoke.rs's diagnostics_hover_definition
-    # -- see that file's own watchdog-thread doc comment for the ongoing
-    # diagnosis. timeout-minutes turns whatever's still unresolved into a
-    # fast, visible failure instead of a multi-hour, 2x-billed hang.
+    # This job hung indefinitely (no output, no timeout for hours) on every
+    # run since the Win32/WGL backend first merged. Root-caused via a
+    # temporary watchdog-thread instrumentation of tests/lsp_smoke.rs (see
+    # its git history / PR #47): window/win32.rs was never the problem --
+    # all 79 lib unit tests, including window::win32::tests::
+    # create_clear_swap_poll_close, pass in well under a second on real
+    # windows-latest hardware. lsp_smoke.rs's own uri_for() helper built
+    # file:// URIs from raw Windows backslash paths, which broke the JSON
+    # framing (\U/\A aren't valid JSON escapes) and got silently dropped by
+    # lsp.rs's parse-error handling -- so the test hung forever awaiting a
+    # publishDiagnostics notification the server had already discarded.
+    # Fixed by percent-encoding the URI properly. timeout-minutes stays as
+    # a general safety net regardless of cause.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
@@ -194,11 +198,8 @@ jobs:
       - name: Unit + golden spec tests (gl)
         # windows-latest is a real Windows machine (unlike the `gl` job's
         # Xvfb-under-Linux stand-in), so `win32.rs`'s smoke test creates and
-        # drives an actual window/WGL context here. --nocapture: needed so
-        # tests/lsp_smoke.rs's temporary watchdog-thread diagnostics (see
-        # its own doc comment) actually reach this log instead of sitting
-        # in libtest's per-test capture buffer, which a hang never flushes.
-        run: cargo test --features gl -- --nocapture
+        # drives an actual window/WGL context here.
+        run: cargo test --features gl
 
   gl-macos:
     # Real Apple Silicon hardware (unlike this repo's own dev/CI containers,
