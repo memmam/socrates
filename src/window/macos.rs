@@ -195,6 +195,13 @@ unsafe fn send1_ptr_ret(recv: *mut Object, s: SEL, arg: *const c_char) -> *mut O
         std::mem::transmute(objc_msgSend as *const ());
     f(recv, s, arg)
 }
+/// One-`BOOL`-argument, `void`-returning message (e.g.
+/// `activateIgnoringOtherApps:`).
+unsafe fn send1_bool_void(recv: *mut Object, s: SEL, arg: ObjcBool) {
+    let f: unsafe extern "C" fn(*mut Object, SEL, ObjcBool) =
+        std::mem::transmute(objc_msgSend as *const ());
+    f(recv, s, arg)
+}
 unsafe fn send_init_window(
     recv: *mut Object,
     s: SEL,
@@ -370,8 +377,48 @@ fn ensure_app_init() {
             sel("setActivationPolicy:"),
             NS_APPLICATION_ACTIVATION_POLICY_REGULAR,
         );
-        send0_void(app, sel("finishLaunching"));
+
+        // Deliberately *not* calling `[NSApp finishLaunching]`. Three
+        // different attempts at giving `mainMenu` a value before that call
+        // — nil (the original code), a bare item-less `NSMenu`, and a
+        // GLFW-shaped skeleton (one empty-titled item with an empty
+        // submenu standing in as the "Apple menu") — all three, verified on
+        // real macos-14 CI hardware, hit the identical fatal assertion
+        // (`-[NSMenu _setMenuName:]`, an unrecoverable SIGABRT, not a
+        // catchable Objective-C exception) at the identical point, deep
+        // inside `finishLaunching`'s own internal main-menu bootstrap. That
+        // rules out "the menu's shape is wrong" as fixable from the outside
+        // without access to AppKit's private implementation; the only
+        // remaining lever is to not call the function that hosts it.
+        //
+        // `finishLaunching`'s other documented effects — posting
+        // `NSApplicationWillFinishLaunchingNotification`/
+        // `didFinishLaunching`, running an installed delegate's launch
+        // hooks — don't apply here (this file installs no
+        // `NSApplicationDelegate` and drives its own event loop directly in
+        // `poll()`, mirroring `x11.rs`'s manual `XPending`/`XNextEvent`
+        // pump rather than handing control to `[NSApp run]`). The one
+        // remaining externally-visible effect worth keeping —
+        // bringing the app/window to the front so it can become key and
+        // receive keyboard events — is requested directly instead.
+        send1_bool_void(app, sel("activateIgnoringOtherApps:"), OBJC_YES);
     });
+}
+
+/// `+[NSThread isMainThread]` — AppKit enforces, unconditionally, that
+/// `NSWindow` (and UI objects generally) only ever get created on the
+/// process's actual main thread; anything else raises an uncatchable
+/// Objective-C exception (confirmed on real macos-14 hardware: `NSWindow
+/// should only be instantiated on the main thread!`, via `-[NSWindow
+/// _initContent:styleMask:backing:defer:contentView:]`). `Inner::create`
+/// checks this before touching any Cocoa API so that calling it from the
+/// wrong thread is a clean, catchable `Err` instead of a process abort —
+/// this isn't just a test-environment quirk (`cargo test` runs every test
+/// body on its own spawned thread, never the real main thread, which is
+/// how this was first found), a real Fable program calling `window.create`
+/// from inside a `worker` isolate would hit the identical crash.
+fn is_main_thread() -> bool {
+    unsafe { send0_bool(class("NSThread"), sel("isMainThread")) != OBJC_NO }
 }
 
 fn shared_app() -> *mut Object {
@@ -411,6 +458,14 @@ pub struct Inner {
 
 impl Inner {
     pub fn create(title: &str, w: i32, h: i32) -> Result<Inner, String> {
+        if !is_main_thread() {
+            return Err(
+                "window.create: must run on the process's main thread (macOS requires all \
+                 NSWindow/AppKit calls there); this fires from a `worker` isolate, or from \
+                 any thread other than the one that started the program"
+                    .to_string(),
+            );
+        }
         let gl = GlFns::load()?;
         ensure_app_init();
 
@@ -703,7 +758,13 @@ mod tests {
     /// restricting window-server access) — mirrors `x11.rs`'s
     /// `create_clear_swap_poll_close` test's graceful-skip style, since
     /// `cargo test --features gl` must stay green even in constrained
-    /// environments.
+    /// environments. In practice this always skips under `cargo test`
+    /// itself: `Inner::create`'s main-thread check (see [`is_main_thread`])
+    /// correctly rejects it, since `libtest` runs every test body on its
+    /// own spawned thread, never the process's real main thread — a real
+    /// Fable program (whose interpreter runs on the actual main thread
+    /// unless the script explicitly uses `worker`) hits neither this check
+    /// nor the AppKit crash it exists to prevent.
     #[test]
     fn create_clear_swap_poll_close() {
         let inner = match Inner::create("fable window test", 320, 240) {

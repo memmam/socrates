@@ -57,16 +57,35 @@ their place fastest.
   hand-rolled popcount/ushr/hex became one-line wrappers over natives).
   Every such change stays byte-identical in observable behavior.
 - **This applies to whole backend implementations, not just algorithmic
-  idioms.** When a newer backend for the same capability is more optimal on
-  a platform (Metal over OpenGL on macOS; eventually Vulkan/DirectX over
-  GL elsewhere), the newer one supersedes rather than living alongside the
-  old one indefinitely — the older path is wrapped, thinned, or dropped as
-  the better one lands. The Fable-facing API is the stable surface across
-  that swap (a windowing layer shared across backends, e.g.); the backend
-  underneath it is free to change as long as the observable output stays
-  testably correct (golden tests, pixel/numeric cross-checks — whatever
-  the feature's own verification story is). Don't build an interim backend
-  you already know will be thrown away once the better one is in scope.
+  idioms** — but the trigger is the *platform* actually dropping the older
+  path, not merely deprecating it. When a newer backend for the same
+  capability is more optimal and the platform has genuinely retired the old
+  one (eventually Vulkan/DirectX superseding GL, say), the newer backend
+  supersedes rather than the two living alongside each other indefinitely —
+  the older path is wrapped, thinned, or dropped as the better one lands.
+  **Metal on macOS is the standing exception, not an instance of this
+  rule**: it ships additive alongside OpenGL/CGL, not as a replacement.
+  Apple marking OpenGL deprecated is not the same as Apple removing it —
+  both backends stay until and unless macOS itself actually drops OpenGL
+  support. The Fable-facing API is the stable surface across any such swap
+  (a windowing layer shared across backends, e.g.); the backend underneath
+  it is free to change as long as the observable output stays testably
+  correct (golden tests, pixel/numeric cross-checks — whatever the
+  feature's own verification story is). Don't build an interim backend you
+  already know will be thrown away once the better one is in scope.
+- **Target what each platform is actively doing before what it used to
+  do.** Scope to current OS versions/architectures first — Apple-Silicon-
+  only macOS support (sidestepping the x86_64-only `objc_msgSend_stret` ABI
+  split) is the current instance — and broaden to older versions of that
+  same platform only once a concrete capability need justifies it, not
+  preemptively as legacy-support insurance. This is a different axis from
+  the backend-supersession rule above (that one swaps backends for a single
+  platform; this one decides which platform/OS-version targets are in
+  scope at all): it follows from the AI-native trajectory (see "What Fable
+  is for") — build for where each platform's ecosystem is actively headed,
+  not for carrying yesterday's compatibility weight up front. Older
+  platforms broadly are still in scope long-term; the ordering is
+  capability-justified breadth, not defensive breadth-first.
 
 ## Invariants (do not break these)
 
