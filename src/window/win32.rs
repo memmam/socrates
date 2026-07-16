@@ -1277,6 +1277,28 @@ fn vk_from_name(name: &str) -> Option<u32> {
 mod tests {
     use super::*;
 
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn SetErrorMode(u_mode: u32) -> u32;
+    }
+    /// Suppresses the Windows Error Reporting "<program> has stopped
+    /// working" dialog for the calling process. Without this, an unhandled
+    /// SEH exception anywhere in this file's raw FFI (a bad struct layout, a
+    /// wrong calling convention, an invalid transmuted function pointer)
+    /// shows a modal dialog instead of terminating — on a headless CI runner
+    /// nothing can ever click it, so the process (and the `cargo test` job
+    /// hosting it) hangs forever with no output instead of failing fast with
+    /// a visible error. Confirmed on real windows-latest CI hardware: the
+    /// `window feature (Win32/WGL)` job's "Unit + golden spec tests (gl)"
+    /// step has hung indefinitely (never producing so much as a `running N
+    /// tests` line) on every run since this backend first merged, including
+    /// runs of code that predates this session — this call exists to turn
+    /// that silent hang into a real, diagnosable failure on the next run.
+    /// Scoped to `#[cfg(test)]` since this is a CI-diagnostic measure, not a
+    /// production behavior change for real Fable programs.
+    const SEM_FAILCRITICALERRORS: u32 = 0x0001;
+    const SEM_NOGPFAULTERRORBOX: u32 = 0x0002;
+
     /// End-to-end smoke test: create a window, clear it, swap buffers, pump
     /// events, confirm it isn't asking to close, then tear it down. Skips
     /// gracefully (doesn't panic the suite) if window creation fails for any
@@ -1286,6 +1308,10 @@ mod tests {
     /// environment — this exercises the whole pipe for real.
     #[test]
     fn create_clear_swap_poll_close() {
+        // See `SetErrorMode`'s doc comment above: without this, a crash
+        // anywhere below shows an unclickable WER dialog on CI instead of
+        // failing fast.
+        unsafe { SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX) };
         let inner = match Inner::create("fable window test", 320, 240) {
             Ok(inner) => inner,
             Err(e) => {
