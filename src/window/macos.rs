@@ -126,6 +126,39 @@ extern "C" {
 #[link(name = "Cocoa", kind = "framework")]
 extern "C" {}
 
+// **Temporary** [debug] hook: `-[NSException raise]` calls this (if
+// installed) synchronously, before it invokes `objc_exception_throw` to
+// start unwinding — i.e. before Rust's runtime ever sees the foreign
+// exception and hard-aborts (`SIGABRT`, no landing pad for a non-Rust
+// unwind). Registering it is the only way to see an uncaught exception's
+// name/reason on this bisection: unlike the `NSMenu` crash earlier in this
+// investigation, this later crash prints no `***`-prefixed assertion text
+// at all before the abort.
+#[link(name = "Foundation", kind = "framework")]
+extern "C" {
+    fn NSSetUncaughtExceptionHandler(handler: extern "C" fn(*mut Object));
+}
+
+extern "C" fn print_uncaught_exception(exc: *mut Object) {
+    unsafe {
+        for (label, selector) in [("name", "name"), ("reason", "reason")] {
+            let value = send0(exc, sel(selector));
+            if value.is_null() {
+                continue;
+            }
+            let chars_ptr = send0_ptr(value, sel("UTF8String"));
+            if chars_ptr.is_null() {
+                continue;
+            }
+            let s = std::ffi::CStr::from_ptr(chars_ptr)
+                .to_string_lossy()
+                .into_owned();
+            eprintln!("[macos debug] UNCAUGHT EXCEPTION {label}: {s}");
+        }
+        let _ = std::io::Write::flush(&mut std::io::stderr());
+    }
+}
+
 /// Resolve a class by name, panicking only if AppKit itself is missing the
 /// class (would indicate a broken/ancient OS, not a recoverable condition —
 /// `x11.rs` similarly treats a missing core X11 symbol as fatal via `dlsym`
@@ -370,6 +403,7 @@ fn ensure_app_init() {
     static INIT: OnceLock<()> = OnceLock::new();
     INIT.get_or_init(|| unsafe {
         debug_step("ensure_app_init: start");
+        NSSetUncaughtExceptionHandler(print_uncaught_exception);
         // Process-lifetime autorelease pool — see the module doc comment on
         // memory management for why this is the deliberately coarse choice
         // here instead of per-frame pool push/pop.
