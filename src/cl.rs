@@ -9,7 +9,7 @@
 //! Physical64 addressing, OpenCL memory model, buffers as CrossWorkgroup
 //! pointer kernel arguments). Each backend ingests only its own profile —
 //! `gpu.backend()` is the branch point, the same rule that picks GLSL vs.
-//! MSL vs. WGSL for source-text shaders (SPEC § 7.2 documents both ABIs).
+//! MSL for source-text shaders (SPEC § 7.2 documents both ABIs).
 //!
 //! **Zero dependencies**: the OpenCL ICD loader is resolved at runtime
 //! with `dlopen("libOpenCL.so.1")` on Linux / `LoadLibraryA("OpenCL.dll")`
@@ -583,7 +583,7 @@ pub(crate) fn run_spirv(
         );
         if r != CL_SUCCESS {
             // Fetch the build log — the only real diagnostic an OpenCL
-            // implementation gives (the wgpu path's validation-scope analog).
+            // implementation gives for a rejected module.
             let mut log_size: usize = 0;
             let mut log = String::new();
             if (f.get_program_build_info)(

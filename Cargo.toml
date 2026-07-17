@@ -18,13 +18,14 @@ path = "src/lib.rs"
 lto = true
 codegen-units = 1
 
-# The DEFAULT build has zero dependencies (CI asserts `cargo tree` is one
-# line). The `gpu` feature is the deliberate, quarantined exception: it pulls
-# in wgpu (+ pollster to block on its futures) for `gpu.run(..)` compute.
-# The `gl` feature is a *different* kind of exception: it adds zero Cargo
-# dependencies (no `dep:` entries) — it's raw FFI to system libraries (X11
-# linked normally, GL/GLX `dlopen`ed at runtime), so `cargo tree` stays one
-# line with or without it. See src/window/ for the `window` namespace.
+# EVERY build has zero dependencies — no [dependencies] section at all, and
+# CI asserts `cargo tree` is one line for the default and for every feature
+# set. (wgpu + pollster, once the sole quarantined exception behind a `gpu`
+# feature, were deleted when the native-backend coverage condition was met —
+# see CLAUDE.md's roadmap.) The features below add zero Cargo dependencies
+# (no `dep:` entries): they are raw FFI to system libraries. The `gl`
+# feature links X11 normally and `dlopen`s GL/GLX at runtime; see
+# src/window/ for the `window` namespace.
 # `metal` is the same zero-dependency shape as `gl` (raw FFI to Metal.
 # framework/QuartzCore.framework, both linked normally, no `dep:` entries) --
 # a *sibling* of `gl`, not nested under or replacing it: both are
@@ -34,7 +35,6 @@ codegen-units = 1
 # principle in CLAUDE.md. On Linux/Windows `metal` compiles to nothing.
 [features]
 default = []
-gpu = ["dep:wgpu", "dep:pollster"]
 gl = []
 metal = []
 # Native Vulkan (Linux/Windows compute; Linux/X11 windowing, additive
@@ -44,7 +44,3 @@ vulkan = []
 # gl/metal/vulkan. Ingests SPIR-V in the OpenCL profile (SPEC section 7.2);
 # vulkan takes precedence when both features are enabled.
 opencl = []
-
-[dependencies]
-wgpu = { version = "30", optional = true }
-pollster = { version = "1", optional = true }

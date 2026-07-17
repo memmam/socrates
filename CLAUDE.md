@@ -89,40 +89,53 @@ their place fastest.
 
 ## Native graphics & compute roadmap (standing directive)
 
-**wgpu is a placeholder, not a resident.** The standing goal (set
-2026-07-17, and easy to lose because it spans many releases: re-read this
-before planning any graphics/compute work) is to factor the
-`wgpu`/`pollster` dependency out entirely and replace it with native,
-raw-FFI, zero-dependency backends — OpenGL, OpenCL, CUDA, Vulkan, Metal,
-and DirectX — built over a maximally-performant, minimal-duplication
-shared graphics/compute core: the `window`/`gfx` pattern generalized (one
-backend-neutral Fable-facing surface; thin per-API backends over
-dlopen/`objc_msgSend`/COM raw FFI; handle tables + enum dispatch in shared
-code, as `window/macos/` already does in miniature). Settled decisions:
+**The wgpu deletion is DONE; the native build-out continues.** The
+standing goal (set 2026-07-17, and easy to lose because it spans many
+releases: re-read this before planning any graphics/compute work) is
+native, raw-FFI, zero-dependency backends for everything — OpenGL,
+OpenCL, CUDA, Vulkan, Metal, and DirectX — built over a
+maximally-performant, minimal-duplication shared graphics/compute core:
+the `window`/`gfx` pattern generalized (one backend-neutral Fable-facing
+surface; thin per-API backends over dlopen/`objc_msgSend`/COM raw FFI;
+handle tables + enum dispatch in shared code, as `window/macos/` does in
+miniature). The `wgpu`/`pollster` dependency was **deleted the same day
+the coverage condition was met** (2026-07-17: Metal ✓, Vulkan ✓ compute +
+graphics, OpenCL ✓ with a CI-proven real dispatch) — every build of Fable
+is now zero-dependency. Still to build, in order: CUDA compute (PTX,
+dlopen libcuda; blind-dev, no CI hardware exists), DirectX
+(D3D12/DirectCompute via COM FFI; CI-provable on windows runners via
+WARP), the Win32 Vulkan window surface, and GL-compute if a concrete
+need appears. Settled decisions:
 
 - **Sequencing:** finish the Metal arc first (PR5's graphics phases, then
   Metal *compute* reusing the same device/queue machinery), then Vulkan
   (compute, then graphics), then OpenCL / CUDA / DirectX. The shared core
   is extracted as each second-of-its-kind backend lands — abstractions
   shaped by real duplication, not guessed up front.
-- **Compute shader input: SPIR-V is the lingua franca.** Vulkan, OpenCL
-  2.1+, and GL 4.6 ingest SPIR-V binaries directly, so one `Bytes` blob
-  covers those three; Metal (MSL), DirectX (HLSL/DXIL), and CUDA (PTX)
-  keep per-backend inputs behind the same `backend_name()`-style branching
-  `gfx` uses for GLSL vs. MSL.
-- **wgpu is deleted only after full native coverage:** it stays as a
-  fallback until every targeted platform has at least one native compute
-  path (Metal + Vulkan + one of OpenCL/DirectX at minimum). Then `wgpu`
-  and `pollster` go, and every build of Fable — not just the default —
-  is zero-dependency.
+- **Compute shader input: SPIR-V is the lingua franca — with two
+  profiles.** Vulkan, OpenCL 2.1+, and GL 4.6 ingest SPIR-V binaries
+  directly, but the *format* has two compute dialects (learned when
+  OpenCL landed): Vulkan/GL take the GLCompute-Logical-GLSL450 profile,
+  OpenCL takes Kernel-Physical64-OpenCL (CrossWorkgroup pointer kernel
+  args) — `clCreateProgramWithIL` rejects the former. The blob must match
+  `gpu.backend()`; Metal (MSL), DirectX (HLSL/DXIL), and CUDA (PTX) keep
+  per-backend inputs behind the same `backend_name()`-style branching
+  `gfx` uses for GLSL vs. MSL. SPEC § 7.2 documents both profiles.
+- **wgpu deleted only after full native coverage — executed:** the
+  condition (Metal + Vulkan + one of OpenCL/DirectX at minimum) was met
+  when OpenCL landed, and `wgpu`/`pollster` (and the `gpu` cargo feature
+  and WGSL dialect with them) were removed the same day. `Cargo.toml`
+  has no `[dependencies]` section at all; CI asserts a one-line
+  `cargo tree` for the default and every feature set.
 
 ## Invariants (do not break these)
 
-- **Zero dependencies in the default build.** `cargo tree -e normal` is one
-  line. The only optional deps are `wgpu`/`pollster`, gated behind the `gpu`
-  cargo feature (`--features gpu`); the default build never pulls them, and
-  they are slated for eventual removal (see "Native graphics & compute
-  roadmap" above).
+- **Zero dependencies, in every build.** `cargo tree -e normal` is one
+  line for the default and for every feature set — `Cargo.toml` has no
+  `[dependencies]` section at all. Features add only raw FFI to system
+  libraries. (wgpu/pollster, once the sole optional exception behind a
+  `gpu` feature, were deleted when native compute coverage landed — see
+  the roadmap above.)
 - **`docs/SPEC.md` is the source of truth.** The implementation, the golden
   tests, and the book must all agree with it; a deviation is a bug. Any
   language change updates the spec in the same PR.

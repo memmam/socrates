@@ -1,49 +1,45 @@
 //! GPU compute for the `gpu` builtin namespace.
 //!
-//! This module is **always compiled**; only its internals are gated on the
-//! `gpu` cargo feature (the project's sole optional dependency, wgpu +
-//! pollster). Without the feature every entry point degrades gracefully:
-//! [`available`] is `false`, [`adapter_info`] and [`run`] report that gpu
-//! support is not compiled in. The default build therefore stays
-//! zero-dependency.
+//! This module is **always compiled**; the backends behind it are the three
+//! **native, zero-dependency** paths of CLAUDE.md's roadmap — Metal (MSL
+//! source via [`run`]; `--features metal`, Apple Silicon macOS), Vulkan and
+//! OpenCL (SPIR-V binaries via [`run_spirv`], each in its own profile;
+//! `--features vulkan` / `opencl`, Linux/Windows; vulkan takes precedence
+//! when both are compiled in). wgpu, once the interpreter's only
+//! dependency, is **gone**: the native coverage condition (Metal + Vulkan +
+//! one of OpenCL/DirectX) was met and the roadmap retired it — every build
+//! of Fable, not just the default, is now zero-dependency. Without a
+//! backend every entry point degrades gracefully: [`available`] is `false`,
+//! [`adapter_info`] and [`run`] report that gpu support is not compiled in.
 //!
-//! # Shader ABI (the `gpu.run` contract)
+//! # The `gpu.run` / `gpu.run_spirv` contract (shared across backends)
 //!
-//! [`run`] executes one dispatch of a WGSL compute shader. The shader must
-//! define:
+//! One dispatch of a compute kernel, whose dialect the active backend fixes
+//! (branch on [`backend`]): MSL source for `run` on metal; a
+//! Vulkan-profile or OpenCL-profile SPIR-V binary for `run_spirv` (SPEC
+//! § 7.2 documents both ABIs). Whatever the dialect:
 //!
-//! ```wgsl
-//! @group(0) @binding(0) var<storage, read> input: array<u32>;   // or array<f32>, ...
-//! @group(0) @binding(1) var<storage, read_write> output: array<u32>;
-//!
-//! @compute @workgroup_size(1)          // any workgroup size
-//! fn main(@builtin(global_invocation_id) gid: vec3<u32>) { ... }
-//! ```
-//!
-//! - entry point named `main`, marked `@compute`;
-//! - binding 0 of group 0: a read-only storage buffer, initialized with the
-//!   caller's input bytes (input must be non-empty and a multiple of 4 bytes,
-//!   per WebGPU storage-binding rules);
-//! - binding 1 of group 0: a read-write storage buffer of `out_len` bytes
-//!   (`out_len` must be positive, a multiple of 4, and at most 256 MiB),
-//!   zero-initialized, copied back to the caller after the dispatch;
-//! - the dispatch is `(wx, wy, wz)` workgroups (each in `1..=65535`).
+//! - two buffers: the caller's input bytes (non-empty, a multiple of 4),
+//!   and `out_len` output bytes (positive, a multiple of 4, at most
+//!   256 MiB), **zero-initialized** and copied back after the dispatch;
+//! - the dispatch covers the `(wx, wy, wz)` index space (each count in
+//!   `1..=65535`), with per-backend workgroup semantics documented at each
+//!   backend's section;
+//! - argument validation is [`validate`], shared so bad calls fail with
+//!   byte-identical messages in every build.
 //!
 //! Every failure — no adapter, shader compile/validation errors, device loss,
 //! bad sizes — returns `Err(String)` with a human-readable message; nothing
 //! in here panics the interpreter.
 
-/// Which implementation `gpu.run` dispatches to in THIS build: `"metal"`
-/// (native raw-FFI, macOS/Apple Silicon with `--features metal`),
-/// `"vulkan"` / `"opencl"` (native raw-dlopen FFI on Linux/Windows —
-/// vulkan takes precedence when both are compiled in), `"wgpu"` (the
-/// feature-gated portable fallback, which remains until full native
-/// coverage retires it; any native backend beats it, per CLAUDE.md's
-/// native-backends-first roadmap), or `"none"`. The `gpu` analog of
-/// `win.backend_name()`: programs branch on it to pick the shader dialect
-/// (MSL vs. WGSL) — and, for `gpu.run_spirv`, the SPIR-V *profile* the
-/// binary must use (Vulkan's GLCompute/Logical vs. OpenCL's
-/// Kernel/Physical64; see SPEC § 7.2).
+/// Which implementation the `gpu` namespace dispatches to in THIS build:
+/// `"metal"` (native raw-FFI, macOS/Apple Silicon with `--features
+/// metal`), `"vulkan"` / `"opencl"` (native raw-dlopen FFI on
+/// Linux/Windows — vulkan takes precedence when both are compiled in), or
+/// `"none"`. The `gpu` analog of `win.backend_name()`: programs branch on
+/// it to pick the shader dialect and entry point — and, for
+/// `gpu.run_spirv`, the SPIR-V *profile* the binary must use (Vulkan's
+/// GLCompute/Logical vs. OpenCL's Kernel/Physical64; see SPEC § 7.2).
 #[cfg(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))]
 pub fn backend() -> &'static str {
     "metal"
@@ -61,15 +57,6 @@ pub fn backend() -> &'static str {
     "opencl"
 }
 #[cfg(all(
-    feature = "gpu",
-    not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")),
-    not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))
-))]
-pub fn backend() -> &'static str {
-    "wgpu"
-}
-#[cfg(all(
-    not(feature = "gpu"),
     not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")),
     not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))
 ))]
@@ -83,8 +70,9 @@ pub const MAX_BUFFER_BYTES: usize = 256 * 1024 * 1024;
 /// Largest workgroup count per dimension (the WebGPU default limit).
 pub const MAX_WORKGROUPS_PER_DIM: u32 = 65_535;
 
-/// Validate the buffer-size and dispatch-size arguments. Shared by both
-/// builds so argument errors are identical with and without the feature.
+/// Validate the buffer-size and dispatch-size arguments. Shared by every
+/// backend (and the stub) so argument errors are byte-identical in every
+/// build.
 fn validate(input: &[u8], out_len: usize, wx: u32, wy: u32, wz: u32) -> Result<(), String> {
     if input.is_empty() {
         return Err("gpu.run: input must not be empty (storage buffers cannot be zero-sized)"
@@ -127,206 +115,45 @@ fn validate(input: &[u8], out_len: usize, wx: u32, wy: u32, wz: u32) -> Result<(
 }
 
 // ---------------------------------------------------------------------------
-// Feature OFF: graceful stubs
+// No backend compiled in: graceful stubs
 // ---------------------------------------------------------------------------
 
-/// Is a GPU adapter available? Always `false` without the `gpu` feature.
-#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
+/// Is a GPU adapter available? Always `false` without a backend.
+#[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
 pub fn available() -> bool {
     false
 }
 
 /// Describe the adapter `gpu.run` would use.
-#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
 pub fn adapter_info() -> String {
     "gpu support not compiled in".to_string()
 }
 
 /// Run a compute shader (see the module docs for the ABI). Always an error
-/// without the `gpu` feature.
-#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
+/// without a backend.
+#[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
 pub fn run(
-    _wgsl: &str,
+    _src: &str,
     input: &[u8],
     out_len: usize,
     wx: u32,
     wy: u32,
     wz: u32,
 ) -> Result<Vec<u8>, String> {
-    // Argument errors first, so bad calls fail identically in both builds.
+    // Argument errors first, so bad calls fail identically in every build.
     validate(input, out_len, wx, wy, wz)?;
-    Err("gpu support not compiled in (build with --features gpu, or --features metal on Apple Silicon macOS)".to_string())
-}
-
-// ---------------------------------------------------------------------------
-// Feature ON: wgpu implementation
-// ---------------------------------------------------------------------------
-
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
-fn request_adapter() -> Result<wgpu::Adapter, String> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        ..Default::default()
-    }))
-    .map_err(|e| format!("no adapter: {e}"))
-}
-
-/// Is a GPU adapter available (any backend, software rasterizers included)?
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
-pub fn available() -> bool {
-    request_adapter().is_ok()
-}
-
-/// Describe the adapter `gpu.run` would use: `"<name> (<backend>)"`, or
-/// `"no adapter"` when none can be acquired.
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
-pub fn adapter_info() -> String {
-    match request_adapter() {
-        Ok(adapter) => {
-            let info = adapter.get_info();
-            format!("{} ({})", info.name, info.backend)
-        }
-        Err(_) => "no adapter".to_string(),
-    }
-}
-
-/// Run one dispatch of a WGSL compute shader (module docs describe the ABI):
-/// upload `input` to binding 0, dispatch `(wx, wy, wz)` workgroups of the
-/// `main` entry point, and read back `out_len` bytes from binding 1.
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
-pub fn run(
-    wgsl: &str,
-    input: &[u8],
-    out_len: usize,
-    wx: u32,
-    wy: u32,
-    wz: u32,
-) -> Result<Vec<u8>, String> {
-    validate(input, out_len, wx, wy, wz)?;
-
-    let adapter = request_adapter()?;
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("fable gpu.run"),
-        ..Default::default()
-    }))
-    .map_err(|e| format!("failed to acquire device: {e}"))?;
-
-    // Route errors to us instead of wgpu's default panicking handler, and
-    // wrap all device work in error scopes: wgpu reports validation failures
-    // (shader compile errors included) asynchronously, not as Results.
-    device.on_uncaptured_error(std::sync::Arc::new(|e: wgpu::Error| {
-        eprintln!("gpu.run: uncaptured device error: {e}");
-    }));
-    let oom_scope = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
-    let validation_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
-
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("gpu.run shader"),
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl)),
-    });
-
-    let input_buf = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("gpu.run input"),
-        size: input.len() as u64,
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: true,
-    });
-    input_buf
-        .slice(..)
-        .get_mapped_range_mut()
-        .map_err(|e| format!("gpu.run: failed to write input buffer: {e}"))?
-        .copy_from_slice(input);
-    input_buf.unmap();
-
-    let output_buf = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("gpu.run output"),
-        size: out_len as u64,
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    });
-    let staging_buf = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("gpu.run staging"),
-        size: out_len as u64,
-        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
-
-    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: Some("gpu.run pipeline"),
-        layout: None,
-        module: &shader,
-        entry_point: Some("main"),
-        compilation_options: Default::default(),
-        cache: None,
-    });
-
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("gpu.run bind group"),
-        layout: &pipeline.get_bind_group_layout(0),
-        entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: input_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: output_buf.as_entire_binding() },
-        ],
-    });
-
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-    {
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("gpu.run pass"),
-            timestamp_writes: None,
-        });
-        pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(wx, wy, wz);
-    }
-    encoder.copy_buffer_to_buffer(&output_buf, 0, &staging_buf, 0, out_len as u64);
-    queue.submit(Some(encoder.finish()));
-
-    // Surface any validation / OOM error recorded above (scopes pop in
-    // reverse push order). Shader compile errors land here: with
-    // `layout: None`, pipeline creation validates the WGSL and its entry
-    // point/bindings.
-    let validation = pollster::block_on(validation_scope.pop());
-    let oom = pollster::block_on(oom_scope.pop());
-    if let Some(e) = validation {
-        return Err(format!("gpu.run: {e}"));
-    }
-    if let Some(e) = oom {
-        return Err(format!("gpu.run: out of GPU memory: {e}"));
-    }
-
-    // Map the staging buffer and copy the result out.
-    let slice = staging_buf.slice(..);
-    let (tx, rx) = std::sync::mpsc::channel();
-    slice.map_async(wgpu::MapMode::Read, move |r| {
-        let _ = tx.send(r);
-    });
-    device
-        .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|e| format!("gpu.run: device poll failed: {e}"))?;
-    match rx.recv() {
-        Ok(Ok(())) => {}
-        Ok(Err(e)) => return Err(format!("gpu.run: failed to map output buffer: {e}")),
-        Err(_) => return Err("gpu.run: device dropped the map request".to_string()),
-    }
-    let data = slice
-        .get_mapped_range()
-        .map_err(|e| format!("gpu.run: failed to read output buffer: {e}"))?
-        .to_vec();
-    staging_buf.unmap();
-    Ok(data)
+    Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, or \
+         --features vulkan or opencl on Linux/Windows)"
+        .to_string())
 }
 
 // ---------------------------------------------------------------------------
 // Native Metal backend (macOS/Apple Silicon with --features metal): raw FFI
-// over crate::mtl/crate::objc, no wgpu involved. Takes precedence over the
-// wgpu path when both are compiled in — the roadmap's native-backends-first
-// rule (CLAUDE.md); wgpu remains the fallback elsewhere until full native
-// coverage retires it.
+// over crate::mtl/crate::objc — the roadmap's first native compute backend
+// (CLAUDE.md).
 //
-// # The MSL `gpu.run` ABI (mirrors the WGSL ABI in the module docs)
+// # The MSL `gpu.run` ABI (the module-docs contract, in MSL)
 //
 // ```msl
 // #include <metal_stdlib>
@@ -340,13 +167,13 @@ pub fn run(
 //   graphics backend's `vertex_main`/`fragment_main` convention);
 // - `[[buffer(0)]]`: the caller's input bytes; `[[buffer(1)]]`: `out_len`
 //   zero-initialized output bytes, copied back after the dispatch — the
-//   same two-binding contract as WGSL's `@binding(0)`/`@binding(1)`;
+//   shared two-buffer contract from the module docs;
 // - the dispatch is `(wx, wy, wz)` *threadgroups of one thread each*, so
-//   `thread_position_in_grid` covers exactly the same index space as a
-//   WGSL shader with `@workgroup_size(1)` — the shape every `gpu.run`
-//   kernel to date uses. (Larger threadgroups are an API-side parameter in
-//   Metal, not a shader-side declaration like WGSL's; if a future need
-//   arises it becomes an explicit new argument, not a silent change.)
+//   `thread_position_in_grid` covers exactly the `(wx, wy, wz)` index
+//   space — the shape every `gpu.run` kernel to date uses. (Larger
+//   threadgroups are an API-side parameter in Metal, not a shader-side
+//   declaration; if a future need arises it becomes an explicit new
+//   argument, not a silent change.)
 // - argument validation, size caps, and workgroup limits are `validate`,
 //   identical across all three builds.
 // ---------------------------------------------------------------------------
@@ -415,8 +242,8 @@ mod metal_native {
         device_and_queue().is_some()
     }
 
-    /// `"<name> (metal)"` — same `"<name> (<backend>)"` shape as the wgpu
-    /// path's adapter string, or `"no adapter"` when no device exists.
+    /// `"<name> (metal)"` — the `"<name> (<backend>)"` shape every gpu
+    /// backend reports, or `"no adapter"` when no device exists.
     pub(super) fn adapter_info() -> String {
         match device_and_queue() {
             Some((device, _)) => {
@@ -495,8 +322,8 @@ mod metal_native {
                 return Err("gpu.run: output buffer allocation failed".to_string());
             }
             // Zero-initialize: `newBufferWithLength:` does not guarantee
-            // zeroed contents, and the wgpu path's output starts zeroed —
-            // the two backends must agree on bytes the kernel never wrote.
+            // zeroed contents, and the zeroed-output contract means every
+            // backend must agree on bytes the kernel never wrote.
             let out_ptr = send0(outbuf, sel("contents")) as *mut u8;
             if out_ptr.is_null() {
                 send0_void(outbuf, sel("release"));
@@ -540,7 +367,7 @@ mod metal_native {
             send0_void(cmd, sel("waitUntilCompleted"));
 
             // Surface execution failures (device loss, invalid dispatch)
-            // the way the wgpu path surfaces its error-scope results.
+            // as Errs, like every other failure mode here.
             let cmd_err = send0(cmd, sel("error"));
             if !cmd_err.is_null() {
                 let msg = nsstring_to_owned(send0(cmd_err, sel("localizedDescription")));
@@ -562,11 +389,11 @@ mod metal_native {
 
 // ---------------------------------------------------------------------------
 // Native Vulkan backend (Linux/Windows with --features vulkan): raw dlopen
-// FFI over src/vk.rs, no wgpu involved — and the first consumer of the
-// SPIR-V lingua-franca decision. `gpu.run_spirv` takes the SPIR-V *binary*
-// as `Bytes` (a sibling entry point rather than an overload of `gpu.run`,
-// for the same no-default-params/no-overloading reason window.create_metal
-// is a sibling of window.create); its ABI matches the WGSL one: entry point
+// FFI over src/vk.rs — the first consumer of the SPIR-V lingua-franca
+// decision. `gpu.run_spirv` takes the SPIR-V *binary* as `Bytes` (a
+// sibling entry point rather than an overload of `gpu.run`, for the same
+// no-default-params/no-overloading reason window.create_metal is a sibling
+// of window.create); its ABI is the module-docs contract: entry point
 // `main` (SPIR-V has no reserved names, and every GLSL toolchain emits
 // `main`), storage buffers at set 0 bindings 0/1, `(wx, wy, wz)` workgroups
 // whose size the SPIR-V module itself declares (LocalSize), shared
@@ -618,15 +445,15 @@ pub fn run_spirv(
 // ---------------------------------------------------------------------------
 // Native OpenCL backend (Linux/Windows with --features opencl, when vulkan
 // is not also compiled in — the native precedence order is metal > vulkan >
-// opencl > wgpu): raw dlopen FFI over src/cl.rs, no wgpu involved — the
-// SECOND SPIR-V consumer, and the one that forced the profile distinction:
+// opencl): raw dlopen FFI over src/cl.rs — the SECOND SPIR-V consumer, and
+// the one that forced the profile distinction:
 // SPIR-V is the lingua-franca *format*, but `clCreateProgramWithIL` ingests
 // only the OpenCL dialect (Kernel execution model, Physical64 addressing,
 // OpenCL memory model, buffers as CrossWorkgroup pointer kernel arguments),
 // not Vulkan's (GLCompute/Logical/GLSL450/descriptor sets). gpu.run_spirv's
 // contract is therefore: the blob matches the active backend's profile, and
-// gpu.backend() is the branch point — the same rule that picks GLSL vs. MSL
-// vs. WGSL for source-text shaders. The ABI is otherwise the established
+// gpu.backend() is the branch point — the same rule that picks GLSL vs.
+// MSL for source-text shaders. The ABI is otherwise the established
 // one: entry point `main`, input/output as the two kernel arguments,
 // `(wx, wy, wz)` covering the same invocation index space (the global work
 // size — a Vulkan module with LocalSize 1 1 1 dispatches identically),
@@ -702,7 +529,6 @@ pub fn run_spirv(
     validate(input, out_len, wx, wy, wz)?;
     Err(match backend() {
         "metal" => "gpu.run_spirv: the metal backend takes MSL source via gpu.run".to_string(),
-        "wgpu" => "gpu.run_spirv: the wgpu backend takes WGSL source via gpu.run".to_string(),
         _ => "gpu.run_spirv: no SPIR-V backend compiled in (build with --features vulkan or \
               opencl on Linux/Windows)"
             .to_string(),
@@ -727,18 +553,23 @@ mod tests {
         assert!(run("", &[0; 4], 4, 1, 1, 70_000).unwrap_err().contains("workgroup count z"));
     }
 
-    #[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
+    #[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
     #[test]
-    fn stubs_without_feature() {
+    fn stubs_without_backend() {
         assert!(!available());
+        assert_eq!(backend(), "none");
         assert_eq!(adapter_info(), "gpu support not compiled in");
-        let err = run("@compute fn main() {}", &[0; 4], 4, 1, 1, 1).unwrap_err();
-        assert_eq!(err, "gpu support not compiled in (build with --features gpu, or --features metal on Apple Silicon macOS)");
+        let err = run("kernel", &[0; 4], 4, 1, 1, 1).unwrap_err();
+        assert_eq!(
+            err,
+            "gpu support not compiled in (build with --features metal on Apple Silicon macOS, \
+             or --features vulkan or opencl on Linux/Windows)"
+        );
     }
 
-    // With the feature on, run() must fail gracefully (Err, not panic) even
+    // With a backend on, run() must fail gracefully (Err, not panic) even
     // when no adapter exists, and report shader errors when one does.
-    #[cfg(any(feature = "gpu", all(feature = "metal", target_os = "macos", target_arch = "aarch64")))]
+    #[cfg(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))]
     #[test]
     fn run_never_panics_without_adapter_or_with_bad_shader() {
         let r = run("not wgsl at all", &[0; 4], 4, 1, 1, 1);
@@ -746,7 +577,7 @@ mod tests {
     }
 
     // The native precedence order: vulkan beats opencl when both are
-    // compiled in (and each already beats wgpu by construction).
+    // compiled in.
     #[cfg(all(
         feature = "vulkan",
         feature = "opencl",

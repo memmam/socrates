@@ -748,8 +748,8 @@ unsafe fn create_instance(
 }
 
 /// First physical device exposing a compute-capable queue family — the
-/// analog of wgpu's default adapter request. Returns the device and the
-/// queue family index.
+/// default-adapter idiom every gpu backend uses. Returns the device and
+/// the queue family index.
 unsafe fn pick_device(
     gipa: FnGetInstanceProcAddr,
     instance: VkInstance,
@@ -1149,9 +1149,9 @@ pub(crate) fn run_spirv(
             ));
         }
 
-        // Buffers: input (copied in) and output (zeroed; the wgpu and Metal
-        // paths zero theirs too — all backends must agree on bytes the
-        // kernel never wrote). Both stay mapped until teardown.
+        // Buffers: input (copied in) and output (zeroed — the shared
+        // contract: all backends must agree on bytes the kernel never
+        // wrote). Both stay mapped until teardown.
         let (inbuf, inmem, inptr) = create_host_buffer(f, device, &memprops, input.len() as u64)?;
         run.inbuf = inbuf;
         run.inmem = inmem;
