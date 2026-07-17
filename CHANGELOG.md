@@ -4,18 +4,20 @@ Each release was shipped as one reviewed pull request. Golden spec tests pin
 every feature listed here; `docs/SPEC.md` marks each with the version that
 introduced it, and `CLAUDE.md` keeps the release ledger.
 
-## v0.9.0 — native graphics and compute, zero dependencies everywhere
+## v0.8.0 — native graphics and compute; the demo round's feature queue
 
-The standing directive behind this release (`CLAUDE.md`'s roadmap):
-replace the one quarantined dependency (wgpu) with native raw-FFI backends
-for every graphics and compute API worth having, built over a
-maximally-performant, minimal-duplication shared core. v0.9 is that
-programme, complete: three native windowing/draw-call backends, five
-native compute backends, and — the headline — **every build of Fable is
-now zero-dependency** (`Cargo.toml` has no `[dependencies]` section at
-all; CI asserts a one-line `cargo tree` for the default build and for
-every feature set). 311 spec tests; eighteen demos (`glcube` joins the
-zoo) with every golden byte-identical throughout the whole arc.
+One release, two workstreams. First, the standing directive from
+`CLAUDE.md`'s roadmap: replace the one quarantined dependency (wgpu) with
+native raw-FFI backends for every graphics and compute API worth having,
+built over a maximally-performant, minimal-duplication shared core —
+three native windowing/draw-call backends, five native compute backends,
+and, the headline, **every build of Fable is now zero-dependency**
+(`Cargo.toml` has no `[dependencies]` section at all; CI asserts a
+one-line `cargo tree` for the default build and for every feature set).
+Second, the feature-request queue the v0.7 demo round left behind, worked
+through directly (the second half of this section). 311 spec tests;
+eighteen demos (`glcube` joins the zoo) with every golden byte-identical
+throughout.
 
 - **`std.glm`** — vector/matrix/quaternion math named and shaped after
   GLM (`vec3`, `perspective`, `look_at`, `proj.mul(view).mul(model)`),
@@ -69,13 +71,10 @@ zoo) with every golden byte-identical throughout the whole arc.
   (executable, like every snippet), and chapter 9's `gpu` section covers
   all five backends.
 
-## v0.8.0 — the v0.7 demo round's feature queue
-
-The v0.7 demo round (seventeen writers, seventeen adversarial verifiers)
-left a deduplicated feature queue, ranked by how many independent demos hit
-each wall (`demos/NOTES.md` § "The v0.7 round"). This release works through
-it directly. 15 new spec tests (309 total); all 71 demo goldens
-byte-identical throughout.
+**The feature queue.** The v0.7 demo round (seventeen writers, seventeen
+adversarial verifiers) left a deduplicated feature queue, ranked by how
+many independent demos hit each wall (`demos/NOTES.md` § "The v0.7
+round"); this release works through it directly:
 
 - **`if let` / `while let`** (×3: dungeon, mdsite, parmandel): test a
   single pattern without a full `match`. Both are pure parser sugar,

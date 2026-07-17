@@ -143,7 +143,7 @@ pub enum Native {
     GpuAvailable,
     GpuAdapterInfo,
     GpuRun,
-    /// `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` (v0.9):
+    /// `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` (v0.8):
     /// `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so
     /// the blob rides the buffer type instead of masquerading as text. A
     /// sibling rather than an overload for the same reason as
@@ -151,7 +151,7 @@ pub enum Native {
     /// overloading). Ingested natively by the vulkan backend; other
     /// backends report which entry point they want instead.
     GpuRunSpirv,
-    /// `gpu.backend()` (v0.9): `"metal"` | `"vulkan"` | `"d3d12"` | `"cuda"` | `"opencl"` | `"none"` — which
+    /// `gpu.backend()` (v0.8): `"metal"` | `"vulkan"` | `"d3d12"` | `"cuda"` | `"opencl"` | `"none"` — which
     /// implementation `gpu.run` dispatches to in this build. The `gpu`
     /// analog of `win.backend_name()`: programs branch on it to pick the
     /// kernel dialect (MSL or PTX source, or the SPIR-V profile).
@@ -161,7 +161,7 @@ pub enum Native {
     // natives are always registered; without the `gl` cargo feature they
     // degrade gracefully (see src/window/mod.rs).
     WindowCreate,
-    /// `window.create_metal(title, w, h)` (v0.9, macOS aarch64 only): a
+    /// `window.create_metal(title, w, h)` (v0.8, macOS aarch64 only): a
     /// Metal-backed sibling of `window.create` — additive alongside the
     /// OpenGL/CGL path, never a replacement (see CLAUDE.md's standing
     /// exception). Without the `metal` cargo feature it degrades
@@ -185,7 +185,7 @@ pub enum Native {
     /// one every subsequent `gfx.*` native operates against (mirrors
     /// `glfwMakeContextCurrent`) — see `Vm::gfx_current_window`.
     WindowHandleMakeCurrent,
-    /// `win.backend_name()` (v0.9): `"opengl"` | `"metal"` — the one
+    /// `win.backend_name()` (v0.8): `"opengl"` | `"metal"` — the one
     /// deliberate escape hatch for backend-specific behavior (shader
     /// source text is inherently GLSL vs. MSL); everything else about the
     /// `gfx.*` call shape stays identical across backends.
@@ -198,7 +198,7 @@ pub enum Native {
     // called `make_current()`, they degrade gracefully (see
     // `natives::gfx_window` and `src/window/mod.rs`).
     GfxCompileProgram,
-    /// `gfx.compile_program_spirv(vertex, fragment)` (v0.9) — the Vulkan
+    /// `gfx.compile_program_spirv(vertex, fragment)` (v0.8) — the Vulkan
     /// backend's shader input: two SPIR-V binaries as `Bytes` (it has no
     /// runtime GLSL compiler, and zero-dep forbids shipping one). Source-
     /// text backends (GL/Metal) return a redirecting `Err`, mirroring how
@@ -1045,8 +1045,8 @@ impl Native {
             ),
             GpuBackend => (vec![], TStr, 0),
 
-            // window.* (v0.8; macOS gained a Metal-backed sibling entry
-            // point in v0.9, Linux a Vulkan-backed one after that). The
+            // window.* (v0.8; macOS also has a Metal-backed sibling entry
+            // point, Linux/Windows a Vulkan-backed one). The
             // `create*` family mirrors `worker.spawn`'s `Result[_, String]`
             // shape.
             WindowCreate => (vec![TStr, Int, Int], res(Type::Window, TStr), 0),
