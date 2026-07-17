@@ -271,6 +271,16 @@ impl WindowHandle {
         }
     }
 
+    /// `gfx.compile_program_spirv` (the Vulkan backend's shader input) —
+    /// same shape as [`Self::gl_compile_program`]; backends that take
+    /// source text return a clean redirecting `Err`.
+    pub fn gl_compile_program_spirv(&mut self, vs: &[u8], fs: &[u8]) -> Result<u32, String> {
+        match &mut self.inner {
+            Some(inner) => inner.compile_program_spirv(vs, fs),
+            None => Err("gfx: window is closed".to_string()),
+        }
+    }
+
     pub fn gl_use_program(&mut self, program: u32) {
         if let Some(inner) = &mut self.inner {
             inner.use_program(program);
@@ -511,6 +521,9 @@ impl WindowHandle {
         unreachable!("WindowHandle is never constructed without a compiled-in backend")
     }
     pub fn gl_compile_program(&mut self, _vertex_src: &str, _fragment_src: &str) -> Result<u32, String> {
+        unreachable!("WindowHandle is never constructed without a compiled-in backend")
+    }
+    pub fn gl_compile_program_spirv(&mut self, _vs: &[u8], _fs: &[u8]) -> Result<u32, String> {
         unreachable!("WindowHandle is never constructed without a compiled-in backend")
     }
     pub fn gl_use_program(&mut self, _program: u32) {

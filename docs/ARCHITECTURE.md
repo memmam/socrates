@@ -764,7 +764,44 @@ the common constants/structure-types, fifteen shared `#[repr(C)]`
 structs, and the shared function-pointer types are `pub(crate)` there;
 WSI/swapchain/image machinery stays in `x11/vulkan.rs` and
 descriptor/pipeline machinery in `vk.rs`'s compute path, each with its
-sole consumer.
+sole consumer. (The descriptor/buffer/shader-module machinery later
+became shared too, when the Vulkan `gfx` surface made the window
+backend its second consumer.)
+
+**The Vulkan gfx surface (`x11/vulkan.rs`, the arc's Phase 2)** maps the
+draw-call namespace onto Vulkan the way the Metal backend mapped it onto
+Metal, with SPIR-V binaries as the shader input
+(`gfx.compile_program_spirv` — no runtime GLSL compiler exists
+zero-dep; conventions in SPEC § 7.3's Vulkan notes). The design in one
+breath: an **in-house SPIR-V reflection parser** (one linear pass over
+the instruction words collecting `OpMemberName`, `OpMemberDecorate
+Offset`, `OpDecorate Binding/DescriptorSet`, and the type shapes)
+resolves `set_uniform_*` names to byte offsets in each stage's one
+uniform block, staged CPU-side and memcpy'd into a persistently-mapped
+host-visible UBO before each draw — safe with zero aliasing reasoning
+because every submission is synchronous (submit → fence wait), the same
+property that lets `gfx` buffers be single persistently-mapped stores
+grown by destroy+recreate. Buffers/textures live in `u32 → handle`
+tables; the VAO shim records `(index → size/stride/offset/buffer)`
+exactly like the Metal one and replays it as
+`VkVertexInput*Descriptions` (attribute *i*'s buffer bound at binding
+*i*); pipelines are cached per `(program, vertex-layout fingerprint,
+depth-test state)` since Vulkan fuses what GL binds independently —
+the PSO-cache bridge again; one draw = one `loadOp=LOAD` render pass
+into the offscreen color + D32 depth pair (framebuffer + views rebuilt
+with the swapchain); `viewport`/`read_pixels` need **no Y-flip in
+shaders**: the device requires `VK_KHR_maintenance1` and renders with a
+negative-height viewport, making clip-space +Y up as in GL, while
+`read_pixels` copies image→buffer then row-reverses and
+BGRA→RGBA-swizzles to `glReadPixels`' bottom-up contract (the Metal
+recipe). Textures are optimal-tiled sampled images uploaded through a
+staging buffer (RGB expanded to RGBA CPU-side — 3-channel formats have
+no guaranteed Vulkan support), sampled through one fixed
+linear/clamp-to-edge sampler at set 0 binding `2 + unit`. Verified by
+`docs/assets/vulkan_triangle.fable`: hand-assembled SPIR-V modules
+(generator script in the commit's test plan) drawn and read back to an
+exact hard-asserted center pixel under Xvfb + lavapipe, locally and in
+CI.
 
 ## Testing strategy
 

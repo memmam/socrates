@@ -987,6 +987,29 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
                 }
             }
         }
+        GfxCompileProgramSpirv => {
+            // `Bytes` args are borrowed from the heap; clone them out
+            // before `gfx_window_msg`'s handle borrow (same discipline as
+            // GpuRunSpirv's bytes handling).
+            let vs = bytes_arg(vm, argc, 0)?.clone();
+            let fs = bytes_arg(vm, argc, 1)?.clone();
+            match gfx_window_msg(vm) {
+                Ok(w) => {
+                    let compiled = w.borrow_mut().gl_compile_program_spirv(&vs, &fs);
+                    match compiled {
+                        Ok(p) => make_ok(vm, Value::Int(p as i64)),
+                        Err(msg) => {
+                            let m = vm.alloc_str(msg);
+                            make_err(vm, m)
+                        }
+                    }
+                }
+                Err(msg) => {
+                    let m = vm.alloc_str(msg);
+                    make_err(vm, m)
+                }
+            }
+        }
         GfxUseProgram => {
             let w = gfx_window(vm)?;
             let p = u32_arg(vm, argc, 0)?;

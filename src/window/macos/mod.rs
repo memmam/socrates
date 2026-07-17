@@ -202,6 +202,17 @@ impl Inner {
         }
     }
 
+    /// `gfx.compile_program_spirv` exists for the Vulkan backend's
+    /// SPIR-V input; both macOS backends take *source text* (GLSL / MSL)
+    /// through `compile_program`, so this is a clean redirect either way.
+    pub fn compile_program_spirv(&mut self, _vs: &[u8], _fs: &[u8]) -> Result<u32, String> {
+        Err(
+            "gfx.compile_program_spirv: this backend takes shader source text (GLSL on \
+             OpenGL, MSL on Metal), not SPIR-V binaries — use gfx.compile_program"
+                .to_string(),
+        )
+    }
+
     pub fn use_program(&mut self, program: u32) {
         match self {
             #[cfg(feature = "gl")]

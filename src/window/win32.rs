@@ -926,6 +926,17 @@ impl Inner {
         self.ensure_current();
     }
 
+    /// `gfx.compile_program_spirv` exists for the Linux Vulkan backend's
+    /// SPIR-V input; this backend takes GLSL source through
+    /// `compile_program`, so this is a clean redirect.
+    pub fn compile_program_spirv(&mut self, _vs: &[u8], _fs: &[u8]) -> Result<u32, String> {
+        Err(
+            "gfx.compile_program_spirv: the OpenGL backend takes GLSL source, not SPIR-V \
+             binaries — use gfx.compile_program(vertex, fragment)"
+                .to_string(),
+        )
+    }
+
     pub fn compile_program(&mut self, vertex_src: &str, fragment_src: &str) -> Result<u32, String> {
         if !self.ensure_current() {
             return Err("gfx: failed to make the GL context current".to_string());
