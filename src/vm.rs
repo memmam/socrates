@@ -559,12 +559,84 @@ impl Vm {
             ip += 1;
 
             match op {
-                // Hottest arms first: with no profile data, LLVM's block
-                // placement follows source order, so arm order IS hot-code
-                // clustering (GetLocal/Const/JumpIfFalse alone are ~45% of
-                // dispatched ops; see bench/RESULTS.md).
-                Op::GetLocal(s) => self.stack.push(self.stack[base + s as usize]),
                 Op::Const(i) => self.stack.push(self.interned[i as usize]),
+                Op::Unit => self.stack.push(Value::Unit),
+                Op::True => self.stack.push(Value::Bool(true)),
+                Op::False => self.stack.push(Value::Bool(false)),
+                Op::Pop => {
+                    self.pop();
+                }
+                Op::PopN(n) => {
+                    let len = self.stack.len() - n as usize;
+                    self.stack.truncate(len);
+                }
+                Op::Dup => self.stack.push(self.peek(0)),
+                Op::Dup2 => {
+                    let b = self.peek(0);
+                    let a = self.peek(1);
+                    self.stack.push(a);
+                    self.stack.push(b);
+                }
+                Op::EndBlock(n) => {
+                    let top = self.pop();
+                    let new_len = self.stack.len() - n as usize;
+                    self.close_upvalues(new_len);
+                    self.stack.truncate(new_len);
+                    self.stack.push(top);
+                }
+                Op::PopScope(n) => {
+                    let new_len = self.stack.len() - n as usize;
+                    self.close_upvalues(new_len);
+                    self.stack.truncate(new_len);
+                }
+
+                Op::GetLocal(s) => self.stack.push(self.stack[base + s as usize]),
+                Op::SetLocal(s) => {
+                    let v = self.pop();
+                    self.stack[base + s as usize] = v;
+                }
+                Op::GetGlobal(g) => {
+                    let v = self.globals[g as usize];
+                    if matches!(v, Value::Undefined) {
+                        return Err(self.err_uninit_global(g, ip));
+                    }
+                    self.stack.push(v);
+                }
+                Op::SetGlobal(g) => {
+                    let v = self.pop();
+                    self.globals[g as usize] = v;
+                }
+                Op::GetUpvalue(i) => {
+                    let closure = self.frames.last().unwrap().closure.expect("no closure");
+                    let uh = match self.heap.get(closure) {
+                        Obj::Closure { upvals, .. } => upvals[i as usize],
+                        _ => return Err(self.err_at(ip, "internal: bad closure (VM bug)")),
+                    };
+                    let v = match self.heap.get(uh) {
+                        Obj::Upvalue(Upval::Open(idx)) => self.stack[*idx],
+                        Obj::Upvalue(Upval::Closed(v)) => *v,
+                        _ => return Err(self.err_at(ip, "internal: bad upvalue (VM bug)")),
+                    };
+                    self.stack.push(v);
+                }
+                Op::SetUpvalue(i) => self.op_set_upvalue(i, ip)?,
+
+                Op::PushFn(p) => {
+                    if let Some(v) = self.fn_closures[p as usize] {
+                        self.stack.push(v);
+                    } else {
+                        let h = self.alloc(Obj::Closure { proto: p, upvals: Vec::new() });
+                        let v = Value::Obj(h);
+                        self.fn_closures[p as usize] = Some(v);
+                        self.stack.push(v);
+                    }
+                }
+                Op::PushNative(n) => self.stack.push(Value::Native(n)),
+                Op::Closure(p) => self.op_closure(p, base, ip)?,
+
+                Op::Jump(off) => {
+                    ip = (ip as i64 + off as i64) as usize;
+                }
                 Op::JumpIfFalse(off) => {
                     let v = self.pop();
                     match v {
@@ -576,121 +648,29 @@ impl Vm {
                         _ => return Err(self.err_at(ip, "internal: expected Bool (VM bug)")),
                     }
                 }
-                Op::Add => self.op_add(ip)?,
-                Op::SetLocal(s) => {
-                    let v = self.pop();
-                    self.stack[base + s as usize] = v;
-                }
-                Op::Lt | Op::Le | Op::Gt | Op::Ge => {
-                    let b = self.peek(0);
-                    let a = self.peek(1);
-                    // Floats get direct IEEE-754 comparisons (every ordered
-                    // comparison involving NaN is false).
-                    let r = if let (Value::Float(x), Value::Float(y)) = (a, b) {
-                        match op {
-                            Op::Lt => x < y,
-                            Op::Le => x <= y,
-                            Op::Gt => x > y,
-                            _ => x >= y,
+                Op::JumpIfFalsePeek(off) => {
+                    let v = self.peek(0);
+                    match v {
+                        Value::Bool(b) => {
+                            if !b {
+                                ip = (ip as i64 + off as i64) as usize;
+                            }
                         }
-                    } else {
-                        let ord = self.compare(a, b).map_err(|m| self.err_at(ip, m))?;
-                        match op {
-                            Op::Lt => ord.is_lt(),
-                            Op::Le => ord.is_le(),
-                            Op::Gt => ord.is_gt(),
-                            _ => ord.is_ge(),
+                        _ => return Err(self.err_at(ip, "internal: expected Bool (VM bug)")),
+                    }
+                }
+                Op::JumpIfTruePeek(off) => {
+                    let v = self.peek(0);
+                    match v {
+                        Value::Bool(b) => {
+                            if b {
+                                ip = (ip as i64 + off as i64) as usize;
+                            }
                         }
-                    };
-                    let n = self.stack.len() - 2;
-                    self.stack[n] = Value::Bool(r);
-                    self.stack.truncate(n + 1);
+                        _ => return Err(self.err_at(ip, "internal: expected Bool (VM bug)")),
+                    }
                 }
-                Op::Sub => self.op_arith(op, ip)?,
-                Op::Mul => self.op_arith(op, ip)?,
-                Op::Div => self.op_arith(op, ip)?,
-                Op::Rem => self.op_arith(op, ip)?,
-                Op::Eq => {
-                    let b = self.peek(0);
-                    let a = self.peek(1);
-                    let eq = self.value_eq(a, b, 0).map_err(|m| self.err_at(ip, m))?;
-                    let n = self.stack.len() - 2;
-                    self.stack[n] = Value::Bool(eq);
-                    self.stack.truncate(n + 1);
-                }
-                Op::Jump(off) => {
-                    ip = (ip as i64 + off as i64) as usize;
-                }
-                Op::Pop => {
-                    self.pop();
-                }
-                Op::Dup => self.stack.push(self.peek(0)),
-                Op::TestVariant(i) => {
-                    let t = self.peek(0);
-                    let Value::Obj(h) = t else {
-                        return Err(self.err_at(ip, "internal: bad enum value (VM bug)"));
-                    };
-                    let b = match self.heap.get(h) {
-                        Obj::Variant { variant, .. } => *variant == i as u32,
-                        _ => return Err(self.err_at(ip, "internal: bad enum value (VM bug)")),
-                    };
-                    self.stack.push(Value::Bool(b));
-                }
-                Op::GetVariantField(i) => {
-                    let t = self.pop();
-                    let Value::Obj(h) = t else {
-                        return Err(self.err_at(ip, "internal: bad enum value (VM bug)"));
-                    };
-                    let v = match self.heap.get(h) {
-                        Obj::Variant { fields, .. } => fields[i as usize],
-                        _ => return Err(self.err_at(ip, "internal: bad enum value (VM bug)")),
-                    };
-                    self.stack.push(v);
-                }
-                Op::MakeVariant { def, variant, arity } => {
-                    self.gc_checkpoint();
-                    let start = self.stack.len() - arity as usize;
-                    let fields: Vec<Value> = self.stack.split_off(start);
-                    let h = self.heap.alloc(Obj::Variant {
-                        def,
-                        variant: variant as u32,
-                        fields,
-                    });
-                    self.stack.push(Value::Obj(h));
-                }
-                Op::GetField(i) => {
-                    let s = self.pop();
-                    let Value::Obj(h) = s else {
-                        return Err(self.err_at(ip, "internal: bad struct (VM bug)"));
-                    };
-                    let v = match self.heap.get(h) {
-                        Obj::Struct { fields, .. } => fields[i as usize],
-                        _ => return Err(self.err_at(ip, "internal: bad struct (VM bug)")),
-                    };
-                    self.stack.push(v);
-                }
-                Op::TupleGet(i) => {
-                    let t = self.pop();
-                    let Value::Obj(h) = t else {
-                        return Err(self.err_at(ip, "internal: bad tuple (VM bug)"));
-                    };
-                    let v = match self.heap.get(h) {
-                        Obj::Tuple(items) => items[i as usize],
-                        _ => return Err(self.err_at(ip, "internal: bad tuple (VM bug)")),
-                    };
-                    self.stack.push(v);
-                }
-                Op::CallFn(p, argc) => {
-                    self.sync_ip(ip);
-                    self.push_frame(p, None, argc, false)?;
-                    proto_idx = p as usize;
-                    ip = 0;
-                    base = self.stack.len() - argc as usize;
-                }
-                Op::CallNative(n, argc) => {
-                    self.sync_ip(ip);
-                    crate::natives::call_native(self, n, argc)?;
-                }
+
                 Op::Call(argc) => {
                     let callee = self.peek(argc as usize);
                     match callee {
@@ -716,6 +696,13 @@ impl Vm {
                         }
                         _ => return Err(self.err_at(ip, "value is not callable")),
                     }
+                }
+                Op::CallFn(p, argc) => {
+                    self.sync_ip(ip);
+                    self.push_frame(p, None, argc, false)?;
+                    proto_idx = p as usize;
+                    ip = 0;
+                    base = self.stack.len() - argc as usize;
                 }
                 Op::TailCallFn(p, argc) => {
                     self.sync_ip(ip);
@@ -764,6 +751,10 @@ impl Vm {
                         _ => return Err(self.err_at(ip, "value is not callable")),
                     }
                 }
+                Op::CallNative(n, argc) => {
+                    self.sync_ip(ip);
+                    crate::natives::call_native(self, n, argc)?;
+                }
                 Op::Return => {
                     let result = self.pop();
                     let f = self.frames.pop().unwrap();
@@ -780,6 +771,11 @@ impl Vm {
                     base = f.base;
                 }
 
+                Op::Add => self.op_add(ip)?,
+                Op::Sub => self.op_arith(op, ip)?,
+                Op::Mul => self.op_arith(op, ip)?,
+                Op::Div => self.op_arith(op, ip)?,
+                Op::Rem => self.op_arith(op, ip)?,
                 Op::BitAnd | Op::BitOr | Op::BitXor | Op::Shl | Op::Shr => {
                     self.op_bitwise(op, ip)?
                 }
@@ -806,119 +802,39 @@ impl Vm {
                         _ => return Err(self.err_at(ip, "internal: expected Bool (VM bug)")),
                     }
                 }
-                Op::ForNextRange { off, inclusive } => {
-                    let hi_v = self.peek(0);
-                    let cur_v = self.peek(1);
-                    match (cur_v, hi_v) {
-                        (Value::Int(cur), Value::Int(hi)) => {
-                            let in_range = if inclusive { cur <= hi } else { cur < hi };
-                            if in_range {
-                                let next_state = cur
-                                    .checked_add(1)
-                                    .map(Value::Int)
-                                    .unwrap_or(Value::Unit);
-                                let n = self.stack.len();
-                                self.stack[n - 2] = next_state;
-                                self.stack.push(Value::Int(cur));
-                            } else {
-                                ip = (ip as i64 + off as i64) as usize;
-                            }
-                        }
-                        (Value::Unit, _) => {
-                            ip = (ip as i64 + off as i64) as usize;
-                        }
-                        _ => {
-                            return Err(
-                                self.err_at(ip, "internal: bad range loop state (VM bug)")
-                            )
-                        }
-                    }
-                }
-                Op::ForNext(off) => ip = self.op_for_next(off, ip)?,
-                Op::JumpIfFalsePeek(off) => {
-                    let v = self.peek(0);
-                    match v {
-                        Value::Bool(b) => {
-                            if !b {
-                                ip = (ip as i64 + off as i64) as usize;
-                            }
-                        }
-                        _ => return Err(self.err_at(ip, "internal: expected Bool (VM bug)")),
-                    }
-                }
-                Op::JumpIfTruePeek(off) => {
-                    let v = self.peek(0);
-                    match v {
-                        Value::Bool(b) => {
-                            if b {
-                                ip = (ip as i64 + off as i64) as usize;
-                            }
-                        }
-                        _ => return Err(self.err_at(ip, "internal: expected Bool (VM bug)")),
-                    }
-                }
-                Op::EndBlock(n) => {
-                    let top = self.pop();
-                    let new_len = self.stack.len() - n as usize;
-                    self.close_upvalues(new_len);
-                    self.stack.truncate(new_len);
-                    self.stack.push(top);
-                }
-                Op::PopScope(n) => {
-                    let new_len = self.stack.len() - n as usize;
-                    self.close_upvalues(new_len);
-                    self.stack.truncate(new_len);
-                }
-                Op::GetGlobal(g) => {
-                    let v = self.globals[g as usize];
-                    if matches!(v, Value::Undefined) {
-                        return Err(self.err_uninit_global(g, ip));
-                    }
-                    self.stack.push(v);
-                }
-                Op::GetUpvalue(i) => {
-                    let closure = self.frames.last().unwrap().closure.expect("no closure");
-                    let uh = match self.heap.get(closure) {
-                        Obj::Closure { upvals, .. } => upvals[i as usize],
-                        _ => return Err(self.err_at(ip, "internal: bad closure (VM bug)")),
-                    };
-                    let v = match self.heap.get(uh) {
-                        Obj::Upvalue(Upval::Open(idx)) => self.stack[*idx],
-                        Obj::Upvalue(Upval::Closed(v)) => *v,
-                        _ => return Err(self.err_at(ip, "internal: bad upvalue (VM bug)")),
-                    };
-                    self.stack.push(v);
-                }
-                Op::Unit => self.stack.push(Value::Unit),
-                Op::True => self.stack.push(Value::Bool(true)),
-                Op::False => self.stack.push(Value::Bool(false)),
-                Op::PopN(n) => {
-                    let len = self.stack.len() - n as usize;
-                    self.stack.truncate(len);
-                }
-                Op::Dup2 => {
+                Op::Eq => {
                     let b = self.peek(0);
                     let a = self.peek(1);
-                    self.stack.push(a);
-                    self.stack.push(b);
+                    let eq = self.value_eq(a, b, 0).map_err(|m| self.err_at(ip, m))?;
+                    let n = self.stack.len() - 2;
+                    self.stack[n] = Value::Bool(eq);
+                    self.stack.truncate(n + 1);
                 }
-                Op::SetGlobal(g) => {
-                    let v = self.pop();
-                    self.globals[g as usize] = v;
-                }
-                Op::PushFn(p) => {
-                    if let Some(v) = self.fn_closures[p as usize] {
-                        self.stack.push(v);
+                Op::Lt | Op::Le | Op::Gt | Op::Ge => {
+                    let b = self.peek(0);
+                    let a = self.peek(1);
+                    // Floats get direct IEEE-754 comparisons (every ordered
+                    // comparison involving NaN is false).
+                    let r = if let (Value::Float(x), Value::Float(y)) = (a, b) {
+                        match op {
+                            Op::Lt => x < y,
+                            Op::Le => x <= y,
+                            Op::Gt => x > y,
+                            _ => x >= y,
+                        }
                     } else {
-                        let h = self.alloc(Obj::Closure { proto: p, upvals: Vec::new() });
-                        let v = Value::Obj(h);
-                        self.fn_closures[p as usize] = Some(v);
-                        self.stack.push(v);
-                    }
+                        let ord = self.compare(a, b).map_err(|m| self.err_at(ip, m))?;
+                        match op {
+                            Op::Lt => ord.is_lt(),
+                            Op::Le => ord.is_le(),
+                            Op::Gt => ord.is_gt(),
+                            _ => ord.is_ge(),
+                        }
+                    };
+                    let n = self.stack.len() - 2;
+                    self.stack[n] = Value::Bool(r);
+                    self.stack.truncate(n + 1);
                 }
-                Op::PushNative(n) => self.stack.push(Value::Native(n)),
-                Op::SetUpvalue(i) => self.op_set_upvalue(i, ip)?,
-                Op::Closure(p) => self.op_closure(p, base, ip)?,
 
                 Op::ToString => self.op_to_string(ip)?,
                 Op::Concat(n) => self.op_concat(n, ip)?,
@@ -951,6 +867,29 @@ impl Vm {
                         _ => return Err(self.err_at(ip, "internal: bad struct (VM bug)")),
                     }
                 }
+                Op::MakeVariant { def, variant, arity } => {
+                    self.gc_checkpoint();
+                    let start = self.stack.len() - arity as usize;
+                    let fields: Vec<Value> = self.stack.split_off(start);
+                    let h = self.heap.alloc(Obj::Variant {
+                        def,
+                        variant: variant as u32,
+                        fields,
+                    });
+                    self.stack.push(Value::Obj(h));
+                }
+
+                Op::GetField(i) => {
+                    let s = self.pop();
+                    let Value::Obj(h) = s else {
+                        return Err(self.err_at(ip, "internal: bad struct (VM bug)"));
+                    };
+                    let v = match self.heap.get(h) {
+                        Obj::Struct { fields, .. } => fields[i as usize],
+                        _ => return Err(self.err_at(ip, "internal: bad struct (VM bug)")),
+                    };
+                    self.stack.push(v);
+                }
                 Op::SetField(i) => {
                     let v = self.pop();
                     let s = self.pop();
@@ -962,6 +901,40 @@ impl Vm {
                         _ => return Err(self.err_at(ip, "internal: bad struct (VM bug)")),
                     }
                 }
+                Op::TupleGet(i) => {
+                    let t = self.pop();
+                    let Value::Obj(h) = t else {
+                        return Err(self.err_at(ip, "internal: bad tuple (VM bug)"));
+                    };
+                    let v = match self.heap.get(h) {
+                        Obj::Tuple(items) => items[i as usize],
+                        _ => return Err(self.err_at(ip, "internal: bad tuple (VM bug)")),
+                    };
+                    self.stack.push(v);
+                }
+                Op::GetVariantField(i) => {
+                    let t = self.pop();
+                    let Value::Obj(h) = t else {
+                        return Err(self.err_at(ip, "internal: bad enum value (VM bug)"));
+                    };
+                    let v = match self.heap.get(h) {
+                        Obj::Variant { fields, .. } => fields[i as usize],
+                        _ => return Err(self.err_at(ip, "internal: bad enum value (VM bug)")),
+                    };
+                    self.stack.push(v);
+                }
+                Op::TestVariant(i) => {
+                    let t = self.peek(0);
+                    let Value::Obj(h) = t else {
+                        return Err(self.err_at(ip, "internal: bad enum value (VM bug)"));
+                    };
+                    let b = match self.heap.get(h) {
+                        Obj::Variant { variant, .. } => *variant == i as u32,
+                        _ => return Err(self.err_at(ip, "internal: bad enum value (VM bug)")),
+                    };
+                    self.stack.push(Value::Bool(b));
+                }
+
                 Op::Index => {
                     let idx = self.pop();
                     let base_v = self.pop();
@@ -976,6 +949,35 @@ impl Vm {
                 }
 
                 Op::ForPrep => self.op_for_prep(ip)?,
+                Op::ForNext(off) => ip = self.op_for_next(off, ip)?,
+                Op::ForNextRange { off, inclusive } => {
+                    let hi_v = self.peek(0);
+                    let cur_v = self.peek(1);
+                    match (cur_v, hi_v) {
+                        (Value::Int(cur), Value::Int(hi)) => {
+                            let in_range = if inclusive { cur <= hi } else { cur < hi };
+                            if in_range {
+                                let next_state = cur
+                                    .checked_add(1)
+                                    .map(Value::Int)
+                                    .unwrap_or(Value::Unit);
+                                let n = self.stack.len();
+                                self.stack[n - 2] = next_state;
+                                self.stack.push(Value::Int(cur));
+                            } else {
+                                ip = (ip as i64 + off as i64) as usize;
+                            }
+                        }
+                        (Value::Unit, _) => {
+                            ip = (ip as i64 + off as i64) as usize;
+                        }
+                        _ => {
+                            return Err(
+                                self.err_at(ip, "internal: bad range loop state (VM bug)")
+                            )
+                        }
+                    }
+                }
 
                 Op::MatchFail => {
                     return Err(self.err_at(
