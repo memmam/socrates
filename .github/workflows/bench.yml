@@ -10,10 +10,13 @@ name: Bench A/B
 # branch under test, or — for branch-scoped actors that cannot dispatch
 # workflows (403), the same constraint the Release workflow's
 # RELEASE_TAG path solves — push the candidate as a `bench/<name>`
-# branch: the pushed ref is the head side, `main` is the base, default
-# rounds. The workflow file is read from the pushed ref, so the branch
-# must contain it (merge main in when benching an older branch). Each
-# job posts its delta table to the run's summary page.
+# branch: the pushed ref is the head side, the base is `main` unless
+# the pushed ref carries a `bench/BASE` file naming another ref (for
+# A/B'ing a candidate against something that isn't main — e.g. a
+# robustness probe of change X on top of change Y, judged against Y).
+# The workflow file is read from the pushed ref, so the branch must
+# contain it (merge main in when benching an older branch). Each job
+# posts its delta table to the run's summary page.
 
 on:
   push:
@@ -65,10 +68,22 @@ jobs:
         with:
           ref: ${{ inputs.head_ref || github.ref }}
           path: head
+      - name: Resolve base ref
+        id: baseref
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.base_ref }}" ]; then
+            ref='${{ inputs.base_ref }}'
+          elif [ -f head/bench/BASE ]; then
+            ref=$(tr -d '[:space:]' < head/bench/BASE)
+          else
+            ref=main
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
       - name: Checkout base
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.base_ref || 'main' }}
+          ref: ${{ steps.baseref.outputs.ref }}
           path: base
       - uses: dtolnay/rust-toolchain@stable
       - name: Build both sides
@@ -84,6 +99,6 @@ jobs:
             --macro-n "${{ inputs.macro_n || '3' }}" \
             --targets "${{ inputs.targets || '' }}" | tee ab.md
           {
-            echo "## ${{ matrix.label }} — ${{ inputs.head_ref || github.ref_name }} vs ${{ inputs.base_ref || 'main' }}"
+            echo "## ${{ matrix.label }} — ${{ inputs.head_ref || github.ref_name }} vs ${{ steps.baseref.outputs.ref }}"
             cat ab.md
           } >> "$GITHUB_STEP_SUMMARY"

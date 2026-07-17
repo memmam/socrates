@@ -40,7 +40,11 @@ MACROS = [
 
 
 def binary(root):
-    exe = os.path.join(root, "target", "release", "fable")
+    # Absolute, because the subprocess runs with cwd=root: POSIX exec
+    # resolves a relative program path in the *child* cwd (root/root/...),
+    # while Windows resolves it in the parent's — absolute is the only
+    # spelling that means the same binary on both.
+    exe = os.path.join(os.path.abspath(root), "target", "release", "fable")
     if os.name == "nt" or not os.path.exists(exe):
         win = exe + ".exe"
         if os.path.exists(win):
@@ -76,6 +80,9 @@ def run_once(root, args):
 
 
 def main():
+    # Windows Python pipes stdout as cp1252, which cannot encode the ⚠
+    # marker; the table is UTF-8 markdown wherever it lands.
+    sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     ap.add_argument("base")
     ap.add_argument("head")
@@ -85,9 +92,25 @@ def main():
     ap.add_argument("--threshold", type=float, default=3.0)
     opts = ap.parse_args()
 
+    for side in ("base", "head"):
+        exe = binary(getattr(opts, side))
+        if not os.path.exists(exe):
+            sys.exit(f"{side} binary missing: {exe} (build both sides first)")
+
     filt = [t for t in opts.targets.split(",") if t]
     rows = []
     for name, args, kind in targets_for(opts.head, filt):
+        # A bench that exists on only one ref (added/removed between the
+        # two) cannot be compared — report the row and move on. Checked
+        # against the source files, never inferred from a run failure: a
+        # failed run is a real failure and must fail the job.
+        if not all(
+            os.path.exists(os.path.join(root, a))
+            for root in (opts.base, opts.head)
+            for a in args
+        ):
+            rows.append((name, None, None, None))
+            continue
         n = opts.micro_n if kind == "micro" else opts.macro_n
         try:
             # One unmeasured warm-up per side, then strict interleaving.
@@ -100,11 +123,6 @@ def main():
         except subprocess.CalledProcessError:
             print(f"{name}: FAILED to run on one side", file=sys.stderr)
             sys.exit(1)
-        except FileNotFoundError:
-            # A target that exists on only one ref (added/removed bench)
-            # cannot be compared — report and move on.
-            rows.append((name, None, None, None))
-            continue
         b, h = min(bs), min(hs)
         rows.append((name, b, h, 100.0 * (h - b) / b))
 
