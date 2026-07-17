@@ -903,14 +903,46 @@ backend, this one is fully exercised on plain CI hardware, no GPU
 needed). Environments without a display or Vulkan device degrade to a
 clean prefixed `Err`.
 
-**Current status: window surface only.** `create`/`clear`/`swap_buffers`/
-`poll`/`key_down`/mouse/size/`should_close`/`close` and
-`win.make_current()` all work; the `gfx.*` draw-call surface is not yet
-implemented on this backend — `gfx.compile_program` returns a clean `Err`
-saying so, and the other `gfx.*` members panic (catchable via `try`) with
-the same message, exactly the Metal backend's between-phases behavior.
-This paragraph is updated as the remaining phases (SPIR-V draw-call
-parity, then glcube pixel parity) ship.
+The full `gfx.*` draw-call surface works on this backend, with **SPIR-V
+binaries** as the shader input (`gfx.compile_program_spirv`, § 7.4 —
+Vulkan has no runtime GLSL compiler, and shipping one would break the
+zero-dependency invariant; this is the same lingua-franca decision
+`gpu.run_spirv` made for compute). `gfx.compile_program` (GLSL source)
+returns a clean `Err` redirecting to `compile_program_spirv`, and vice
+versa on the source-text backends — `win.backend_name()` is the branch
+point, exactly as GLSL-vs-MSL already is on macOS. The Vulkan shader
+conventions:
+
+- Both modules name their entry point `main` (vertex and fragment are
+  separate SPIR-V modules, so the names don't collide).
+- Each stage's uniforms live in one `Block`-decorated uniform-buffer
+  struct at descriptor set 0 — binding 0 for the vertex stage, binding 1
+  for the fragment stage, by convention (the backend reads the actual
+  binding from the module's decorations). `gfx.set_uniform_*` resolves
+  the member by *name* via the backend's in-house SPIR-V reflection
+  (`OpMemberName` + `OpMemberDecorate Offset` over the instruction
+  words), so the module must carry member names (glslang and friends
+  emit them by default); names a shader doesn't declare are silently
+  ignored — both exactly like GLSL uniform locations.
+- Vertex attributes are `Input` variables whose `Location` matches
+  `gfx.set_vertex_attrib`'s index; shaders never name vertex buffer
+  bindings (the backend binds attribute *i*'s data at binding *i*
+  internally). Textures are combined image samplers at set 0 binding
+  `2 + unit`, with the unit from `gfx.active_texture_unit`.
+- Y-axis needs **no** shader-side handling: the backend renders with a
+  maintenance1 negative-height viewport, so clip-space +Y is up exactly
+  as in GL. The one clip-space caveat that does travel with
+  GL-convention projection matrices (`std.glm.perspective`) is depth:
+  GL puts clip z in `[-w, +w]`, Vulkan in `[0, +w]`, so a vertex shader
+  using such a matrix remaps once at the end —
+  `pos.z = (pos.z + pos.w) * 0.5;` — the same remap the Metal backend
+  documents (§ 7.3 above).
+
+Verified with real rasterized pixels on CI:
+`docs/assets/vulkan_triangle.fable` draws a hand-assembled SPIR-V
+triangle and hard-asserts the exact center pixel through
+`gfx.read_pixels`, under Xvfb + lavapipe. This paragraph is updated once
+glcube pixel parity (the remaining phase) ships.
 
 ### 7.4 The gfx namespace (v0.8, feature-gated)
 
@@ -925,12 +957,14 @@ as the one every subsequent `gfx.*` call targets, and is idempotent — the
 same make-current call `clear()`/`swap_buffers()` already issue internally
 per call, just exposed on its own.
 
-Like `window`, `gfx` is quarantined behind the `gl` cargo feature and adds
-**zero** Cargo dependencies (raw FFI only); the namespace always exists —
-programs using it typecheck in every build. Every member degrades
-gracefully: without the `gl` feature, every `gfx.*` call panics with
-`"gfx support not compiled in (build with --features gl)"`; with the
-feature but before any window has ever called `make_current()`, every call
+Like `window`, `gfx` is quarantined behind the rendering-backend cargo
+features (`gl`, `metal`, `vulkan` — it is compiled in whenever any of
+them is) and adds **zero** Cargo dependencies (raw FFI only); the
+namespace always exists — programs using it typecheck in every build.
+Every member degrades gracefully: without any rendering backend, every
+`gfx.*` call panics with
+`"gfx support not compiled in (build with --features gl, metal, or vulkan)"`;
+with one but before any window has ever called `make_current()`, every call
 panics with `"gfx: no current GL context -- call window.make_current()
 first"`. The one exception is `compile_program`, whose failures — including
 both of the above — are `Err` values instead of panics, matching its
@@ -940,7 +974,8 @@ program is validly linked and bound, the same no-`Result`-plumbing shape
 
 | Member | Type | Notes |
 |---|---|---|
-| `gfx.compile_program(vertex_src, fragment_src)` | `fn(String, String) -> Result[Int, String]` | compiles + links a GLSL vertex/fragment pair; `Err` carries the driver's shader/link info log, sized via `GL_INFO_LOG_LENGTH` (never a guessed fixed buffer) — and any shader/program object already created is deleted before returning |
+| `gfx.compile_program(vertex_src, fragment_src)` | `fn(String, String) -> Result[Int, String]` | compiles + links a GLSL vertex/fragment pair; `Err` carries the driver's shader/link info log, sized via `GL_INFO_LOG_LENGTH` (never a guessed fixed buffer) — and any shader/program object already created is deleted before returning. On the Vulkan backend: a clean `Err` redirecting to `compile_program_spirv` |
+| `gfx.compile_program_spirv(vertex, fragment)` | `fn(Bytes, Bytes) -> Result[Int, String]` | (v0.9) the Vulkan backend's shader input: two SPIR-V binaries (vertex, fragment — see the Linux Vulkan backend note in § 7.3 for the module conventions). A sibling of `compile_program`, not an overload (Fable has neither): SPIR-V is a binary format, so it rides `Bytes`, exactly like `gpu.run_spirv`. On source-text backends (GL, Metal): a clean `Err` redirecting to `compile_program` |
 | `gfx.use_program(p)` | `fn(Int) -> Unit` | `glUseProgram` |
 | `gfx.delete_program(p)` | `fn(Int) -> Unit` | `glDeleteProgram` |
 | `gfx.create_buffer()` | `fn() -> Int` | `glGenBuffers(1, ...)` |

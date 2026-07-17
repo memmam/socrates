@@ -101,15 +101,15 @@ pub(crate) type VkDevice = *mut c_void;
 pub(crate) type VkQueue = *mut c_void;
 pub(crate) type VkCommandBuffer = *mut c_void;
 // Non-dispatchable handles: 64-bit integers on every platform.
-type VkBuffer = u64;
+pub(crate) type VkBuffer = u64;
 pub(crate) type VkDeviceMemory = u64;
-type VkShaderModule = u64;
-type VkDescriptorSetLayout = u64;
-type VkPipelineLayout = u64;
-type VkPipeline = u64;
+pub(crate) type VkShaderModule = u64;
+pub(crate) type VkDescriptorSetLayout = u64;
+pub(crate) type VkPipelineLayout = u64;
+pub(crate) type VkPipeline = u64;
 type VkPipelineCache = u64;
-type VkDescriptorPool = u64;
-type VkDescriptorSet = u64;
+pub(crate) type VkDescriptorPool = u64;
+pub(crate) type VkDescriptorSet = u64;
 pub(crate) type VkCommandPool = u64;
 pub(crate) type VkFence = u64;
 
@@ -119,8 +119,8 @@ pub(crate) const VK_TRUE: u32 = 1;
 
 pub(crate) const VK_API_VERSION_1_0: u32 = 1 << 22;
 const VK_QUEUE_COMPUTE_BIT: u32 = 0x2;
-const VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT: u32 = 0x2;
-const VK_MEMORY_PROPERTY_HOST_COHERENT_BIT: u32 = 0x4;
+pub(crate) const VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT: u32 = 0x2;
+pub(crate) const VK_MEMORY_PROPERTY_HOST_COHERENT_BIT: u32 = 0x4;
 const VK_BUFFER_USAGE_STORAGE_BUFFER_BIT: u32 = 0x20;
 pub(crate) const VK_SHARING_MODE_EXCLUSIVE: u32 = 0;
 const VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: u32 = 7;
@@ -137,15 +137,15 @@ pub(crate) const ST_DEVICE_CREATE_INFO: i32 = 3;
 pub(crate) const ST_SUBMIT_INFO: i32 = 4;
 pub(crate) const ST_MEMORY_ALLOCATE_INFO: i32 = 5;
 pub(crate) const ST_FENCE_CREATE_INFO: i32 = 8;
-const ST_BUFFER_CREATE_INFO: i32 = 12;
-const ST_SHADER_MODULE_CREATE_INFO: i32 = 16;
-const ST_PIPELINE_SHADER_STAGE_CREATE_INFO: i32 = 18;
+pub(crate) const ST_BUFFER_CREATE_INFO: i32 = 12;
+pub(crate) const ST_SHADER_MODULE_CREATE_INFO: i32 = 16;
+pub(crate) const ST_PIPELINE_SHADER_STAGE_CREATE_INFO: i32 = 18;
 const ST_COMPUTE_PIPELINE_CREATE_INFO: i32 = 29;
-const ST_PIPELINE_LAYOUT_CREATE_INFO: i32 = 30;
-const ST_DESCRIPTOR_SET_LAYOUT_CREATE_INFO: i32 = 32;
-const ST_DESCRIPTOR_POOL_CREATE_INFO: i32 = 33;
-const ST_DESCRIPTOR_SET_ALLOCATE_INFO: i32 = 34;
-const ST_WRITE_DESCRIPTOR_SET: i32 = 35;
+pub(crate) const ST_PIPELINE_LAYOUT_CREATE_INFO: i32 = 30;
+pub(crate) const ST_DESCRIPTOR_SET_LAYOUT_CREATE_INFO: i32 = 32;
+pub(crate) const ST_DESCRIPTOR_POOL_CREATE_INFO: i32 = 33;
+pub(crate) const ST_DESCRIPTOR_SET_ALLOCATE_INFO: i32 = 34;
+pub(crate) const ST_WRITE_DESCRIPTOR_SET: i32 = 35;
 pub(crate) const ST_COMMAND_POOL_CREATE_INFO: i32 = 39;
 pub(crate) const ST_COMMAND_BUFFER_ALLOCATE_INFO: i32 = 40;
 pub(crate) const ST_COMMAND_BUFFER_BEGIN_INFO: i32 = 42;
@@ -239,15 +239,15 @@ struct VkPhysicalDevicePropertiesPadded {
     tail: [u8; 1024],
 }
 #[repr(C)]
-struct VkBufferCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    size: u64,
-    usage: u32,
-    sharing_mode: u32,
-    queue_family_index_count: u32,
-    p_queue_family_indices: *const u32,
+pub(crate) struct VkBufferCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) size: u64,
+    pub(crate) usage: u32,
+    pub(crate) sharing_mode: u32,
+    pub(crate) queue_family_index_count: u32,
+    pub(crate) p_queue_family_indices: *const u32,
 }
 #[repr(C)]
 pub(crate) struct VkMemoryRequirements {
@@ -263,48 +263,48 @@ pub(crate) struct VkMemoryAllocateInfo {
     pub(crate) memory_type_index: u32,
 }
 #[repr(C)]
-struct VkShaderModuleCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    code_size: usize,
-    p_code: *const u32,
+pub(crate) struct VkShaderModuleCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) code_size: usize,
+    pub(crate) p_code: *const u32,
 }
 #[repr(C)]
-struct VkDescriptorSetLayoutBinding {
-    binding: u32,
-    descriptor_type: u32,
-    descriptor_count: u32,
-    stage_flags: u32,
-    p_immutable_samplers: *const c_void,
+pub(crate) struct VkDescriptorSetLayoutBinding {
+    pub(crate) binding: u32,
+    pub(crate) descriptor_type: u32,
+    pub(crate) descriptor_count: u32,
+    pub(crate) stage_flags: u32,
+    pub(crate) p_immutable_samplers: *const c_void,
 }
 #[repr(C)]
-struct VkDescriptorSetLayoutCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    binding_count: u32,
-    p_bindings: *const VkDescriptorSetLayoutBinding,
+pub(crate) struct VkDescriptorSetLayoutCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) binding_count: u32,
+    pub(crate) p_bindings: *const VkDescriptorSetLayoutBinding,
 }
 #[repr(C)]
-struct VkPipelineLayoutCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    set_layout_count: u32,
-    p_set_layouts: *const VkDescriptorSetLayout,
-    push_constant_range_count: u32,
-    p_push_constant_ranges: *const c_void,
+pub(crate) struct VkPipelineLayoutCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) set_layout_count: u32,
+    pub(crate) p_set_layouts: *const VkDescriptorSetLayout,
+    pub(crate) push_constant_range_count: u32,
+    pub(crate) p_push_constant_ranges: *const c_void,
 }
 #[repr(C)]
-struct VkPipelineShaderStageCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    stage: u32,
-    module: VkShaderModule,
-    p_name: *const c_char,
-    p_specialization_info: *const c_void,
+pub(crate) struct VkPipelineShaderStageCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) stage: u32,
+    pub(crate) module: VkShaderModule,
+    pub(crate) p_name: *const c_char,
+    pub(crate) p_specialization_info: *const c_void,
 }
 #[repr(C)]
 struct VkComputePipelineCreateInfo {
@@ -317,45 +317,45 @@ struct VkComputePipelineCreateInfo {
     base_pipeline_index: i32,
 }
 #[repr(C)]
-struct VkDescriptorPoolSize {
-    ty: u32,
-    descriptor_count: u32,
+pub(crate) struct VkDescriptorPoolSize {
+    pub(crate) ty: u32,
+    pub(crate) descriptor_count: u32,
 }
 #[repr(C)]
-struct VkDescriptorPoolCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    max_sets: u32,
-    pool_size_count: u32,
-    p_pool_sizes: *const VkDescriptorPoolSize,
+pub(crate) struct VkDescriptorPoolCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) max_sets: u32,
+    pub(crate) pool_size_count: u32,
+    pub(crate) p_pool_sizes: *const VkDescriptorPoolSize,
 }
 #[repr(C)]
-struct VkDescriptorSetAllocateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    descriptor_pool: VkDescriptorPool,
-    descriptor_set_count: u32,
-    p_set_layouts: *const VkDescriptorSetLayout,
+pub(crate) struct VkDescriptorSetAllocateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) descriptor_pool: VkDescriptorPool,
+    pub(crate) descriptor_set_count: u32,
+    pub(crate) p_set_layouts: *const VkDescriptorSetLayout,
 }
 #[repr(C)]
-struct VkDescriptorBufferInfo {
-    buffer: VkBuffer,
-    offset: u64,
-    range: u64,
+pub(crate) struct VkDescriptorBufferInfo {
+    pub(crate) buffer: VkBuffer,
+    pub(crate) offset: u64,
+    pub(crate) range: u64,
 }
 #[repr(C)]
-struct VkWriteDescriptorSet {
-    s_type: i32,
-    p_next: *const c_void,
-    dst_set: VkDescriptorSet,
-    dst_binding: u32,
-    dst_array_element: u32,
-    descriptor_count: u32,
-    descriptor_type: u32,
-    p_image_info: *const c_void,
-    p_buffer_info: *const VkDescriptorBufferInfo,
-    p_texel_buffer_view: *const c_void,
+pub(crate) struct VkWriteDescriptorSet {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) dst_set: VkDescriptorSet,
+    pub(crate) dst_binding: u32,
+    pub(crate) dst_array_element: u32,
+    pub(crate) descriptor_count: u32,
+    pub(crate) descriptor_type: u32,
+    pub(crate) p_image_info: *const c_void,
+    pub(crate) p_buffer_info: *const VkDescriptorBufferInfo,
+    pub(crate) p_texel_buffer_view: *const c_void,
 }
 #[repr(C)]
 pub(crate) struct VkCommandPoolCreateInfo {
@@ -428,28 +428,28 @@ pub(crate) type FnCreateDevice = unsafe extern "system" fn(
 type FnGetDeviceProcAddr = unsafe extern "system" fn(VkDevice, *const c_char) -> PfnVoidFunction;
 pub(crate) type FnDestroyDevice = unsafe extern "system" fn(VkDevice, *const c_void);
 pub(crate) type FnGetDeviceQueue = unsafe extern "system" fn(VkDevice, u32, u32, *mut VkQueue);
-type FnCreateShaderModule = unsafe extern "system" fn(
+pub(crate) type FnCreateShaderModule = unsafe extern "system" fn(
     VkDevice,
     *const VkShaderModuleCreateInfo,
     *const c_void,
     *mut VkShaderModule,
 ) -> VkResult;
-type FnDestroyShaderModule = unsafe extern "system" fn(VkDevice, VkShaderModule, *const c_void);
-type FnCreateDescriptorSetLayout = unsafe extern "system" fn(
+pub(crate) type FnDestroyShaderModule = unsafe extern "system" fn(VkDevice, VkShaderModule, *const c_void);
+pub(crate) type FnCreateDescriptorSetLayout = unsafe extern "system" fn(
     VkDevice,
     *const VkDescriptorSetLayoutCreateInfo,
     *const c_void,
     *mut VkDescriptorSetLayout,
 ) -> VkResult;
-type FnDestroyDescriptorSetLayout =
+pub(crate) type FnDestroyDescriptorSetLayout =
     unsafe extern "system" fn(VkDevice, VkDescriptorSetLayout, *const c_void);
-type FnCreatePipelineLayout = unsafe extern "system" fn(
+pub(crate) type FnCreatePipelineLayout = unsafe extern "system" fn(
     VkDevice,
     *const VkPipelineLayoutCreateInfo,
     *const c_void,
     *mut VkPipelineLayout,
 ) -> VkResult;
-type FnDestroyPipelineLayout =
+pub(crate) type FnDestroyPipelineLayout =
     unsafe extern "system" fn(VkDevice, VkPipelineLayout, *const c_void);
 type FnCreateComputePipelines = unsafe extern "system" fn(
     VkDevice,
@@ -459,30 +459,30 @@ type FnCreateComputePipelines = unsafe extern "system" fn(
     *const c_void,
     *mut VkPipeline,
 ) -> VkResult;
-type FnDestroyPipeline = unsafe extern "system" fn(VkDevice, VkPipeline, *const c_void);
-type FnCreateDescriptorPool = unsafe extern "system" fn(
+pub(crate) type FnDestroyPipeline = unsafe extern "system" fn(VkDevice, VkPipeline, *const c_void);
+pub(crate) type FnCreateDescriptorPool = unsafe extern "system" fn(
     VkDevice,
     *const VkDescriptorPoolCreateInfo,
     *const c_void,
     *mut VkDescriptorPool,
 ) -> VkResult;
-type FnDestroyDescriptorPool =
+pub(crate) type FnDestroyDescriptorPool =
     unsafe extern "system" fn(VkDevice, VkDescriptorPool, *const c_void);
-type FnAllocateDescriptorSets = unsafe extern "system" fn(
+pub(crate) type FnAllocateDescriptorSets = unsafe extern "system" fn(
     VkDevice,
     *const VkDescriptorSetAllocateInfo,
     *mut VkDescriptorSet,
 ) -> VkResult;
-type FnUpdateDescriptorSets =
+pub(crate) type FnUpdateDescriptorSets =
     unsafe extern "system" fn(VkDevice, u32, *const VkWriteDescriptorSet, u32, *const c_void);
-type FnCreateBuffer = unsafe extern "system" fn(
+pub(crate) type FnCreateBuffer = unsafe extern "system" fn(
     VkDevice,
     *const VkBufferCreateInfo,
     *const c_void,
     *mut VkBuffer,
 ) -> VkResult;
-type FnDestroyBuffer = unsafe extern "system" fn(VkDevice, VkBuffer, *const c_void);
-type FnGetBufferMemoryRequirements =
+pub(crate) type FnDestroyBuffer = unsafe extern "system" fn(VkDevice, VkBuffer, *const c_void);
+pub(crate) type FnGetBufferMemoryRequirements =
     unsafe extern "system" fn(VkDevice, VkBuffer, *mut VkMemoryRequirements);
 pub(crate) type FnAllocateMemory = unsafe extern "system" fn(
     VkDevice,
@@ -491,9 +491,9 @@ pub(crate) type FnAllocateMemory = unsafe extern "system" fn(
     *mut VkDeviceMemory,
 ) -> VkResult;
 pub(crate) type FnFreeMemory = unsafe extern "system" fn(VkDevice, VkDeviceMemory, *const c_void);
-type FnBindBufferMemory =
+pub(crate) type FnBindBufferMemory =
     unsafe extern "system" fn(VkDevice, VkBuffer, VkDeviceMemory, u64) -> VkResult;
-type FnMapMemory = unsafe extern "system" fn(
+pub(crate) type FnMapMemory = unsafe extern "system" fn(
     VkDevice,
     VkDeviceMemory,
     u64,
@@ -515,8 +515,8 @@ pub(crate) type FnAllocateCommandBuffers = unsafe extern "system" fn(
 ) -> VkResult;
 pub(crate) type FnBeginCommandBuffer =
     unsafe extern "system" fn(VkCommandBuffer, *const VkCommandBufferBeginInfo) -> VkResult;
-type FnCmdBindPipeline = unsafe extern "system" fn(VkCommandBuffer, u32, VkPipeline);
-type FnCmdBindDescriptorSets = unsafe extern "system" fn(
+pub(crate) type FnCmdBindPipeline = unsafe extern "system" fn(VkCommandBuffer, u32, VkPipeline);
+pub(crate) type FnCmdBindDescriptorSets = unsafe extern "system" fn(
     VkCommandBuffer,
     u32,
     VkPipelineLayout,

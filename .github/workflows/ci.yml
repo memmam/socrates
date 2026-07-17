@@ -340,6 +340,16 @@ jobs:
         run: |
           cargo build --release --features vulkan
           ./target/release/fable docs/assets/vulkan_compute.fable
+      - name: Vulkan triangle (SPIR-V gfx draw calls, hard-asserted pixel)
+        # The full gfx.* surface on the Vulkan backend: hand-assembled
+        # SPIR-V shaders through gfx.compile_program_spirv, reflection-
+        # resolved uniforms, a real rasterized draw, and a read_pixels
+        # center-pixel assert — a wrong color panics the program (exit
+        # 70), failing this step. Xvfb from the gl,vulkan step is on :99.
+        run: |
+          out=$(DISPLAY=:99 ./target/release/fable docs/assets/vulkan_triangle.fable)
+          echo "$out"
+          test "$out" = "ok: vulkan triangle drawn, center=[255, 128, 64, 255]"
       - name: Vulkan window smoke (real WSI presentation, hard-asserted)
         # window.create_vulkan opens a real window against lavapipe's
         # xlib-surface + swapchain path and presents three frames — the

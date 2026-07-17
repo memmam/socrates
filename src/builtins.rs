@@ -198,6 +198,12 @@ pub enum Native {
     // called `make_current()`, they degrade gracefully (see
     // `natives::gfx_window` and `src/window/mod.rs`).
     GfxCompileProgram,
+    /// `gfx.compile_program_spirv(vertex, fragment)` (v0.9) — the Vulkan
+    /// backend's shader input: two SPIR-V binaries as `Bytes` (it has no
+    /// runtime GLSL compiler, and zero-dep forbids shipping one). Source-
+    /// text backends (GL/Metal) return a redirecting `Err`, mirroring how
+    /// `compile_program` redirects on Vulkan.
+    GfxCompileProgramSpirv,
     GfxUseProgram,
     GfxDeleteProgram,
     GfxCreateBuffer,
@@ -550,6 +556,7 @@ impl Native {
             })),
             "gfx" => Some(MathMember::Fn(match member {
                 "compile_program" => GfxCompileProgram,
+                "compile_program_spirv" => GfxCompileProgramSpirv,
                 "use_program" => GfxUseProgram,
                 "delete_program" => GfxDeleteProgram,
                 "create_buffer" => GfxCreateBuffer,
@@ -787,6 +794,7 @@ impl Native {
             WindowHandleMakeCurrent => "make_current",
             WindowHandleBackendName => "backend_name",
             GfxCompileProgram => "gfx.compile_program",
+            GfxCompileProgramSpirv => "gfx.compile_program_spirv",
             GfxUseProgram => "gfx.use_program",
             GfxDeleteProgram => "gfx.delete_program",
             GfxCreateBuffer => "gfx.create_buffer",
@@ -1060,6 +1068,7 @@ impl Native {
             // once a program is validly linked and bound, matching
             // `window`'s own methods' shape (no `Result` plumbing).
             GfxCompileProgram => (vec![TStr, TStr], res(Int, TStr), 0),
+            GfxCompileProgramSpirv => (vec![Type::Bytes, Type::Bytes], res(Int, TStr), 0),
             GfxUseProgram => (vec![Int], Unit, 0),
             GfxDeleteProgram => (vec![Int], Unit, 0),
             GfxCreateBuffer => (vec![], Int, 0),
