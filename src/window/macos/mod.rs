@@ -28,16 +28,6 @@
 //! both backends need are factored into [`shared`], composed by each
 //! backend rather than duplicated.
 
-// Temporary until Phase 2: with `gl` off, every `gfx.*`-forwarding method's
-// `Gl` match arm (its only real, parameter-using arm — the `Metal` arm
-// panics via `metal_gfx_todo` until the Metal draw-call surface lands)
-// doesn't exist, so a `--features metal`-only build sees every one of those
-// parameters as unused. `gl.rs`'s callers already exercise all of them
-// whenever `gl` is on, so scoping the allowance to "only when `gl` is off"
-// keeps real unused-variable detection active for every build that actually
-// exercises these methods.
-#![cfg_attr(not(feature = "gl"), allow(unused_variables))]
-
 #[cfg(feature = "gl")]
 mod gl;
 #[cfg(feature = "metal")]
@@ -176,15 +166,13 @@ impl Inner {
     }
 
     // -----------------------------------------------------------------
-    // gfx.* (v0.8) — forwarded to whichever backend is live. On the `Metal`
-    // variant, everything below `make_current` panics via `metal_gfx_todo`
-    // until Phase 2 lands the Metal draw-call surface (MSL compilation,
-    // buffer/texture handle tables, the VAO shim, reflection-based
-    // uniforms) — a live Metal window CAN be made current as of Phase 1,
-    // so unlike Phase 0 these arms are genuinely reachable and must say
-    // clearly what's missing instead of claiming unreachability. The one
-    // exception is `compile_program`, whose `Result` return lets it report
-    // the same thing as a clean, catchable `Err`.
+    // gfx.* — forwarded to whichever backend is live. Both variants
+    // implement the full draw-call surface (GL since v0.8; Metal since
+    // Phase 2 of the Metal arc) with identical observable semantics; the
+    // shader *source text* each expects (GLSL vs. MSL) is the one
+    // deliberate per-backend difference — see `metal.rs`'s module docs for
+    // the MSL conventions and `WindowHandle::backend_name` for the escape
+    // hatch programs branch on.
     // -----------------------------------------------------------------
 
     pub fn make_current(&mut self) {
@@ -201,11 +189,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.compile_program(vertex_src, fragment_src),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => Err(
-                "gfx.compile_program: not yet implemented on the Metal backend (draw-call \
-                 parity lands in Phase 2; use window.create() / OpenGL for gfx.* today)"
-                    .to_string(),
-            ),
+            Inner::Metal(i) => i.compile_program(vertex_src, fragment_src),
         }
     }
 
@@ -214,7 +198,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.use_program(program),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.use_program(program),
         }
     }
 
@@ -223,7 +207,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_program(program),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.delete_program(program),
         }
     }
 
@@ -232,7 +216,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.create_buffer(),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.create_buffer(),
         }
     }
 
@@ -241,7 +225,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_buffer(buffer),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.delete_buffer(buffer),
         }
     }
 
@@ -250,7 +234,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.bind_buffer(kind, buffer),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.bind_buffer(kind, buffer),
         }
     }
 
@@ -259,7 +243,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.upload_buffer(kind, data, dynamic),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.upload_buffer(kind, data, dynamic),
         }
     }
 
@@ -268,7 +252,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.create_vertex_array(),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.create_vertex_array(),
         }
     }
 
@@ -277,7 +261,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.bind_vertex_array(vao),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.bind_vertex_array(vao),
         }
     }
 
@@ -286,7 +270,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_vertex_array(vao),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.delete_vertex_array(vao),
         }
     }
 
@@ -295,7 +279,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_vertex_attrib(index, size, stride, offset),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.set_vertex_attrib(index, size, stride, offset),
         }
     }
 
@@ -304,7 +288,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.disable_vertex_attrib(index),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.disable_vertex_attrib(index),
         }
     }
 
@@ -313,7 +297,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.create_texture(),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.create_texture(),
         }
     }
 
@@ -322,7 +306,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_texture(tex),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.delete_texture(tex),
         }
     }
 
@@ -331,7 +315,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.bind_texture(tex),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.bind_texture(tex),
         }
     }
 
@@ -340,7 +324,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.active_texture_unit(unit),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.active_texture_unit(unit),
         }
     }
 
@@ -349,7 +333,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.upload_texture(data, width, height, has_alpha),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.upload_texture(data, width, height, has_alpha),
         }
     }
 
@@ -358,7 +342,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_int(program, name, v),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.set_uniform_int(program, name, v),
         }
     }
 
@@ -367,7 +351,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_float(program, name, v),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.set_uniform_float(program, name, v),
         }
     }
 
@@ -376,7 +360,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_vec2(program, name, x, y),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.set_uniform_vec2(program, name, x, y),
         }
     }
 
@@ -385,7 +369,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_vec3(program, name, x, y, z),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.set_uniform_vec3(program, name, x, y, z),
         }
     }
 
@@ -394,7 +378,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_vec4(program, name, x, y, z, w),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.set_uniform_vec4(program, name, x, y, z, w),
         }
     }
 
@@ -403,7 +387,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_mat4(program, name, values),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.set_uniform_mat4(program, name, values),
         }
     }
 
@@ -412,7 +396,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.draw_arrays(first, count),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.draw_arrays(first, count),
         }
     }
 
@@ -421,7 +405,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.draw_elements(count, byte_offset),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.draw_elements(count, byte_offset),
         }
     }
 
@@ -430,7 +414,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.gfx_clear(r, g, b, a),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.gfx_clear(r, g, b, a),
         }
     }
 
@@ -439,7 +423,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_depth_test(enabled),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.set_depth_test(enabled),
         }
     }
 
@@ -448,7 +432,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.viewport(x, y, w, h),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.viewport(x, y, w, h),
         }
     }
 
@@ -457,7 +441,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.read_pixels(x, y, w, h),
             #[cfg(feature = "metal")]
-            Inner::Metal(_i) => metal_gfx_todo(),
+            Inner::Metal(i) => i.read_pixels(x, y, w, h),
         }
     }
 
@@ -469,17 +453,4 @@ impl Inner {
             Inner::Metal(i) => i.teardown(),
         }
     }
-}
-
-/// The Phase-2 boundary for `gfx.*` on a live Metal window — a deliberate,
-/// loud panic (catchable via Fable's `try`, like every native panic) rather
-/// than a silent no-op that would render nothing and corrupt golden output
-/// invisibly. `compile_program` reports the same thing as an `Err` instead,
-/// since it's the one `Result`-returning member.
-#[cfg(feature = "metal")]
-fn metal_gfx_todo() -> ! {
-    panic!(
-        "gfx: draw calls are not yet implemented on the Metal backend (draw-call parity lands \
-         in Phase 2; use window.create() / OpenGL for gfx.* today)"
-    )
 }

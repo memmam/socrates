@@ -773,20 +773,38 @@ feature) rather than the plain single-backend struct `x11`/`win32` each
 use — the only way one compiled binary can transparently hold either kind
 of live window.
 
-**Current status: window lifecycle works; draw calls are pending.**
 `create_metal` opens a real window (`MTLDevice` + command queue +
-`CAMetalLayer` hosted by the content view), and `poll`/`key_down`/
-`mouse_pos`/`width`/`height`/`should_close`/`clear`/`swap_buffers`/
-`close` behave identically to the OpenGL backend — `clear` renders into an
-app-owned offscreen texture and `swap_buffers` blits it into the frame's
-drawable and presents (see `metal.rs`'s module docs for why the offscreen
-indirection is load-bearing). The `gfx.*` draw-call surface is not yet
-implemented against a Metal-current window: `gfx.compile_program` returns
-a clean `Err` saying so, and every other `gfx.*` member panics (catchable
-via `try`) with the same message rather than silently rendering nothing.
-Environments with no Metal-capable GPU degrade gracefully:
-`Err("window.create_metal: MTLCreateSystemDefaultDevice returned nil
-...")`.
+`CAMetalLayer` hosted by the content view), and the entire `Window` +
+`gfx.*` surface behaves identically to the OpenGL backend — rendering
+lands in an app-owned offscreen texture that `swap_buffers` blits into the
+frame's drawable and presents (see `metal.rs`'s module docs for why the
+offscreen indirection is load-bearing). Environments with no Metal-capable
+GPU degrade gracefully: `Err("window.create_metal:
+MTLCreateSystemDefaultDevice returned nil ...")`.
+
+The `gfx.*` calls have the same observable semantics on both backends —
+including Y-origin normalization (`viewport` and `read_pixels` flip
+internally between GL's bottom-left and Metal's top-left origins, and
+`read_pixels` returns bottom-up RGBA rows on both, so the same call reads
+the same physical pixels) — with shader **source text** as the one
+deliberate per-backend difference (`win.backend_name()`, § 8.4d). The
+Metal shader conventions:
+
+- `compile_program`'s two sources are each standalone MSL whose entry
+  functions are named `vertex_main` and `fragment_main` (the analog of
+  GLSL's fixed per-stage `main`).
+- Vertex attributes arrive via `[[stage_in]]` with `[[attribute(i)]]`
+  matching `gfx.set_vertex_attrib`'s index; shaders never name vertex
+  buffer indices (the backend binds attribute `i`'s data at `1 + i`
+  internally).
+- Each stage's uniforms live in one struct argument at `[[buffer(0)]]`;
+  `gfx.set_uniform_*` resolves the member by *name* via pipeline
+  reflection, and names a shader doesn't declare are silently ignored —
+  both exactly like GLSL uniform locations.
+- Textures are `[[texture(unit)]]` with the unit from
+  `gfx.active_texture_unit`; sampling state is declared in the shader as a
+  `constexpr sampler` (the MSL spelling of the fixed linear/clamp-to-edge
+  mode `upload_texture` configures on GL).
 
 ### 7.4 The gfx namespace (v0.8, feature-gated)
 

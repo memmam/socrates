@@ -596,28 +596,51 @@ report every `gfx.*` call as "not compiled in" even with a live Metal
 window current, since the check fired before ever looking at
 `vm.gfx_current_window`.
 
-**Current status: window lifecycle real, draw calls pending.** Phase 1
-landed the device/queue/`CAMetalLayer` plumbing: `metal::Inner` holds a
-`CocoaWindowState` (composition, like `gl::Inner`) plus a retained
-`MTLDevice`/`MTLCommandQueue`/`CAMetalLayer` and an app-owned offscreen
-render target. `clear` encodes a loadAction=Clear render pass into that
-offscreen texture; `swap_buffers` acquires the frame's drawable,
-whole-texture-blits the offscreen target into it, presents, commits, and
-waits (synchronous like a GL swap). The offscreen indirection is
-load-bearing, not overhead: drawable textures are transient (no stable
-"back buffer" identity across `nextDrawable` calls) and not reliably
-CPU-readable, while the offscreen target uses `MTLStorageModeShared`
-(Apple-Silicon uniform memory) so the future `read_pixels` maps it
-directly. One deliberate deviation from `shared.rs`'s process-lifetime
-autorelease pool: the frame path pushes/pops a pool per call, because
-`nextDrawable` hands back one of a small fixed pool (~3) of drawables the
-layer only reclaims on actual release — without a per-frame drain, the
-third `swap_buffers` would block forever. Still pending (Phase 2): MSL
-`compile_program`, the buffer/VAO/texture handle tables Metal needs (its
-objects are pointers, not driver-issued integers, unlike GL),
-pipeline-reflection-based uniform upload, draws, and `read_pixels` — until
-then `gfx.compile_program` on a Metal-current window returns a clean `Err`
-and every other `gfx.*` member panics (catchably) with the same message.
+`metal::Inner` holds a `CocoaWindowState` (composition, like `gl::Inner`)
+plus a retained `MTLDevice`/`MTLCommandQueue`/`CAMetalLayer` and app-owned
+offscreen color + depth render targets. All rendering lands in the
+offscreen color texture; `swap_buffers` acquires the frame's drawable,
+whole-texture-blits the target into it, presents, commits, and waits
+(synchronous like a GL swap). The offscreen indirection is load-bearing,
+not overhead: drawable textures are transient (no stable "back buffer"
+identity across `nextDrawable` calls) and not reliably CPU-readable,
+while the offscreen target uses `MTLStorageModeShared` (Apple-Silicon
+uniform memory) so `read_pixels` maps it directly. One deliberate
+deviation from `shared.rs`'s process-lifetime autorelease pool: the frame
+path pushes/pops a pool per call, because `nextDrawable` hands back one
+of a small fixed pool (~3) of drawables the layer only reclaims on actual
+release — without a per-frame drain, the third `swap_buffers` would block
+forever.
+
+The `gfx.*` surface maps onto Metal as follows (all conventions
+documented in SPEC § 7.4's Metal notes; `metal.rs`'s module docs carry
+the full rationale): MSL sources compile via
+`newLibraryWithSource:` with fixed `vertex_main`/`fragment_main` entry
+points; buffers and textures live in `u32 → retained pointer` handle
+tables (Metal objects are pointers, not driver-issued integers, and
+handles resolve to live objects at *draw* time so `upload_buffer`'s
+`glBufferData`-style same-handle-new-store semantics hold); VAOs are a
+pure Rust-side shim — `set_vertex_attrib` records
+`(index → size/stride/offset/buffer)` tuples exactly like GL captures
+the bound array buffer into VAO state, replayed per draw as an
+`MTLVertexDescriptor` (attribute `i`'s buffer bound at index `1 + i`,
+index 0 reserved for the uniform struct) — and the element-array binding
+is VAO state on both backends; uniforms are staged CPU-side by name and
+resolved to byte offsets via pipeline reflection
+(`MTLRenderPipelineReflection` → `bufferStructType` → member offsets)
+at draw time, uploaded with `setVertexBytes`/`setFragmentBytes` (every
+`gfx` uniform is far below Metal's 4 KiB inline limit); pipelines are
+cached per `(program, vertex-layout fingerprint)` since Metal fuses what
+GL binds independently; each draw is its own `loadAction=Load` render
+pass into the persistent offscreen target — observably identical to GL's
+free interleaving, and a candidate for the standard efficiency-pass
+batching later without changing a pinned byte; `set_depth_test` swaps
+between a 2-state `MTLDepthStencilState` cache (`Less`+write /
+`Always`+no-write — Metal has no enable toggle); `viewport` and
+`read_pixels` Y-flip internally (GL bottom-left vs. Metal top-left), and
+`read_pixels` swizzles the BGRA target to RGBA and reverses rows to match
+`glReadPixels`' bottom-up contract, so demos/glcube's corner-pixel pins
+mean the same physical pixels on both backends.
 
 ## Testing strategy
 

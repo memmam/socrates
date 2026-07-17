@@ -257,15 +257,16 @@ jobs:
         run: cargo test --features gl,metal
       - name: Zero dependencies (gl + metal together)
         run: test "$(cargo tree -e normal --prefix none --features gl,metal | wc -l)" -eq 1
-      - name: Metal clear+present smoke (best effort)
-        # The real-hardware proof of Phase 1's device/queue/CAMetalLayer
-        # plumbing: opens a Metal window, clears, presents 5 frames (more
-        # than the drawable pool, so a drawable leak hangs instead of
-        # passing). Prints `ok: metal cleared and presented` when the runner
-        # has a Metal device + window server, `err: <reason>` when either is
-        # unavailable — both exit 0 (same convention as the gpu job's
-        # gpu_double step); assert only exit 0 but echo the line to the log
-        # so a silent capability regression is visible in the job output.
+      - name: Metal triangle smoke (best effort)
+        # The real-hardware proof of the Metal gfx surface: opens a Metal
+        # window, compiles an MSL shader pair, uploads a triangle, draws,
+        # reads back the center pixel through the GL-parity Y-flip, and
+        # presents. Prints `ok: metal triangle drawn, center=[255, 128, 64,
+        # 255]`-ish when the runner has a Metal device + window server,
+        # `err: <reason>` when either is unavailable — both exit 0 (same
+        # convention as the gpu job's gpu_double step); assert only exit 0
+        # but echo the line to the log so a silent capability regression is
+        # visible in the job output.
         run: |
           cargo build --release --features metal
           ./target/release/fable docs/assets/metal_triangle.fable
