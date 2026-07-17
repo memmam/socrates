@@ -143,7 +143,15 @@ pub enum Native {
     GpuAvailable,
     GpuAdapterInfo,
     GpuRun,
-    /// `gpu.backend()` (v0.9): `"metal"` | `"wgpu"` | `"none"` — which
+    /// `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` (v0.9):
+    /// `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so
+    /// the blob rides the buffer type instead of masquerading as text. A
+    /// sibling rather than an overload for the same reason as
+    /// `window.create_metal` (Fable has neither default parameters nor
+    /// overloading). Ingested natively by the vulkan backend; other
+    /// backends report which entry point they want instead.
+    GpuRunSpirv,
+    /// `gpu.backend()` (v0.9): `"metal"` | `"wgpu"` | `"vulkan"` | `"none"` — which
     /// implementation `gpu.run` dispatches to in this build. The `gpu`
     /// analog of `win.backend_name()`: programs branch on it to pick the
     /// shader dialect (MSL vs. WGSL).
@@ -522,6 +530,7 @@ impl Native {
                 "available" => GpuAvailable,
                 "adapter_info" => GpuAdapterInfo,
                 "run" => GpuRun,
+                "run_spirv" => GpuRunSpirv,
                 "backend" => GpuBackend,
                 _ => return None,
             })),
@@ -755,6 +764,7 @@ impl Native {
             GpuAvailable => "gpu.available",
             GpuAdapterInfo => "gpu.adapter_info",
             GpuRun => "gpu.run",
+            GpuRunSpirv => "gpu.run_spirv",
             GpuBackend => "gpu.backend",
             WindowCreate => "window.create",
             WindowCreateMetal => "window.create_metal",
@@ -1010,6 +1020,11 @@ impl Native {
             // gpu.run(wgsl, input, out_len, wx, wy, wz)
             GpuRun => (
                 vec![TStr, Type::Bytes, Int, Int, Int, Int],
+                res(Type::Bytes, TStr),
+                0,
+            ),
+            GpuRunSpirv => (
+                vec![Type::Bytes, Type::Bytes, Int, Int, Int, Int],
                 res(Type::Bytes, TStr),
                 0,
             ),

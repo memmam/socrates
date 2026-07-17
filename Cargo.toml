@@ -37,6 +37,8 @@ default = []
 gpu = ["dep:wgpu", "dep:pollster"]
 gl = []
 metal = []
+# Native Vulkan compute (Linux/Windows), raw dlopen FFI -- zero deps, like gl/metal.
+vulkan = []
 
 [dependencies]
 wgpu = { version = "30", optional = true }

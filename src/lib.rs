@@ -43,6 +43,10 @@ pub mod span;
 pub mod token;
 pub mod types;
 pub mod value;
+/// Raw-FFI Vulkan compute primitives (see the module docs; the roadmap's
+/// second native compute backend and first SPIR-V consumer).
+#[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]
+pub(crate) mod vk;
 pub mod vm;
 pub mod window;
 pub mod worker;

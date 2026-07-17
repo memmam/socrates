@@ -44,16 +44,22 @@
 pub fn backend() -> &'static str {
     "metal"
 }
+#[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]
+pub fn backend() -> &'static str {
+    "vulkan"
+}
 #[cfg(all(
     feature = "gpu",
-    not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))
+    not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")),
+    not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))
 ))]
 pub fn backend() -> &'static str {
     "wgpu"
 }
 #[cfg(all(
     not(feature = "gpu"),
-    not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))
+    not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")),
+    not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))
 ))]
 pub fn backend() -> &'static str {
     "none"
@@ -113,20 +119,20 @@ fn validate(input: &[u8], out_len: usize, wx: u32, wy: u32, wz: u32) -> Result<(
 // ---------------------------------------------------------------------------
 
 /// Is a GPU adapter available? Always `false` without the `gpu` feature.
-#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
+#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
 pub fn available() -> bool {
     false
 }
 
 /// Describe the adapter `gpu.run` would use.
-#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
+#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
 pub fn adapter_info() -> String {
     "gpu support not compiled in".to_string()
 }
 
 /// Run a compute shader (see the module docs for the ABI). Always an error
 /// without the `gpu` feature.
-#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
+#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
 pub fn run(
     _wgsl: &str,
     input: &[u8],
@@ -144,7 +150,7 @@ pub fn run(
 // Feature ON: wgpu implementation
 // ---------------------------------------------------------------------------
 
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
 fn request_adapter() -> Result<wgpu::Adapter, String> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -155,14 +161,14 @@ fn request_adapter() -> Result<wgpu::Adapter, String> {
 }
 
 /// Is a GPU adapter available (any backend, software rasterizers included)?
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
 pub fn available() -> bool {
     request_adapter().is_ok()
 }
 
 /// Describe the adapter `gpu.run` would use: `"<name> (<backend>)"`, or
 /// `"no adapter"` when none can be acquired.
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
 pub fn adapter_info() -> String {
     match request_adapter() {
         Ok(adapter) => {
@@ -176,7 +182,7 @@ pub fn adapter_info() -> String {
 /// Run one dispatch of a WGSL compute shader (module docs describe the ABI):
 /// upload `input` to binding 0, dispatch `(wx, wy, wz)` workgroups of the
 /// `main` entry point, and read back `out_len` bytes from binding 1.
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
 pub fn run(
     wgsl: &str,
     input: &[u8],
@@ -542,6 +548,81 @@ mod metal_native {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Native Vulkan backend (Linux/Windows with --features vulkan): raw dlopen
+// FFI over src/vk.rs, no wgpu involved — and the first consumer of the
+// SPIR-V lingua-franca decision. `gpu.run_spirv` takes the SPIR-V *binary*
+// as `Bytes` (a sibling entry point rather than an overload of `gpu.run`,
+// for the same no-default-params/no-overloading reason window.create_metal
+// is a sibling of window.create); its ABI matches the WGSL one: entry point
+// `main` (SPIR-V has no reserved names, and every GLSL toolchain emits
+// `main`), storage buffers at set 0 bindings 0/1, `(wx, wy, wz)` workgroups
+// whose size the SPIR-V module itself declares (LocalSize), shared
+// `validate` for identical argument errors.
+// ---------------------------------------------------------------------------
+
+#[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]
+pub fn available() -> bool {
+    crate::vk::available()
+}
+#[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]
+pub fn adapter_info() -> String {
+    crate::vk::adapter_info()
+}
+/// On the vulkan backend, `gpu.run`'s source-text entry point has no
+/// meaning — SPIR-V is binary, and pretending otherwise (base64 in a
+/// String, say) would launder the type instead of admitting the format.
+#[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]
+pub fn run(
+    _src: &str,
+    input: &[u8],
+    out_len: usize,
+    wx: u32,
+    wy: u32,
+    wz: u32,
+) -> Result<Vec<u8>, String> {
+    validate(input, out_len, wx, wy, wz)?;
+    Err("gpu.run: the vulkan backend takes SPIR-V binaries via gpu.run_spirv (gpu.backend() \
+         == \"vulkan\")"
+        .to_string())
+}
+
+/// One compute dispatch of a SPIR-V binary — `gpu.run`'s `Bytes`-shader
+/// sibling. Only the vulkan backend ingests SPIR-V today (OpenCL 2.1+ and
+/// GL 4.6 join it later, per CLAUDE.md's roadmap); every other build
+/// reports which entry point its backend actually wants.
+#[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]
+pub fn run_spirv(
+    spirv: &[u8],
+    input: &[u8],
+    out_len: usize,
+    wx: u32,
+    wy: u32,
+    wz: u32,
+) -> Result<Vec<u8>, String> {
+    validate(input, out_len, wx, wy, wz)?;
+    crate::vk::run_spirv(spirv, input, out_len, wx, wy, wz)
+}
+#[cfg(not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows"))))]
+pub fn run_spirv(
+    _spirv: &[u8],
+    input: &[u8],
+    out_len: usize,
+    wx: u32,
+    wy: u32,
+    wz: u32,
+) -> Result<Vec<u8>, String> {
+    // Argument errors first, identical to the vulkan build.
+    validate(input, out_len, wx, wy, wz)?;
+    Err(match backend() {
+        "metal" => "gpu.run_spirv: the metal backend takes MSL source via gpu.run".to_string(),
+        "wgpu" => "gpu.run_spirv: the wgpu backend takes WGSL source via gpu.run".to_string(),
+        _ => "gpu.run_spirv: no SPIR-V backend compiled in (build with --features vulkan on \
+              Linux/Windows)"
+            .to_string(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -560,7 +641,7 @@ mod tests {
         assert!(run("", &[0; 4], 4, 1, 1, 70_000).unwrap_err().contains("workgroup count z"));
     }
 
-    #[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
+    #[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
     #[test]
     fn stubs_without_feature() {
         assert!(!available());

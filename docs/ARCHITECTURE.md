@@ -592,8 +592,30 @@ after `waitUntilCompleted`, standing in for wgpu's error scopes. Where
 both `gpu` (wgpu) and `metal` are compiled in, native Metal takes
 precedence — CLAUDE.md's native-backends-first rule; wgpu remains the
 portable fallback until full native coverage retires it. `gpu.backend()`
-(`"metal"`/`"wgpu"`/`"none"`) is the dialect escape hatch, the compute
-analog of `win.backend_name()`.
+(`"metal"`/`"vulkan"`/`"wgpu"`/`"none"`) is the dialect escape hatch, the
+compute analog of `win.backend_name()`.
+
+**Native Vulkan compute (`src/vk.rs`).** The second native compute
+backend, and the first SPIR-V consumer: `gpu.run_spirv` takes the binary
+as `Bytes` (a sibling entry point — Fable has no overloading — and an
+honest one: base64 in `gpu.run`'s String would launder the format). The
+loader is `dlopen`ed (`libvulkan.so.1` / `vulkan-1.dll`, the `x11.rs`
+strategy) and every entry point resolved through
+`vkGetInstanceProcAddr`/`vkGetDeviceProcAddr`; all structs are
+hand-transcribed 1.0 core with exact field widths, with
+`VkPhysicalDeviceProperties` read through an oversized tail pad (only
+`deviceName` is interpreted). Each call builds and tears down the whole
+instance→device→pipeline chain — leak-free by construction via a
+`Drop`-guard struct that releases in reverse creation order, and
+thread-safe for worker isolates with zero shared-handle reasoning; the
+cached-device idiom is a measured efficiency-pass upgrade later, not a
+day-one guess. Buffers live in HOST_VISIBLE|HOST_COHERENT memory and stay
+mapped for their lifetime (freeing mapped memory implicitly unmaps);
+output is explicitly zeroed to match the other backends. Uniquely, this
+backend is fully exercised on plain CI hardware: Mesa's lavapipe software
+device runs the hard-asserted doubling battery
+(`docs/assets/vulkan_compute.fable`, its SPIR-V hand-assembled word by
+word) on every ubuntu runner — and in the dev container itself.
 
 Making that coexist under a single `WindowHandle` needed one structural
 change: `x11::Inner`/`win32::Inner` stay plain structs, aliased directly to

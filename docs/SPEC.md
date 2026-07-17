@@ -632,24 +632,28 @@ these modules follow the same visibility rules as user code.
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
-The `gpu` namespace dispatches compute shaders. It has two backends,
+The `gpu` namespace dispatches compute shaders. It has three backends,
 selected at build time: the original **wgpu** path (WGSL shaders; the
 interpreter's **only** dependency, quarantined behind the `gpu` cargo
 feature — slated for removal once native coverage is full, see
-`CLAUDE.md`'s roadmap) and, since v0.9, a **native Metal** path (MSL
-kernels; raw FFI, zero dependencies, behind the `metal` feature on Apple
-Silicon macOS — the same feature as the Metal window backend). Where both
-are compiled in, native Metal takes precedence. The default build stays
-zero-dependency (CI asserts `cargo tree` is a single line). The namespace
-itself always exists — programs using it typecheck and run in every build;
-without either backend the members degrade gracefully as described below.
+`CLAUDE.md`'s roadmap) and, since v0.9, two **native** paths — **Metal**
+(MSL kernels; raw FFI, zero dependencies, behind the `metal` feature on
+Apple Silicon macOS, the same feature as the Metal window backend) and
+**Vulkan** (SPIR-V binaries via `gpu.run_spirv`; raw `dlopen` FFI, zero
+dependencies, behind the `vulkan` feature on Linux/Windows). A native
+path always takes precedence over wgpu where both are compiled in. The
+default build stays zero-dependency (CI asserts `cargo tree` is a single
+line). The namespace itself always exists — programs using it typecheck
+and run in every build; without a backend the members degrade gracefully
+as described below.
 
 | Member | Type | Notes |
 |--------|------|-------|
 | `gpu.available()` | `fn() -> Bool` | is a GPU adapter usable? Always `false` without a backend |
 | `gpu.adapter_info()` | `fn() -> String` | `"<name> (<backend>)"`, `"no adapter"`, or `"gpu support not compiled in"`. Never empty |
 | `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch (ABI below; `src` is WGSL on the wgpu backend, MSL on the Metal backend). Without a backend: `Err("gpu support not compiled in (build with --features gpu, or --features metal on Apple Silicon macOS)")` |
-| `gpu.backend()` | `fn() -> String` | (v0.9) `"metal"`, `"wgpu"`, or `"none"` — which implementation `gpu.run` dispatches to in this build. The `gpu` analog of `win.backend_name()`: branch on it to pick the shader dialect |
+| `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` | `fn(Bytes, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | (v0.9) `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so the blob rides the buffer type (a sibling, not an overload: Fable has neither default parameters nor overloading). Ingested natively by the vulkan backend; other backends `Err` naming the entry point they want |
+| `gpu.backend()` | `fn() -> String` | (v0.9) `"metal"`, `"vulkan"`, `"wgpu"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build. The `gpu` analog of `win.backend_name()`: branch on it to pick the shader dialect and entry point |
 
 Every failure is an `Err` value, never a panic: bad arguments, no adapter,
 shader compile/validation errors (their messages pass through), device loss.
@@ -696,6 +700,22 @@ example is `docs/assets/metal_compute.fable` (the MSL mirror of
 `gpu_double.fable`, which hard-asserts its output bytes whenever a device
 exists — compute needs no window server, so it is a real correctness gate
 on any Metal-capable machine).
+
+**The SPIR-V ABI (the native Vulkan backend, v0.9)** is the same contract
+again, expressed in SPIR-V: `gpu.run_spirv`'s first argument is the
+binary (a `Bytes` blob of 4-byte words, magic `0x07230203`), whose module
+must declare a `GLCompute` entry point named `main` (SPIR-V reserves
+nothing; every GLSL toolchain emits `main`) with two `BufferBlock`
+storage buffers at descriptor set 0, bindings 0/1, and its own
+`LocalSize` execution mode — the dispatch is `(wx, wy, wz)` workgroups of
+whatever size the module declares, exactly like WGSL's
+`@workgroup_size`. SPIR-V is the roadmap's compute lingua franca
+(`CLAUDE.md`): Vulkan ingests it today, and the OpenCL 2.1+ and GL 4.6
+backends will accept the same blob when they land. The worked example is
+`docs/assets/vulkan_compute.fable` — a hand-assembled doubling kernel,
+hard-asserted whenever a compute device exists; Mesa's lavapipe software
+device makes that unconditional on CI, the first `gpu` backend fully
+exercised without GPU hardware.
 
 `gpu.run`'s I/O rides on the `Bytes` buffer type (§ 8.4b), which ships in
 every build — `bytes(n)`/`bytes_of(..)` construct the input, and the LE
