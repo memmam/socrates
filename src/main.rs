@@ -25,11 +25,33 @@ use std::process::ExitCode;
 use fable::source::Source;
 use fable::{bundle, check, compiler, diag, dis, fmt, lexer, parser, modules, repl, vm};
 
+// Deep-but-legal programs (nested expressions, native callback re-entrancy,
+// deep value display) consume Rust stack proportional to their depth; a
+// large virtual stack keeps Fable's own limits (4096 frames, parser/checker
+// nesting caps) the binding ones. How that stack is obtained is
+// per-platform:
+//
+// - **macOS**: the interpreter MUST run on the process's real main thread —
+//   AppKit hard-requires `NSWindow` creation there (see
+//   `src/window/macos/shared.rs::is_main_thread`), so a spawned interpreter
+//   thread would make `window.create`/`window.create_metal` unconditionally
+//   fail in every real `fable` run (found on real macos-14 hardware by the
+//   `gl-macos-metal` job's clear+present smoke step — `cargo test`'s
+//   graceful main-thread skip had masked it). The big stack comes from the
+//   linker instead: `build.rs` emits `-Wl,-stack_size,0x20000000` (the same
+//   512 MiB) for `aarch64-apple-darwin` bins, sizing the main thread's
+//   stack at link time (and see build.rs for why it's a build script, not
+//   `.cargo/config.toml` rustflags).
+// - **everywhere else**: a spawned thread with an explicit `stack_size`, as
+//   before — neither X11 nor Win32 requires the process's first thread, and
+//   a spawned thread's stack size is portable where linker flags are not.
+#[cfg(target_os = "macos")]
 fn main() -> ExitCode {
-    // Deep-but-legal programs (nested expressions, native callback
-    // re-entrancy, deep value display) consume Rust stack proportional to
-    // their depth; a large virtual stack keeps Fable's own limits (4096
-    // frames, parser/checker nesting caps) the binding ones.
+    real_main()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn main() -> ExitCode {
     std::thread::Builder::new()
         .name("fable".into())
         .stack_size(512 * 1024 * 1024)
