@@ -4,6 +4,71 @@ Each release was shipped as one reviewed pull request. Golden spec tests pin
 every feature listed here; `docs/SPEC.md` marks each with the version that
 introduced it, and `CLAUDE.md` keeps the release ledger.
 
+## v0.9.0 — native graphics and compute, zero dependencies everywhere
+
+The standing directive behind this release (`CLAUDE.md`'s roadmap):
+replace the one quarantined dependency (wgpu) with native raw-FFI backends
+for every graphics and compute API worth having, built over a
+maximally-performant, minimal-duplication shared core. v0.9 is that
+programme, complete: three native windowing/draw-call backends, five
+native compute backends, and — the headline — **every build of Fable is
+now zero-dependency** (`Cargo.toml` has no `[dependencies]` section at
+all; CI asserts a one-line `cargo tree` for the default build and for
+every feature set). 311 spec tests; eighteen demos (`glcube` joins the
+zoo) with every golden byte-identical throughout the whole arc.
+
+- **`std.glm`** — vector/matrix/quaternion math named and shaped after
+  GLM (`vec3`, `perspective`, `look_at`, `proj.mul(view).mul(model)`),
+  pure Fable; plus `Bytes` f32 accessors (`push_f32le`/`be`,
+  `read_f32le`/`be`) for vertex data.
+- **The `window` namespace** — real OS windows over raw FFI:
+  `window.create` is OpenGL everywhere (X11/GLX on Linux, Win32/WGL on
+  Windows, Cocoa/CGL on Apple Silicon macOS — `dlopen`ed GL, zero
+  dependencies, behind the `gl` feature), with events, `key_down`,
+  `mouse`, clear/present, and idempotent teardown.
+- **The `gfx` namespace** — a GL-shaped draw-call surface (programs,
+  buffers, vertex arrays, uniforms resolved by name, textures, draws,
+  `read_pixels`) that behaves identically on every backend.
+- **The Metal backend** (`--features metal`, Apple Silicon) — additive
+  alongside GL, never a replacement: `window.create_metal` plus the full
+  `gfx` surface in raw `objc_msgSend` FFI, MSL shaders, reflection-based
+  uniforms. On macOS the interpreter now runs on the main thread (Cocoa's
+  requirement), with the worker/main split handled at startup.
+- **The Vulkan backend** (`--features vulkan`) — `window.create_vulkan`
+  on Linux/X11 **and** Windows (`VK_KHR_xlib_surface` /
+  `VK_KHR_win32_surface`), with everything past the surface — device
+  pick, swapchain, offscreen back buffer, and the whole `gfx` surface —
+  in one shared platform-neutral core (`window/vulkan.rs`), so the two
+  platforms are behaviorally identical by construction. SPIR-V shaders
+  via `gfx.compile_program_spirv` with in-house SPIR-V reflection; CI
+  proves presentation and draws with real pixels on Mesa's lavapipe.
+- **Three backends, one picture**: `demos/glcube` renders the same
+  spinning cube with golden frame pins **byte-identical** across OpenGL,
+  Metal, and Vulkan — the same Fable program, the same pixels, three
+  graphics APIs.
+- **Five native compute backends** — `gpu.run` / `gpu.run_spirv` over
+  Metal (MSL source), Vulkan (SPIR-V, GLCompute profile), OpenCL
+  (SPIR-V, Kernel profile via `clCreateProgramWithIL` — CI-proven on
+  Intel's CPU runtime), CUDA (PTX text JIT'ed by the NVIDIA driver; no
+  toolkit), and Direct3D 12 (HLSL compiled at dispatch by the OS's own
+  `d3dcompiler_47.dll`; WARP guarantees a device, so CI hard-asserts
+  real dispatched bytes). `gpu.backend()` names the live one; precedence
+  is metal > vulkan > d3d12 > cuda > opencl; the two SPIR-V compute
+  profiles are documented in SPEC § 7.2.
+- **wgpu and pollster deleted** — v0.7's quarantined `gpu` feature and
+  its WGSL dialect are gone, replaced by the native set; `Cargo.lock`
+  went from 1212 lines to 7.
+- **Shared cores, extracted at the second consumer** (the discipline,
+  applied three times): `objc.rs`/`mtl.rs` (Objective-C dispatch + Metal,
+  shared by windowing and compute), `vk.rs` (the Vulkan loader and 1.0
+  primitives, shared by compute and windowing), and `window/vulkan.rs`
+  (the entire Vulkan WSI + draw-call machinery, shared by the Linux and
+  Windows shims — a net −1212 lines, and the lavapipe pixel asserts
+  prove the exact code Windows runs).
+- **The book** grew chapter 8 sections for `std.glm` and `window`/`gfx`
+  (executable, like every snippet), and chapter 9's `gpu` section covers
+  all five backends.
+
 ## v0.8.0 — the v0.7 demo round's feature queue
 
 The v0.7 demo round (seventeen writers, seventeen adversarial verifiers)
