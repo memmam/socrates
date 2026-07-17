@@ -48,3 +48,8 @@ opencl = []
 # (libcuda) -- zero deps; no CUDA toolkit involved. Takes PTX text through
 # gpu.run (SPEC section 7.2); vulkan takes precedence when both are enabled.
 cuda = []
+# Native Direct3D 12 compute (Windows), COM-vtable FFI over runtime-loaded
+# d3d12/dxgi/d3dcompiler_47 system DLLs -- zero deps, no SDK. Takes HLSL
+# source through gpu.run (SPEC section 7.2); always has a device thanks to
+# WARP; vulkan takes precedence, d3d12 beats cuda/opencl.
+d3d12 = []

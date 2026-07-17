@@ -38,6 +38,7 @@
         feature = "opencl",
         not(feature = "vulkan"),
         not(feature = "cuda"),
+        not(all(feature = "d3d12", target_os = "windows")),
         any(target_os = "linux", target_os = "windows")
     )),
     allow(dead_code)

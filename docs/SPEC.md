@@ -632,7 +632,7 @@ these modules follow the same visibility rules as user code.
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
-The `gpu` namespace dispatches compute shaders. It has four backends,
+The `gpu` namespace dispatches compute shaders. It has five backends,
 all **native and zero-dependency** (since v0.9): **Metal** (MSL kernels;
 raw FFI, behind the `metal` feature on Apple Silicon macOS, the same
 feature as the Metal window backend), **Vulkan** (SPIR-V binaries via
@@ -640,13 +640,18 @@ feature as the Metal window backend), **Vulkan** (SPIR-V binaries via
 Linux/Windows), **OpenCL** (SPIR-V binaries via `gpu.run_spirv` in
 the *OpenCL profile* — see below; raw `dlopen` FFI over the ICD loader,
 behind the `opencl` feature on Linux/Windows; requires an OpenCL 2.1+
-runtime with IL ingestion at run time), and **CUDA** (PTX kernels via
+runtime with IL ingestion at run time), **CUDA** (PTX kernels via
 `gpu.run` — PTX is textual, so it rides the `String` argument like MSL;
 raw `dlopen` FFI to NVIDIA's driver, behind the `cuda` feature on
-Linux/Windows; no CUDA toolkit involved, the driver JITs the PTX). Where
-several are compiled in, the precedence is vulkan > cuda > opencl (the
-CI-proven universal path first, then the vendor GPU path, then OpenCL,
-which commonly resolves to a CPU implementation). The original **wgpu** path (WGSL
+Linux/Windows; no CUDA toolkit involved, the driver JITs the PTX), and
+**Direct3D 12** (HLSL kernels via `gpu.run`, compiled at dispatch time
+by the OS's own `d3dcompiler_47.dll`; COM-vtable FFI over runtime-loaded
+system DLLs, behind the `d3d12` feature on Windows — where WARP, the
+OS's software adapter, guarantees a device on every machine). Where
+several are compiled in, the precedence is vulkan > d3d12 > cuda >
+opencl (the CI-proven universal path first, then the always-has-a-device
+Windows path, then the vendor GPU path, then OpenCL, which commonly
+resolves to a CPU implementation). The original **wgpu** path (WGSL
 shaders behind a `gpu` cargo feature — v0.7's one quarantined
 dependency) was **removed in v0.9** when this native coverage landed,
 per `CLAUDE.md`'s roadmap: every build of Fable is now zero-dependency
@@ -659,9 +664,9 @@ gracefully as described below.
 |--------|------|-------|
 | `gpu.available()` | `fn() -> Bool` | is a GPU adapter usable? Always `false` without a backend |
 | `gpu.adapter_info()` | `fn() -> String` | `"<name> (<backend>)"`, `"no adapter"`, or `"gpu support not compiled in"`. Never empty |
-| `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch of source-text `src` — MSL on the metal backend, PTX on the cuda backend (the ABIs below). The binary backends (vulkan, opencl) `Err` redirecting to `gpu.run_spirv`. Without a backend: `Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, or --features vulkan, cuda, or opencl on Linux/Windows)")` |
+| `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch of source-text `src` — MSL on the metal backend, PTX on the cuda backend, HLSL on the d3d12 backend (the ABIs below). The binary backends (vulkan, opencl) `Err` redirecting to `gpu.run_spirv`. Without a backend: `Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, --features d3d12 on Windows, or --features vulkan, cuda, or opencl on Linux/Windows)")` |
 | `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` | `fn(Bytes, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | (v0.9) `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so the blob rides the buffer type (a sibling, not an overload: Fable has neither default parameters nor overloading). Ingested natively by the vulkan and opencl backends — each in its own SPIR-V *profile* (the two ABI paragraphs below; the blobs are not interchangeable); other backends `Err` naming the entry point they want |
-| `gpu.backend()` | `fn() -> String` | (v0.9) `"metal"`, `"vulkan"`, `"cuda"`, `"opencl"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (vulkan > cuda > opencl). The `gpu` analog of `win.backend_name()`: branch on it to pick the kernel dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
+| `gpu.backend()` | `fn() -> String` | (v0.9) `"metal"`, `"vulkan"`, `"d3d12"`, `"cuda"`, `"opencl"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (vulkan > d3d12 > cuda > opencl). The `gpu` analog of `win.backend_name()`: branch on it to pick the kernel dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
 
 Every failure is an `Err` value, never a panic: bad arguments, no adapter,
 shader compile/validation errors (their messages pass through), device loss.
@@ -755,6 +760,23 @@ implementation exists, so unlike the other three backends this one is
 exercised end to end only on real NVIDIA hardware — CI pins the graceful
 no-driver error path, and the battery hard-asserts its bytes the first
 time a GPU runs it.
+
+**The HLSL ABI (the native Direct3D 12 backend, v0.9)** expresses the
+contract in HLSL, compiled to DXBC at dispatch time by
+`d3dcompiler_47.dll` — an OS component, so the compiler adds no
+dependency. The kernel must declare `void main` (HLSL reserves nothing)
+with the two buffers as `RWByteAddressBuffer`s at `u0` (input) and `u1`
+(output), bound as *root UAVs* — no descriptor tables anywhere — and a
+`[numthreads]` attribute of its choosing; the dispatch is `(wx, wy, wz)`
+**thread groups**, so with `[numthreads(1,1,1)]` `SV_GroupID` spans the
+index space, the same shape as the Metal and CUDA dispatches.
+`gpu.run_spirv` on this backend `Err`s redirecting to `gpu.run` (D3D12
+ingests DXBC/DXIL, not SPIR-V). Uniquely on Windows, availability is
+unconditional: WARP, the OS's software D3D12 adapter, provides a device
+on any Windows 10+ machine, GPU or none — which is why the worked
+example, `docs/assets/d3d12_compute.fable`, is hard-asserted end to end
+on plain CI runners, like the Vulkan (lavapipe) and OpenCL (Intel CPU
+runtime) batteries.
 
 `gpu.run`'s I/O rides on the `Bytes` buffer type (§ 8.4b), which ships in
 every build — `bytes(n)`/`bytes_of(..)` construct the input, and the LE

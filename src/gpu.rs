@@ -1,13 +1,14 @@
 //! GPU compute for the `gpu` builtin namespace.
 //!
-//! This module is **always compiled**; the backends behind it are the four
+//! This module is **always compiled**; the backends behind it are the five
 //! **native, zero-dependency** paths of CLAUDE.md's roadmap — Metal (MSL
 //! source via [`run`]; `--features metal`, Apple Silicon macOS), Vulkan and
 //! OpenCL (SPIR-V binaries via [`run_spirv`], each in its own profile;
-//! `--features vulkan` / `opencl`, Linux/Windows), and CUDA (PTX source via
-//! [`run`]; `--features cuda`, Linux/Windows). Where several are compiled
-//! in, the precedence is vulkan > cuda > opencl (metal is alone on macOS).
-//! wgpu, once the interpreter's only
+//! `--features vulkan` / `opencl`, Linux/Windows), CUDA (PTX source via
+//! [`run`]; `--features cuda`, Linux/Windows), and Direct3D 12 (HLSL
+//! source via [`run`]; `--features d3d12`, Windows). Where several are
+//! compiled in, the precedence is vulkan > d3d12 > cuda > opencl (metal
+//! is alone on macOS). wgpu, once the interpreter's only
 //! dependency, is **gone**: the native coverage condition (Metal + Vulkan +
 //! one of OpenCL/DirectX) was met and the roadmap retired it — every build
 //! of Fable, not just the default, is now zero-dependency. Without a
@@ -17,9 +18,9 @@
 //! # The `gpu.run` / `gpu.run_spirv` contract (shared across backends)
 //!
 //! One dispatch of a compute kernel, whose dialect the active backend fixes
-//! (branch on [`backend`]): MSL source for `run` on metal, PTX source for
-//! `run` on cuda; a Vulkan-profile or OpenCL-profile SPIR-V binary for
-//! `run_spirv` (SPEC § 7.2 documents all four ABIs). Whatever the dialect:
+//! (branch on [`backend`]): MSL source for `run` on metal, PTX on cuda,
+//! HLSL on d3d12; a Vulkan-profile or OpenCL-profile SPIR-V binary for
+//! `run_spirv` (SPEC § 7.2 documents all five ABIs). Whatever the dialect:
 //!
 //! - two buffers: the caller's input bytes (non-empty, a multiple of 4),
 //!   and `out_len` output bytes (positive, a multiple of 4, at most
@@ -36,10 +37,11 @@
 
 /// Which implementation the `gpu` namespace dispatches to in THIS build:
 /// `"metal"` (native raw-FFI, macOS/Apple Silicon with `--features
-/// metal`), `"vulkan"` / `"cuda"` / `"opencl"` (native raw-dlopen FFI on
-/// Linux/Windows — that order is the precedence when several are compiled
-/// in: vulkan is the CI-proven universal path, and the vendor GPU path
-/// beats the often-CPU OpenCL), or `"none"`. The `gpu` analog of
+/// metal`), `"vulkan"` / `"d3d12"` / `"cuda"` / `"opencl"` (native
+/// runtime-loaded FFI — that order is the precedence when several are
+/// compiled in: vulkan is the CI-proven universal path, d3d12 always has
+/// a device on Windows thanks to WARP, and the vendor GPU path beats the
+/// often-CPU OpenCL; d3d12 is Windows-only), or `"none"`. The `gpu` analog of
 /// `win.backend_name()`: programs branch on it to pick the shader dialect
 /// and entry point — and, for `gpu.run_spirv`, the SPIR-V *profile* the
 /// binary must use (Vulkan's GLCompute/Logical vs. OpenCL's
@@ -53,8 +55,17 @@ pub fn backend() -> &'static str {
     "vulkan"
 }
 #[cfg(all(
+    feature = "d3d12",
+    not(feature = "vulkan"),
+    target_os = "windows"
+))]
+pub fn backend() -> &'static str {
+    "d3d12"
+}
+#[cfg(all(
     feature = "cuda",
     not(feature = "vulkan"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub fn backend() -> &'static str {
@@ -64,6 +75,7 @@ pub fn backend() -> &'static str {
     feature = "opencl",
     not(feature = "vulkan"),
     not(feature = "cuda"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub fn backend() -> &'static str {
@@ -71,7 +83,8 @@ pub fn backend() -> &'static str {
 }
 #[cfg(all(
     not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")),
-    not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows")))
+    not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows"))),
+    not(all(feature = "d3d12", target_os = "windows"))
 ))]
 pub fn backend() -> &'static str {
     "none"
@@ -132,20 +145,20 @@ fn validate(input: &[u8], out_len: usize, wx: u32, wy: u32, wz: u32) -> Result<(
 // ---------------------------------------------------------------------------
 
 /// Is a GPU adapter available? Always `false` without a backend.
-#[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows"))), not(all(feature = "d3d12", target_os = "windows"))))]
 pub fn available() -> bool {
     false
 }
 
 /// Describe the adapter `gpu.run` would use.
-#[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows"))), not(all(feature = "d3d12", target_os = "windows"))))]
 pub fn adapter_info() -> String {
     "gpu support not compiled in".to_string()
 }
 
 /// Run a compute shader (see the module docs for the ABI). Always an error
 /// without a backend.
-#[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows"))), not(all(feature = "d3d12", target_os = "windows"))))]
 pub fn run(
     _src: &str,
     input: &[u8],
@@ -156,8 +169,9 @@ pub fn run(
 ) -> Result<Vec<u8>, String> {
     // Argument errors first, so bad calls fail identically in every build.
     validate(input, out_len, wx, wy, wz)?;
-    Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, or \
-         --features vulkan, cuda, or opencl on Linux/Windows)"
+    Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, \
+         --features d3d12 on Windows, or --features vulkan, cuda, or opencl on \
+         Linux/Windows)"
         .to_string())
 }
 
@@ -456,6 +470,76 @@ pub fn run_spirv(
     crate::vk::run_spirv(spirv, input, out_len, wx, wy, wz)
 }
 // ---------------------------------------------------------------------------
+// Native Direct3D 12 backend (Windows with --features d3d12, when vulkan
+// is not also compiled in — the precedence is metal > vulkan > d3d12 >
+// cuda > opencl): COM-vtable FFI over src/dx.rs. The kernel input is HLSL
+// source through `gpu.run` — d3dcompiler_47.dll ships in Windows, so the
+// OS's own compiler produces the DXBC (no SDK, no dependency). Entry
+// `main`, RWByteAddressBuffers at u0 (input) / u1 (output), and
+// `(wx, wy, wz)` thread groups of whatever `[numthreads]` declares — with
+// `(1,1,1)`, SV_GroupID spans the index space (the Metal/CUDA shape).
+// WARP (the OS's software adapter) makes this backend executable on any
+// Windows machine, GPU or not — including CI runners, where the battery
+// hard-asserts real dispatched bytes. `gpu.run_spirv` redirects: D3D12
+// ingests DXBC/DXIL, not SPIR-V.
+// ---------------------------------------------------------------------------
+
+#[cfg(all(
+    feature = "d3d12",
+    not(feature = "vulkan"),
+    target_os = "windows"
+))]
+pub fn available() -> bool {
+    crate::dx::available()
+}
+#[cfg(all(
+    feature = "d3d12",
+    not(feature = "vulkan"),
+    target_os = "windows"
+))]
+pub fn adapter_info() -> String {
+    crate::dx::adapter_info()
+}
+/// One dispatch of an HLSL compute kernel (see the section comment above
+/// and SPEC § 7.2 for the HLSL ABI).
+#[cfg(all(
+    feature = "d3d12",
+    not(feature = "vulkan"),
+    target_os = "windows"
+))]
+pub fn run(
+    hlsl: &str,
+    input: &[u8],
+    out_len: usize,
+    wx: u32,
+    wy: u32,
+    wz: u32,
+) -> Result<Vec<u8>, String> {
+    validate(input, out_len, wx, wy, wz)?;
+    crate::dx::run(hlsl, input, out_len, wx, wy, wz)
+}
+/// On the d3d12 backend, SPIR-V has no ingestion path — D3D12 takes
+/// DXBC/DXIL, produced here from HLSL source, so `run_spirv` redirects.
+#[cfg(all(
+    feature = "d3d12",
+    not(feature = "vulkan"),
+    target_os = "windows"
+))]
+pub fn run_spirv(
+    _spirv: &[u8],
+    input: &[u8],
+    out_len: usize,
+    wx: u32,
+    wy: u32,
+    wz: u32,
+) -> Result<Vec<u8>, String> {
+    validate(input, out_len, wx, wy, wz)?;
+    Err("gpu.run_spirv: the d3d12 backend takes HLSL source via gpu.run (gpu.backend() == \
+         \"d3d12\")"
+        .to_string())
+}
+
+// ---------------------------------------------------------------------------
 // Native CUDA backend (Linux/Windows with --features cuda, when vulkan is
 // not also compiled in — the native precedence order is metal > vulkan >
 // cuda > opencl): raw dlopen FFI over src/cu.rs. CUDA's kernel input is
@@ -471,6 +555,7 @@ pub fn run_spirv(
 #[cfg(all(
     feature = "cuda",
     not(feature = "vulkan"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub fn available() -> bool {
@@ -479,6 +564,7 @@ pub fn available() -> bool {
 #[cfg(all(
     feature = "cuda",
     not(feature = "vulkan"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub fn adapter_info() -> String {
@@ -489,6 +575,7 @@ pub fn adapter_info() -> String {
 #[cfg(all(
     feature = "cuda",
     not(feature = "vulkan"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub fn run(
@@ -507,6 +594,7 @@ pub fn run(
 #[cfg(all(
     feature = "cuda",
     not(feature = "vulkan"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub fn run_spirv(
@@ -545,6 +633,7 @@ pub fn run_spirv(
     feature = "opencl",
     not(feature = "vulkan"),
     not(feature = "cuda"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub fn available() -> bool {
@@ -554,6 +643,7 @@ pub fn available() -> bool {
     feature = "opencl",
     not(feature = "vulkan"),
     not(feature = "cuda"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub fn adapter_info() -> String {
@@ -565,6 +655,7 @@ pub fn adapter_info() -> String {
     feature = "opencl",
     not(feature = "vulkan"),
     not(feature = "cuda"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub fn run(
@@ -587,6 +678,7 @@ pub fn run(
     feature = "opencl",
     not(feature = "vulkan"),
     not(feature = "cuda"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub fn run_spirv(
@@ -601,7 +693,7 @@ pub fn run_spirv(
     crate::cl::run_spirv(spirv, input, out_len, wx, wy, wz)
 }
 
-#[cfg(not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows"))))]
+#[cfg(all(not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows"))), not(all(feature = "d3d12", target_os = "windows"))))]
 pub fn run_spirv(
     _spirv: &[u8],
     input: &[u8],
@@ -638,7 +730,7 @@ mod tests {
         assert!(run("", &[0; 4], 4, 1, 1, 70_000).unwrap_err().contains("workgroup count z"));
     }
 
-    #[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows")))))]
+    #[cfg(all(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl", feature = "cuda"), any(target_os = "linux", target_os = "windows"))), not(all(feature = "d3d12", target_os = "windows"))))]
     #[test]
     fn stubs_without_backend() {
         assert!(!available());
@@ -648,7 +740,8 @@ mod tests {
         assert_eq!(
             err,
             "gpu support not compiled in (build with --features metal on Apple Silicon macOS, \
-             or --features vulkan, cuda, or opencl on Linux/Windows)"
+             --features d3d12 on Windows, or --features vulkan, cuda, or opencl on \
+             Linux/Windows)"
         );
     }
 
@@ -677,6 +770,7 @@ mod tests {
         feature = "opencl",
         not(feature = "vulkan"),
         not(feature = "cuda"),
+        not(all(feature = "d3d12", target_os = "windows")),
         any(target_os = "linux", target_os = "windows")
     ))]
     #[test]
@@ -700,6 +794,7 @@ mod tests {
         feature = "cuda",
         feature = "opencl",
         not(feature = "vulkan"),
+        not(all(feature = "d3d12", target_os = "windows")),
         any(target_os = "linux", target_os = "windows")
     ))]
     #[test]
@@ -713,6 +808,7 @@ mod tests {
     #[cfg(all(
         feature = "cuda",
         not(feature = "vulkan"),
+        not(all(feature = "d3d12", target_os = "windows")),
         any(target_os = "linux", target_os = "windows")
     ))]
     #[test]
@@ -726,6 +822,35 @@ mod tests {
         assert!(r.is_err(), "a driverless or PTX-rejecting machine must Err");
     }
 
+    // The d3d12 corner of the precedence lattice (compile-checked from
+    // Linux via --target x86_64-pc-windows-msvc; executed on windows CI).
+    #[cfg(all(feature = "vulkan", feature = "d3d12", target_os = "windows"))]
+    #[test]
+    fn d3d12_defers_to_vulkan() {
+        assert_eq!(backend(), "vulkan");
+    }
+    #[cfg(all(
+        feature = "d3d12",
+        feature = "cuda",
+        not(feature = "vulkan"),
+        target_os = "windows"
+    ))]
+    #[test]
+    fn cuda_defers_to_d3d12() {
+        assert_eq!(backend(), "d3d12");
+    }
+    #[cfg(all(feature = "d3d12", not(feature = "vulkan"), target_os = "windows"))]
+    #[test]
+    fn d3d12_run_spirv_redirects_and_bad_hlsl_errs() {
+        assert_eq!(backend(), "d3d12");
+        let err = run_spirv(&[0u8; 20], &[0; 4], 4, 1, 1, 1).unwrap_err();
+        assert!(err.contains("gpu.run"), "got: {err}");
+        // Not HLSL: must surface the compiler's error blob as an Err (and
+        // never panic), whatever adapter the machine has.
+        let r = run("not hlsl at all", &[0; 4], 4, 1, 1, 1);
+        assert!(r.is_err(), "bad HLSL must be an Err");
+    }
+
     // Never panics, whatever the machine has: a non-SPIR-V blob errs on the
     // magic check; a valid-magic header errs on the missing runtime (this
     // dev container), a build failure (a header is not a module), or worse
@@ -734,6 +859,7 @@ mod tests {
         feature = "opencl",
         not(feature = "vulkan"),
         not(feature = "cuda"),
+        not(all(feature = "d3d12", target_os = "windows")),
         any(target_os = "linux", target_os = "windows")
     ))]
     #[test]

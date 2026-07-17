@@ -466,6 +466,55 @@ jobs:
           echo "$out"
           test "$out" = "err: gpu.run: no CUDA driver (libcuda) on this system"
 
+  d3d12:
+    # The roadmap's fifth native compute backend -- COM-vtable FFI to
+    # runtime-loaded d3d12/dxgi/d3dcompiler_47 system DLLs, HLSL compiled
+    # by the OS's own compiler at dispatch time. WARP (Windows' software
+    # D3D12 adapter) guarantees a device on every windows runner, so like
+    # the vulkan (lavapipe) and opencl (Intel CPU runtime) jobs this
+    # battery hard-asserts REAL dispatched bytes -- no GPU anywhere. The
+    # pair builds prove the precedence lattice on the platform where
+    # d3d12 exists (vulkan > d3d12 > cuda; unit tests pin each).
+    name: D3D12 compute (native, WARP)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Build (d3d12)
+        run: cargo build --features d3d12
+      - name: Clippy (d3d12, deny warnings)
+        run: cargo clippy --features d3d12 --all-targets -- -D warnings
+      - name: Unit + golden spec tests (d3d12)
+        run: cargo test --features d3d12
+      - name: Build + clippy + tests (vulkan,d3d12 and d3d12,cuda precedence)
+        shell: bash
+        run: |
+          cargo build --features vulkan,d3d12
+          cargo clippy --features vulkan,d3d12 --all-targets -- -D warnings
+          cargo test --features vulkan,d3d12
+          cargo build --features d3d12,cuda
+          cargo clippy --features d3d12,cuda --all-targets -- -D warnings
+          cargo test --features d3d12,cuda
+      - name: Zero dependencies (d3d12; vulkan,d3d12; d3d12,cuda)
+        shell: bash
+        run: |
+          test "$(cargo tree -e normal --prefix none --features d3d12 | wc -l)" -eq 1
+          test "$(cargo tree -e normal --prefix none --features vulkan,d3d12 | wc -l)" -eq 1
+          test "$(cargo tree -e normal --prefix none --features d3d12,cuda | wc -l)" -eq 1
+      - name: D3D12 compute battery (real WARP dispatch, hard-asserted bytes)
+        # The exact ok line is asserted, so a silent fall-through to the
+        # err branch fails the job; the program itself also hard-asserts
+        # the doubled bytes (a wrong result panics, exit 70).
+        shell: bash
+        run: |
+          cargo build --release --features d3d12
+          out=$(./target/release/fable.exe docs/assets/d3d12_compute.fable)
+          echo "$out"
+          test "$out" = "ok: [2, 0, 0, 0, 4, 0, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0, 10, 0, 0, 0, 12, 0, 0, 0, 14, 0, 0, 0, 200, 0, 0, 0]"
+
   demo-zoo:
     # Proves the release's cross-compile + `fable build` stapling works on
     # every non-native target before a release is ever cut (x86_64-linux is
