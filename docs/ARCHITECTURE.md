@@ -562,6 +562,21 @@ actually drops OpenGL on macOS. A new `metal = []` feature is a sibling of
 to a system framework), independently toggleable and combinable, so
 `--features gl,metal` compiles both into one binary.
 
+**The macOS shared core (`src/objc.rs`, `src/mtl.rs`).** When the `gpu`
+namespace's native Metal compute path became the *second* consumer of the
+Objective-C dispatch machinery, that machinery graduated out of
+`window/macos/shared.rs` into crate-level modules, per CLAUDE.md's
+shared-core rule (extract at real duplication, never guess up front):
+`objc.rs` holds the runtime types, `objc_msgSend`
+transmute-per-shape wrappers, class/selector lookup, and the RAII
+autorelease pool; `mtl.rs` holds what both Metal consumers share — the
+device constructor, buffer creation, and MSL library compilation.
+API-specific shapes (AppKit's window/event messages, Metal graphics'
+clear-color/viewport/region calls) deliberately stay with their sole
+consumers. This is the seed of the roadmap's shared graphics/compute
+core: Vulkan/OpenCL/CUDA/DirectX backends grow sibling primitive modules
+of the same shape as they land.
+
 Making that coexist under a single `WindowHandle` needed one structural
 change: `x11::Inner`/`win32::Inner` stay plain structs, aliased directly to
 `PlatformInner`, but `macos::Inner` becomes a small enum —

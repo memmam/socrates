@@ -16,7 +16,21 @@ pub mod fmt;
 pub mod gpu;
 pub mod jsonlite;
 pub mod lsp;
+/// The Objective-C runtime dispatch layer shared by every macOS raw-FFI
+/// backend (see the module docs; extraction per CLAUDE.md's shared-core
+/// rule).
+#[cfg(all(
+    any(feature = "gl", feature = "metal"),
+    target_os = "macos",
+    target_arch = "aarch64"
+))]
+pub(crate) mod objc;
 pub mod modules;
+/// Raw-FFI Metal primitives shared by the graphics backend and the native
+/// compute path (see the module docs; extraction per CLAUDE.md's
+/// shared-core rule).
+#[cfg(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))]
+pub(crate) mod mtl;
 pub mod natives;
 pub mod patterns;
 pub mod repl;

@@ -24,7 +24,8 @@
 //! (`glClearColor`/`glClear`) already used — no proc-address mechanism
 //! exists on this platform at all.
 
-use super::shared::{class, objc_msgSend, sel, send0, send0_void, send1_obj, CocoaWindowState, Object, SEL};
+use super::shared::CocoaWindowState;
+use crate::objc::{class, objc_msgSend, sel, send0, send0_void, send1_obj, Object, SEL};
 use std::ffi::{c_char, c_void, CString};
 use std::os::raw::c_int;
 use std::sync::OnceLock;
