@@ -83,7 +83,28 @@ fn run_capture_here(name: &str, text: &str) -> RunOutcome {
 /// Run a program from a file path, loading any imported modules relative to
 /// it, capturing output. Used by the golden test harness; behavior for
 /// single-file programs matches `run_capture`.
+///
+/// Runs the program on a spawned 512 MiB-stack thread (deep-but-legal
+/// programs need it; see `src/main.rs`'s `main`) — **except** when this is
+/// already the macOS main thread of a windowing-capable build, where the
+/// program runs inline instead. AppKit hard-requires `NSWindow` creation on
+/// the process's real main thread, so `fable test`'s windowed goldens
+/// (demos/glcube's `main_metal.fable`, found failing on real macos-14
+/// hardware exactly this way) only render if the test body stays on it; the
+/// main thread's own 512 MiB stack comes from `build.rs`'s linker flag, so
+/// nothing is lost by not spawning. The conditional matters in the other
+/// direction too: under `cargo test`, these run on libtest worker threads
+/// whose stacks are small — there the spawn IS the deep-stack provision and
+/// must stay (windowing tests already skip gracefully off the main thread).
 pub fn run_capture_path(path: &std::path::Path) -> RunOutcome {
+    #[cfg(all(
+        any(feature = "gl", feature = "metal"),
+        target_os = "macos",
+        target_arch = "aarch64"
+    ))]
+    if window::macos::is_main_thread() {
+        return run_capture_path_here(path);
+    }
     let path = path.to_path_buf();
     std::thread::Builder::new()
         .stack_size(512 * 1024 * 1024)
@@ -94,25 +115,36 @@ pub fn run_capture_path(path: &std::path::Path) -> RunOutcome {
 }
 
 /// `run_capture_path` with an explicit module search path (for tests; the
-/// default reads `FABLE_PATH`).
+/// default reads `FABLE_PATH`). Same conditional main-thread inlining as
+/// `run_capture_path` — see its doc comment.
 pub fn run_capture_path_with(
     path: &std::path::Path,
     search: &[std::path::PathBuf],
 ) -> RunOutcome {
+    #[cfg(all(
+        any(feature = "gl", feature = "metal"),
+        target_os = "macos",
+        target_arch = "aarch64"
+    ))]
+    if window::macos::is_main_thread() {
+        return run_capture_path_with_here(path, search);
+    }
     let path = path.to_path_buf();
     let search = search.to_vec();
     std::thread::Builder::new()
         .stack_size(512 * 1024 * 1024)
-        .spawn(move || {
-            let units = match modules::load_modules_with(&path, &search) {
-                Ok(u) => u,
-                Err((_source, diags)) => return RunOutcome::CompileError(diags),
-            };
-            run_units(units, path.parent().map(|p| p.to_path_buf()))
-        })
+        .spawn(move || run_capture_path_with_here(&path, &search))
         .expect("failed to spawn interpreter thread")
         .join()
         .expect("interpreter thread panicked")
+}
+
+fn run_capture_path_with_here(path: &std::path::Path, search: &[std::path::PathBuf]) -> RunOutcome {
+    let units = match modules::load_modules_with(path, search) {
+        Ok(u) => u,
+        Err((_source, diags)) => return RunOutcome::CompileError(diags),
+    };
+    run_units(units, path.parent().map(|p| p.to_path_buf()))
 }
 
 fn run_capture_path_here(path: &std::path::Path) -> RunOutcome {

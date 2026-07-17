@@ -53,6 +53,15 @@ pub enum Inner {
     Metal(metal::Inner),
 }
 
+/// Is this the process's real main thread — the only thread AppKit allows
+/// window creation on? Exposed at crate level for `lib.rs`'s
+/// `run_capture_path` (the `fable test` runner), which runs test bodies
+/// inline when — and only when — windowing could actually work on this
+/// thread; see its doc comment for the full reasoning.
+pub fn is_main_thread() -> bool {
+    shared::is_main_thread()
+}
+
 impl Inner {
     /// The default `window.create()` entry point — always OpenGL/CGL.
     #[cfg(feature = "gl")]
