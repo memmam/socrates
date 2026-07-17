@@ -501,7 +501,7 @@ untouched, leaving the original mismatch as a normal failure. `error:`/
 
 **`gfx`** is a backend-neutral OpenGL 3.3 core-profile draw-call namespace
 built on top of `window`'s per-platform `GlFns` function-pointer table
-(each of `x11.rs`/`win32.rs`/`macos.rs` already carries the full shader/
+(each of `x11.rs`/`win32.rs`/`macos/gl.rs` already carries the full shader/
 program/buffer/VAO/texture/uniform/draw-call table, resolved at `Window`
 creation time). Two design choices make this a thin layer rather than a
 new subsystem:
@@ -552,6 +552,72 @@ object already created before returning. Every other member panics
 matching `window`'s own methods — two fixed messages depending on cause
 (`gl` feature off at compile time, checked via `cfg!` — vs. no window
 having called `make_current()` yet).
+
+**Metal backend (macOS, additive alongside OpenGL/CGL).** CLAUDE.md carves
+out a standing exception to the "newer backend supersedes the older one"
+rule for Metal on macOS: it ships **additive**, never replacing
+`window/macos/gl.rs`'s existing OpenGL/CGL path, unless (or until) Apple
+actually drops OpenGL on macOS. A new `metal = []` feature is a sibling of
+`gl`, not nested under it — the same zero-Cargo-dependency shape (raw FFI
+to a system framework), independently toggleable and combinable, so
+`--features gl,metal` compiles both into one binary.
+
+Making that coexist under a single `WindowHandle` needed one structural
+change: `x11::Inner`/`win32::Inner` stay plain structs, aliased directly to
+`PlatformInner`, but `macos::Inner` becomes a small enum —
+`Gl(gl::Inner)` / `Metal(metal::Inner)`, each variant `#[cfg]`-gated on its
+own feature — because a type alias resolves to exactly one type, and only
+a sum type underneath it lets one `WindowHandle` transparently hold either
+a live GL-backed or Metal-backed window in the same compiled binary. Every
+`Inner` method becomes a two-armed `match` forwarding to whichever variant
+is live; `#[allow(clippy::large_enum_variant)]` on the enum itself
+(`gl::Inner` carries the ~45-function-pointer `GlFns` table, ~456 bytes,
+against `metal::Inner`'s current 0) is deliberate — boxing would add an
+indirection to every hot-path `gfx.*` call for no real benefit, since at
+most one `Inner` is ever live per window. `src/window/macos.rs` was split
+into `macos/{mod,shared,gl,metal}.rs` to carry this: `shared.rs` holds
+everything already Cocoa/AppKit-generic (`CocoaWindowState` — window
+creation, the event-pump `poll()` loop, key/mouse state), which `gl.rs`'s
+`Inner` now holds by composition instead of inlining.
+
+`window.create_metal(title, w, h)` is a new **sibling** function to
+`create`, not a `backend` parameter on it — Fable has neither default
+parameters nor overloading, so a mandatory extra argument would break
+every existing `window.create(title, w, h)` call site for no ergonomic
+gain. `Window.backend_name() -> String` (`"opengl"`/`"metal"`) is the one
+deliberate escape hatch this design needs: shader *source text* is
+inherently backend-specific (GLSL vs. MSL), so a Fable program targeting
+both backends branches on this one string and nothing else — every other
+`gfx`/`Window` member keeps the exact same call shape regardless of which
+backend is live. `gfx_window_msg`'s feature-off check widened from
+`!cfg!(feature = "gl")` to `!cfg!(feature = "gl") && !cfg!(feature =
+"metal")` — as it was, a `--features metal`-only build would wrongly
+report every `gfx.*` call as "not compiled in" even with a live Metal
+window current, since the check fired before ever looking at
+`vm.gfx_current_window`.
+
+**Current status: window lifecycle real, draw calls pending.** Phase 1
+landed the device/queue/`CAMetalLayer` plumbing: `metal::Inner` holds a
+`CocoaWindowState` (composition, like `gl::Inner`) plus a retained
+`MTLDevice`/`MTLCommandQueue`/`CAMetalLayer` and an app-owned offscreen
+render target. `clear` encodes a loadAction=Clear render pass into that
+offscreen texture; `swap_buffers` acquires the frame's drawable,
+whole-texture-blits the offscreen target into it, presents, commits, and
+waits (synchronous like a GL swap). The offscreen indirection is
+load-bearing, not overhead: drawable textures are transient (no stable
+"back buffer" identity across `nextDrawable` calls) and not reliably
+CPU-readable, while the offscreen target uses `MTLStorageModeShared`
+(Apple-Silicon uniform memory) so the future `read_pixels` maps it
+directly. One deliberate deviation from `shared.rs`'s process-lifetime
+autorelease pool: the frame path pushes/pops a pool per call, because
+`nextDrawable` hands back one of a small fixed pool (~3) of drawables the
+layer only reclaims on actual release — without a per-frame drain, the
+third `swap_buffers` would block forever. Still pending (Phase 2): MSL
+`compile_program`, the buffer/VAO/texture handle tables Metal needs (its
+objects are pointers, not driver-issued integers, unlike GL),
+pipeline-reflection-based uniform upload, draws, and `read_pixels` — until
+then `gfx.compile_program` on a Metal-current window returns a clean `Err`
+and every other `gfx.*` member panics (catchably) with the same message.
 
 ## Testing strategy
 

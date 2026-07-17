@@ -11,25 +11,34 @@
 //! same-named methods.
 //!
 //! This module is **always compiled**; only its internals are gated on the
-//! `gl` cargo feature, mirroring `src/gpu.rs` exactly. The feature adds
-//! **zero** Cargo dependencies — it is raw FFI to system libraries (X11/
-//! Win32 linked normally, GL/GLX/WGL resolved with `dlopen`+`dlsym` or
-//! `LoadLibrary`+`GetProcAddress` at runtime, Cocoa/NSOpenGL messaged via
-//! `objc_msgSend`) — so `cargo tree -e normal` stays a single line with or
-//! without it.
+//! `gl`/`metal` cargo features, mirroring `src/gpu.rs` exactly. Both
+//! features add **zero** Cargo dependencies — it is raw FFI to system
+//! libraries and frameworks (X11/Win32 linked normally, GL/GLX/WGL resolved
+//! with `dlopen`+`dlsym` or `LoadLibrary`+`GetProcAddress` at runtime,
+//! Cocoa/NSOpenGL/Metal messaged via `objc_msgSend`) — so `cargo tree -e
+//! normal` stays a single line with or without either.
 //!
 //! Three platform backends, each behind its own submodule: [`x11`] (Linux,
-//! any arch), [`win32`] (Windows, any arch), [`macos`] (macOS — gated on
-//! `target_arch = "aarch64"` **in addition to** `target_os`, not just by
-//! convention: it sidesteps the struct-return `objc_msgSend_stret` ABI split
-//! that only exists on x86_64, so an accidental `x86_64-apple-darwin` build
-//! must not silently compile the same code in and hit that split at
-//! runtime). Exactly one backend is ever compiled in, aliased to
-//! `PlatformInner` below, so
+//! any arch, `gl` only), [`win32`] (Windows, any arch, `gl` only), [`macos`]
+//! (macOS — gated on `target_arch = "aarch64"` **in addition to**
+//! `target_os`, not just by convention: it sidesteps the struct-return
+//! `objc_msgSend_stret` ABI split that only exists on x86_64, so an
+//! accidental `x86_64-apple-darwin` build must not silently compile the same
+//! code in and hit that split at runtime). `x11`/`win32` each expose exactly
+//! one `Inner` struct, aliased directly to `PlatformInner`; `macos` is the
+//! one platform with **two** independently-togglable backends (`gl`/
+//! OpenGL-CGL and `metal`, additive per CLAUDE.md's standing Metal
+//! exception — never a replacement), so its `Inner` (still aliased to
+//! `PlatformInner`) is a small enum over both, letting a single compiled
+//! binary open either kind of window at runtime via [`create`] or
+//! [`create_metal`] (see `macos/mod.rs`'s module docs for why). Either way,
 //! [`WindowHandle`]'s method bodies are written once and never see which
-//! platform they're actually running on. On any other target (or with the
-//! feature off), [`create`] degrades gracefully to `Err`, the same way
-//! `gpu::run` does without the `gpu` feature.
+//! platform (or, on macOS, which backend) they're actually running on,
+//! except for the one deliberate escape hatch, [`WindowHandle::backend_name`]
+//! (shader *source text* is inherently GLSL vs. MSL). On any other target
+//! (or with the relevant feature off), [`create`]/[`create_metal`] degrade
+//! gracefully to `Err`, the same way `gpu::run` does without the `gpu`
+//! feature.
 //!
 //! # Deliberate deviation from `Worker`
 //!
@@ -54,15 +63,15 @@ pub mod win32;
 #[cfg(all(feature = "gl", target_os = "windows"))]
 use win32::Inner as PlatformInner;
 
-#[cfg(all(feature = "gl", target_os = "macos", target_arch = "aarch64"))]
+#[cfg(all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64"))]
 pub mod macos;
-#[cfg(all(feature = "gl", target_os = "macos", target_arch = "aarch64"))]
+#[cfg(all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64"))]
 use macos::Inner as PlatformInner;
 
 /// Buffer-binding target for `gfx.bind_buffer`/`gfx.upload_buffer` (v0.8):
 /// mirrors `GL_ARRAY_BUFFER` / `GL_ELEMENT_ARRAY_BUFFER` as a plain Rust enum
 /// so the raw GL enum values stay encapsulated inside each platform backend
-/// (`x11.rs`/`win32.rs`/`macos.rs`), instead of leaking out to `natives.rs`.
+/// (`x11.rs`/`win32.rs`/`macos/gl.rs`), instead of leaking out to `natives.rs`.
 /// Always compiled (unlike `WindowHandle`'s GL-calling methods below) since
 /// it carries no platform state — just a tag `natives.rs` maps a Fable
 /// `"vertex"`/`"index"` string onto.
@@ -77,9 +86,10 @@ pub enum GfxBufferKind {
 /// `Obj::Window` in `src/value.rs`): nothing GC-relevant lives inside it,
 /// only OS/GL handles, same reasoning as `Obj::Worker`.
 pub struct WindowHandle {
-    #[cfg(all(
-        feature = "gl",
-        any(target_os = "linux", target_os = "windows", all(target_os = "macos", target_arch = "aarch64"))
+    #[cfg(any(
+        all(feature = "gl", target_os = "linux"),
+        all(feature = "gl", target_os = "windows"),
+        all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
     ))]
     inner: Option<PlatformInner>,
 }
@@ -93,26 +103,51 @@ impl std::fmt::Debug for WindowHandle {
 /// Create a window titled `title`, `w` by `h` pixels, with a GL context made
 /// current. Always an `Err` without the `gl` feature or on an unsupported
 /// target.
-#[cfg(not(all(
-    feature = "gl",
-    any(target_os = "linux", target_os = "windows", all(target_os = "macos", target_arch = "aarch64"))
+#[cfg(not(any(
+    all(feature = "gl", target_os = "linux"),
+    all(feature = "gl", target_os = "windows"),
+    all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 )))]
 pub fn create(_title: &str, _w: i32, _h: i32) -> Result<WindowHandle, String> {
     Err("windowing support not compiled in (build with --features gl)".to_string())
 }
 
-#[cfg(all(
-    feature = "gl",
-    any(target_os = "linux", target_os = "windows", all(target_os = "macos", target_arch = "aarch64"))
+#[cfg(any(
+    all(feature = "gl", target_os = "linux"),
+    all(feature = "gl", target_os = "windows"),
+    all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 ))]
 pub fn create(title: &str, w: i32, h: i32) -> Result<WindowHandle, String> {
     let inner = PlatformInner::create(title, w, h)?;
     Ok(WindowHandle { inner: Some(inner) })
 }
 
-#[cfg(all(
-    feature = "gl",
-    any(target_os = "linux", target_os = "windows", all(target_os = "macos", target_arch = "aarch64"))
+/// Create a Metal-backed window (macOS/Apple Silicon only) — additive
+/// alongside [`create`]'s OpenGL/CGL path, never a replacement (see
+/// `CLAUDE.md`'s standing Metal exception). A sibling function rather than a
+/// `backend` parameter on `create`: Fable has neither default parameters nor
+/// overloading, so a mandatory extra argument would break every existing
+/// `window.create(title, w, h)` call site for no ergonomic gain. Always an
+/// `Err` without the `metal` feature or off Apple Silicon macOS.
+#[cfg(not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")))]
+pub fn create_metal(_title: &str, _w: i32, _h: i32) -> Result<WindowHandle, String> {
+    Err(
+        "Metal windowing support not compiled in (build with --features metal, \
+         aarch64-apple-darwin only)"
+            .to_string(),
+    )
+}
+
+#[cfg(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))]
+pub fn create_metal(title: &str, w: i32, h: i32) -> Result<WindowHandle, String> {
+    let inner = macos::Inner::create_metal(title, w, h)?;
+    Ok(WindowHandle { inner: Some(inner) })
+}
+
+#[cfg(any(
+    all(feature = "gl", target_os = "linux"),
+    all(feature = "gl", target_os = "windows"),
+    all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 ))]
 impl WindowHandle {
     /// Pump the platform event queue; updates should-close/key/mouse/size
@@ -128,7 +163,7 @@ impl WindowHandle {
     /// been explicitly `close()`d.
     pub fn should_close(&self) -> bool {
         match &self.inner {
-            Some(inner) => inner.should_close,
+            Some(inner) => inner.should_close(),
             None => true,
         }
     }
@@ -149,17 +184,26 @@ impl WindowHandle {
 
     pub fn mouse_pos(&self) -> (f64, f64) {
         match &self.inner {
-            Some(inner) => inner.mouse,
+            Some(inner) => inner.mouse(),
             None => (0.0, 0.0),
         }
     }
 
     pub fn width(&self) -> i32 {
-        self.inner.as_ref().map_or(0, |i| i.width)
+        self.inner.as_ref().map_or(0, |i| i.width())
     }
 
     pub fn height(&self) -> i32 {
-        self.inner.as_ref().map_or(0, |i| i.height)
+        self.inner.as_ref().map_or(0, |i| i.height())
+    }
+
+    /// `"opengl"` or `"metal"` — the one place a Fable program needs to
+    /// branch when writing a single codebase that targets both backends,
+    /// since shader *source text* (GLSL vs. MSL) is inherently
+    /// backend-specific; everything else about the `gfx` call shape is
+    /// identical across backends.
+    pub fn backend_name(&self) -> String {
+        self.inner.as_ref().map_or("?", |i| i.backend_name()).to_string()
     }
 
     pub fn clear(&mut self, r: f64, g: f64, b: f64, a: f64) {
@@ -374,9 +418,10 @@ impl WindowHandle {
     }
 }
 
-#[cfg(all(
-    feature = "gl",
-    any(target_os = "linux", target_os = "windows", all(target_os = "macos", target_arch = "aarch64"))
+#[cfg(any(
+    all(feature = "gl", target_os = "linux"),
+    all(feature = "gl", target_os = "windows"),
+    all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 ))]
 impl Drop for WindowHandle {
     fn drop(&mut self) {
@@ -393,9 +438,10 @@ impl Drop for WindowHandle {
 // across every feature/platform combination (mirrors `src/gpu.rs`'s stubs).
 // ---------------------------------------------------------------------------
 
-#[cfg(not(all(
-    feature = "gl",
-    any(target_os = "linux", target_os = "windows", all(target_os = "macos", target_arch = "aarch64"))
+#[cfg(not(any(
+    all(feature = "gl", target_os = "linux"),
+    all(feature = "gl", target_os = "windows"),
+    all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 )))]
 impl WindowHandle {
     pub fn poll(&mut self) {
@@ -417,6 +463,9 @@ impl WindowHandle {
         unreachable!("WindowHandle is never constructed without a compiled-in backend")
     }
     pub fn height(&self) -> i32 {
+        unreachable!("WindowHandle is never constructed without a compiled-in backend")
+    }
+    pub fn backend_name(&self) -> String {
         unreachable!("WindowHandle is never constructed without a compiled-in backend")
     }
     pub fn clear(&mut self, _r: f64, _g: f64, _b: f64, _a: f64) {
@@ -528,5 +577,25 @@ impl WindowHandle {
     }
     pub fn gl_read_pixels(&mut self, _x: i32, _y: i32, _w: i32, _h: i32) -> Vec<u8> {
         unreachable!("WindowHandle is never constructed without a compiled-in backend")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `create_metal` degrades gracefully off Apple Silicon macOS (or with
+    /// the `metal` feature disabled) — unlike the GL/Cocoa backends, this is
+    /// deterministic and needs no display or hardware, so it runs in every
+    /// CI environment including this Linux dev container.
+    #[test]
+    fn create_metal_stub_errs_off_apple_silicon_macos() {
+        if cfg!(all(feature = "metal", target_os = "macos", target_arch = "aarch64")) {
+            eprintln!("skipping: metal feature is actually compiled in on this target");
+            return;
+        }
+        let err = create_metal("fable window test", 320, 240).unwrap_err();
+        assert!(err.contains("Metal windowing support not compiled in"));
+        assert!(err.contains("--features metal"));
     }
 }

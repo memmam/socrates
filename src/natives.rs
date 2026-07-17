@@ -800,15 +800,34 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
 
         // ------------------------------------------------------------------
-        // window.* (v0.8, Linux-only for now) — implementation lives in
-        // src/window/; without the `gl` cargo feature it degrades
-        // gracefully (see src/window/mod.rs).
+        // window.* (v0.8: Linux/Windows/macOS via `gl`; v0.9 adds a
+        // Metal-backed `create_metal` sibling on macOS, additive alongside
+        // `gl`, never a replacement) — implementation lives in
+        // src/window/; without the relevant cargo feature each entry point
+        // degrades gracefully (see src/window/mod.rs).
         // ------------------------------------------------------------------
         WindowCreate => {
             let title = str_arg(vm, argc, 0)?;
             let w = int_arg(vm, argc, 1)?;
             let h = int_arg(vm, argc, 2)?;
             match crate::window::create(&title, w as i32, h as i32) {
+                Ok(handle) => {
+                    let h = vm.heap.alloc(Obj::Window(std::rc::Rc::new(
+                        std::cell::RefCell::new(handle),
+                    )));
+                    make_ok(vm, Value::Obj(h))
+                }
+                Err(msg) => {
+                    let m = vm.alloc_str(msg);
+                    make_err(vm, m)
+                }
+            }
+        }
+        WindowCreateMetal => {
+            let title = str_arg(vm, argc, 0)?;
+            let w = int_arg(vm, argc, 1)?;
+            let h = int_arg(vm, argc, 2)?;
+            match crate::window::create_metal(&title, w as i32, h as i32) {
                 Ok(handle) => {
                     let h = vm.heap.alloc(Obj::Window(std::rc::Rc::new(
                         std::cell::RefCell::new(handle),
@@ -876,6 +895,11 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             w.borrow_mut().make_current();
             vm.gfx_current_window = Some(w);
             Value::Unit
+        }
+        WindowHandleBackendName => {
+            let w = window_rc(vm, argc)?;
+            let name = w.borrow().backend_name();
+            vm.alloc_str(name)
         }
 
         // ------------------------------------------------------------------
@@ -2213,8 +2237,15 @@ fn list_handle(vm: &Vm, argc: u8) -> Result<Handle, VmError> {
 fn gfx_window_msg(
     vm: &Vm,
 ) -> Result<std::rc::Rc<std::cell::RefCell<crate::window::WindowHandle>>, String> {
-    if !cfg!(feature = "gl") {
-        return Err("gfx support not compiled in (build with --features gl)".to_string());
+    // Checking `gl` alone would wrongly report every `gfx.*` call as "not
+    // compiled in" on a `--features metal`-only build, even with a live
+    // Metal window current -- `gfx` is backend-neutral, so it's compiled in
+    // whenever either rendering backend is.
+    if !cfg!(feature = "gl") && !cfg!(feature = "metal") {
+        return Err(
+            "gfx support not compiled in (build with --features gl or --features metal)"
+                .to_string(),
+        );
     }
     match &vm.gfx_current_window {
         Some(w) => Ok(w.clone()),

@@ -204,10 +204,10 @@ jobs:
   gl-macos:
     # Real Apple Silicon hardware (unlike this repo's own dev/CI containers,
     # which are Linux) — the only environment that can actually link and run
-    # `src/window/macos.rs`'s Cocoa/NSOpenGL FFI. Mirrors the `gl` (Linux)
+    # `src/window/macos/gl.rs`'s Cocoa/NSOpenGL FFI. Mirrors the `gl` (Linux)
     # job's steps one-for-one; there's no equivalent of Xvfb needed here
     # since `cargo test --features gl` on macOS runs against the real
-    # window server, and `macos.rs`'s test skips gracefully if that's
+    # window server, and `macos/gl.rs`'s test skips gracefully if that's
     # restricted in this environment (see its module docs).
     name: window feature (Cocoa/NSOpenGL, Apple Silicon)
     runs-on: macos-14
@@ -223,6 +223,52 @@ jobs:
         run: cargo clippy --features gl --all-targets -- -D warnings
       - name: Unit + golden spec tests (gl)
         run: cargo test --features gl
+
+  gl-macos-metal:
+    # Metal ships additive alongside OpenGL/CGL on macOS -- CLAUDE.md's
+    # standing exception to the "newer backend supersedes the older one"
+    # rule. This job is the actual proof of that coexistence, not just of
+    # compilation: `--features gl,metal` together on real Apple Silicon
+    # hardware, plus `--features metal` alone, each with its own zero-dep
+    # check (the `metal` feature is raw FFI like `gl`, not a new Cargo
+    # dependency). `gl-macos` above stays untouched as the OpenGL-only
+    # regression check.
+    name: window feature (Metal, Apple Silicon)
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Build (metal)
+        run: cargo build --features metal
+      - name: Clippy (metal, deny warnings)
+        run: cargo clippy --features metal --all-targets -- -D warnings
+      - name: Unit + golden spec tests (metal)
+        run: cargo test --features metal
+      - name: Zero dependencies (metal feature alone)
+        run: test "$(cargo tree -e normal --prefix none --features metal | wc -l)" -eq 1
+      - name: Build (gl + metal together — the coexistence proof)
+        run: cargo build --features gl,metal
+      - name: Clippy (gl + metal, deny warnings)
+        run: cargo clippy --features gl,metal --all-targets -- -D warnings
+      - name: Unit + golden spec tests (gl + metal together)
+        run: cargo test --features gl,metal
+      - name: Zero dependencies (gl + metal together)
+        run: test "$(cargo tree -e normal --prefix none --features gl,metal | wc -l)" -eq 1
+      - name: Metal clear+present smoke (best effort)
+        # The real-hardware proof of Phase 1's device/queue/CAMetalLayer
+        # plumbing: opens a Metal window, clears, presents 5 frames (more
+        # than the drawable pool, so a drawable leak hangs instead of
+        # passing). Prints `ok: metal cleared and presented` when the runner
+        # has a Metal device + window server, `err: <reason>` when either is
+        # unavailable — both exit 0 (same convention as the gpu job's
+        # gpu_double step); assert only exit 0 but echo the line to the log
+        # so a silent capability regression is visible in the job output.
+        run: |
+          cargo build --release --features metal
+          ./target/release/fable docs/assets/metal_triangle.fable
 
   demo-zoo:
     # Proves the release's cross-compile + `fable build` stapling works on

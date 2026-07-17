@@ -1,0 +1,41 @@
+// Metal window demo (SPEC § 7.3, macOS Metal backend — Apple Silicon only):
+// open a Metal-backed window via window.create_metal, clear it to a known
+// orange, present a few frames, confirm backend_name(), and close. The
+// actual triangle (gfx.* draw calls against a Metal window — MSL shaders,
+// buffers, draws) lands in Phase 2, when this file grows the same calls
+// gl_triangle.fable makes today.
+//
+//   cargo run --release --features metal -- docs/assets/metal_triangle.fable
+//
+// Prints `ok: metal cleared and presented` when a Metal device and window
+// are available, `err: <reason>` when metal support isn't compiled in, no
+// Metal-capable GPU exists, or the environment can't create windows — and
+// exits 0 either way (this file runs on machines with and without a GPU /
+// window server, e.g. macOS CI runners).
+// Not wired into the golden test suite: the output is build- and
+// environment-dependent, same as gl_triangle.fable / gpu_double.fable.
+
+fn run() -> Result[Unit, String] {
+    let win = window.create_metal("metal_triangle", 320, 240)?;
+    let name = win.backend_name();
+
+    // Five clear+present frames — more than the layer's internal drawable
+    // pool (~3), so a leaked drawable would hang here rather than pass (see
+    // metal.rs's module docs on per-frame autorelease pools).
+    for frame in 0..5 {
+        win.poll();
+        win.clear(1.0, 0.5, 0.25, 1.0);
+        win.swap_buffers();
+    }
+
+    win.close();
+    if name != "metal" {
+        return Err("expected backend_name \"metal\", got \"{name}\"");
+    }
+    Ok(())
+}
+
+match run() {
+    Ok(_) -> println("ok: metal cleared and presented"),
+    Err(msg) -> println("err: {msg}"),
+}

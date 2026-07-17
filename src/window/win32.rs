@@ -388,7 +388,7 @@ type FnUniformMatrix4Fv = unsafe extern "system" fn(i32, i32, u8, *const f32);
 ///   first succeeds, never memoized process-wide.
 ///
 /// Plain function pointers, `Copy`: nothing here owns a resource a `Drop`
-/// would need to release, exactly like `x11.rs`/`macos.rs`'s `GlFns`.
+/// would need to release, exactly like `x11.rs`/`macos/gl.rs`'s `GlFns`.
 #[derive(Clone, Copy)]
 struct GlFns {
     clear_color: FnClearColor,
@@ -452,7 +452,7 @@ struct GlFns {
 impl GlFns {
     /// Resolve every field above against *this thread's currently current*
     /// WGL context — see the struct doc comment for why this, unlike
-    /// `x11.rs`/`macos.rs`'s `GlFns::load`, is neither `OnceLock`-cached nor
+    /// `x11.rs`/`macos/gl.rs`'s `GlFns::load`, is neither `OnceLock`-cached nor
     /// safe to call before `wglMakeCurrent` has succeeded. Any failure
     /// (a symbol the driver doesn't expose) is a clean `Err`, matching this
     /// module's "no partial resource leaks on a fallible step" discipline —
@@ -853,6 +853,31 @@ impl Inner {
         // `self`).
         let pressed = unsafe { &(*self.state).pressed };
         pressed.contains(&vk)
+    }
+
+    // Method-shaped accessors alongside the public fields above: macOS's
+    // `Inner` is a two-backend enum (see `macos/mod.rs`), which can't expose
+    // shared state via dot-field syntax across variants the way a plain
+    // struct can — `window/mod.rs`'s generic `WindowHandle` code calls these
+    // uniformly across all three platforms instead. Field and method share a
+    // name safely (separate namespaces: `.should_close` is the field,
+    // `.should_close()` is this method).
+    pub fn mouse(&self) -> (f64, f64) {
+        self.mouse
+    }
+    pub fn width(&self) -> i32 {
+        self.width
+    }
+    pub fn height(&self) -> i32 {
+        self.height
+    }
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+    /// This backend is always OpenGL/WGL — no Metal-equivalent exists on
+    /// Windows, so unlike macOS's `Inner` enum this never varies.
+    pub fn backend_name(&self) -> &'static str {
+        "opengl"
     }
 
     pub fn clear(&mut self, r: f32, g: f32, b: f32, a: f32) {
