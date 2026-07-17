@@ -6,10 +6,18 @@ name: Bench A/B
 # architecture regresses beyond the noise floor — "fast on the dev box" is
 # one vote, not a verdict.
 #
-# Trigger it by hand (Actions -> Bench A/B -> Run workflow) with the branch
-# under test; each job posts its delta table to the run's summary page.
+# Two ways in: by hand (Actions -> Bench A/B -> Run workflow) with the
+# branch under test, or — for branch-scoped actors that cannot dispatch
+# workflows (403), the same constraint the Release workflow's
+# RELEASE_TAG path solves — push the candidate as a `bench/<name>`
+# branch: the pushed ref is the head side, `main` is the base, default
+# rounds. The workflow file is read from the pushed ref, so the branch
+# must contain it (merge main in when benching an older branch). Each
+# job posts its delta table to the run's summary page.
 
 on:
+  push:
+    branches: ["bench/**"]
   workflow_dispatch:
     inputs:
       head_ref:
@@ -55,12 +63,12 @@ jobs:
       - name: Checkout head
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.head_ref }}
+          ref: ${{ inputs.head_ref || github.ref }}
           path: head
       - name: Checkout base
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.base_ref }}
+          ref: ${{ inputs.base_ref || 'main' }}
           path: base
       - uses: dtolnay/rust-toolchain@stable
       - name: Build both sides
@@ -72,10 +80,10 @@ jobs:
         shell: bash
         run: |
           python3 head/bench/ab.py base head \
-            --micro-n "${{ inputs.micro_n }}" \
-            --macro-n "${{ inputs.macro_n }}" \
-            --targets "${{ inputs.targets }}" | tee ab.md
+            --micro-n "${{ inputs.micro_n || '5' }}" \
+            --macro-n "${{ inputs.macro_n || '3' }}" \
+            --targets "${{ inputs.targets || '' }}" | tee ab.md
           {
-            echo "## ${{ matrix.label }} — ${{ inputs.head_ref }} vs ${{ inputs.base_ref }}"
+            echo "## ${{ matrix.label }} — ${{ inputs.head_ref || github.ref_name }} vs ${{ inputs.base_ref || 'main' }}"
             cat ab.md
           } >> "$GITHUB_STEP_SUMMARY"
