@@ -745,9 +745,15 @@ Metal's `waitUntilCompleted` and keeping the offscreen image's tracked
 layout honest with zero cross-frame hazard reasoning. Presentation is
 pixel-verified end to end: a unit test clears, presents, and `XGetImage`s
 the exact linear color back out of the X window. (That pixel readback
-polls bounded rather than sleeping once: Mesa's X11 WSI queues FIFO
-presents on an internal thread, so `vkQueuePresentKHR` returning — even
-followed by `XSync` — doesn't mean the `XPutImage` has landed yet.)
+re-presents and polls bounded rather than reading once after a sleep,
+for two empirically-hit reasons: Mesa's X11 WSI queues FIFO presents on
+an internal thread, so `vkQueuePresentKHR` returning — even followed by
+`XSync` — doesn't mean the `XPutImage` has landed; and the GL window
+smoke runs concurrently with both windows stacked at (0, 0) under
+Xvfb's WM-less placement, and `XGetImage` on an occluded or
+freshly-re-exposed X11 window reads the occluder's pixels or stale
+content — X never repaints exposed regions, so the retry loop redraws
+each iteration the way a real frame loop self-heals exposure damage.)
 
 Once the window backend existed, the two Vulkan consumers' shared
 1.0-core FFI graduated into `crate::vk` as the crate's Vulkan primitive

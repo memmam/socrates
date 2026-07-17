@@ -1464,15 +1464,22 @@ mod tests {
             ) -> *mut XImagePrefix;
         }
         unsafe {
-            // vkQueuePresentKHR returning does not mean the pixels are in
-            // the window yet: Mesa's X11 WSI queues FIFO presents on an
-            // internal thread, so the XPutImage lands asynchronously even
-            // relative to an XSync on this connection. Poll (bounded) until
-            // the presented color shows up; assert the exact value only at
-            // timeout — under an idle machine the first read already
-            // matches, under full-suite load it can take a few frames.
+            // Two things make a single read-after-present unreliable, both
+            // seen in practice: (a) Mesa's X11 WSI queues FIFO presents on
+            // an internal thread, so vkQueuePresentKHR returning — even
+            // followed by XSync — doesn't mean the XPutImage has landed;
+            // (b) the test harness runs the GL window smoke concurrently,
+            // and under Xvfb's WM-less stacking both 320x240 windows sit at
+            // (0, 0) — XGetImage on an occluded (or freshly re-exposed)
+            // X11 window reads the occluder's pixels or stale content,
+            // since X never repaints exposed regions for you. So each
+            // bounded retry re-presents the frame first (a real program's
+            // frame loop self-heals exposure damage the same way) and
+            // asserts the exact value only at timeout.
             let mut last = (0u8, 0u8, 0u8);
             for _ in 0..80 {
+                inner.clear(1.0, 0.5, 0.0, 1.0);
+                inner.swap_buffers();
                 XSync(inner.x11.display, X_FALSE);
                 let img = XGetImage(
                     inner.x11.display,
