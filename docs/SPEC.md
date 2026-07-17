@@ -563,7 +563,12 @@ split-complex signals — a complex vector is a pair of equal-length
 | `fft.fft(re, im)` | `fn(List[Float], List[Float]) -> (List[Float], List[Float])` | forward DFT, no normalization |
 | `fft.ifft(re, im)` | `fn(List[Float], List[Float]) -> (List[Float], List[Float])` | inverse DFT, normalized by `1/n` |
 | `fft.rfft(x)` | `fn(List[Float]) -> (List[Float], List[Float])` | real input; the first `n/2 + 1` bins of `fft(x, zeros)` |
-| `fft.magnitude(re, im)` | `fn(List[Float], List[Float]) -> List[Float]` | `sqrt(re[i]^2 + im[i]^2)` per bin (v0.8) — every `rfft` consumer wrote this by hand |
+
+The derived helper `magnitude(re, im)` — `sqrt(re[i]^2 + im[i]^2)` per
+bin — lives in `std.fft` (§ 7.1), which also wraps `rfft`/`ifft` so an
+importing file keeps the same spellings. (It was a native in the v0.8
+draft, computing `hypot` — which differs from `sqrt(re^2 + im^2)` in the
+last ulp, a deviation from this definition; the move to Fable fixed it.)
 
 Any length `n >= 1` is supported in O(n log n): powers of two run an
 iterative radix-2 Cooley–Tukey; every other length goes through
@@ -629,6 +634,7 @@ these modules follow the same visibility rules as user code.
 | `std.deque` | `Deque[T]` (v0.7), a double-ended queue with amortized O(1) ends (two-stack representation; a pop on an empty side reverses the other side across). `new()`, `from_list(xs)` (copies); methods `push_front` / `push_back`, `pop_front` / `pop_back` / `front` / `back` (all `Option[T]`), `len`, `is_empty`, `to_list` (front to back) |
 | `std.lazy` | `Lazy[T]` (v0.8): deferred, memoized computation. `of(thunk: fn() -> T) -> Lazy[T]` wraps a zero-argument thunk that doesn't run until needed; methods `get() -> T` (computes and caches on the first call, free on every later call — on any reference, since structs are references) and `is_forced() -> Bool`. For a module-level table that's expensive to build and not always needed — a plain top-level `let` already builds once at import (eagerly); `Lazy` defers that to first use. |
 | `std.glm` | Vector/matrix/quaternion math (v0.8), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Fable, no native code. |
+| `std.fft` | FFT helpers (moved from the native namespace in the minification pass): `magnitude(re, im)` (`sqrt(re[i]^2 + im[i]^2)` per bin, exactly as written — the panic on length mismatch matches the old native's message byte for byte), plus one-line `rfft`/`ifft` wrappers so an importing file keeps the `fft.` spellings (an imported module shadows the builtin namespace). `fft.fft` (complex pairs) is deliberately not re-exported — a module fn named `fft` would shadow the namespace in this module's own bodies; files that need it use the native namespace and skip this import. |
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 

@@ -1,6 +1,10 @@
-// fft.magnitude(re, im) (v0.8): the re.zip(im).map(|p| sqrt(p.0^2+p.1^2))
-// line every rfft consumer wrote by hand. Pythagorean triples give exact
-// f64 results, avoiding raw-libm pinning (STYLE.md § 2).
+// std.fft.magnitude: the re.zip(im).map(|p| sqrt(p.0^2+p.1^2)) line every
+// rfft consumer wrote by hand, in std since the minification pass (the
+// module also wraps rfft, so `fft.` spellings survive the import).
+// Pythagorean triples give exact f64 results, avoiding raw-libm pinning
+// (STYLE.md § 2).
+
+import std.fft;
 
 println(fft.magnitude([3.0, 5.0, 8.0], [4.0, 12.0, 15.0]));
 //? expect: [5.0, 13.0, 17.0]

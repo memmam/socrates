@@ -1,0 +1,28 @@
+// std.fft — Fable-level helpers over the native `fft` namespace, with
+// one-line wrappers for the transforms the helpers ride on (importing a
+// module named `fft` shadows the builtin namespace in the importing
+// file, so the wrappers keep `fft.rfft`/`fft.ifft` spelled the same).
+// The complex-pair transform `fft.fft` is deliberately not re-exported:
+// a `pub fn fft` here would shadow the namespace inside this module's
+// own bodies. A file that calls `fft.fft` should keep using the native
+// namespace and not import this module — mixing them is a loud
+// compile-time error, never a silent change.
+
+pub fn rfft(signal: List[Float]) -> (List[Float], List[Float]) {
+    fft.rfft(signal)
+}
+
+pub fn ifft(re: List[Float], im: List[Float]) -> (List[Float], List[Float]) {
+    fft.ifft(re, im)
+}
+
+// The spec defines magnitude as sqrt(re[i]^2 + im[i]^2) per bin, and this
+// body computes exactly that expression. (The v0.8 native computed
+// Rust's hypot instead, which differs from sqrt(a*a + b*b) in the last
+// ulp for general inputs — a spec deviation, fixed by this move.)
+pub fn magnitude(re: List[Float], im: List[Float]) -> List[Float] {
+    if re.len() != im.len() {
+        panic("fft.magnitude: re and im lengths differ ({re.len()} vs {im.len()})");
+    }
+    re.zip(im).map(|p| (p.0 * p.0 + p.1 * p.1).sqrt())
+}

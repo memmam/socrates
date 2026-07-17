@@ -15,6 +15,7 @@ pub fn std_module(key: &str) -> Option<&'static str> {
         "std.deque" => include_str!("../std/deque.fable"),
         "std.lazy" => include_str!("../std/lazy.fable"),
         "std.glm" => include_str!("../std/glm.fable"),
+        "std.fft" => include_str!("../std/fft.fable"),
         _ => return None,
     })
 }

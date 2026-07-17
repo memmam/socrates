@@ -1,4 +1,8 @@
-// fft.magnitude requires the re and im lists to be the same length, like
-// fft.fft (fft_length_mismatch.fable).
+// std.fft.magnitude requires the re and im lists to be the same length,
+// like fft.fft (fft_length_mismatch.fable) — same message as the old
+// native, byte for byte.
+
+import std.fft;
+
 //? panic: fft.magnitude: re and im lengths differ (2 vs 3)
 println(fft.magnitude([1.0, 2.0], [0.0, 0.0, 0.0]));

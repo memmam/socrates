@@ -16,6 +16,7 @@
 import svg;
 import chart;
 import std.lists;
+import std.fft;
 
 // --- the functions being plotted -------------------------------------------
 
@@ -89,10 +90,11 @@ fn two_tone(n: Int, k1: Int, a1: Float, k2: Int, a2: Float) -> List[Float] {
     )
 }
 
-// Magnitude of every rfft bin (n/2 + 1 of them).
+// Magnitude of every rfft bin (n/2 + 1 of them) — std.fft.magnitude is
+// this file's old hand-rolled sqrt line, byte for byte.
 fn magnitudes(x: List[Float]) -> List[Float] {
     let (re, im) = fft.rfft(x);
-    re.zip(im).map(|p| (p.0 * p.0 + p.1 * p.1).sqrt())
+    fft.magnitude(re, im)
 }
 
 // sort_by-convention comparator over (bin, magnitude) pairs, for

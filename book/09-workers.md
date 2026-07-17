@@ -120,9 +120,14 @@ chord analyzer on it; `synthwave` uses it to verify that the notes it
 synthesized land on the frequencies it intended.
 
 Reading a spectrum almost always means magnitude, not raw re/im — a
-signal alternating every other sample puts all its energy in one bin:
+signal alternating every other sample puts all its energy in one bin.
+The `magnitude` helper lives in `std.fft` (pure Fable — it is the
+`sqrt(re²+im²)` one-liner, packaged), which also wraps `rfft` so the
+`fft.` spellings survive the import:
 
 ```fable
+import std.fft;
+
 let (re, im) = fft.rfft([1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0]);
 println(fft.magnitude(re, im));
 ```

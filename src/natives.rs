@@ -172,23 +172,6 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             let (or_, oi) = crate::fft::rfft(&x);
             floats_pair(vm, or_, oi)
         }
-        FftMagnitude => {
-            // Every rfft consumer wrote this same zip/hypot line; Floats
-            // aren't heap objects, so building the result list needs no
-            // extra GC rooting beyond `make_list`'s own allocation.
-            let re = float_vec_arg(vm, argc, 0)?;
-            let im = float_vec_arg(vm, argc, 1)?;
-            if re.len() != im.len() {
-                return Err(vm.error(format!(
-                    "fft.magnitude: re and im lengths differ ({} vs {})",
-                    re.len(),
-                    im.len()
-                )));
-            }
-            let mags = re.iter().zip(&im).map(|(r, i)| Value::Float(r.hypot(*i))).collect();
-            make_list(vm, mags)
-        }
-
         // ------------------------------------------------------------------
         // worker.* (v0.7) — OS-thread isolates, string channels
         // ------------------------------------------------------------------

@@ -113,9 +113,6 @@ pub enum Native {
     FftFft,
     FftIfft,
     FftRfft,
-    /// `fft.magnitude(re, im)` (v0.8): every `rfft` consumer wrote the same
-    /// `re.zip(im).map(|p| sqrt(p.0*p.0 + p.1*p.1))` line.
-    FftMagnitude,
     // worker.* + Worker handle methods (v0.7)
     WorkerSpawn,
     WorkerSelfSend,
@@ -518,7 +515,6 @@ impl Native {
                 "fft" => FftFft,
                 "ifft" => FftIfft,
                 "rfft" => FftRfft,
-                "magnitude" => FftMagnitude,
                 _ => return None,
             })),
             "worker" => Some(MathMember::Fn(match member {
@@ -767,7 +763,6 @@ impl Native {
             FftFft => "fft.fft",
             FftIfft => "fft.ifft",
             FftRfft => "fft.rfft",
-            FftMagnitude => "fft.magnitude",
             FsRemove => "fs.remove",
             OsArgs => "os.args",
             OsEnv => "os.env",
@@ -1008,7 +1003,6 @@ impl Native {
                 0,
             ),
             FftRfft => (vec![list(Float)], tup(vec![list(Float), list(Float)]), 0),
-            FftMagnitude => (vec![list(Float), list(Float)], list(Float), 0),
 
             // worker.* (v0.7). Only Strings cross threads; spawn resolves
             // the file like an import (relative to the spawning script) and
