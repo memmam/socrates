@@ -1,8 +1,9 @@
 # The Standard Library and System Namespaces
 
 Fable ships with batteries of two kinds. **System namespaces** — `math`,
-`fs`, `os`, and the numeric namespaces of the next chapter — are implemented
-in Rust, always present, and used without an import, like `math.sqrt`. The
+`fs`, `os`, the graphics namespaces `window` and `gfx` at the end of this
+chapter, and the numeric namespaces of the next — are implemented in Rust,
+always present, and used without an import, like `math.sqrt`. The
 **standard library** — `std.json`, `std.set`, and friends — is written in
 Fable, compiled into the binary, and brought in with `import`. Nothing is on
 disk to install either way.
@@ -193,12 +194,95 @@ println(calls);
 1
 ```
 
+**Vector and matrix math.** `std.glm` is 3D math named and shaped after
+the GLM library — `vec3`, `perspective`, `look_at` — so graphics code
+reads like graphics code everywhere else. `Vec2`/`Vec3`/`Vec4` carry the
+operators plus `dot`, `cross`, `length`, `normalize`, and `lerp`; `Mat4`
+is column-major with the full constructor set (`translation`, `scaling`,
+`rotation_*`, `perspective`, `ortho`, `look_at`), composed with `mul` and
+applied with `mul_vec4`; `Quat` adds `from_axis_angle`, `slerp`, and
+`to_mat4`. Pure Fable, no native code:
+
+```fable
+import std.glm;
+
+let a = glm.vec3(3.0, 0.0, 4.0);
+println(a.length());
+println(a.normalize().x);
+
+let x = glm.vec3(1.0, 0.0, 0.0);
+let y = glm.vec3(0.0, 1.0, 0.0);
+let z = x.cross(y);
+println("({z.x}, {z.y}, {z.z})");
+println(x.dot(y));
+
+let model = glm.rotation_y(math.pi / 2.0);
+let view = glm.look_at(glm.vec3(0.0, 0.0, 3.0), glm.vec3(0.0, 0.0, 0.0), y);
+let proj = glm.perspective(math.pi / 4.0, 16.0 / 9.0, 0.1, 10.0);
+let mvp = proj.mul(view).mul(model);
+let p = mvp.mul_vec4(glm.vec4(0.0, 0.0, 0.0, 1.0));
+println(p.w);
+```
+
+```text
+5.0
+0.6
+(0.0, 0.0, 1.0)
+0.0
+3.0
+```
+
+That last chain is the model-view-projection idiom exactly as a GL
+tutorial writes it — `proj.mul(view).mul(model)` — and the `3.0` is the
+origin sitting three units in front of the `look_at` eye, carried into
+clip space in `w`.
+
 Rounding out the set: `std.flags` is deliberately rigid CLI parsing
 (`flag`, `value`, `value_or`, `positionals`), and `std.path` handles the
 textual path chores (`join`, `base_name`, `dir_name`, `ext`, `strip_ext`).
 The full method inventories live in the [spec](../docs/SPEC.md); the point
 of the standard library is that all of it is Fable you can read, and none of
 it cost the interpreter a line of Rust or the binary a dependency.
+
+## `window` and `gfx`: native graphics
+
+The `window` namespace opens a real OS window and `gfx` draws into it with
+a GL-shaped call surface (programs, buffers, vertex arrays, uniforms,
+textures, `draw_arrays`/`draw_elements`, `read_pixels`). Like `gpu` in the
+next chapter, the backends are native raw-FFI code with zero Cargo
+dependencies, behind cargo features only because they are platform code:
+`window.create` is OpenGL on all three desktop platforms (X11/GLX,
+Win32/WGL, Cocoa/CGL — `--features gl`), `window.create_metal` is Metal on
+Apple Silicon macOS (`--features metal`), and `window.create_vulkan` is
+Vulkan on Linux and Windows (`--features vulkan`), where everything past
+the platform's surface is one shared backend, so the two platforms behave
+identically. Shader input follows the backend — GLSL source on OpenGL, MSL
+on Metal, SPIR-V binaries on Vulkan — with `win.backend_name()` as the
+branch point, and the `demos/glcube` demo renders the same golden frames
+byte-for-byte on all three. A default build stays lean and reports itself
+cleanly:
+
+```fable
+match window.create("fable", 640, 480) {
+    Ok(win) -> {
+        win.make_current();
+        gfx.clear(0.1, 0.2, 0.3, 1.0);
+        win.swap_buffers();
+        println("cleared one {win.backend_name()} frame");
+        win.close();
+    },
+    Err(e) -> println("no window: {e}"),
+}
+```
+
+```text
+no window: windowing support not compiled in (build with --features gl)
+```
+
+(Build with `--features gl` on a machine with a display and the same
+program prints `cleared one opengl frame` instead.) The full surface —
+every `gfx` member, the per-backend shader conventions, and the
+platform table — lives in the spec's § 7.3 and § 7.4.
 
 ---
 

@@ -141,7 +141,7 @@ need appears. Settled decisions:
   language change updates the spec in the same PR.
 - **Everything observable is golden-tested and byte-identical.** Every
   demo's full stdout is pinned (`demos/`), every ```fable block in `book/`
-  executes in CI, and the spec suite (`tests/spec/`, 309 tests) runs through
+  executes in CI, and the spec suite (`tests/spec/`, 311 tests) runs through
   the same `fable test` path users get. A refactor that changes any pinned
   output is wrong unless the output change is the point.
 - **GC-stress must stay green.** `FABLE_GC_STRESS=1` collects before every
@@ -157,8 +157,11 @@ cargo test                                    # unit + golden spec suite
 FABLE_GC_STRESS=1 cargo test --test spec_runner
 cargo clippy --all-targets -- -D warnings
 cargo build --release
-./target/release/fable test tests/spec        # 309
-./target/release/fable test demos             # 71, also with FABLE_GC_STRESS=1
+./target/release/fable test tests/spec        # 311
+# glcube's three mains need a live GL/Metal/Vulkan window (CI runs them in
+# the windowing jobs); everything else, cube.fable/spec.fable included:
+shopt -s extglob
+./target/release/fable test demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable  # 73, also with FABLE_GC_STRESS=1
 FABLE_PATH=ports ./target/release/fable test ports/pyl/spec.fable   # + ports/icaa/spec.fable
 ./target/release/fable build demos/csvql -o /tmp/csvql && (cd /tmp && ./csvql)  # `fable build` smoke
 bench/run.sh 3                                # perf A/B vs a pre-change binary
