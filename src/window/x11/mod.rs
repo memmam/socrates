@@ -28,13 +28,15 @@
 //! protocol-error watch) that both backends need are factored into
 //! [`shared`], composed by each backend rather than duplicated.
 
-// Temporary: with `gl` off, every `gfx.*`-forwarding method's `Gl` match arm
-// (its only real, parameter-using arm in this Phase-0 stub — the `Vulkan`
-// arm is `unreachable!()`) doesn't exist, so a `--features vulkan`-only
-// build sees every one of those parameters as unused. `gl.rs`'s callers
-// already exercise all of them whenever `gl` is on, so scoping the
-// allowance to "only when `gl` is off" keeps real unused-variable detection
-// active for every build that actually exercises these methods.
+// Temporary until the Vulkan draw-call surface lands: with `gl` off, every
+// `gfx.*`-forwarding method's `Gl` match arm (its only real,
+// parameter-using arm — the `Vulkan` arm panics via `vulkan_gfx_todo`
+// until draw-call parity ships) doesn't exist, so a `--features
+// vulkan`-only build sees every one of those parameters as unused.
+// `gl.rs`'s callers already exercise all of them whenever `gl` is on, so
+// scoping the allowance to "only when `gl` is off" keeps real
+// unused-variable detection active for every build that actually
+// exercises these methods.
 #![cfg_attr(not(feature = "gl"), allow(unused_variables))]
 
 #[cfg(feature = "gl")]
@@ -92,19 +94,12 @@ impl Inner {
         )
     }
 
-    // Every `Inner::Vulkan(_) => unreachable!(...)` arm below (this method
-    // through `teardown` at the end of this impl) is safe for the same
-    // reason: `create_vulkan` always returns `Err` in this Phase-0 stub (see
-    // `vulkan.rs`'s module doc comment), so `Inner::Vulkan(_)` is never
-    // actually constructed yet — these arms exist only so each match stays
-    // exhaustive once real Vulkan FFI lands and they become real forwards.
-
     pub fn poll(&mut self) {
         match self {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.poll(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(i) => i.poll(),
         }
     }
 
@@ -113,7 +108,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.key_down(name),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(i) => i.key_down(name),
         }
     }
 
@@ -122,7 +117,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.mouse(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(i) => i.mouse(),
         }
     }
 
@@ -131,7 +126,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.width(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(i) => i.width(),
         }
     }
 
@@ -140,7 +135,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.height(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(i) => i.height(),
         }
     }
 
@@ -149,7 +144,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.should_close(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(i) => i.should_close(),
         }
     }
 
@@ -169,7 +164,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.clear(r, g, b, a),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(i) => i.clear(r, g, b, a),
         }
     }
 
@@ -178,15 +173,22 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.swap_buffers(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(i) => i.swap_buffers(),
         }
     }
 
     // -----------------------------------------------------------------
     // gfx.* — forwarded to whichever backend is live. The `Gl` arms are
-    // the full draw-call surface this backend has shipped since v0.8; the
-    // `Vulkan` arms become real forwards as the Vulkan graphics arc's
-    // later phases land (mirroring how `macos/mod.rs`'s Metal arms grew).
+    // the full draw-call surface this backend has shipped since v0.8. On
+    // the `Vulkan` variant, everything below `make_current` panics via
+    // `vulkan_gfx_todo` until the Vulkan draw-call surface lands (SPIR-V
+    // pipelines, buffer/texture handle tables, the VAO shim, reflection
+    // uniforms) — a live Vulkan window CAN be made current as of Phase 1,
+    // so these arms are genuinely reachable and must say clearly what's
+    // missing instead of claiming unreachability. The one exception is
+    // `compile_program`, whose `Result` return lets it report the same
+    // thing as a clean, catchable `Err` — exactly the Metal arc's
+    // between-phases precedent (`macos/mod.rs` at Metal Phase 1).
     // -----------------------------------------------------------------
 
     pub fn make_current(&mut self) {
@@ -194,7 +196,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.make_current(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(i) => i.make_current(),
         }
     }
 
@@ -203,7 +205,11 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.compile_program(vertex_src, fragment_src),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => Err(
+                "gfx.compile_program: not yet implemented on the Vulkan backend (draw-call \
+                 parity lands in a later phase; use window.create() / OpenGL for gfx.* today)"
+                    .to_string(),
+            ),
         }
     }
 
@@ -212,7 +218,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.use_program(program),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -221,7 +227,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_program(program),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -230,7 +236,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.create_buffer(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -239,7 +245,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_buffer(buffer),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -248,7 +254,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.bind_buffer(kind, buffer),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -257,7 +263,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.upload_buffer(kind, data, dynamic),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -266,7 +272,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.create_vertex_array(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -275,7 +281,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.bind_vertex_array(vao),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -284,7 +290,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_vertex_array(vao),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -293,7 +299,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_vertex_attrib(index, size, stride, offset),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -302,7 +308,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.disable_vertex_attrib(index),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -311,7 +317,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.create_texture(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -320,7 +326,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_texture(tex),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -329,7 +335,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.bind_texture(tex),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -338,7 +344,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.active_texture_unit(unit),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -347,7 +353,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.upload_texture(data, width, height, has_alpha),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -356,7 +362,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_int(program, name, v),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -365,7 +371,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_float(program, name, v),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -374,7 +380,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_vec2(program, name, x, y),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -383,7 +389,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_vec3(program, name, x, y, z),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -392,7 +398,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_vec4(program, name, x, y, z, w),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -401,7 +407,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_mat4(program, name, values),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -410,7 +416,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.draw_arrays(first, count),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -419,7 +425,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.draw_elements(count, byte_offset),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -428,7 +434,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.gfx_clear(r, g, b, a),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -437,7 +443,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_depth_test(enabled),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -446,7 +452,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.viewport(x, y, w, h),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -455,7 +461,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.read_pixels(x, y, w, h),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(_i) => vulkan_gfx_todo(),
         }
     }
 
@@ -464,30 +470,47 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.teardown(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(_i) => unreachable!("Vulkan backend not yet implemented (Phase 0 stub)"),
+            Inner::Vulkan(i) => i.teardown(),
         }
     }
 }
 
+/// The reachable-but-unimplemented `gfx.*` arms' shared panic — a live
+/// Vulkan window exists as of Phase 1, so unlike the Phase-0 stub these
+/// paths CAN be hit and must say what's missing (removed when draw-call
+/// parity lands, the way `macos/mod.rs`'s `metal_gfx_todo` was).
+#[cfg(feature = "vulkan")]
+fn vulkan_gfx_todo() -> ! {
+    panic!(
+        "gfx: draw calls are not yet implemented on the Vulkan backend (draw-call parity \
+         lands in a later phase; use window.create() / OpenGL for gfx.* today)"
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    /// `create_vulkan` is deterministic in every build shape today: the
-    /// Phase-0 stub `Err` with the `vulkan` feature on, the not-compiled-in
-    /// `Err` with it off — no display or hardware needed, so this runs in
-    /// every Linux CI environment (headless included).
+    /// `create_vulkan` end-to-end through the enum dispatch: with the
+    /// `vulkan` feature on and a display + Vulkan device present it opens
+    /// a real window (torn down immediately); in a headless environment
+    /// or with the feature off it returns a clean, prefixed `Err`. Every
+    /// build shape is deterministic — no panic paths.
     #[test]
-    fn create_vulkan_errs_cleanly() {
-        // Not `unwrap_err()`: `Inner` holds raw OS handles and deliberately
-        // has no `Debug` impl for that to lean on.
-        let err = match super::Inner::create_vulkan("fable window test", 320, 240) {
-            Err(e) => e,
-            Ok(_) => panic!("expected create_vulkan to return Err in this build"),
-        };
-        if cfg!(feature = "vulkan") {
-            assert!(err.contains("not yet implemented"), "got: {err}");
-        } else {
-            assert!(err.contains("not compiled in"), "got: {err}");
-            assert!(err.contains("--features vulkan"), "got: {err}");
+    fn create_vulkan_opens_or_errs_cleanly() {
+        match super::Inner::create_vulkan("fable window test", 320, 240) {
+            Ok(inner) => {
+                assert_eq!(inner.backend_name(), "vulkan");
+                inner.teardown();
+            }
+            Err(err) => {
+                // Both the feature-off stub and every runtime failure mode
+                // (no display, no loader, no device) carry the entry-point
+                // prefix, so the message is actionable either way.
+                assert!(err.contains("window.create_vulkan"), "got: {err}");
+                if !cfg!(feature = "vulkan") {
+                    assert!(err.contains("not compiled in"), "got: {err}");
+                    assert!(err.contains("--features vulkan"), "got: {err}");
+                }
+            }
         }
     }
 }

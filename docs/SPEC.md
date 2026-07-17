@@ -746,7 +746,7 @@ and has no plan to be** (see the macOS backend note below for why)),
 |--------|------|-------|
 | `window.create(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | opens an OS window of size `w`×`h` with a current GL context. Without the feature (or backend): `Err("windowing support not compiled in (build with --features gl)")` |
 | `window.create_metal(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | (v0.9, macOS/Apple Silicon only) opens a Metal-backed window — a sibling of `create`, additive alongside it, never a replacement (see the macOS Metal backend note below). Without the feature (or off Apple Silicon macOS): `Err("Metal windowing support not compiled in (build with --features metal, aarch64-apple-darwin only)")` |
-| `window.create_vulkan(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | (v0.9, Linux/X11 only) will open a Vulkan-backed window — `create_metal`'s Linux analog, riding the same `vulkan` cargo feature as `gpu.run_spirv` (see the Linux Vulkan backend note below). Without the feature (or off Linux): `Err("Vulkan windowing support not compiled in (build with --features vulkan, Linux/X11 only for now)")`. **Currently scaffolding**: with the feature on it returns `Err("window.create_vulkan: Vulkan window backend not yet implemented ...")` until the backend's rendering phases land |
+| `window.create_vulkan(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | (v0.9, Linux/X11 only) opens a Vulkan-backed window — `create_metal`'s Linux analog, riding the same `vulkan` cargo feature as `gpu.run_spirv` (see the Linux Vulkan backend note below). Without the feature (or off Linux): `Err("Vulkan windowing support not compiled in (build with --features vulkan, Linux/X11 only for now)")`; without a display or Vulkan device at runtime, a prefixed `Err` naming the failing step |
 
 `Window` is a nameable opaque type (§ 8.4d) — the handle `create` returns on
 success.
@@ -887,13 +887,30 @@ shape (`Gl(gl::Inner)` / `Vulkan(vulkan::Inner)`, each gated on its own
 cargo feature) over a shared `X11WindowState` (Xlib window creation + event
 pump, written once in `x11/shared.rs`).
 
-**Current status: scaffolding only.** The entry point, feature gating,
-enum dispatch, and `backend_name()` plumbing are wired end-to-end, but
-`create_vulkan` returns `Err("window.create_vulkan: Vulkan window backend
-not yet implemented ...")` until the backend's rendering phases land
-(device/swapchain, then the full `gfx.*` surface with SPIR-V shader input,
-then glcube pixel parity — the same phase sequence the Metal backend
-followed). This paragraph is updated as each phase ships.
+`create_vulkan` opens a real window: a WSI swapchain
+(`VK_KHR_surface`/`VK_KHR_xlib_surface`/`VK_KHR_swapchain`, FIFO) over the
+X window, with all rendering landing in an app-owned offscreen image that
+`swap_buffers` copies into the frame's acquired swapchain image and
+presents (the same stable-back-buffer indirection as the Metal backend,
+for the same reasons — see `x11/vulkan.rs`'s module docs). The backend
+prefers a UNORM surface format explicitly (`B8G8R8A8_UNORM`, then
+`R8G8B8A8_UNORM`) so clear values stay linear — lavapipe offers an sRGB
+format first, which would silently re-encode every color. Presentation is
+verified with real pixels: a unit test clears the back buffer, presents,
+and reads the exact color back out of the X window via `XGetImage` (CI
+runs it against Mesa's lavapipe under Xvfb — like the Vulkan compute
+backend, this one is fully exercised on plain CI hardware, no GPU
+needed). Environments without a display or Vulkan device degrade to a
+clean prefixed `Err`.
+
+**Current status: window surface only.** `create`/`clear`/`swap_buffers`/
+`poll`/`key_down`/mouse/size/`should_close`/`close` and
+`win.make_current()` all work; the `gfx.*` draw-call surface is not yet
+implemented on this backend — `gfx.compile_program` returns a clean `Err`
+saying so, and the other `gfx.*` members panic (catchable via `try`) with
+the same message, exactly the Metal backend's between-phases behavior.
+This paragraph is updated as the remaining phases (SPIR-V draw-call
+parity, then glcube pixel parity) ship.
 
 ### 7.4 The gfx namespace (v0.8, feature-gated)
 

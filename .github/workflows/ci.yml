@@ -340,6 +340,18 @@ jobs:
         run: |
           cargo build --release --features vulkan
           ./target/release/fable docs/assets/vulkan_compute.fable
+      - name: Vulkan window smoke (real WSI presentation, hard-asserted)
+        # window.create_vulkan opens a real window against lavapipe's
+        # xlib-surface + swapchain path and presents three frames — the
+        # exact ok line is asserted, so a silent fall-through to the err
+        # branch fails the job. (Pixel-exactness of the presented clear is
+        # asserted by window::x11::vulkan's XGetImage roundtrip unit test
+        # in the gl,vulkan test step above; this asserts the Fable-facing
+        # surface.) Xvfb from the gl,vulkan step above is still on :99.
+        run: |
+          out=$(DISPLAY=:99 ./target/release/fable docs/assets/vulkan_window.fable)
+          echo "$out"
+          test "$out" = "ok: vulkan window presented 3 frames (backend=vulkan, 320x240)"
 
   demo-zoo:
     # Proves the release's cross-compile + `fable build` stapling works on

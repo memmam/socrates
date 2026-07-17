@@ -713,17 +713,42 @@ the same `#[cfg]`-per-variant `Gl`/`Vulkan` enum `macos::Inner` is, and
 `window.create_vulkan` mirrors `create_metal` end-to-end (natives,
 `backend_name()` `"vulkan"`, graceful `Err` stubs off-feature/off-Linux).
 The Vulkan windowing path deliberately rides the *existing* `vulkan`
-feature rather than adding a new one — same API, same loader
-(`crate::vk`'s `dlopen`), same zero-dependency shape — gated to Linux for
-windowing (`all(feature = "vulkan", target_os = "linux")`) while the
-compute half stays Linux+Windows; `gfx_window_msg`'s feature-off check
-gained that same platform-qualified clause. `vulkan.rs` itself is a
-Phase-0 stub (`create` returns a clean `Err`); unlike Metal, the phases
-that fill it in are developed and hard-asserted locally and on plain
-ubuntu CI — lavapipe supplies the Vulkan device, Xvfb the X server — so
-the `vulkan` CI job builds/tests `--features vulkan` and `--features
-gl,vulkan` (real coexistence, mirroring `gl-macos-metal`'s `gl,metal`
-proof) with the GL window smoke rendering under Xvfb in the same binary.
+feature rather than adding a new one — same API, same loading strategy,
+same zero-dependency shape — gated to Linux for windowing
+(`all(feature = "vulkan", target_os = "linux")`) while the compute half
+stays Linux+Windows; `gfx_window_msg`'s feature-off check gained that
+same platform-qualified clause. Unlike Metal, every phase is developed
+and hard-asserted locally and on plain ubuntu CI — lavapipe supplies the
+Vulkan device, Xvfb the X server — so the `vulkan` CI job builds/tests
+`--features vulkan` and `--features gl,vulkan` (real coexistence,
+mirroring `gl-macos-metal`'s `gl,metal` proof) with both window backends
+rendering under Xvfb in the same binary.
+
+**Vulkan window presentation (`x11/vulkan.rs`, the arc's Phase 1).**
+Before it was built, a throwaway spike confirmed empirically that
+lavapipe presents to Xvfb through real WSI (`VK_KHR_xlib_surface` +
+`VK_KHR_swapchain`), killing the XPutImage-fallback branch of the design.
+The backend is the Metal backend's structure transliterated: an app-owned
+**offscreen stable back buffer** (a `VkImage` in the swapchain's own
+format, `TRANSFER_SRC|TRANSFER_DST|COLOR_ATTACHMENT`) receives all work —
+swapchain images are a rotating pool with no stable identity, exactly
+like `CAMetalLayer` drawables — and `swap_buffers` does fence-synced
+`vkAcquireNextImageKHR` → layout barriers → `vkCmdCopyImage` (raw 1:1,
+same format/extent) → `PRESENT_SRC` barrier → synchronous submit →
+`vkQueuePresentKHR`, rebuilding the swapchain+offscreen pair on
+`OUT_OF_DATE`/`SUBOPTIMAL` (resize). Two empirically-load-bearing
+choices: the surface **format must prefer UNORM** (`B8G8R8A8_UNORM` then
+`R8G8B8A8_UNORM`) because lavapipe lists an sRGB format first and picking
+it silently re-encodes every clear value (0.5 → 188/255, not 128/255); and
+every submission is synchronous (one fence, submit → wait), matching
+Metal's `waitUntilCompleted` and keeping the offscreen image's tracked
+layout honest with zero cross-frame hazard reasoning. Presentation is
+pixel-verified end to end: a unit test clears, presents, and `XGetImage`s
+the exact linear color back out of the X window. The FFI is deliberately
+self-contained in `vulkan.rs` for now (the same hand-transcribed shapes
+as `crate::vk` plus the WSI extensions); deduplicating the two Vulkan
+consumers into a shared primitive module is its own follow-up refactor,
+per the extract-at-real-duplication rule (`crate::objc`'s precedent).
 
 ## Testing strategy
 

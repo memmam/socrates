@@ -20,13 +20,11 @@
 //! module instead (`dlopen("libGL.so.1")` in `gl.rs`;
 //! `dlopen("libvulkan.so.1")` via `crate::vk` for Vulkan).
 
-// Phase 0 of the Vulkan graphics arc: `vulkan.rs` is a stub that doesn't
-// consume this module yet, so a `--features vulkan`-only build (`gl` off)
-// sees these items as unused. `gl.rs` exercises all of them whenever `gl`
-// is on, so scoping the allowance to "only when `gl` is off" keeps real
+// A few items here (`XVisualInfo`, `XFree`, `X_TRUE`) serve only the GLX
+// path's visual-selection dance, so a `--features vulkan`-only build (`gl`
+// off) sees them as unused. `gl.rs` exercises all of them whenever `gl` is
+// on, so scoping the allowance to "only when `gl` is off" keeps real
 // dead-code detection active for every build that actually uses them.
-// Remove when the Vulkan backend starts composing `X11WindowState`
-// (Phase 1).
 #![cfg_attr(not(feature = "gl"), allow(dead_code))]
 
 use std::collections::HashSet;
@@ -246,6 +244,14 @@ extern "C" {
     pub(super) fn XOpenDisplay(display_name: *const c_char) -> *mut Display;
     pub(super) fn XCloseDisplay(display: *mut Display) -> c_int;
     pub(super) fn XDefaultScreen(display: *mut Display) -> c_int;
+    // The screen's default visual/depth — what the Vulkan backend passes to
+    // `X11WindowState::create_window` (WSI needs no special visual, unlike
+    // GLX's `glXChooseVisual` pick). Their only consumer is `vulkan.rs`,
+    // hence the inverse of the module-level allowance above.
+    #[cfg_attr(not(feature = "vulkan"), allow(dead_code))]
+    pub(super) fn XDefaultVisual(display: *mut Display, screen_number: c_int) -> *mut Visual;
+    #[cfg_attr(not(feature = "vulkan"), allow(dead_code))]
+    pub(super) fn XDefaultDepth(display: *mut Display, screen_number: c_int) -> c_int;
     fn XRootWindow(display: *mut Display, screen_number: c_int) -> Window;
     fn XCreateColormap(
         display: *mut Display,
