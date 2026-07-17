@@ -797,6 +797,14 @@ Metal shader conventions:
   matching `gfx.set_vertex_attrib`'s index; shaders never name vertex
   buffer indices (the backend binds attribute `i`'s data at `1 + i`
   internally).
+- Cross-stage varyings (vertex outputs the fragment stage reads) carry an
+  explicit `[[user(name)]]` semantic **in both stage structs**: the two
+  sources are separate MSL translation units, and the semantic name — not
+  struct-member order — is what reliably links them across separately
+  compiled functions. (And assign every varying in the vertex function:
+  MSL does not error on an uninitialized output member — it rasterizes as
+  undefined data. See `demos/glcube/main_metal.fable` for the worked
+  example.)
 - Each stage's uniforms live in one struct argument at `[[buffer(0)]]`;
   `gfx.set_uniform_*` resolves the member by *name* via pipeline
   reflection, and names a shader doesn't declare are silently ignored —

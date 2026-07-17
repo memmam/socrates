@@ -36,6 +36,18 @@ fn run() -> Result[Unit, String] {
     // the last line of vertex_main, the near half of the scene would be
     // clipped away. `(z + w) * 0.5` maps GL's range onto Metal's exactly,
     // so cube.fable's mvp_at works verbatim on both backends.
+    // Two hard-won details, both found via this file's own golden pins on
+    // real hardware (the first cross-stage varying any Metal demo used):
+    // - `out.color = in.color;` must be assigned explicitly — this file's
+    //   first version forgot it, and an uninitialized varying rasterized as
+    //   solid white [255,255,255,255] at every pixel, on both pinned
+    //   frames. MSL warns about it at most; it does not error.
+    // - The color varying carries an explicit [[user(vcolor)]] semantic in
+    //   BOTH structs: the two sources are separate MSL translation units
+    //   (like main.fable's two GLSL stages), and the semantic name — not
+    //   struct-member order — is what reliably links a vertex output to a
+    //   fragment input across separately compiled functions. SPEC § 7.4's
+    //   Metal notes document this as the convention.
     let vertex_src = [
         "#include <metal_stdlib>",
         "using namespace metal;",
@@ -45,7 +57,7 @@ fn run() -> Result[Unit, String] {
         "};",
         "struct VertexOut \{",
         "    float4 position [[position]];",
-        "    float3 color;",
+        "    float3 color [[user(vcolor)]];",
         "};",
         "struct Uniforms \{ float4x4 mvp; };",
         "vertex VertexOut vertex_main(VertexIn in [[stage_in]],",
@@ -53,20 +65,17 @@ fn run() -> Result[Unit, String] {
         "    VertexOut out;",
         "    out.position = u.mvp * float4(in.pos, 1.0);",
         "    out.position.z = (out.position.z + out.position.w) * 0.5;",
+        "    out.color = in.color;",
         "    return out;",
         "}",
     ].join("\n");
-    // (VertexOut is redeclared because each source is a standalone MSL
-    // translation unit — the same reason main.fable's GLSL declares
-    // v_color in both stages.)
     let fragment_src = [
         "#include <metal_stdlib>",
         "using namespace metal;",
-        "struct VertexOut \{",
-        "    float4 position [[position]];",
-        "    float3 color;",
+        "struct FragmentIn \{",
+        "    float3 color [[user(vcolor)]];",
         "};",
-        "fragment float4 fragment_main(VertexOut in [[stage_in]]) \{",
+        "fragment float4 fragment_main(FragmentIn in [[stage_in]]) \{",
         "    return float4(in.color, 1.0);",
         "}",
     ].join("\n");
