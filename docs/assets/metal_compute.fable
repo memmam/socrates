@@ -1,0 +1,44 @@
+// gpu.run on the native Metal backend (SPEC § 7.2): double eight u32 values
+// in an MSL compute kernel — the Metal mirror of gpu_double.fable's WGSL.
+//
+//   cargo run --release --features metal -- docs/assets/metal_compute.fable
+//
+// Prints `ok: <output bytes>` when a Metal device exists, `err: <reason>`
+// when metal support isn't compiled in or no device is available — and
+// exits 0 either way, EXCEPT that when the dispatch does run, the output
+// bytes are hard-asserted (a wrong result panics, exit 70): unlike a
+// window, a compute dispatch needs no window server, so on any
+// Metal-capable machine this file is a real correctness gate, not a smoke
+// test. Not wired into the golden test suite: the ok/err line is
+// build-dependent.
+
+// The MSL gpu.run ABI (the Metal analog of the WGSL one): a kernel named
+// `compute_main`, input bytes at [[buffer(0)]], output at [[buffer(1)]],
+// one thread per threadgroup so thread_position_in_grid spans (wx, wy, wz).
+let msl = [
+    "#include <metal_stdlib>",
+    "using namespace metal;",
+    "kernel void compute_main(device const uint* input  [[buffer(0)]],",
+    "                         device uint*       output [[buffer(1)]],",
+    "                         uint3 gid [[thread_position_in_grid]]) \{",
+    "    output[gid.x] = input[gid.x] * 2u;",
+    "}",
+].join("\n");
+
+let nums = bytes(0);
+for n in [1, 2, 3, 4, 5, 6, 7, 100] {
+    nums.push_u32le(n);
+}
+
+// 32 output bytes (eight u32s), one single-thread threadgroup per element.
+match gpu.run(msl, nums, 32, 8, 1, 1) {
+    Ok(out) -> {
+        let expect = bytes(0);
+        for n in [2, 4, 6, 8, 10, 12, 14, 200] {
+            expect.push_u32le(n);
+        }
+        assert_eq(out.to_list(), expect.to_list());
+        println("ok: {out.to_list()}");
+    },
+    Err(msg) -> println("err: {msg}"),
+}

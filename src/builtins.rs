@@ -143,6 +143,11 @@ pub enum Native {
     GpuAvailable,
     GpuAdapterInfo,
     GpuRun,
+    /// `gpu.backend()` (v0.9): `"metal"` | `"wgpu"` | `"none"` — which
+    /// implementation `gpu.run` dispatches to in this build. The `gpu`
+    /// analog of `win.backend_name()`: programs branch on it to pick the
+    /// shader dialect (MSL vs. WGSL).
+    GpuBackend,
 
     // window.* + Window handle methods (v0.8, Linux-only for now). The
     // natives are always registered; without the `gl` cargo feature they
@@ -517,6 +522,7 @@ impl Native {
                 "available" => GpuAvailable,
                 "adapter_info" => GpuAdapterInfo,
                 "run" => GpuRun,
+                "backend" => GpuBackend,
                 _ => return None,
             })),
             "window" => Some(MathMember::Fn(match member {
@@ -749,6 +755,7 @@ impl Native {
             GpuAvailable => "gpu.available",
             GpuAdapterInfo => "gpu.adapter_info",
             GpuRun => "gpu.run",
+            GpuBackend => "gpu.backend",
             WindowCreate => "window.create",
             WindowCreateMetal => "window.create_metal",
             WindowHandlePoll => "poll",
@@ -1006,6 +1013,7 @@ impl Native {
                 res(Type::Bytes, TStr),
                 0,
             ),
+            GpuBackend => (vec![], TStr, 0),
 
             // window.* (v0.8; macOS also gained a Metal-backed sibling
             // entry point in v0.9). `create`/`create_metal` mirror

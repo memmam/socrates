@@ -33,6 +33,32 @@
 //! bad sizes — returns `Err(String)` with a human-readable message; nothing
 //! in here panics the interpreter.
 
+/// Which implementation `gpu.run` dispatches to in THIS build: `"metal"`
+/// (native raw-FFI, macOS/Apple Silicon with `--features metal` — takes
+/// precedence over wgpu when both are compiled in, per CLAUDE.md's
+/// native-backends-first roadmap), `"wgpu"` (the feature-gated portable
+/// fallback, which remains until full native coverage retires it), or
+/// `"none"`. The `gpu` analog of `win.backend_name()`: programs branch on
+/// it to pick the shader dialect `gpu.run` expects (MSL vs. WGSL).
+#[cfg(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))]
+pub fn backend() -> &'static str {
+    "metal"
+}
+#[cfg(all(
+    feature = "gpu",
+    not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))
+))]
+pub fn backend() -> &'static str {
+    "wgpu"
+}
+#[cfg(all(
+    not(feature = "gpu"),
+    not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))
+))]
+pub fn backend() -> &'static str {
+    "none"
+}
+
 /// Upper bound on the output buffer size (and on input, symmetrically).
 pub const MAX_BUFFER_BYTES: usize = 256 * 1024 * 1024;
 
@@ -87,20 +113,20 @@ fn validate(input: &[u8], out_len: usize, wx: u32, wy: u32, wz: u32) -> Result<(
 // ---------------------------------------------------------------------------
 
 /// Is a GPU adapter available? Always `false` without the `gpu` feature.
-#[cfg(not(feature = "gpu"))]
+#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
 pub fn available() -> bool {
     false
 }
 
 /// Describe the adapter `gpu.run` would use.
-#[cfg(not(feature = "gpu"))]
+#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
 pub fn adapter_info() -> String {
     "gpu support not compiled in".to_string()
 }
 
 /// Run a compute shader (see the module docs for the ABI). Always an error
 /// without the `gpu` feature.
-#[cfg(not(feature = "gpu"))]
+#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
 pub fn run(
     _wgsl: &str,
     input: &[u8],
@@ -111,14 +137,14 @@ pub fn run(
 ) -> Result<Vec<u8>, String> {
     // Argument errors first, so bad calls fail identically in both builds.
     validate(input, out_len, wx, wy, wz)?;
-    Err("gpu support not compiled in (build with --features gpu)".to_string())
+    Err("gpu support not compiled in (build with --features gpu, or --features metal on Apple Silicon macOS)".to_string())
 }
 
 // ---------------------------------------------------------------------------
 // Feature ON: wgpu implementation
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "gpu")]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
 fn request_adapter() -> Result<wgpu::Adapter, String> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -129,14 +155,14 @@ fn request_adapter() -> Result<wgpu::Adapter, String> {
 }
 
 /// Is a GPU adapter available (any backend, software rasterizers included)?
-#[cfg(feature = "gpu")]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
 pub fn available() -> bool {
     request_adapter().is_ok()
 }
 
 /// Describe the adapter `gpu.run` would use: `"<name> (<backend>)"`, or
 /// `"no adapter"` when none can be acquired.
-#[cfg(feature = "gpu")]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
 pub fn adapter_info() -> String {
     match request_adapter() {
         Ok(adapter) => {
@@ -150,7 +176,7 @@ pub fn adapter_info() -> String {
 /// Run one dispatch of a WGSL compute shader (module docs describe the ABI):
 /// upload `input` to binding 0, dispatch `(wx, wy, wz)` workgroups of the
 /// `main` entry point, and read back `out_len` bytes from binding 1.
-#[cfg(feature = "gpu")]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
 pub fn run(
     wgsl: &str,
     input: &[u8],
@@ -275,6 +301,247 @@ pub fn run(
     Ok(data)
 }
 
+// ---------------------------------------------------------------------------
+// Native Metal backend (macOS/Apple Silicon with --features metal): raw FFI
+// over crate::mtl/crate::objc, no wgpu involved. Takes precedence over the
+// wgpu path when both are compiled in — the roadmap's native-backends-first
+// rule (CLAUDE.md); wgpu remains the fallback elsewhere until full native
+// coverage retires it.
+//
+// # The MSL `gpu.run` ABI (mirrors the WGSL ABI in the module docs)
+//
+// ```msl
+// #include <metal_stdlib>
+// using namespace metal;
+// kernel void compute_main(device const uint* input  [[buffer(0)]],
+//                          device uint*       output [[buffer(1)]],
+//                          uint3 gid [[thread_position_in_grid]]) { ... }
+// ```
+//
+// - entry point named `compute_main` (MSL reserves `main`; this matches the
+//   graphics backend's `vertex_main`/`fragment_main` convention);
+// - `[[buffer(0)]]`: the caller's input bytes; `[[buffer(1)]]`: `out_len`
+//   zero-initialized output bytes, copied back after the dispatch — the
+//   same two-binding contract as WGSL's `@binding(0)`/`@binding(1)`;
+// - the dispatch is `(wx, wy, wz)` *threadgroups of one thread each*, so
+//   `thread_position_in_grid` covers exactly the same index space as a
+//   WGSL shader with `@workgroup_size(1)` — the shape every `gpu.run`
+//   kernel to date uses. (Larger threadgroups are an API-side parameter in
+//   Metal, not a shader-side declaration like WGSL's; if a future need
+//   arises it becomes an explicit new argument, not a silent change.)
+// - argument validation, size caps, and workgroup limits are `validate`,
+//   identical across all three builds.
+// ---------------------------------------------------------------------------
+
+#[cfg(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))]
+pub fn available() -> bool {
+    metal_native::available()
+}
+#[cfg(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))]
+pub fn adapter_info() -> String {
+    metal_native::adapter_info()
+}
+#[cfg(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))]
+pub fn run(
+    msl: &str,
+    input: &[u8],
+    out_len: usize,
+    wx: u32,
+    wy: u32,
+    wz: u32,
+) -> Result<Vec<u8>, String> {
+    metal_native::run(msl, input, out_len, wx, wy, wz)
+}
+
+#[cfg(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))]
+mod metal_native {
+    use std::sync::OnceLock;
+
+    use crate::mtl::{
+        new_library, send_dispatch_threadgroups, send_new_buffer, send_new_buffer_len,
+        send_new_compute_pipeline, send_set_buffer, MtlSize, MTLCreateSystemDefaultDevice,
+        MTL_RESOURCE_STORAGE_MODE_SHARED,
+    };
+    use crate::objc::{
+        ns_string, nsstring_to_owned, sel, send0, send0_void, send1_obj, send1_obj_obj,
+        AutoreleasePool, Object,
+    };
+
+    /// The process-lifetime device + queue, created once. Both are
+    /// documented thread-safe in Metal (unlike encoders), so sharing them
+    /// across the interpreter thread and worker isolates is sound; they're
+    /// stored as `usize` because raw pointers aren't `Send`/`Sync` even
+    /// when the objects they name are.
+    fn device_and_queue() -> Option<(*mut Object, *mut Object)> {
+        static CELL: OnceLock<(usize, usize)> = OnceLock::new();
+        let (d, q) = *CELL.get_or_init(|| unsafe {
+            let device = MTLCreateSystemDefaultDevice();
+            if device.is_null() {
+                return (0, 0);
+            }
+            let queue = send0(device, sel("newCommandQueue"));
+            if queue.is_null() {
+                send0_void(device, sel("release"));
+                return (0, 0);
+            }
+            (device as usize, queue as usize)
+        });
+        if d == 0 {
+            None
+        } else {
+            Some((d as *mut Object, q as *mut Object))
+        }
+    }
+
+    pub(super) fn available() -> bool {
+        device_and_queue().is_some()
+    }
+
+    /// `"<name> (metal)"` — same `"<name> (<backend>)"` shape as the wgpu
+    /// path's adapter string, or `"no adapter"` when no device exists.
+    pub(super) fn adapter_info() -> String {
+        match device_and_queue() {
+            Some((device, _)) => {
+                let _pool = AutoreleasePool::push();
+                let name = unsafe { nsstring_to_owned(send0(device, sel("name"))) };
+                format!("{name} (metal)")
+            }
+            None => "no adapter".to_string(),
+        }
+    }
+
+    pub(super) fn run(
+        msl: &str,
+        input: &[u8],
+        out_len: usize,
+        wx: u32,
+        wy: u32,
+        wz: u32,
+    ) -> Result<Vec<u8>, String> {
+        super::validate(input, out_len, wx, wy, wz)?;
+        let Some((device, queue)) = device_and_queue() else {
+            return Err(
+                "gpu.run: no adapter (MTLCreateSystemDefaultDevice returned nil)".to_string(),
+            );
+        };
+        let _pool = AutoreleasePool::push();
+        // Safety: every fallible step (a nil return) is checked, and every
+        // +1 object created before a failure is released on that path —
+        // the same no-partial-leaks discipline the graphics backend holds.
+        unsafe {
+            let lib = new_library(device, msl).map_err(|e| format!("gpu.run: {e}"))?;
+            let fun = send1_obj_obj(lib, sel("newFunctionWithName:"), ns_string("compute_main"));
+            send0_void(lib, sel("release")); // the function retains its library
+            if fun.is_null() {
+                return Err("gpu.run: no kernel function named `compute_main` (the Metal \
+                            backend's fixed entry-point convention — see SPEC § 7.2)"
+                    .to_string());
+            }
+            let mut err: *mut Object = std::ptr::null_mut();
+            let pso = send_new_compute_pipeline(
+                device,
+                sel("newComputePipelineStateWithFunction:error:"),
+                fun,
+                &mut err,
+            );
+            send0_void(fun, sel("release"));
+            if pso.is_null() {
+                let msg = if err.is_null() {
+                    "unknown pipeline-state error".to_string()
+                } else {
+                    nsstring_to_owned(send0(err, sel("localizedDescription")))
+                };
+                return Err(format!("gpu.run: {msg}"));
+            }
+
+            let inbuf = send_new_buffer(
+                device,
+                sel("newBufferWithBytes:length:options:"),
+                input.as_ptr() as *const std::ffi::c_void,
+                input.len() as u64,
+                MTL_RESOURCE_STORAGE_MODE_SHARED,
+            );
+            if inbuf.is_null() {
+                send0_void(pso, sel("release"));
+                return Err("gpu.run: input buffer allocation failed".to_string());
+            }
+            let outbuf = send_new_buffer_len(
+                device,
+                sel("newBufferWithLength:options:"),
+                out_len as u64,
+                MTL_RESOURCE_STORAGE_MODE_SHARED,
+            );
+            if outbuf.is_null() {
+                send0_void(inbuf, sel("release"));
+                send0_void(pso, sel("release"));
+                return Err("gpu.run: output buffer allocation failed".to_string());
+            }
+            // Zero-initialize: `newBufferWithLength:` does not guarantee
+            // zeroed contents, and the wgpu path's output starts zeroed —
+            // the two backends must agree on bytes the kernel never wrote.
+            let out_ptr = send0(outbuf, sel("contents")) as *mut u8;
+            if out_ptr.is_null() {
+                send0_void(outbuf, sel("release"));
+                send0_void(inbuf, sel("release"));
+                send0_void(pso, sel("release"));
+                return Err("gpu.run: output buffer has no CPU mapping".to_string());
+            }
+            std::ptr::write_bytes(out_ptr, 0, out_len);
+
+            let cmd = send0(queue, sel("commandBuffer"));
+            let enc = if cmd.is_null() {
+                std::ptr::null_mut()
+            } else {
+                send0(cmd, sel("computeCommandEncoder"))
+            };
+            if enc.is_null() {
+                send0_void(outbuf, sel("release"));
+                send0_void(inbuf, sel("release"));
+                send0_void(pso, sel("release"));
+                return Err("gpu.run: failed to create a command encoder".to_string());
+            }
+            send1_obj(enc, sel("setComputePipelineState:"), pso);
+            send_set_buffer(enc, sel("setBuffer:offset:atIndex:"), inbuf, 0, 0);
+            send_set_buffer(enc, sel("setBuffer:offset:atIndex:"), outbuf, 0, 1);
+            send_dispatch_threadgroups(
+                enc,
+                sel("dispatchThreadgroups:threadsPerThreadgroup:"),
+                MtlSize {
+                    width: wx as u64,
+                    height: wy as u64,
+                    depth: wz as u64,
+                },
+                MtlSize {
+                    width: 1,
+                    height: 1,
+                    depth: 1,
+                },
+            );
+            send0_void(enc, sel("endEncoding"));
+            send0_void(cmd, sel("commit"));
+            send0_void(cmd, sel("waitUntilCompleted"));
+
+            // Surface execution failures (device loss, invalid dispatch)
+            // the way the wgpu path surfaces its error-scope results.
+            let cmd_err = send0(cmd, sel("error"));
+            if !cmd_err.is_null() {
+                let msg = nsstring_to_owned(send0(cmd_err, sel("localizedDescription")));
+                send0_void(outbuf, sel("release"));
+                send0_void(inbuf, sel("release"));
+                send0_void(pso, sel("release"));
+                return Err(format!("gpu.run: {msg}"));
+            }
+
+            let mut out = vec![0u8; out_len];
+            std::ptr::copy_nonoverlapping(out_ptr, out.as_mut_ptr(), out_len);
+            send0_void(outbuf, sel("release"));
+            send0_void(inbuf, sel("release"));
+            send0_void(pso, sel("release"));
+            Ok(out)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,18 +560,18 @@ mod tests {
         assert!(run("", &[0; 4], 4, 1, 1, 70_000).unwrap_err().contains("workgroup count z"));
     }
 
-    #[cfg(not(feature = "gpu"))]
+    #[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))))]
     #[test]
     fn stubs_without_feature() {
         assert!(!available());
         assert_eq!(adapter_info(), "gpu support not compiled in");
         let err = run("@compute fn main() {}", &[0; 4], 4, 1, 1, 1).unwrap_err();
-        assert_eq!(err, "gpu support not compiled in (build with --features gpu)");
+        assert_eq!(err, "gpu support not compiled in (build with --features gpu, or --features metal on Apple Silicon macOS)");
     }
 
     // With the feature on, run() must fail gracefully (Err, not panic) even
     // when no adapter exists, and report shader errors when one does.
-    #[cfg(feature = "gpu")]
+    #[cfg(any(feature = "gpu", all(feature = "metal", target_os = "macos", target_arch = "aarch64")))]
     #[test]
     fn run_never_panics_without_adapter_or_with_bad_shader() {
         let r = run("not wgsl at all", &[0; 4], 4, 1, 1, 1);

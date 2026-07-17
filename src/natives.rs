@@ -764,6 +764,7 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         // ------------------------------------------------------------------
         GpuAvailable => Value::Bool(crate::gpu::available()),
         GpuAdapterInfo => vm.alloc_str(crate::gpu::adapter_info()),
+        GpuBackend => vm.alloc_str(crate::gpu::backend().to_string()),
         GpuRun => {
             let wgsl = str_arg(vm, argc, 0)?;
             let input = bytes_arg(vm, argc, 1)?.clone();

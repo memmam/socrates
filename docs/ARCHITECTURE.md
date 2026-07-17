@@ -577,6 +577,24 @@ consumers. This is the seed of the roadmap's shared graphics/compute
 core: Vulkan/OpenCL/CUDA/DirectX backends grow sibling primitive modules
 of the same shape as they land.
 
+**Native Metal compute (`gpu.rs`'s `metal_native` section).** The first
+native compute backend of the roadmap: `gpu.run` on Apple Silicon macOS
+with `--features metal` compiles an MSL kernel (`compute_main`, buffers
+0/1 — the exact WGSL contract restated in MSL) via `crate::mtl`, on a
+process-lifetime device+queue pair (`OnceLock`; both objects are
+documented thread-safe, so worker isolates share them soundly). The
+dispatch is `(wx, wy, wz)` single-thread threadgroups, making
+`thread_position_in_grid` span the same index space as WGSL's
+`@workgroup_size(1)`; the output buffer is explicitly zeroed before the
+dispatch (`newBufferWithLength:` guarantees nothing) so the two backends
+agree on bytes the kernel never wrote; command-buffer `error` is checked
+after `waitUntilCompleted`, standing in for wgpu's error scopes. Where
+both `gpu` (wgpu) and `metal` are compiled in, native Metal takes
+precedence — CLAUDE.md's native-backends-first rule; wgpu remains the
+portable fallback until full native coverage retires it. `gpu.backend()`
+(`"metal"`/`"wgpu"`/`"none"`) is the dialect escape hatch, the compute
+analog of `win.backend_name()`.
+
 Making that coexist under a single `WindowHandle` needed one structural
 change: `x11::Inner`/`win32::Inner` stay plain structs, aliased directly to
 `PlatformInner`, but `macos::Inner` becomes a small enum —

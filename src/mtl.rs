@@ -25,6 +25,54 @@ extern "C" {
 /// `newBufferWith...` call wants.
 pub(crate) const MTL_RESOURCE_STORAGE_MODE_SHARED: NsUInteger = 0;
 
+/// `MTLSize` — three `NSUInteger`s. Passed by value (indirectly, per the
+/// arm64 ABI for >16-byte aggregates, which the correctly-typed transmute
+/// handles).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct MtlSize {
+    pub(crate) width: NsUInteger,
+    pub(crate) height: NsUInteger,
+    pub(crate) depth: NsUInteger,
+}
+
+/// `setBuffer:offset:atIndex:` (compute command encoder).
+pub(crate) unsafe fn send_set_buffer(
+    recv: *mut Object,
+    s: SEL,
+    buf: *mut Object,
+    offset: NsUInteger,
+    index: NsUInteger,
+) {
+    let f: unsafe extern "C" fn(*mut Object, SEL, *mut Object, NsUInteger, NsUInteger) =
+        std::mem::transmute(objc_msgSend as *const ());
+    f(recv, s, buf, offset, index)
+}
+
+/// `dispatchThreadgroups:threadsPerThreadgroup:` — two by-value `MTLSize`s.
+pub(crate) unsafe fn send_dispatch_threadgroups(
+    recv: *mut Object,
+    s: SEL,
+    groups: MtlSize,
+    per_group: MtlSize,
+) {
+    let f: unsafe extern "C" fn(*mut Object, SEL, MtlSize, MtlSize) =
+        std::mem::transmute(objc_msgSend as *const ());
+    f(recv, s, groups, per_group)
+}
+
+/// `newComputePipelineStateWithFunction:error:` — +1 result.
+pub(crate) unsafe fn send_new_compute_pipeline(
+    recv: *mut Object,
+    s: SEL,
+    fun: *mut Object,
+    error: *mut *mut Object,
+) -> *mut Object {
+    let f: unsafe extern "C" fn(*mut Object, SEL, *mut Object, *mut *mut Object) -> *mut Object =
+        std::mem::transmute(objc_msgSend as *const ());
+    f(recv, s, fun, error)
+}
+
 /// `newBufferWithBytes:length:options:` — +1 result.
 pub(crate) unsafe fn send_new_buffer(
     recv: *mut Object,

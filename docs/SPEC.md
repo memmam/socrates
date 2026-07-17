@@ -632,18 +632,24 @@ these modules follow the same visibility rules as user code.
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
-The `gpu` namespace dispatches WGSL compute shaders. Its implementation is
-the interpreter's **only** dependency (the wgpu library), quarantined behind
-the `gpu` cargo feature: the default build stays zero-dependency (CI asserts
-`cargo tree` is a single line), and a `--features gpu` build opts in. The
-namespace itself always exists — programs using it typecheck and run in every
-build; without the feature the members degrade gracefully as described below.
+The `gpu` namespace dispatches compute shaders. It has two backends,
+selected at build time: the original **wgpu** path (WGSL shaders; the
+interpreter's **only** dependency, quarantined behind the `gpu` cargo
+feature — slated for removal once native coverage is full, see
+`CLAUDE.md`'s roadmap) and, since v0.9, a **native Metal** path (MSL
+kernels; raw FFI, zero dependencies, behind the `metal` feature on Apple
+Silicon macOS — the same feature as the Metal window backend). Where both
+are compiled in, native Metal takes precedence. The default build stays
+zero-dependency (CI asserts `cargo tree` is a single line). The namespace
+itself always exists — programs using it typecheck and run in every build;
+without either backend the members degrade gracefully as described below.
 
 | Member | Type | Notes |
 |--------|------|-------|
-| `gpu.available()` | `fn() -> Bool` | is a GPU adapter usable? Always `false` without the feature |
+| `gpu.available()` | `fn() -> Bool` | is a GPU adapter usable? Always `false` without a backend |
 | `gpu.adapter_info()` | `fn() -> String` | `"<name> (<backend>)"`, `"no adapter"`, or `"gpu support not compiled in"`. Never empty |
-| `gpu.run(wgsl, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch (ABI below). Without the feature: `Err("gpu support not compiled in (build with --features gpu)")` |
+| `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch (ABI below; `src` is WGSL on the wgpu backend, MSL on the Metal backend). Without a backend: `Err("gpu support not compiled in (build with --features gpu, or --features metal on Apple Silicon macOS)")` |
+| `gpu.backend()` | `fn() -> String` | (v0.9) `"metal"`, `"wgpu"`, or `"none"` — which implementation `gpu.run` dispatches to in this build. The `gpu` analog of `win.backend_name()`: branch on it to pick the shader dialect |
 
 Every failure is an `Err` value, never a panic: bad arguments, no adapter,
 shader compile/validation errors (their messages pass through), device loss.
@@ -666,6 +672,30 @@ after dispatching `(wx, wy, wz)` workgroups (each count in `1..=65535`).
 Byte order is the GPU's little-endian layout. A worked example —
 doubling an `array<f32>` — lives in `docs/assets/gpu_double.fable` (it
 prints `ok:`/`err:` and exits 0 with or without an adapter).
+
+**The MSL ABI (the native Metal backend, v0.9)** mirrors the WGSL one
+member for member — same two-binding contract, same argument validation,
+same size caps and workgroup limits:
+
+```msl
+#include <metal_stdlib>
+using namespace metal;
+kernel void compute_main(device const uint* input  [[buffer(0)]],
+                         device uint*       output [[buffer(1)]],
+                         uint3 gid [[thread_position_in_grid]]) { ... }
+```
+
+The entry point is named `compute_main` (MSL reserves `main`; this matches
+the `gfx` backend's `vertex_main`/`fragment_main` convention). The
+dispatch is `(wx, wy, wz)` threadgroups of **one thread each**, so
+`thread_position_in_grid` covers exactly the index space a WGSL
+`@workgroup_size(1)` shader sees — larger threadgroups are an API-side
+parameter in Metal rather than a shader-side declaration, and would be a
+new explicit argument if ever needed, not a silent change. The worked
+example is `docs/assets/metal_compute.fable` (the MSL mirror of
+`gpu_double.fable`, which hard-asserts its output bytes whenever a device
+exists — compute needs no window server, so it is a real correctness gate
+on any Metal-capable machine).
 
 `gpu.run`'s I/O rides on the `Bytes` buffer type (§ 8.4b), which ships in
 every build — `bytes(n)`/`bytes_of(..)` construct the input, and the LE

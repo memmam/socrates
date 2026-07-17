@@ -272,6 +272,13 @@ jobs:
         run: |
           cargo build --release --features metal
           ./target/release/fable docs/assets/metal_triangle.fable
+      - name: Metal compute battery (hard-asserted bytes when a device exists)
+        # gpu.run on the native Metal backend: an MSL doubling kernel whose
+        # output bytes the script itself hard-asserts (assert_eq panics ->
+        # exit 70 -> job fails) whenever a Metal device exists — compute
+        # needs no window server, so on this runner it is a real
+        # correctness gate. `err: <reason>` (no device) exits 0.
+        run: ./target/release/fable docs/assets/metal_compute.fable
       - name: glcube-Metal golden test (real rendered pixels, hard assert)
         # The cross-backend pixel-parity proof (the Metal arc's Phase 3):
         # main_metal.fable renders the same cube through the same gfx calls
