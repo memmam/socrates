@@ -632,58 +632,46 @@ these modules follow the same visibility rules as user code.
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
-The `gpu` namespace dispatches compute shaders. It has four backends,
-selected at build time: the original **wgpu** path (WGSL shaders; the
-interpreter's **only** dependency, quarantined behind the `gpu` cargo
-feature — slated for removal once native coverage is full, see
-`CLAUDE.md`'s roadmap) and, since v0.9, three **native** paths — **Metal**
-(MSL kernels; raw FFI, zero dependencies, behind the `metal` feature on
-Apple Silicon macOS, the same feature as the Metal window backend),
-**Vulkan** (SPIR-V binaries via `gpu.run_spirv`; raw `dlopen` FFI, zero
-dependencies, behind the `vulkan` feature on Linux/Windows), and
-**OpenCL** (SPIR-V binaries via `gpu.run_spirv` in the *OpenCL profile* —
-see below; raw `dlopen` FFI over the ICD loader, zero dependencies,
+The `gpu` namespace dispatches compute shaders. It has three backends,
+all **native and zero-dependency** (since v0.9): **Metal** (MSL kernels;
+raw FFI, behind the `metal` feature on Apple Silicon macOS, the same
+feature as the Metal window backend), **Vulkan** (SPIR-V binaries via
+`gpu.run_spirv`; raw `dlopen` FFI, behind the `vulkan` feature on
+Linux/Windows), and **OpenCL** (SPIR-V binaries via `gpu.run_spirv` in
+the *OpenCL profile* — see below; raw `dlopen` FFI over the ICD loader,
 behind the `opencl` feature on Linux/Windows; requires an OpenCL 2.1+
-runtime with IL ingestion at run time). A native path always takes
-precedence over wgpu where both are compiled in, and vulkan takes
-precedence over opencl. The default build stays zero-dependency (CI
-asserts `cargo tree` is a single line). The namespace itself always
-exists — programs using it typecheck and run in every build; without a
-backend the members degrade gracefully as described below.
+runtime with IL ingestion at run time). Vulkan takes precedence over
+opencl where both are compiled in. The original **wgpu** path (WGSL
+shaders behind a `gpu` cargo feature — v0.7's one quarantined
+dependency) was **removed in v0.9** when this native coverage landed,
+per `CLAUDE.md`'s roadmap: every build of Fable is now zero-dependency
+(CI asserts `cargo tree` is a single line for the default and for every
+feature set). The namespace itself always exists — programs using it
+typecheck and run in every build; without a backend the members degrade
+gracefully as described below.
 
 | Member | Type | Notes |
 |--------|------|-------|
 | `gpu.available()` | `fn() -> Bool` | is a GPU adapter usable? Always `false` without a backend |
 | `gpu.adapter_info()` | `fn() -> String` | `"<name> (<backend>)"`, `"no adapter"`, or `"gpu support not compiled in"`. Never empty |
-| `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch (ABI below; `src` is WGSL on the wgpu backend, MSL on the Metal backend). Without a backend: `Err("gpu support not compiled in (build with --features gpu, or --features metal on Apple Silicon macOS)")` |
+| `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch of source-text `src` — MSL on the metal backend (the ABI below). The binary backends (vulkan, opencl) `Err` redirecting to `gpu.run_spirv`. Without a backend: `Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, or --features vulkan or opencl on Linux/Windows)")` |
 | `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` | `fn(Bytes, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | (v0.9) `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so the blob rides the buffer type (a sibling, not an overload: Fable has neither default parameters nor overloading). Ingested natively by the vulkan and opencl backends — each in its own SPIR-V *profile* (the two ABI paragraphs below; the blobs are not interchangeable); other backends `Err` naming the entry point they want |
-| `gpu.backend()` | `fn() -> String` | (v0.9) `"metal"`, `"vulkan"`, `"opencl"`, `"wgpu"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (natives beat wgpu; vulkan beats opencl). The `gpu` analog of `win.backend_name()`: branch on it to pick the shader dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
+| `gpu.backend()` | `fn() -> String` | (v0.9) `"metal"`, `"vulkan"`, `"opencl"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (vulkan beats opencl). The `gpu` analog of `win.backend_name()`: branch on it to pick the shader dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
 
 Every failure is an `Err` value, never a panic: bad arguments, no adapter,
 shader compile/validation errors (their messages pass through), device loss.
 
-**The `gpu.run` shader ABI.** The WGSL module must define a `@compute` entry
-point named `main` with two storage buffers in bind group 0:
+**The shared kernel contract.** Whatever the backend's dialect, every
+kernel sees the same two buffers: an input initialized with the argument
+bytes (which must be non-empty and a multiple of 4 bytes), and an output
+of `out_len` bytes (positive, a multiple of 4, at most 256 MiB),
+zero-initialized and returned as the `Ok` value after the dispatch covers
+the `(wx, wy, wz)` index space (each count in `1..=65535`). Byte order is
+the GPU's little-endian layout. Argument validation is shared, so bad
+calls fail with byte-identical messages in every build.
 
-```wgsl
-@group(0) @binding(0) var<storage, read> input: array<f32>;        // or array<u32>, ...
-@group(0) @binding(1) var<storage, read_write> output: array<f32>;
-
-@compute @workgroup_size(1)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) { ... }
-```
-
-`input` is initialized with the argument bytes (which must be non-empty and
-a multiple of 4 bytes); `output` has `out_len` bytes (positive, a multiple
-of 4, at most 256 MiB), zero-initialized, and is returned as the `Ok` value
-after dispatching `(wx, wy, wz)` workgroups (each count in `1..=65535`).
-Byte order is the GPU's little-endian layout. A worked example —
-doubling an `array<f32>` — lives in `docs/assets/gpu_double.fable` (it
-prints `ok:`/`err:` and exits 0 with or without an adapter).
-
-**The MSL ABI (the native Metal backend, v0.9)** mirrors the WGSL one
-member for member — same two-binding contract, same argument validation,
-same size caps and workgroup limits:
+**The MSL ABI (the native Metal backend, v0.9)** expresses that contract
+in MSL:
 
 ```msl
 #include <metal_stdlib>
@@ -696,14 +684,14 @@ kernel void compute_main(device const uint* input  [[buffer(0)]],
 The entry point is named `compute_main` (MSL reserves `main`; this matches
 the `gfx` backend's `vertex_main`/`fragment_main` convention). The
 dispatch is `(wx, wy, wz)` threadgroups of **one thread each**, so
-`thread_position_in_grid` covers exactly the index space a WGSL
-`@workgroup_size(1)` shader sees — larger threadgroups are an API-side
-parameter in Metal rather than a shader-side declaration, and would be a
-new explicit argument if ever needed, not a silent change. The worked
-example is `docs/assets/metal_compute.fable` (the MSL mirror of
-`gpu_double.fable`, which hard-asserts its output bytes whenever a device
-exists — compute needs no window server, so it is a real correctness gate
-on any Metal-capable machine).
+`thread_position_in_grid` covers exactly the `(wx, wy, wz)` index space —
+larger threadgroups are an API-side parameter in Metal rather than a
+shader-side declaration, and would be a new explicit argument if ever
+needed, not a silent change. The worked example is
+`docs/assets/metal_compute.fable` (an MSL doubling kernel, which
+hard-asserts its output bytes whenever a device exists — compute needs no
+window server, so it is a real correctness gate on any Metal-capable
+machine).
 
 **The SPIR-V ABI (the native Vulkan backend, v0.9)** is the same contract
 again, expressed in SPIR-V: `gpu.run_spirv`'s first argument is the
@@ -712,8 +700,7 @@ must declare a `GLCompute` entry point named `main` (SPIR-V reserves
 nothing; every GLSL toolchain emits `main`) with two `BufferBlock`
 storage buffers at descriptor set 0, bindings 0/1, and its own
 `LocalSize` execution mode — the dispatch is `(wx, wy, wz)` workgroups of
-whatever size the module declares, exactly like WGSL's
-`@workgroup_size`. The worked example is
+whatever size the module declares. The worked example is
 `docs/assets/vulkan_compute.fable` — a hand-assembled doubling kernel,
 hard-asserted whenever a compute device exists; Mesa's lavapipe software
 device makes that unconditional on CI, the first `gpu` backend fully
@@ -731,7 +718,7 @@ addressing and the `OpenCL` memory model, with buffers as
 rejects the former and Vulkan rejects the latter: **the blob passed to
 `gpu.run_spirv` must match the active backend's profile, and
 `gpu.backend()` is the branch point** — the same rule that already picks
-GLSL vs. MSL vs. WGSL for source-text shaders. On the opencl backend the
+GLSL vs. MSL for source-text shaders. On the opencl backend the
 module must name its `Kernel` entry point `main` and take exactly two
 `CrossWorkgroup` pointer parameters: argument 0 is bound to the input
 bytes (read-only), argument 1 to `out_len` zero-initialized bytes

@@ -133,23 +133,29 @@ println(fft.magnitude(re, im));
 
 ## `gpu`: compute shaders, behind a flag
 
-The `gpu` namespace hands a WGSL compute shader and a `Bytes` buffer to the
-graphics card and reads the result back. It is the one place Fable takes a
-dependency, so it lives behind a cargo feature: a default build stays
-zero-dependency, and the namespace still type-checks and runs — it just
-reports that it is unavailable.
+The `gpu` namespace hands a compute kernel and a `Bytes` buffer to the
+GPU and reads the result back. The backends are native raw-FFI code with
+zero Cargo dependencies — Metal on Apple Silicon macOS (`--features
+metal`), Vulkan and OpenCL on Linux/Windows (`--features vulkan` /
+`opencl`) — so they live behind cargo features only because they are
+platform code, not because they pull anything in. A default build stays
+lean, and the namespace still type-checks and runs — it just reports that
+it is unavailable.
 
 ```fable
-println(gpu.available());   // false in a default build; true with --features gpu
+println(gpu.available());   // false in a default build; true with a native backend + device
 ```
 
-Build with `--features gpu` (which pulls in `wgpu`) and, on a machine with a
-usable adapter, `gpu.run(shader, input, out_len, x, y, z)` compiles the
-shader, uploads the `Bytes`, dispatches `x·y·z` workgroups, and returns the
-output bytes as a `Result`:
+Build with a backend feature and, on a machine with a usable device,
+`gpu.run(shader, input, out_len, x, y, z)` compiles the kernel, uploads
+the `Bytes`, dispatches the `x·y·z` index space, and returns the output
+bytes as a `Result`. The kernel's dialect follows the backend —
+`gpu.backend()` tells you which one is live: MSL source through `gpu.run`
+on Metal, SPIR-V binaries through `gpu.run_spirv` on Vulkan and OpenCL
+(each in its own SPIR-V profile — the spec's § 7.2 documents both):
 
 ```fable skip
-let shader = "...WGSL that doubles each f32...";
+let shader = "...MSL that doubles each f32...";
 let input = bytes_of([/* four little-endian f32s */]);
 match gpu.run(shader, input, 16, 4, 1, 1) {
     Ok(out) -> println(out.to_list()),
@@ -157,10 +163,12 @@ match gpu.run(shader, input, 16, 4, 1, 1) {
 }
 ```
 
-`docs/assets/gpu_double.fable` is the runnable version. The point of the
-flag is honesty about dependencies: the moment Fable needs a real one, it is
-opt-in and quarantined, and the language you get without it is exactly the
-zero-dependency language the rest of this book describes.
+`docs/assets/metal_compute.fable`, `vulkan_compute.fable`, and
+`opencl_compute.fable` are the runnable versions, one per backend. Fable
+once took its single Cargo dependency here (wgpu, quarantined behind a
+`gpu` feature); the native backends replaced it, and today every build of
+Fable — any feature set — is the same zero-dependency language the rest
+of this book describes.
 
 ---
 

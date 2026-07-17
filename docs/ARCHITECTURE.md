@@ -398,21 +398,23 @@ natives, and `strings.Builder` re-backed by a `Bytes` buffer. Every change
 kept observable output byte-identical and was gated on interleaved A/B
 measurement.
 
-**gpu.rs** is the home of the `gpu` builtin namespace's implementation and
-the project's only dependency boundary: wgpu (+ pollster) sit behind the
-`gpu` cargo feature, so the default build stays zero-dependency (CI asserts
-`cargo tree` is one line). The module is always compiled — only its
-internals are `#[cfg]`-gated — so `builtins.rs`/`natives.rs` register the
-natives unconditionally and feature-off builds degrade gracefully
-(`available()` false, `run()` an `Err`) instead of failing to resolve
-`gpu.*`. `run` is synchronous from the VM's point of view (pollster blocks
-on wgpu's futures), copies its input out of the heap before any device work
-and allocates the result after all of it, so the GC checkpoint discipline is
-untouched. wgpu reports validation failures (shader compile errors included)
-asynchronously; `run` brackets all device work in error scopes and converts
-anything captured into the `Err` message. `run`'s I/O rides on the v0.7
-`Bytes` heap object (`Obj::Bytes`, a GC leaf) introduced with the binary-I/O
-work — the gpu natives reuse its existing helpers in `natives.rs`.
+**gpu.rs** is the home of the `gpu` builtin namespace's implementation. In
+v0.7 it was the project's only dependency boundary — wgpu (+ pollster)
+behind a `gpu` cargo feature; that path (and with it the last Cargo
+dependency and the WGSL dialect) was **deleted in v0.9** once the native
+coverage condition was met (see the native-backend entries below), so
+every build of Fable is now zero-dependency (CI asserts `cargo tree` is
+one line for the default and for every feature set). The module is always
+compiled — only the backends are `#[cfg]`-gated — so
+`builtins.rs`/`natives.rs` register the natives unconditionally and
+backend-less builds degrade gracefully (`available()` false, `run()` an
+`Err`) instead of failing to resolve `gpu.*`. Every backend's `run` is
+synchronous from the VM's point of view, copies its input out of the heap
+before any device work and allocates the result after all of it, so the
+GC checkpoint discipline is untouched. `run`'s I/O rides on the v0.7
+`Bytes` heap object (`Obj::Bytes`, a GC leaf) introduced with the
+binary-I/O work — the gpu natives reuse its existing helpers in
+`natives.rs`.
 
 ## v0.8 additions
 
@@ -580,20 +582,18 @@ of the same shape as they land.
 **Native Metal compute (`gpu.rs`'s `metal_native` section).** The first
 native compute backend of the roadmap: `gpu.run` on Apple Silicon macOS
 with `--features metal` compiles an MSL kernel (`compute_main`, buffers
-0/1 — the exact WGSL contract restated in MSL) via `crate::mtl`, on a
+0/1 — the shared two-buffer contract in MSL) via `crate::mtl`, on a
 process-lifetime device+queue pair (`OnceLock`; both objects are
 documented thread-safe, so worker isolates share them soundly). The
 dispatch is `(wx, wy, wz)` single-thread threadgroups, making
-`thread_position_in_grid` span the same index space as WGSL's
-`@workgroup_size(1)`; the output buffer is explicitly zeroed before the
-dispatch (`newBufferWithLength:` guarantees nothing) so the two backends
-agree on bytes the kernel never wrote; command-buffer `error` is checked
-after `waitUntilCompleted`, standing in for wgpu's error scopes. Where
-both `gpu` (wgpu) and `metal` are compiled in, native Metal takes
-precedence — CLAUDE.md's native-backends-first rule; wgpu remains the
-portable fallback until full native coverage retires it. `gpu.backend()`
-(`"metal"`/`"vulkan"`/`"wgpu"`/`"none"`) is the dialect escape hatch, the
-compute analog of `win.backend_name()`.
+`thread_position_in_grid` span exactly that index space; the output
+buffer is explicitly zeroed before the dispatch (`newBufferWithLength:`
+guarantees nothing) so all backends agree on bytes the kernel never
+wrote; command-buffer `error` is checked after `waitUntilCompleted`.
+This backend's landing (with Vulkan and OpenCL after it) is what
+retired wgpu — CLAUDE.md's native-backends-first rule, completed in
+v0.9. `gpu.backend()` (`"metal"`/`"vulkan"`/`"opencl"`/`"none"`) is the
+dialect escape hatch, the compute analog of `win.backend_name()`.
 
 **Native Vulkan compute (`src/vk.rs`).** The second native compute
 backend, and the first SPIR-V consumer: `gpu.run_spirv` takes the binary
@@ -640,7 +640,7 @@ platform and scores devices — SPIR-V support advertised in
 `CL_DEVICE_IL_VERSION` first, GPU over CPU second — so a machine with
 both a vendor GPU driver and pocl picks the GPU, and a pocl-only CI
 runner still resolves. The native precedence order is metal > vulkan >
-opencl > wgpu; when `vulkan` and `opencl` are both compiled in, `cl.rs`
+opencl; when `vulkan` and `opencl` are both compiled in, `cl.rs`
 is not even built (the `lib.rs` gate carries `not(feature = "vulkan")`),
 keeping the dispatch maze honest at compile time. The battery is
 `docs/assets/opencl_compute.fable` — the doubling kernel hand-assembled
