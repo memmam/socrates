@@ -62,6 +62,68 @@ constituent change measured flat-or-better alone. It was a codegen-layout
 artifact; a dispatch-core wave (frame-state hoisting et al.) buried it and
 turned it into −21% on checkers before the pass shipped.
 
+## The dispatch restructure (H1) and the four-arch gate
+
+The "run() is a codegen lottery" headroom item is resolved. The trigger
+was the minification pass's first wave (moving `fft.magnitude` to std):
+removing one mid-enum `Native` variant — no semantic change — swung
+dispatch-heavy targets ±5–14% on one box and scattered *different*
+marked regressions per architecture on the matrix. `Cargo.toml` already
+had `lto = true` and `codegen-units = 1`, so the mechanism is
+whole-program layout shift: any edit moves every function, and a large
+`run()` amplified alignment changes into measured swings.
+
+**H1**: `run()` keeps only compact, frequent arms inline; nine bulky or
+rare op bodies moved verbatim behind `#[inline(never)]` (`SetUpvalue`,
+`Closure`, `ToString`, `Concat`, `MakeMap`, `MakeRange`,
+`MakeStructEmpty`, `ForPrep`, `ForNext`), and `GetGlobal`'s
+uninitialized-global error construction into a `#[cold]` factory.
+Four-arch verdicts vs main (two interleaved samples per arch; marked
+rows only):
+
+| arch           | improvements                        | regressions |
+|----------------|-------------------------------------|-------------|
+| x86_64-linux   | 8 rows, −3.1..−7.5%                 | none (worst +1.6%) |
+| x86_64-windows | 11 rows, −3.7..−7.8%                | none (worst +2.6%) |
+| aarch64-macos  | 18 rows, −4..−27%, reproduced ±1%   | none real (a lisp +5.1% mark did not reproduce) |
+| aarch64-linux  | none                                | enum_match +4.5% (systematic, below) |
+
+The robustness proof: re-applying the same variant removal on top of H1
+and judging against H1 itself (a `bench/BASE` probe) is flat on **all
+four** architectures — Linux and Windows in single runs, macOS by
+multi-sample majority. The lottery is dead; surface minification is
+unblocked.
+
+**The per-target binding.** enum_match +4.5% on aarch64-linux
+reproduced three times across *two different arm layouts* (H1 and the
+rejected hottest-first reorder), so it is a systematic cost of the
+compact loop on Neoverse, not a placement roll — that bench executes no
+outlined op. Per the CLAUDE.md rule, an irreconcilable per-target
+disagreement is never accepted as a tradeoff: the op bodies live once
+in vm.rs, and an attribute pair binds each target to its
+measured-fastest form — `#[inline(never)]` (compact loop) everywhere
+except aarch64-linux, where a build.rs-emitted `monolithic_dispatch`
+cfg flips them to `#[inline(always)]` and folds the monolith back
+together. Non-aarch64-linux binaries are unchanged by the cfg
+machinery; aarch64-linux is judged on the matrix like everything else.
+
+**macOS measurement protocol.** macos-14 runners are precise but
+per-job biased: an A/A run (identical trees both sides; a
+Compare-binaries step proved the two independent builds bit-identical)
+measures flat, and large deltas reproduce within ±1% across runs — yet
+small (≲6%) layout-dependent deltas flip sign between jobs on the same
+binary pair. Judge macOS marked rows by majority across ≥3 runs, never
+one sample.
+
+Two instrument facts worth keeping: release builds are deterministic
+(bit-identical across checkouts) only when the checkout paths have
+equal length — embedded path lengths shift layout, which is why
+`bench.yml` checks out `base/` and `head/` and why "+7.4% between two
+builds of identical source" was once measured locally across
+different-length paths. And sub-10ms macro targets (reversi, png)
+bounce ±4% in both directions on every platform; ignore their marks at
+any threshold.
+
 ## Negative results (measured, rejected — do not re-attempt without new evidence)
 
 - GC `next_gc` pacing `(live*2).max(4096)` is already the local optimum in
@@ -72,12 +134,17 @@ turned it into −21% on checkers before the pass shipped.
   lottery (+2.8% Ir elsewhere).
 - A fused compare-and-branch peephole: sound, but the same codegen lottery
   swamps the saved dispatch.
+- Hottest-first arm reordering inside the compact `run()` (H1b): did not
+  fix aarch64-linux's systematic enum_match cost (still +4.6%, plus a
+  new map_ops +4.4% there) and broke x86_64-linux (enum_match −3.1% →
+  +4.6%, bench_display +6.7%). Arm order on top of H1 is a pure dice
+  roll; H1's source order stands.
 
 ## Known headroom (identified, not yet taken)
 
-- `run()` is a codegen lottery (±3–9% Ir from any arm-set change); a
-  computed-goto / tail-call dispatch structure would de-risk future work.
 - checkers' 13.5M movegen `List` allocations are its biggest single cost
   pool; an inline-small-list `Obj::List` representation is the real fix.
 - Superinstructions for the `GetLocal`/`Const`/`JumpIfFalse` hot triple
-  (45% of dispatched ops) — needs the dispatch restructure first.
+  (45% of dispatched ops) — unblocked now that the H1 dispatch
+  restructure landed (the lottery that made such changes unjudgeable is
+  gone; judge on the four-arch matrix).
