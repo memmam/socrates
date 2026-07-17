@@ -1,7 +1,7 @@
 // window.create_vulkan on the native Vulkan backend (SPEC § 7.3): open a
 // Vulkan-backed window, clear the back buffer, present three frames, and
 // close — the create/clear/swap/poll/close pipe end to end, no draw calls
-// yet (those land with the Vulkan gfx.* surface).
+// (the gfx.* surface has its own asset, vulkan_triangle.fable).
 //
 //   cargo run --release --features vulkan -- docs/assets/vulkan_window.fable
 //

@@ -160,9 +160,9 @@ pub fn create_metal(title: &str, w: i32, h: i32) -> Result<WindowHandle, String>
 /// rather than a `backend` parameter on `create` for the same reason: Fable
 /// has neither default parameters nor overloading). Rides the same `vulkan`
 /// cargo feature as the `gpu.run_spirv` compute backend. Always an `Err`
-/// without the `vulkan` feature or off Linux — and, until the Vulkan
-/// graphics arc's Phase 1 lands, a clean "not yet implemented" `Err` even
-/// with it on (see `x11/vulkan.rs`).
+/// without the `vulkan` feature or off Linux/Windows; with it, both
+/// platforms are thin shims over the shared `window/vulkan.rs` core at
+/// full `gfx.*` parity.
 #[cfg(not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows"))))]
 pub fn create_vulkan(_title: &str, _w: i32, _h: i32) -> Result<WindowHandle, String> {
     Err(

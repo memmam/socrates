@@ -718,9 +718,9 @@ Vulkan surface's scaffolding landed: `win32.rs` split into
 platform substitution (`vkCreateWin32SurfaceKHR` over hinstance+hwnd
 instead of `vkCreateXlibSurfaceKHR` over display+window) next to the
 composed window state — window lifecycle, UNORM-preferred swapchain,
-offscreen back buffer, clear and present all work end to end; the
-`gfx.*` dispatch arms panic via `vulkan_gfx_todo` until draw-call
-parity lands, the x11 backend's own intermediate shape. All three
+offscreen back buffer, clear/present, and the whole `gfx.*` draw-call
+surface all forward to the shared core, at full parity with the X11
+backend. All three
 platform backends are now the same two-variant enum shape.) Every
 `Inner` method becomes a two-armed `match` forwarding to whichever variant
 is live; `#[allow(clippy::large_enum_variant)]` on the enum itself
@@ -920,10 +920,11 @@ requires `VK_KHR_maintenance1` — which the gfx surface needs anyway,
 and which is universal wherever swapchains exist (core in 1.1) — and
 the full function table resolves at create. Neither changes any
 observable CI behavior: windows-latest ships no ICD, so creation fails
-at `vkCreateInstance` before either matters. The win32 shim still
-forwards only the window half; its `gfx.*` dispatch arms stay
-`vulkan_gfx_todo` until the draw-call-parity phase flips them to
-forwards.)
+at `vkCreateInstance` before either matters. The draw-call-parity
+phase then flipped the win32 dispatch arms from `vulkan_gfx_todo`
+panics to forwards, completing the parity story: `window.create_vulkan`
+plus the full `gfx.*` surface behave identically on Linux and Windows
+because they are the same code.)
 
 ## Testing strategy
 

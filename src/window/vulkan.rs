@@ -53,12 +53,6 @@
 //! present, image transitions and copies, pipelines and descriptors) is
 //! transcribed here, shared by the platform shims.
 
-// The gfx.* draw-call methods have no Windows caller yet: win32/mod.rs's
-// gfx arms still diverge (`vulkan_gfx_todo`) and its shim forwards only
-// the window half, so on Windows the draw-call machinery compiles unused
-// until draw-call parity wires it through that dispatch. The Linux build
-// exercises everything, so this silences nothing real there.
-#![cfg_attr(target_os = "windows", allow(dead_code))]
 
 use std::ffi::{c_char, c_void, CString};
 use std::ptr;
