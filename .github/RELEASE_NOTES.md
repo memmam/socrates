@@ -6,15 +6,19 @@ release that sentence has no asterisk: `Cargo.toml` has no `[dependencies]`
 section at all, in the default build and in every feature set, and CI
 asserts it (`cargo tree` is a single line everywhere).
 
-v0.9 is the native graphics and compute release. The one quarantined
-dependency v0.7 allowed itself (wgpu, behind a `gpu` feature) has been
-replaced — and then some — by native raw-FFI backends for every graphics
-and compute API worth having, built over shared cores extracted wherever a
-second consumer appeared: three windowing/draw-call backends and five
-compute backends, all `dlopen`/`objc_msgSend`/COM against the OS's own
-libraries, nothing vendored, nothing downloaded.
+v0.8 is two releases' worth in one. The native graphics and compute
+programme: the one quarantined dependency v0.7 allowed itself (wgpu,
+behind a `gpu` feature) has been replaced — and then some — by native
+raw-FFI backends for every graphics and compute API worth having, built
+over shared cores extracted wherever a second consumer appeared: three
+windowing/draw-call backends and five compute backends, all
+`dlopen`/`objc_msgSend`/COM against the OS's own libraries, nothing
+vendored, nothing downloaded. And alongside it, the entire
+feature-request queue the v0.7 demo round left behind — seventeen
+independent demo authors, a ranked list of every wall they hit — worked
+through directly.
 
-Highlights of v0.9 over v0.8 (full list in
+Highlights of v0.8 over v0.7 (full list in
 [`CHANGELOG.md`](https://github.com/memmam/fable/blob/main/CHANGELOG.md)):
 
 - **The `window` and `gfx` namespaces** — real OS windows and a GL-shaped
@@ -42,6 +46,13 @@ Highlights of v0.9 over v0.8 (full list in
   WARP guarantees a device on every Windows machine). `gpu.backend()`
   names the live one.
 - **wgpu and pollster deleted** — `Cargo.lock` went from 1212 lines to 7.
+- **The demo round's queue, cleared** — `if let` / `while let` (pure
+  parser sugar over `match`), bitwise compound assignment (`&= |= ^= <<=
+  >>=`), 64-bit hex/binary literals and `String.parse_hex()`, `Bytes`
+  64-bit accessors and `Int.wrapping_*`, `fft.magnitude`,
+  `Range.any`/`all`, non-blocking `worker.try_recv()`, a new `std.lazy`
+  module, ergonomic `std.json` construction, `strings.Builder` ergonomics,
+  and `fable test --bless`.
 
 Everything observable is pinned: 311 golden spec tests, 136 executable book
 snippets, and 73 demo golden tests, the whole suite green under
@@ -56,7 +67,7 @@ Every one of the eighteen [`demos/`](https://github.com/memmam/fable/tree/main/d
 alpha-beta engine, a from-scratch PNG encoder, a chiptune renderer, a
 parallel Mandelbrot, a spinning GL/Metal/Vulkan cube, and ten more — ships
 as a **self-contained binary**: no `fable`, no source, one file you run.
-They are attached as `fable-demozoo-v0.9.0-<target>.tar.gz` for five
+They are attached as `fable-demozoo-v0.8.0-<target>.tar.gz` for five
 desktop targets:
 
 - `x86_64-linux`, `aarch64-linux`

@@ -2,7 +2,7 @@
 
 Fable is a statically-typed, garbage-collected programming language with
 algebraic data types, exhaustive pattern matching, closures, and generics,
-implemented from scratch in Rust with **zero dependencies** (default build).
+implemented from scratch in Rust with **zero dependencies** — every build.
 This file is the working memory for the project: what Fable is *for*, the
 invariants that must never break, the engineering principles that decide
 close calls, how to verify a change, where the detailed records live, and a
@@ -236,7 +236,8 @@ and the standing numbers.
   --payload-only` emits it; `read_self` parses the running image to read it
   back) and ad-hoc signed. Developer ID signing + notarization are wired in
   `release.yml`, dormant until the `MACOS_CERT_P12_BASE64` etc. secrets exist.
-- **v0.8 — the demo round's feature queue.** The v0.7 demo round left a
+- **v0.8 — native graphics and compute + the demo round's feature
+  queue.** The v0.7 demo round left a
   ranked, deduplicated feature-request queue (`demos/NOTES.md`); this
   release works through it directly rather than via a fresh round.
   `if let`/`while let` (pure parser sugar, desugared fully to `match`/`while`
@@ -254,8 +255,8 @@ and the standing numbers.
   declined — one demo, one-line workaround, `std` grows reluctantly. Four
   items in the original queue turned out to already be shipped in v0.7's
   own efficiency pass; `demos/NOTES.md` now says so.
-- **v0.9 — native graphics and compute; zero dependencies everywhere.**
-  The standing roadmap directive executed end to end: `std.glm` (GLM-shaped
+  **And, in the same release, the native graphics-and-compute
+  programme** — the standing roadmap directive executed end to end: `std.glm` (GLM-shaped
   vector/matrix/quaternion math, pure Fable) + `Bytes` f32 accessors; the
   `window` namespace (OpenGL via X11/GLX, Win32/WGL, Cocoa/CGL raw FFI) and
   the GL-shaped `gfx` draw-call surface; the Metal backend (additive,

@@ -1,6 +1,6 @@
 # The Fable Language Specification
 
-**Version 0.9** — This document is the normative reference for the Fable
+**Version 0.8** — This document is the normative reference for the Fable
 programming language. Inline `(vN)` tags mark the release where a feature
 landed. The implementation (`src/`), the golden test suite (`tests/spec/`),
 and the book (`book/`) must all agree with this document.
@@ -628,12 +628,12 @@ these modules follow the same visibility rules as user code.
 | `std.set` | `Set[T]` (v0.7), backed by `Map[T, Unit]`: structural membership, insertion-order iteration. `new()`, `from_list(xs)` (first occurrence wins); methods `insert(v) -> Bool` / `remove(v) -> Bool` (did anything change), `contains`, `len`, `is_empty`, `to_list`, and `union` / `intersect` / `difference` — each returns a **new** set ordered by the left operand's insertion order, then the right's |
 | `std.deque` | `Deque[T]` (v0.7), a double-ended queue with amortized O(1) ends (two-stack representation; a pop on an empty side reverses the other side across). `new()`, `from_list(xs)` (copies); methods `push_front` / `push_back`, `pop_front` / `pop_back` / `front` / `back` (all `Option[T]`), `len`, `is_empty`, `to_list` (front to back) |
 | `std.lazy` | `Lazy[T]` (v0.8): deferred, memoized computation. `of(thunk: fn() -> T) -> Lazy[T]` wraps a zero-argument thunk that doesn't run until needed; methods `get() -> T` (computes and caches on the first call, free on every later call — on any reference, since structs are references) and `is_forced() -> Bool`. For a module-level table that's expensive to build and not always needed — a plain top-level `let` already builds once at import (eagerly); `Lazy` defers that to first use. |
-| `std.glm` | Vector/matrix/quaternion math (v0.9), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Fable, no native code. |
+| `std.glm` | Vector/matrix/quaternion math (v0.8), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Fable, no native code. |
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
 The `gpu` namespace dispatches compute shaders. It has five backends,
-all **native and zero-dependency** (since v0.9): **Metal** (MSL kernels;
+all **native and zero-dependency** (since v0.8): **Metal** (MSL kernels;
 raw FFI, behind the `metal` feature on Apple Silicon macOS, the same
 feature as the Metal window backend), **Vulkan** (SPIR-V binaries via
 `gpu.run_spirv`; raw `dlopen` FFI, behind the `vulkan` feature on
@@ -653,7 +653,7 @@ opencl (the CI-proven universal path first, then the always-has-a-device
 Windows path, then the vendor GPU path, then OpenCL, which commonly
 resolves to a CPU implementation). The original **wgpu** path (WGSL
 shaders behind a `gpu` cargo feature — v0.7's one quarantined
-dependency) was **removed in v0.9** when this native coverage landed,
+dependency) was **removed in v0.8** when this native coverage landed,
 per `CLAUDE.md`'s roadmap: every build of Fable is now zero-dependency
 (CI asserts `cargo tree` is a single line for the default and for every
 feature set). The namespace itself always exists — programs using it
@@ -665,8 +665,8 @@ gracefully as described below.
 | `gpu.available()` | `fn() -> Bool` | is a GPU adapter usable? Always `false` without a backend |
 | `gpu.adapter_info()` | `fn() -> String` | `"<name> (<backend>)"`, `"no adapter"`, or `"gpu support not compiled in"`. Never empty |
 | `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch of source-text `src` — MSL on the metal backend, PTX on the cuda backend, HLSL on the d3d12 backend (the ABIs below). The binary backends (vulkan, opencl) `Err` redirecting to `gpu.run_spirv`. Without a backend: `Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, --features d3d12 on Windows, or --features vulkan, cuda, or opencl on Linux/Windows)")` |
-| `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` | `fn(Bytes, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | (v0.9) `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so the blob rides the buffer type (a sibling, not an overload: Fable has neither default parameters nor overloading). Ingested natively by the vulkan and opencl backends — each in its own SPIR-V *profile* (the two ABI paragraphs below; the blobs are not interchangeable); other backends `Err` naming the entry point they want |
-| `gpu.backend()` | `fn() -> String` | (v0.9) `"metal"`, `"vulkan"`, `"d3d12"`, `"cuda"`, `"opencl"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (vulkan > d3d12 > cuda > opencl). The `gpu` analog of `win.backend_name()`: branch on it to pick the kernel dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
+| `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` | `fn(Bytes, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | (v0.8) `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so the blob rides the buffer type (a sibling, not an overload: Fable has neither default parameters nor overloading). Ingested natively by the vulkan and opencl backends — each in its own SPIR-V *profile* (the two ABI paragraphs below; the blobs are not interchangeable); other backends `Err` naming the entry point they want |
+| `gpu.backend()` | `fn() -> String` | (v0.8) `"metal"`, `"vulkan"`, `"d3d12"`, `"cuda"`, `"opencl"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (vulkan > d3d12 > cuda > opencl). The `gpu` analog of `win.backend_name()`: branch on it to pick the kernel dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
 
 Every failure is an `Err` value, never a panic: bad arguments, no adapter,
 shader compile/validation errors (their messages pass through), device loss.
@@ -680,7 +680,7 @@ the `(wx, wy, wz)` index space (each count in `1..=65535`). Byte order is
 the GPU's little-endian layout. Argument validation is shared, so bad
 calls fail with byte-identical messages in every build.
 
-**The MSL ABI (the native Metal backend, v0.9)** expresses that contract
+**The MSL ABI (the native Metal backend, v0.8)** expresses that contract
 in MSL:
 
 ```msl
@@ -703,7 +703,7 @@ hard-asserts its output bytes whenever a device exists — compute needs no
 window server, so it is a real correctness gate on any Metal-capable
 machine).
 
-**The SPIR-V ABI (the native Vulkan backend, v0.9)** is the same contract
+**The SPIR-V ABI (the native Vulkan backend, v0.8)** is the same contract
 again, expressed in SPIR-V: `gpu.run_spirv`'s first argument is the
 binary (a `Bytes` blob of 4-byte words, magic `0x07230203`), whose module
 must declare a `GLCompute` entry point named `main` (SPIR-V reserves
@@ -716,7 +716,7 @@ hard-asserted whenever a compute device exists; Mesa's lavapipe software
 device makes that unconditional on CI, the first `gpu` backend fully
 exercised without GPU hardware.
 
-**The SPIR-V ABI (the native OpenCL backend, v0.9)** is the same contract
+**The SPIR-V ABI (the native OpenCL backend, v0.8)** is the same contract
 through the same entry point — but SPIR-V is the roadmap's lingua-franca
 *format* (`CLAUDE.md`), and compute kernels come in two **profiles** the
 format does not paper over. A Vulkan-profile module declares a
@@ -744,7 +744,7 @@ OpenCL-profile twin of `vulkan_compute.fable`, hard-asserting the same
 doubled bytes (a CPU implementation like pocl counts; no GPU hardware
 needed).
 
-**The PTX ABI (the native CUDA backend, v0.9)** expresses the contract in
+**The PTX ABI (the native CUDA backend, v0.8)** expresses the contract in
 NVIDIA's textual virtual ISA, which the driver JITs for the resident GPU
 at module load — so it travels through `gpu.run`'s `String` argument,
 like MSL. The module must declare `.visible .entry main` taking exactly
@@ -761,7 +761,7 @@ exercised end to end only on real NVIDIA hardware — CI pins the graceful
 no-driver error path, and the battery hard-asserts its bytes the first
 time a GPU runs it.
 
-**The HLSL ABI (the native Direct3D 12 backend, v0.9)** expresses the
+**The HLSL ABI (the native Direct3D 12 backend, v0.8)** expresses the
 contract in HLSL, compiled to DXBC at dispatch time by
 `d3dcompiler_47.dll` — an OS component, so the compiler adds no
 dependency. The kernel must declare `void main` (HLSL reserves nothing)
@@ -782,7 +782,7 @@ runtime) batteries.
 every build — `bytes(n)`/`bytes_of(..)` construct the input, and the LE
 pushers (`push_u32le`, ...) / `to_list()` bridge to and from numeric data.
 
-### 7.3 The window namespace (v0.9, Linux + Windows + macOS (Apple Silicon), feature-gated)
+### 7.3 The window namespace (v0.8, Linux + Windows + macOS (Apple Silicon), feature-gated)
 
 The `window` namespace is the GLFW-equivalent piece of the native-OpenGL
 roadmap (`std.glm`, § 7.1, shipped the math side): window creation, event
@@ -806,8 +806,8 @@ and has no plan to be** (see the macOS backend note below for why)),
 | Member | Type | Notes |
 |--------|------|-------|
 | `window.create(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | opens an OS window of size `w`×`h` with a current GL context. Without the feature (or backend): `Err("windowing support not compiled in (build with --features gl)")` |
-| `window.create_metal(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | (v0.9, macOS/Apple Silicon only) opens a Metal-backed window — a sibling of `create`, additive alongside it, never a replacement (see the macOS Metal backend note below). Without the feature (or off Apple Silicon macOS): `Err("Metal windowing support not compiled in (build with --features metal, aarch64-apple-darwin only)")` |
-| `window.create_vulkan(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | (v0.9) opens a Vulkan-backed window — `create_metal`'s Linux/Windows analog, riding the same `vulkan` cargo feature as `gpu.run_spirv` (see the Linux Vulkan backend note below). Implemented on Linux/X11 and Windows (`VK_KHR_xlib_surface` / `VK_KHR_win32_surface`), at full `gfx.*` parity on both — everything past the surface is one shared backend (`window/vulkan.rs`), so the two platforms are behaviorally identical. Without the feature (or off Linux/Windows): `Err("Vulkan windowing support not compiled in (build with --features vulkan, Linux/X11 or Windows)")`; without a display or Vulkan device at runtime, a prefixed `Err` naming the failing step |
+| `window.create_metal(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | (v0.8, macOS/Apple Silicon only) opens a Metal-backed window — a sibling of `create`, additive alongside it, never a replacement (see the macOS Metal backend note below). Without the feature (or off Apple Silicon macOS): `Err("Metal windowing support not compiled in (build with --features metal, aarch64-apple-darwin only)")` |
+| `window.create_vulkan(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | (v0.8) opens a Vulkan-backed window — `create_metal`'s Linux/Windows analog, riding the same `vulkan` cargo feature as `gpu.run_spirv` (see the Linux Vulkan backend note below). Implemented on Linux/X11 and Windows (`VK_KHR_xlib_surface` / `VK_KHR_win32_surface`), at full `gfx.*` parity on both — everything past the surface is one shared backend (`window/vulkan.rs`), so the two platforms are behaviorally identical. Without the feature (or off Linux/Windows): `Err("Vulkan windowing support not compiled in (build with --features vulkan, Linux/X11 or Windows)")`; without a display or Vulkan device at runtime, a prefixed `Err` naming the failing step |
 
 `Window` is a nameable opaque type (§ 8.4d) — the handle `create` returns on
 success.
@@ -859,7 +859,7 @@ poll-per-frame API deliberately avoids); instead `should_close` is set once
 `[window isVisible]` goes false after a click on the close box, which
 AppKit's default close path guarantees without a delegate.
 
-### window namespace, macOS Metal backend (v0.9, Apple Silicon only, additive)
+### window namespace, macOS Metal backend (v0.8, Apple Silicon only, additive)
 
 `window.create_metal` opens a Metal-backed window as a **sibling** to
 `create`'s OpenGL/CGL path (`src/window/macos/gl.rs`) — additive, never a
@@ -935,7 +935,7 @@ Metal shader conventions:
   to the OpenGL `main.fable`'s (the cross-backend pixel-parity proof,
   asserted in CI on real Apple Silicon hardware).
 
-### window namespace, Vulkan backend (v0.9, Linux + Windows, additive)
+### window namespace, Vulkan backend (v0.8, Linux + Windows, additive)
 
 `window.create_vulkan` is the Linux/Windows analog of `create_metal`: a **sibling**
 to `create`'s OpenGL/GLX path, additive alongside it, never a replacement,
@@ -1011,7 +1011,7 @@ spinning-cube demo with golden pins **byte-identical** to the OpenGL
 program rendering the same pixels on three graphics APIs — both under
 Xvfb + lavapipe (no GPU needed).
 
-### 7.4 The gfx namespace (v0.9, feature-gated)
+### 7.4 The gfx namespace (v0.8, feature-gated)
 
 `gfx` is a backend-neutral OpenGL 3.3 core-profile draw-call layer on top of
 `window`'s per-platform GL function-pointer table (§ 7.3): shaders,
@@ -1042,7 +1042,7 @@ program is validly linked and bound, the same no-`Result`-plumbing shape
 | Member | Type | Notes |
 |---|---|---|
 | `gfx.compile_program(vertex_src, fragment_src)` | `fn(String, String) -> Result[Int, String]` | compiles + links a GLSL vertex/fragment pair; `Err` carries the driver's shader/link info log, sized via `GL_INFO_LOG_LENGTH` (never a guessed fixed buffer) — and any shader/program object already created is deleted before returning. On the Vulkan backend: a clean `Err` redirecting to `compile_program_spirv` |
-| `gfx.compile_program_spirv(vertex, fragment)` | `fn(Bytes, Bytes) -> Result[Int, String]` | (v0.9) the Vulkan backend's shader input: two SPIR-V binaries (vertex, fragment — see the Linux Vulkan backend note in § 7.3 for the module conventions). A sibling of `compile_program`, not an overload (Fable has neither): SPIR-V is a binary format, so it rides `Bytes`, exactly like `gpu.run_spirv`. On source-text backends (GL, Metal): a clean `Err` redirecting to `compile_program` |
+| `gfx.compile_program_spirv(vertex, fragment)` | `fn(Bytes, Bytes) -> Result[Int, String]` | (v0.8) the Vulkan backend's shader input: two SPIR-V binaries (vertex, fragment — see the Linux Vulkan backend note in § 7.3 for the module conventions). A sibling of `compile_program`, not an overload (Fable has neither): SPIR-V is a binary format, so it rides `Bytes`, exactly like `gpu.run_spirv`. On source-text backends (GL, Metal): a clean `Err` redirecting to `compile_program` |
 | `gfx.use_program(p)` | `fn(Int) -> Unit` | `glUseProgram` |
 | `gfx.delete_program(p)` | `fn(Int) -> Unit` | `glDeleteProgram` |
 | `gfx.create_buffer()` | `fn() -> Int` | `glGenBuffers(1, ...)` |
@@ -1196,7 +1196,7 @@ offset; a read that would touch any byte outside the buffer panics like
 `get`; unlike the 16/32-bit reads, a 64-bit read can come back negative
 when bit 63 is set, matching `to_hex`/hex-literal semantics),
 `push_f32le(Float)` / `push_f32be(Float)` / `read_f32le(Int) -> Float` /
-`read_f32be(Int) -> Float` (v0.9: `Float` is `f64`; these narrow to `f32`
+`read_f32be(Int) -> Float` (v0.8: `Float` is `f64`; these narrow to `f32`
 at the boundary — the wire format vertex/uniform/PCM data actually uses —
 so a read-back is only accurate to `f32`'s precision, not bit-identical to
 whatever `f64` went in),
@@ -1227,7 +1227,7 @@ in `worker.recv()` sees `None` — then waits; `Err` carries the worker's
 panic message; joining again returns the cached result; messages the
 worker sent before finishing can still be `recv`'d after `join`).
 
-### 8.4d `Window` methods (v0.9, Linux + Windows + macOS (Apple Silicon))
+### 8.4d `Window` methods (v0.8, Linux + Windows + macOS (Apple Silicon))
 
 A `Window` is the handle `window.create` returns (§ 7.3) — an OS window
 plus a current GL context. `Window` is a nameable type usable in signatures
@@ -1263,14 +1263,14 @@ before the first pointer motion), `width() -> Int` / `height() -> Int`
 `glClear(GL_COLOR_BUFFER_BIT)`), `swap_buffers() -> Unit` (presents the back
 buffer — the window is double-buffered).
 
-`make_current() -> Unit` (v0.9): makes this window's GL context current on
+`make_current() -> Unit` (v0.8): makes this window's GL context current on
 this thread. Idempotent, and the same call `clear()`/`swap_buffers()`
 already make internally per call — this just exposes it as its own public
 method, so the `gfx` namespace (§ 7.4) has an explicit window to target:
 every `gfx.*` call operates against whichever window last called
 `make_current()`.
 
-`backend_name() -> String` (v0.9): `"opengl"`, `"metal"` (macOS,
+`backend_name() -> String` (v0.8): `"opengl"`, `"metal"` (macOS,
 `create_metal`), or `"vulkan"` (Linux, `create_vulkan`) — see the macOS
 Metal and Linux Vulkan backend notes above (§ 7.3). On Windows, where only
 the OpenGL backend exists, this always returns `"opengl"`.

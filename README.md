@@ -338,7 +338,7 @@ let x: Int = "no";    //? error: type mismatch
 ## Status
 
 Fable is a complete, working language. The spec (`docs/SPEC.md`) is the
-source of truth; deviations are bugs. It has grown through nine releases —
+source of truth; deviations are bugs. It has grown through eight releases —
 the core language and toolchain (v0.1–v0.5), a field-test pass that removed
 the walls real demo programs hit (v0.6), an infrastructure release that
 added `Bytes`, native FFT, worker isolates, bitwise operators, a GPU path,
@@ -349,11 +349,11 @@ and a release that worked directly through the demo round's own
 deduplicated feature-request queue: `if let`/`while let`, bitwise compound
 assignment, 64-bit hex literals and `Bytes` accessors, wrapping arithmetic,
 `Range.any`/`all`, non-blocking `worker.try_recv`, a `std.lazy` module,
-ergonomic `std.json` construction, and `fable test --bless` (v0.8) —
-and the native graphics-and-compute release: `window`/`gfx` across OpenGL,
-Metal, and Vulkan with the glcube demo pinned byte-identical on all three,
-five native compute backends, `std.glm`, and the deletion of the one
-optional dependency, leaving every build zero-dependency (v0.9).
+ergonomic `std.json` construction, and `fable test --bless` — plus, in
+the same release, the native graphics-and-compute programme: `window`/`gfx`
+across OpenGL, Metal, and Vulkan with the glcube demo pinned byte-identical
+on all three, five native compute backends, `std.glm`, and the deletion of
+the one optional dependency, leaving every build zero-dependency (v0.8).
 Features are pulled in by real use, not pushed by a roadmap; the per-release
 detail is in [`CHANGELOG.md`](CHANGELOG.md), and the project's purpose and
 invariants in [`CLAUDE.md`](CLAUDE.md).

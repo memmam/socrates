@@ -115,7 +115,12 @@ jobs:
         run: |
           cargo test
           cargo clippy --all-targets -- -D warnings
-          ./target/release/fable test tests/spec demos > /dev/null
+          ./target/release/fable test tests/spec > /dev/null
+          # glcube's three mains need a live GL/Metal/Vulkan window (ci.yml's
+          # windowing jobs run them); everything else runs here, including
+          # glcube's own GL-free cube.fable/spec.fable.
+          shopt -s extglob
+          ./target/release/fable test demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable > /dev/null
 
       - name: Assemble the demo zoo
         shell: bash

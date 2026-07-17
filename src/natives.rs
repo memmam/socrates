@@ -837,10 +837,10 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         }
 
         // ------------------------------------------------------------------
-        // window.* (v0.8: Linux/Windows/macOS via `gl`; v0.9 adds a
+        // window.* (v0.8: Linux/Windows/macOS via `gl`, plus a
         // Metal-backed `create_metal` sibling on macOS, additive alongside
-        // `gl`, never a replacement; Linux then gains a Vulkan-backed
-        // `create_vulkan` sibling the same way) — implementation lives in
+        // `gl`, never a replacement, and a Vulkan-backed `create_vulkan`
+        // sibling on Linux/Windows) — implementation lives in
         // src/window/; without the relevant cargo feature each entry point
         // degrades gracefully (see src/window/mod.rs).
         // ------------------------------------------------------------------

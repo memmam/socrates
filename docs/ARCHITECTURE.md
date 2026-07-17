@@ -401,7 +401,7 @@ measurement.
 **gpu.rs** is the home of the `gpu` builtin namespace's implementation. In
 v0.7 it was the project's only dependency boundary — wgpu (+ pollster)
 behind a `gpu` cargo feature; that path (and with it the last Cargo
-dependency and the WGSL dialect) was **deleted in v0.9** once the native
+dependency and the WGSL dialect) was **deleted in v0.8** once the native
 coverage condition was met (see the native-backend entries below), so
 every build of Fable is now zero-dependency (CI asserts `cargo tree` is
 one line for the default and for every feature set). The module is always
@@ -592,7 +592,7 @@ guarantees nothing) so all backends agree on bytes the kernel never
 wrote; command-buffer `error` is checked after `waitUntilCompleted`.
 This backend's landing (with Vulkan and OpenCL after it) is what
 retired wgpu — CLAUDE.md's native-backends-first rule, completed in
-v0.9. `gpu.backend()` (`"metal"`/`"vulkan"`/`"opencl"`/`"none"`) is the
+v0.8. `gpu.backend()` (`"metal"`/`"vulkan"`/`"opencl"`/`"none"`) is the
 dialect escape hatch, the compute analog of `win.backend_name()`.
 
 **Native Vulkan compute (`src/vk.rs`).** The second native compute
