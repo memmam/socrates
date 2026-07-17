@@ -1,6 +1,6 @@
 # The Fable Language Specification
 
-**Version 0.7** — This document is the normative reference for the Fable
+**Version 0.9** — This document is the normative reference for the Fable
 programming language. Inline `(vN)` tags mark the release where a feature
 landed. The implementation (`src/`), the golden test suite (`tests/spec/`),
 and the book (`book/`) must all agree with this document.
@@ -628,7 +628,7 @@ these modules follow the same visibility rules as user code.
 | `std.set` | `Set[T]` (v0.7), backed by `Map[T, Unit]`: structural membership, insertion-order iteration. `new()`, `from_list(xs)` (first occurrence wins); methods `insert(v) -> Bool` / `remove(v) -> Bool` (did anything change), `contains`, `len`, `is_empty`, `to_list`, and `union` / `intersect` / `difference` — each returns a **new** set ordered by the left operand's insertion order, then the right's |
 | `std.deque` | `Deque[T]` (v0.7), a double-ended queue with amortized O(1) ends (two-stack representation; a pop on an empty side reverses the other side across). `new()`, `from_list(xs)` (copies); methods `push_front` / `push_back`, `pop_front` / `pop_back` / `front` / `back` (all `Option[T]`), `len`, `is_empty`, `to_list` (front to back) |
 | `std.lazy` | `Lazy[T]` (v0.8): deferred, memoized computation. `of(thunk: fn() -> T) -> Lazy[T]` wraps a zero-argument thunk that doesn't run until needed; methods `get() -> T` (computes and caches on the first call, free on every later call — on any reference, since structs are references) and `is_forced() -> Bool`. For a module-level table that's expensive to build and not always needed — a plain top-level `let` already builds once at import (eagerly); `Lazy` defers that to first use. |
-| `std.glm` | Vector/matrix/quaternion math (v0.8), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Fable, no native code. |
+| `std.glm` | Vector/matrix/quaternion math (v0.9), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Fable, no native code. |
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
@@ -782,7 +782,7 @@ runtime) batteries.
 every build — `bytes(n)`/`bytes_of(..)` construct the input, and the LE
 pushers (`push_u32le`, ...) / `to_list()` bridge to and from numeric data.
 
-### 7.3 The window namespace (v0.8, Linux + Windows + macOS (Apple Silicon), feature-gated)
+### 7.3 The window namespace (v0.9, Linux + Windows + macOS (Apple Silicon), feature-gated)
 
 The `window` namespace is the GLFW-equivalent piece of the native-OpenGL
 roadmap (`std.glm`, § 7.1, shipped the math side): window creation, event
@@ -935,9 +935,9 @@ Metal shader conventions:
   to the OpenGL `main.fable`'s (the cross-backend pixel-parity proof,
   asserted in CI on real Apple Silicon hardware).
 
-### window namespace, Linux Vulkan backend (v0.9, additive — scaffolding)
+### window namespace, Vulkan backend (v0.9, Linux + Windows, additive)
 
-`window.create_vulkan` is the Linux analog of `create_metal`: a **sibling**
+`window.create_vulkan` is the Linux/Windows analog of `create_metal`: a **sibling**
 to `create`'s OpenGL/GLX path, additive alongside it, never a replacement,
 riding the same zero-Cargo-dependency `vulkan` cargo feature the
 `gpu.run_spirv` compute backend (§ 7.2) ships under — both backends compile
@@ -1011,7 +1011,7 @@ spinning-cube demo with golden pins **byte-identical** to the OpenGL
 program rendering the same pixels on three graphics APIs — both under
 Xvfb + lavapipe (no GPU needed).
 
-### 7.4 The gfx namespace (v0.8, feature-gated)
+### 7.4 The gfx namespace (v0.9, feature-gated)
 
 `gfx` is a backend-neutral OpenGL 3.3 core-profile draw-call layer on top of
 `window`'s per-platform GL function-pointer table (§ 7.3): shaders,
@@ -1196,7 +1196,7 @@ offset; a read that would touch any byte outside the buffer panics like
 `get`; unlike the 16/32-bit reads, a 64-bit read can come back negative
 when bit 63 is set, matching `to_hex`/hex-literal semantics),
 `push_f32le(Float)` / `push_f32be(Float)` / `read_f32le(Int) -> Float` /
-`read_f32be(Int) -> Float` (v0.8: `Float` is `f64`; these narrow to `f32`
+`read_f32be(Int) -> Float` (v0.9: `Float` is `f64`; these narrow to `f32`
 at the boundary — the wire format vertex/uniform/PCM data actually uses —
 so a read-back is only accurate to `f32`'s precision, not bit-identical to
 whatever `f64` went in),
@@ -1227,7 +1227,7 @@ in `worker.recv()` sees `None` — then waits; `Err` carries the worker's
 panic message; joining again returns the cached result; messages the
 worker sent before finishing can still be `recv`'d after `join`).
 
-### 8.4d `Window` methods (v0.8, Linux + Windows + macOS (Apple Silicon))
+### 8.4d `Window` methods (v0.9, Linux + Windows + macOS (Apple Silicon))
 
 A `Window` is the handle `window.create` returns (§ 7.3) — an OS window
 plus a current GL context. `Window` is a nameable type usable in signatures
@@ -1263,7 +1263,7 @@ before the first pointer motion), `width() -> Int` / `height() -> Int`
 `glClear(GL_COLOR_BUFFER_BIT)`), `swap_buffers() -> Unit` (presents the back
 buffer — the window is double-buffered).
 
-`make_current() -> Unit` (v0.8): makes this window's GL context current on
+`make_current() -> Unit` (v0.9): makes this window's GL context current on
 this thread. Idempotent, and the same call `clear()`/`swap_buffers()`
 already make internally per call — this just exposes it as its own public
 method, so the `gfx` namespace (§ 7.4) has an explicit window to target:

@@ -254,6 +254,26 @@ and the standing numbers.
   declined — one demo, one-line workaround, `std` grows reluctantly. Four
   items in the original queue turned out to already be shipped in v0.7's
   own efficiency pass; `demos/NOTES.md` now says so.
+- **v0.9 — native graphics and compute; zero dependencies everywhere.**
+  The standing roadmap directive executed end to end: `std.glm` (GLM-shaped
+  vector/matrix/quaternion math, pure Fable) + `Bytes` f32 accessors; the
+  `window` namespace (OpenGL via X11/GLX, Win32/WGL, Cocoa/CGL raw FFI) and
+  the GL-shaped `gfx` draw-call surface; the Metal backend (additive,
+  windows + compute, MSL, interpreter moved to the macOS main thread); the
+  Vulkan backend (compute + windowing + full gfx on Linux/X11 AND Windows,
+  SPIR-V with in-house reflection, lavapipe-pixel-proven, everything past
+  the surface in one shared `window/vulkan.rs` core); glcube rendering
+  byte-identical golden frames on GL, Metal, and Vulkan; five native
+  compute backends (metal/MSL, vulkan/SPIR-V, opencl/SPIR-V via
+  clCreateProgramWithIL proven on Intel's CPU runtime, cuda/PTX
+  graceful-proven, d3d12/HLSL WARP-proven; precedence metal > vulkan >
+  d3d12 > cuda > opencl; two SPIR-V compute profiles in SPEC § 7.2); and
+  the wgpu/pollster deletion the moment coverage landed — `Cargo.toml` has
+  no `[dependencies]` section, `Cargo.lock` is 7 lines, CI asserts the
+  one-line `cargo tree` per feature set. Shared cores extracted at each
+  second consumer: `objc.rs`/`mtl.rs`, `vk.rs`, `window/vulkan.rs`
+  (−1212 lines; the lavapipe asserts prove the code Windows runs). Book
+  ch8 gained executable `std.glm` + `window`/`gfx` sections.
 
 ## Workflow conventions
 
