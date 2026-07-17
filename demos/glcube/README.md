@@ -66,6 +66,23 @@ in CI by the `gl-macos-metal` job on real Apple Silicon hardware (the
 Linux `gl` job's Xvfb can't run it, so that job pins `main.fable` and
 lists its files explicitly).
 
+## The Vulkan twin: `main_vulkan.fable`
+
+The same cube a third time, against a `window.create_vulkan` window
+(Linux, `--features vulkan`). `cube.fable` is again reused unchanged; the
+differences are the create call and the shader *input* — precompiled
+SPIR-V binaries through `gfx.compile_program_spirv` (Vulkan has no
+runtime GLSL compiler, and zero-dep forbids shipping one), hand-assembled
+with the GLSL equivalents in the file's comments. The vertex module
+carries the same clip-z remap line as the Metal twin's MSL, for the same
+reason; Y needs no shader handling at all (the backend renders with a
+negative-height viewport, so clip-space +Y is up as in GL). Its golden
+pins are **byte-identical** to both `main.fable`'s and
+`main_metal.fable`'s — the same Fable program rendering the same pixels
+on three graphics APIs — asserted in CI by the `vulkan` job under Xvfb +
+Mesa's lavapipe (no GPU needed; this is the one glcube twin a plain
+ubuntu runner can render).
+
 ## Files
 
 | File          | What it is                                                         |
@@ -73,6 +90,7 @@ lists its files explicitly).
 | `cube.fable`  | the cube's 24-vertex/36-index geometry (one solid color per face) and `mvp_at`, the model\*view\*projection builder |
 | `main.fable`  | opens the window, compiles the shader pair, spins the cube six frames, pixel-spot-checks two of them |
 | `main_metal.fable` | the same scene on the Metal backend, pinned to identical pixels (see above) |
+| `main_vulkan.fable` | the same scene on the Vulkan backend via SPIR-V shaders, pinned to identical pixels (see above) |
 | `spec.fable`  | GL-free checks: vertex/index counts, and `mvp_at`'s screen-center projection at two rotation angles |
 
 ## Fable features on display

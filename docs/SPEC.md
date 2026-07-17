@@ -938,11 +938,14 @@ conventions:
   `pos.z = (pos.z + pos.w) * 0.5;` — the same remap the Metal backend
   documents (§ 7.3 above).
 
-Verified with real rasterized pixels on CI:
+Verified with real rasterized pixels on CI, twice over:
 `docs/assets/vulkan_triangle.fable` draws a hand-assembled SPIR-V
 triangle and hard-asserts the exact center pixel through
-`gfx.read_pixels`, under Xvfb + lavapipe. This paragraph is updated once
-glcube pixel parity (the remaining phase) ships.
+`gfx.read_pixels`, and `demos/glcube/main_vulkan.fable` renders the
+spinning-cube demo with golden pins **byte-identical** to the OpenGL
+`main.fable`'s and the Metal `main_metal.fable`'s — the same Fable
+program rendering the same pixels on three graphics APIs — both under
+Xvfb + lavapipe (no GPU needed).
 
 ### 7.4 The gfx namespace (v0.8, feature-gated)
 

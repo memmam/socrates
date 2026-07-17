@@ -340,6 +340,14 @@ jobs:
         run: |
           cargo build --release --features vulkan
           ./target/release/fable docs/assets/vulkan_compute.fable
+      - name: glcube-Vulkan golden (real rendered pixels, hard assert)
+        # The three-backend pixel-parity contract: main_vulkan.fable's
+        # pins are byte-identical to main.fable's (OpenGL, the gl job) and
+        # main_metal.fable's (Metal, the gl-macos-metal job). Explicit
+        # files, not the directory — the GL and Metal twins can't render
+        # in this job's environment. Xvfb from the gl,vulkan step is on
+        # :99; lavapipe renders.
+        run: DISPLAY=:99 ./target/release/fable test demos/glcube/main_vulkan.fable demos/glcube/cube.fable demos/glcube/spec.fable
       - name: Vulkan triangle (SPIR-V gfx draw calls, hard-asserted pixel)
         # The full gfx.* surface on the Vulkan backend: hand-assembled
         # SPIR-V shaders through gfx.compile_program_spirv, reflection-
