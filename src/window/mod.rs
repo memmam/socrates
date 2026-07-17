@@ -60,9 +60,9 @@ pub mod x11;
 #[cfg(all(any(feature = "gl", feature = "vulkan"), target_os = "linux"))]
 use x11::Inner as PlatformInner;
 
-#[cfg(all(feature = "gl", target_os = "windows"))]
+#[cfg(all(any(feature = "gl", feature = "vulkan"), target_os = "windows"))]
 pub mod win32;
-#[cfg(all(feature = "gl", target_os = "windows"))]
+#[cfg(all(any(feature = "gl", feature = "vulkan"), target_os = "windows"))]
 use win32::Inner as PlatformInner;
 
 #[cfg(all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64"))]
@@ -91,7 +91,7 @@ pub enum GfxBufferKind {
 pub struct WindowHandle {
     #[cfg(any(
         all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
-        all(feature = "gl", target_os = "windows"),
+        all(any(feature = "gl", feature = "vulkan"), target_os = "windows"),
         all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
     ))]
     inner: Option<PlatformInner>,
@@ -108,7 +108,7 @@ impl std::fmt::Debug for WindowHandle {
 /// target.
 #[cfg(not(any(
     all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
-    all(feature = "gl", target_os = "windows"),
+    all(any(feature = "gl", feature = "vulkan"), target_os = "windows"),
     all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 )))]
 pub fn create(_title: &str, _w: i32, _h: i32) -> Result<WindowHandle, String> {
@@ -117,7 +117,7 @@ pub fn create(_title: &str, _w: i32, _h: i32) -> Result<WindowHandle, String> {
 
 #[cfg(any(
     all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
-    all(feature = "gl", target_os = "windows"),
+    all(any(feature = "gl", feature = "vulkan"), target_os = "windows"),
     all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 ))]
 pub fn create(title: &str, w: i32, h: i32) -> Result<WindowHandle, String> {
@@ -147,7 +147,7 @@ pub fn create_metal(title: &str, w: i32, h: i32) -> Result<WindowHandle, String>
     Ok(WindowHandle { inner: Some(inner) })
 }
 
-/// Create a Vulkan-backed window (Linux/X11 only for now) — additive
+/// Create a Vulkan-backed window (Linux/X11 and Windows) — additive
 /// alongside [`create`]'s OpenGL/GLX path, never a replacement, exactly the
 /// shape [`create_metal`] established on macOS (and a sibling function
 /// rather than a `backend` parameter on `create` for the same reason: Fable
@@ -156,24 +156,24 @@ pub fn create_metal(title: &str, w: i32, h: i32) -> Result<WindowHandle, String>
 /// without the `vulkan` feature or off Linux — and, until the Vulkan
 /// graphics arc's Phase 1 lands, a clean "not yet implemented" `Err` even
 /// with it on (see `x11/vulkan.rs`).
-#[cfg(not(all(feature = "vulkan", target_os = "linux")))]
+#[cfg(not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows"))))]
 pub fn create_vulkan(_title: &str, _w: i32, _h: i32) -> Result<WindowHandle, String> {
     Err(
         "Vulkan windowing support not compiled in (build with --features vulkan, \
-         Linux/X11 only for now)"
+         Linux/X11 or Windows)"
             .to_string(),
     )
 }
 
-#[cfg(all(feature = "vulkan", target_os = "linux"))]
+#[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]
 pub fn create_vulkan(title: &str, w: i32, h: i32) -> Result<WindowHandle, String> {
-    let inner = x11::Inner::create_vulkan(title, w, h)?;
+    let inner = PlatformInner::create_vulkan(title, w, h)?;
     Ok(WindowHandle { inner: Some(inner) })
 }
 
 #[cfg(any(
     all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
-    all(feature = "gl", target_os = "windows"),
+    all(any(feature = "gl", feature = "vulkan"), target_os = "windows"),
     all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 ))]
 impl WindowHandle {
@@ -457,7 +457,7 @@ impl WindowHandle {
 
 #[cfg(any(
     all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
-    all(feature = "gl", target_os = "windows"),
+    all(any(feature = "gl", feature = "vulkan"), target_os = "windows"),
     all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 ))]
 impl Drop for WindowHandle {
@@ -477,7 +477,7 @@ impl Drop for WindowHandle {
 
 #[cfg(not(any(
     all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
-    all(feature = "gl", target_os = "windows"),
+    all(any(feature = "gl", feature = "vulkan"), target_os = "windows"),
     all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 )))]
 impl WindowHandle {
@@ -645,7 +645,7 @@ mod tests {
     /// on Linux, `x11/mod.rs`'s own test covers the Phase-0 stub `Err`.)
     #[test]
     fn create_vulkan_stub_errs_without_linux_vulkan() {
-        if cfg!(all(feature = "vulkan", target_os = "linux")) {
+        if cfg!(all(feature = "vulkan", any(target_os = "linux", target_os = "windows"))) {
             eprintln!("skipping: vulkan windowing is actually compiled in on this target");
             return;
         }

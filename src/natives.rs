@@ -2324,7 +2324,7 @@ fn gfx_window_msg(
     // exists, and `gfx.*` really isn't compiled in.)
     if !cfg!(feature = "gl")
         && !cfg!(feature = "metal")
-        && !cfg!(all(feature = "vulkan", target_os = "linux"))
+        && !cfg!(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))
     {
         return Err(
             "gfx support not compiled in (build with --features gl, metal, or vulkan)"

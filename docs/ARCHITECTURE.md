@@ -707,7 +707,17 @@ a sum type underneath it lets one `WindowHandle` transparently hold either
 a live GL-backed or Metal-backed window in the same compiled binary.
 (`x11::Inner` was a plain struct too until the Vulkan window backend
 arrived and it adopted the identical enum shape — see the Vulkan window
-scaffolding section below.) Every
+scaffolding section below — and `win32::Inner` followed when the Win32
+Vulkan surface's scaffolding landed: `win32.rs` split into
+`win32/{mod,shared,gl,vulkan}.rs` with the Win32-generic machinery
+(class registration, `CreateWindowExW`, the message pump, the
+`GWLP_USERDATA` boxed-state pattern, key mapping) in `shared.rs`'s
+`Win32WindowState`, composed by `gl.rs`'s WGL half; `vulkan.rs` is
+Phase-0 scaffolding whose `Inner` is deliberately *uninhabited* — its
+`create` always `Err`s, so every `Vulkan` dispatch arm in
+`win32/mod.rs` is the statically-unreachable `match *i {}` until the
+`VK_KHR_win32_surface` WSI phase makes them real. All three platform
+backends are now the same two-variant enum shape.) Every
 `Inner` method becomes a two-armed `match` forwarding to whichever variant
 is live; `#[allow(clippy::large_enum_variant)]` on the enum itself
 (`gl::Inner` carries the ~45-function-pointer `GlFns` table, ~456 bytes,

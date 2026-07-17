@@ -157,7 +157,7 @@ pub enum Native {
     /// kernel dialect (MSL or PTX source, or the SPIR-V profile).
     GpuBackend,
 
-    // window.* + Window handle methods (v0.8, Linux-only for now). The
+    // window.* + Window handle methods (v0.8; Linux/Windows/macOS). The
     // natives are always registered; without the `gl` cargo feature they
     // degrade gracefully (see src/window/mod.rs).
     WindowCreate,

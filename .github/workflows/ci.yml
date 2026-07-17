@@ -175,9 +175,26 @@ jobs:
         run: cargo clippy --features gl --all-targets -- -D warnings
       - name: Unit + golden spec tests (gl)
         # windows-latest is a real Windows machine (unlike the `gl` job's
-        # Xvfb-under-Linux stand-in), so `win32.rs`'s smoke test creates and
-        # drives an actual window/WGL context here.
+        # Xvfb-under-Linux stand-in), so `win32/gl.rs`'s smoke test creates
+        # and drives an actual window/WGL context here.
         run: cargo test --features gl
+      - name: Build + clippy + tests (gl,vulkan coexistence; vulkan alone)
+        # The win32/ split (the x11/ Phase-0 pattern): one binary carries
+        # both the WGL backend and the Vulkan window scaffolding, and a
+        # vulkan-only build compiles cleanly too. create_vulkan currently
+        # returns the Phase-0 scaffolding Err (pinned by
+        # win32::tests::create_vulkan_errs_cleanly_in_phase0) — the WSI
+        # phase makes it real. Diagnostics: report whether this runner has
+        # any Vulkan loader at all (it is NOT expected to), so the WSI
+        # phase's CI story is decided from evidence.
+        shell: bash
+        run: |
+          cargo build --features gl,vulkan
+          cargo clippy --features gl,vulkan --all-targets -- -D warnings
+          cargo test --features gl,vulkan
+          cargo build --features vulkan
+          cargo clippy --features vulkan --all-targets -- -D warnings
+          ls "C:/Windows/System32/vulkan-1.dll" && echo "vulkan-1.dll PRESENT" || echo "no vulkan-1.dll on this runner"
 
   gl-macos:
     # Real Apple Silicon hardware (unlike this repo's own dev/CI containers,

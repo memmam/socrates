@@ -37,7 +37,8 @@ codegen-units = 1
 default = []
 gl = []
 metal = []
-# Native Vulkan (Linux/Windows compute; Linux/X11 windowing, additive
+# Native Vulkan (Linux/Windows compute; Linux/X11 windowing plus the
+# Windows windowing scaffolding, additive
 # alongside gl), raw dlopen FFI -- zero deps, like gl/metal.
 vulkan = []
 # Native OpenCL compute (Linux/Windows), raw dlopen FFI -- zero deps, like
