@@ -712,11 +712,15 @@ Vulkan surface's scaffolding landed: `win32.rs` split into
 `win32/{mod,shared,gl,vulkan}.rs` with the Win32-generic machinery
 (class registration, `CreateWindowExW`, the message pump, the
 `GWLP_USERDATA` boxed-state pattern, key mapping) in `shared.rs`'s
-`Win32WindowState`, composed by `gl.rs`'s WGL half; `vulkan.rs` is
-Phase-0 scaffolding whose `Inner` is deliberately *uninhabited* — its
-`create` always `Err`s, so every `Vulkan` dispatch arm in
-`win32/mod.rs` is the statically-unreachable `match *i {}` until the
-`VK_KHR_win32_surface` WSI phase makes them real. All three platform
+`Win32WindowState`, composed by `gl.rs`'s WGL half; `vulkan.rs` is the
+`VK_KHR_win32_surface` WSI backend, ported from `x11/vulkan.rs`'s
+proven Phase-1 machinery with exactly one platform substitution
+(`vkCreateWin32SurfaceKHR` over hinstance+hwnd instead of
+`vkCreateXlibSurfaceKHR` over display+window) — window lifecycle,
+UNORM-preferred swapchain, offscreen back buffer, clear and present all
+work end to end; the `gfx.*` dispatch arms panic via `vulkan_gfx_todo`
+until draw-call parity lands, the x11 backend's own intermediate
+shape. All three platform
 backends are now the same two-variant enum shape.) Every
 `Inner` method becomes a two-armed `match` forwarding to whichever variant
 is live; `#[allow(clippy::large_enum_variant)]` on the enum itself

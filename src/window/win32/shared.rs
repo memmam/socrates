@@ -24,10 +24,10 @@
 // own naming exactly, on purpose — same call `x11/shared.rs` makes for
 // `XID`.
 #![allow(clippy::upper_case_acronyms)]
-// In a vulkan-only build the whole module is (for now) consumer-less:
-// `vulkan.rs` is Phase-0 scaffolding whose `create` errs before ever making
-// a window. The WSI phase composes `Win32WindowState` from `vulkan.rs` and
-// this allowance narrows away — the same arc `x11/shared.rs` followed.
+// In a vulkan-only build the GL-only pieces (GetDC/ReleaseDC and the HDC
+// they traffic in) have no consumer — `vulkan.rs` composes the window/pump
+// machinery but needs no device context. Same shape as `x11/shared.rs`'s
+// gl-only allowance.
 #![cfg_attr(not(feature = "gl"), allow(dead_code))]
 
 use std::collections::HashSet;
