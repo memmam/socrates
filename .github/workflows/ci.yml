@@ -164,10 +164,12 @@ jobs:
         # The one demo whose golden test needs an actual GL context (SPEC
         # § 7.4's own verification convention: pixel spot-checks, not a
         # framebuffer hash — see demos/glcube/README.md). Xvfb from the step
-        # above is still running on :99.
+        # above is still running on :99. Explicit files, not the directory:
+        # main_metal.fable (the Metal twin, identical pins) can only render
+        # on Apple Silicon macOS — the gl-macos-metal job asserts it there.
         run: |
           cargo build --release --features gl
-          DISPLAY=:99 ./target/release/fable test demos/glcube
+          DISPLAY=:99 ./target/release/fable test demos/glcube/main.fable demos/glcube/cube.fable demos/glcube/spec.fable
 
   gl-windows:
     name: window feature (Win32/WGL)
@@ -270,6 +272,16 @@ jobs:
         run: |
           cargo build --release --features metal
           ./target/release/fable docs/assets/metal_triangle.fable
+      - name: glcube-Metal golden test (real rendered pixels, hard assert)
+        # The cross-backend pixel-parity proof (the Metal arc's Phase 3):
+        # main_metal.fable renders the same cube through the same gfx calls
+        # as main.fable and is pinned to the IDENTICAL two frames / pixel
+        # coordinates / expected bytes as the OpenGL version. Unlike the
+        # smoke step above, this one hard-asserts: macos-14 runners have a
+        # Metal-capable paravirtual GPU and a window server (proven by the
+        # smoke step's ok-line since Phase 1), so a mismatch here is a real
+        # rendering divergence, not a capability gap.
+        run: ./target/release/fable test demos/glcube/main_metal.fable demos/glcube/cube.fable demos/glcube/spec.fable
 
   demo-zoo:
     # Proves the release's cross-compile + `fable build` stapling works on

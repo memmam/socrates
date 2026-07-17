@@ -805,6 +805,14 @@ Metal shader conventions:
   `gfx.active_texture_unit`; sampling state is declared in the shader as a
   `constexpr sampler` (the MSL spelling of the fixed linear/clamp-to-edge
   mode `upload_texture` configures on GL).
+- One clip-space caveat travels with GL-convention projection matrices
+  (`std.glm.perspective`): GL puts clip-space z in `[-w, +w]`, Metal in
+  `[0, +w]`, so an MSL vertex shader using such a matrix remaps once at
+  the end — `out.position.z = (out.position.z + out.position.w) * 0.5;`
+  — or half the depth range is clipped away. See
+  `demos/glcube/main_metal.fable`, whose golden pins are byte-identical
+  to the OpenGL `main.fable`'s (the cross-backend pixel-parity proof,
+  asserted in CI on real Apple Silicon hardware).
 
 ### 7.4 The gfx namespace (v0.8, feature-gated)
 

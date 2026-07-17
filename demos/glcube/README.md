@@ -50,12 +50,29 @@ DISPLAY=:98 ./target/release/fable demos/glcube/main.fable   # render
 DISPLAY=:98 ./target/release/fable test demos/glcube          # golden tests
 ```
 
+## The Metal twin: `main_metal.fable`
+
+The same cube, through the same `gfx.*` calls, against a
+`window.create_metal` window (macOS/Apple Silicon, `--features metal`).
+`cube.fable` is reused completely unchanged; the only differences are the
+create call and the shader source text (MSL instead of GLSL — the one
+deliberate per-backend difference, per `win.backend_name()`'s design),
+plus one line in the vertex shader remapping GL's `[-w, +w]` clip-space z
+onto Metal's `[0, +w]` so `mvp_at`'s GL-convention projection works
+verbatim. Its golden pins are **byte-identical** to `main.fable`'s — the
+same two frames, the same pixel coordinates, the same expected values —
+which is the point: it is the cross-backend pixel-parity proof, asserted
+in CI by the `gl-macos-metal` job on real Apple Silicon hardware (the
+Linux `gl` job's Xvfb can't run it, so that job pins `main.fable` and
+lists its files explicitly).
+
 ## Files
 
 | File          | What it is                                                         |
 |---------------|---------------------------------------------------------------------|
 | `cube.fable`  | the cube's 24-vertex/36-index geometry (one solid color per face) and `mvp_at`, the model\*view\*projection builder |
 | `main.fable`  | opens the window, compiles the shader pair, spins the cube six frames, pixel-spot-checks two of them |
+| `main_metal.fable` | the same scene on the Metal backend, pinned to identical pixels (see above) |
 | `spec.fable`  | GL-free checks: vertex/index counts, and `mvp_at`'s screen-center projection at two rotation angles |
 
 ## Fable features on display
