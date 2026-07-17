@@ -31,7 +31,7 @@
 import jsl.vec;
 
 pub fn clampf(x: Float, lo: Float, hi: Float) -> Float {
-    math.min_float(math.max_float(x, lo), hi)
+    x.max(lo).min(hi)
 }
 
 pub fn mix(a: Float, b: Float, t: Float) -> Float {
@@ -48,7 +48,7 @@ pub fn smoothstep(edge0: Float, edge1: Float, x: Float) -> Float {
 }
 
 pub fn inverse_sqrt(x: Float) -> Float {
-    1.0 / math.sqrt(x)
+    1.0 / x.sqrt()
 }
 
 pub fn signf(x: Float) -> Float {
@@ -80,7 +80,7 @@ pub fn srgb_oetf(c: Float) -> Float {
 // componentwise sqrt — TSL's sqrt(vec3), used by ICAA's fast preset for the
 // gamma-2.0 square-approximation coverage mix.
 pub fn sqrt3(c: vec.Vec3) -> vec.Vec3 {
-    vec.v3(math.sqrt(c.x), math.sqrt(c.y), math.sqrt(c.z))
+    vec.v3(c.x.sqrt(), c.y.sqrt(), c.z.sqrt())
 }
 
 pub fn srgb_eotf3(c: vec.Vec3) -> vec.Vec3 {

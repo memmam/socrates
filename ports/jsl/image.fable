@@ -29,8 +29,8 @@ pub fn new_image(w: Int, h: Int) -> Image {
 
 impl Image {
     pub fn get_px(self, ix: Int, iy: Int) -> vec.Vec4 {
-        let x = math.max(0, math.min(ix, self.w - 1));
-        let y = math.max(0, math.min(iy, self.h - 1));
+        let x = (0).max(ix.min(self.w - 1));
+        let y = (0).max(iy.min(self.h - 1));
         let i = (y * self.w + x) * 4;
         vec.v4(self.px[i], self.px[i + 1], self.px[i + 2], self.px[i + 3])
     }
@@ -65,7 +65,7 @@ impl Image {
 
 fn to_byte(c: Float) -> Int {
     let v = (c * 255.0).round().to_int();
-    math.max(0, math.min(v, 255))
+    (0).max(v.min(255))
 }
 
 pub fn write_ppm(img: Image, path: String) -> Result[Unit, String] {

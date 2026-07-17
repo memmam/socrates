@@ -3,7 +3,7 @@
 Fable ships with batteries of two kinds. **System namespaces** — `math`,
 `fs`, `os`, the graphics namespaces `window` and `gfx` at the end of this
 chapter, and the numeric namespaces of the next — are implemented in Rust,
-always present, and used without an import, like `math.sqrt`. The
+always present, and used without an import, like `math.sin`. The
 **standard library** — `std.json`, `std.set`, and friends — is written in
 Fable, compiled into the binary, and brought in with `import`. Nothing is on
 disk to install either way.

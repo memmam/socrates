@@ -35,7 +35,7 @@ impl Vec2 {
 
     pub fn dot(self, o: Vec2) -> Float { self.x * o.x + self.y * o.y }
     pub fn length_sq(self) -> Float { self.dot(self) }
-    pub fn length(self) -> Float { math.sqrt(self.length_sq()) }
+    pub fn length(self) -> Float { self.length_sq().sqrt() }
 
     // Divides by length (not `* (1.0 / length)`) — the reciprocal form
     // differs by up to 1 ulp on full-magnitude components, and that
@@ -65,7 +65,7 @@ impl Vec3 {
         )
     }
     pub fn length_sq(self) -> Float { self.dot(self) }
-    pub fn length(self) -> Float { math.sqrt(self.length_sq()) }
+    pub fn length(self) -> Float { self.length_sq().sqrt() }
 
     pub fn normalize(self) -> Vec3 {
         let len = self.length();
@@ -95,7 +95,7 @@ impl Vec4 {
         self.x * o.x + self.y * o.y + self.z * o.z + self.w * o.w
     }
     pub fn length_sq(self) -> Float { self.dot(self) }
-    pub fn length(self) -> Float { math.sqrt(self.length_sq()) }
+    pub fn length(self) -> Float { self.length_sq().sqrt() }
 
     // The point/direction part, dropping w (e.g. after a Mat4 transform).
     pub fn xyz(self) -> Vec3 { vec3(self.x, self.y, self.z) }
@@ -263,7 +263,7 @@ impl Quat {
     pub fn length_sq(self) -> Float {
         self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w
     }
-    pub fn length(self) -> Float { math.sqrt(self.length_sq()) }
+    pub fn length(self) -> Float { self.length_sq().sqrt() }
 
     pub fn normalize(self) -> Quat {
         let len = self.length();
@@ -317,7 +317,7 @@ impl Quat {
             );
             result.normalize()
         } else {
-            let theta_0 = math.atan2(math.sqrt(1.0 - dot * dot), dot);
+            let theta_0 = math.atan2((1.0 - dot * dot).sqrt(), dot);
             let theta = theta_0 * t;
             let sin_theta_0 = math.sin(theta_0);
             let s1 = math.sin(theta) / sin_theta_0;

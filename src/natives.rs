@@ -79,7 +79,6 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         // ------------------------------------------------------------------
         // math.*
         // ------------------------------------------------------------------
-        MathSqrt => Value::Float(float_arg(vm, argc, 0)?.sqrt()),
         MathSin => Value::Float(float_arg(vm, argc, 0)?.sin()),
         MathCos => Value::Float(float_arg(vm, argc, 0)?.cos()),
         MathTan => Value::Float(float_arg(vm, argc, 0)?.tan()),
@@ -89,15 +88,6 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         MathLog2 => Value::Float(float_arg(vm, argc, 0)?.log2()),
         MathExp => Value::Float(float_arg(vm, argc, 0)?.exp()),
         MathPow => Value::Float(float_arg(vm, argc, 0)?.powf(float_arg(vm, argc, 1)?)),
-        MathFloor => Value::Float(float_arg(vm, argc, 0)?.floor()),
-        MathCeil => Value::Float(float_arg(vm, argc, 0)?.ceil()),
-        MathRound => Value::Float(float_arg(vm, argc, 0)?.round()),
-        MathAbs => Value::Float(float_arg(vm, argc, 0)?.abs()),
-        MathAbsInt => Value::Int(checked_abs(vm, int_arg(vm, argc, 0)?)?),
-        MathMin => Value::Int(int_arg(vm, argc, 0)?.min(int_arg(vm, argc, 1)?)),
-        MathMax => Value::Int(int_arg(vm, argc, 0)?.max(int_arg(vm, argc, 1)?)),
-        MathMinFloat => Value::Float(float_arg(vm, argc, 0)?.min(float_arg(vm, argc, 1)?)),
-        MathMaxFloat => Value::Float(float_arg(vm, argc, 0)?.max(float_arg(vm, argc, 1)?)),
         MathRandom => Value::Float(vm.rng_next()),
         MathSeed => {
             let s = int_arg(vm, argc, 0)?;
@@ -1919,6 +1909,8 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         FloatCeil => Value::Float(float_arg(vm, argc, 0)?.ceil()),
         FloatRound => Value::Float(float_arg(vm, argc, 0)?.round()),
         FloatSqrt => Value::Float(float_arg(vm, argc, 0)?.sqrt()),
+        FloatMin => Value::Float(float_arg(vm, argc, 0)?.min(float_arg(vm, argc, 1)?)),
+        FloatMax => Value::Float(float_arg(vm, argc, 0)?.max(float_arg(vm, argc, 1)?)),
         FloatIsNan => Value::Bool(float_arg(vm, argc, 0)?.is_nan()),
         FloatToFixed => {
             let f = float_arg(vm, argc, 0)?;

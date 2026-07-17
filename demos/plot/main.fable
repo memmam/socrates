@@ -68,7 +68,7 @@ fn spirograph() -> String {
     let mut i = 0;
     let mut seg = 0;
     while i < steps {
-        let end = math.min(i + chunk, steps);
+        let end = (i + chunk).min(steps);
         d.polyline(pts.slice(i, end + 1), "hsl({360 * seg * chunk / steps}, 80%, 62%)", 1.6);
         i = end;
         seg += 1;

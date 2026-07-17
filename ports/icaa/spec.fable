@@ -19,7 +19,7 @@ import jsl.vec;
 
 fn to_byte(c: Float) -> Int {
     let v = (c * 255.0).round().to_int();
-    math.max(0, math.min(v, 255))
+    (0).max(v.min(255))
 }
 
 // Order-sensitive checksum over quantized RGB bytes.

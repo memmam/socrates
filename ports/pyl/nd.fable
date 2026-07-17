@@ -260,7 +260,7 @@ impl Nd {
     pub fn tanhv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| tanh(v)) } }
     pub fn absv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| v.abs()) } }
     pub fn floorv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| v.floor()) } }
-    pub fn sqrtv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| math.sqrt(v)) } }
+    pub fn sqrtv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| v.sqrt()) } }
 
     // ---- reductions / scans (mono) ----
 
@@ -277,7 +277,7 @@ impl Nd {
     pub fn max_abs(self) -> Float {
         require_mono(self, "max_abs");
         let mut m = 0.0;
-        for v in self.data { m = math.max_float(m, v.abs()); }
+        for v in self.data { m = m.max(v.abs()); }
         m
     }
 
@@ -296,7 +296,7 @@ impl Nd {
     // decision, same as max_abs)
     pub fn max_abs_all(self) -> Float {
         let mut m = 0.0;
-        for v in self.data { m = math.max_float(m, v.abs()); }
+        for v in self.data { m = m.max(v.abs()); }
         m
     }
 
@@ -328,7 +328,7 @@ impl Nd {
 
     // per component min(max(x, lo), hi)
     pub fn clip(self, lo: Float, hi: Float) -> Nd {
-        Nd { ch: self.ch, data: self.data.map(|v| math.min_float(math.max_float(v, lo), hi)) }
+        Nd { ch: self.ch, data: self.data.map(|v| v.max(lo).min(hi)) }
     }
 
     // ---- slicing (copies; frame indices, clamped) ----
@@ -336,8 +336,8 @@ impl Nd {
     // x[from:to] by frames, `to` exclusive, both clamped to [0, frames]
     pub fn slice(self, from: Int, to: Int) -> Nd {
         let n = self.frames();
-        let f = math.max(0, math.min(from, n));
-        let t = math.max(f, math.min(to, n));
+        let f = (0).max(from.min(n));
+        let t = f.max(to.min(n));
         let data = [];
         for i in f * self.ch..t * self.ch { data.push(self.data[i]); }
         Nd { ch: self.ch, data }
@@ -377,7 +377,7 @@ impl Nd {
             panic("pyl.nd: add_range: channel mismatch ({self.ch} vs {src.ch})");
         }
         if at < 0 { panic("pyl.nd: add_range: negative start frame {at}"); }
-        let ei = math.min(at + src.frames(), self.frames());
+        let ei = (at + src.frames()).min(self.frames());
         let count = (ei - at) * self.ch;
         let mut i = 0;
         while i < count {
@@ -399,7 +399,7 @@ impl Nd {
         for p in pos.data {
             let i0 = p.to_int();
             let frac = p - i0.to_float();
-            let i1 = math.min(i0 + 1, n - 1);
+            let i1 = (i0 + 1).min(n - 1);
             for c in 0..self.ch {
                 data.push(self.data[i0 * self.ch + c] * (1.0 - frac) + self.data[i1 * self.ch + c] * frac);
             }

@@ -124,13 +124,13 @@ fn carve_corridor(grid: List[List[String]], from: (Int, Int), to: (Int, Int)) {
 }
 
 fn carve_h(grid: List[List[String]], x1: Int, x2: Int, y: Int) {
-    for x in math.min(x1, x2)..=math.max(x1, x2) {
+    for x in x1.min(x2)..=x1.max(x2) {
         grid[y][x] = floor;
     }
 }
 
 fn carve_v(grid: List[List[String]], y1: Int, y2: Int, x: Int) {
-    for y in math.min(y1, y2)..=math.max(y1, y2) {
+    for y in y1.min(y2)..=y1.max(y2) {
         grid[y][x] = floor;
     }
 }

@@ -83,7 +83,7 @@ impl C {
         }
     }
     fn scale(self, k: Float) -> C { c(self.re * k, self.im * k) }
-    fn mag(self) -> Float { math.sqrt(self.re * self.re + self.im * self.im) }
+    fn mag(self) -> Float { (self.re * self.re + self.im * self.im).sqrt() }
     fn conj(self) -> C { c(self.re, -self.im) }
 }
 
@@ -102,10 +102,10 @@ fn csqrt(z: C) -> C {
     if z.re == 0.0 && z.im == 0.0 { return c(0.0, 0.0); }
     let r = z.mag();
     if z.re >= 0.0 {
-        let t = math.sqrt((r + z.re) / 2.0);
+        let t = ((r + z.re) / 2.0).sqrt();
         c(t, z.im / (2.0 * t))
     } else {
-        let t = math.sqrt((r - z.re) / 2.0);
+        let t = ((r - z.re) / 2.0).sqrt();
         let re = z.im.abs() / (2.0 * t);
         if z.im < 0.0 { c(re, -t) } else { c(re, t) }
     }
@@ -268,7 +268,7 @@ fn zpk2sos(z_in: List[C], p_in: List[C], k: Float) -> List[List[Float]] {
     let pfull = p_in.clone();
     while pfull.len() < zfull.len() { pfull.push(c(0.0, 0.0)); }
     while zfull.len() < pfull.len() { zfull.push(c(0.0, 0.0)); }
-    let n_sections = (math.max(pfull.len(), zfull.len()) + 1) / 2;
+    let n_sections = (pfull.len().max(zfull.len()) + 1) / 2;
     if pfull.len() % 2 == 1 {  // pairing == 'nearest'
         pfull.push(c(0.0, 0.0));
         zfull.push(c(0.0, 0.0));
@@ -358,7 +358,7 @@ fn butter_rows(order: Int, wn: List[Float], bt: String) -> List[List[Float]] {
         let w1 = 4.0 * math.tan(math.pi * wn[0] / 2.0);
         let w2 = 4.0 * math.tan(math.pi * wn[1] / 2.0);
         let bw = w2 - w1;
-        let wo = math.sqrt(w1 * w2);
+        let wo = (w1 * w2).sqrt();
         let p_lp = proto.map(|pp| pp.scale(bw / 2.0));
         // +sqrt branch for every prototype pole, then the -sqrt branch
         for pl in p_lp { pt.push(pl + csqrt(pl * pl - c(wo * wo, 0.0))); }

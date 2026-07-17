@@ -1379,7 +1379,7 @@ impl Checker {
         }
         if Native::is_namespace(name) {
             let hint = match name {
-                "math" => "use `math.sqrt(..)`, `math.pi`, ...",
+                "math" => "use `math.sin(..)`, `math.pi`, ...",
                 "fs" => "use `fs.read(..)`, `fs.write(..)`, ...",
                 "gpu" => "use `gpu.available()`, `gpu.run(..)`, ...",
                 "window" => "use `window.create(..)`, ...",
@@ -4279,7 +4279,7 @@ mod tests {
 
     #[test]
     fn math_namespace() {
-        ok("println(math.sqrt(2.0)); println(math.pi); println(math.min(1, 2));");
+        ok("println(math.sin(2.0)); println(math.pi); println(math.pow(2.0, 3.0));");
         err_code("println(math.nope(1.0));", "E0413");
         err_code("let m = math;", "E0410");
     }

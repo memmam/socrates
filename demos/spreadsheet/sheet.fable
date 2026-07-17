@@ -123,7 +123,7 @@ pub fn load(path: String) -> Result[Sheet, String] {
         }
         row += 1;
     }
-    sheet.n_rows = math.max(sheet.n_rows, row);
+    sheet.n_rows = sheet.n_rows.max(row);
     Ok(sheet)
 }
 
@@ -134,8 +134,8 @@ impl Sheet {
     pub fn set(self, a: String, text: String) {
         match parse_addr(a) {
             Some((col, row)) -> {
-                self.n_cols = math.max(self.n_cols, col + 1);
-                self.n_rows = math.max(self.n_rows, row + 1);
+                self.n_cols = self.n_cols.max(col + 1);
+                self.n_rows = self.n_rows.max(row + 1);
             },
             None -> panic("bad cell address '{a}'"),
         }
@@ -246,8 +246,8 @@ fn span(a: String, b: String) -> Option[List[String]] {
     let (c1, r1) = parse_addr(a)?;
     let (c2, r2) = parse_addr(b)?;
     let addrs: List[String] = [];
-    for r in math.min(r1, r2)..=math.max(r1, r2) {
-        for c in math.min(c1, c2)..=math.max(c1, c2) {
+    for r in r1.min(r2)..=r1.max(r2) {
+        for c in c1.min(c2)..=c1.max(c2) {
             addrs.push(addr(c, r));
         }
     }
@@ -283,7 +283,7 @@ fn need_one(extreme: Option[Float]) -> Value {
 // numbers without the trailing ".0" that Fable floats normally carry.
 fn fmt_num(v: Float) -> String {
     let r = (v * 100.0).round() / 100.0;
-    if r == math.floor(r) { str(r.to_int()) } else { str(r) }
+    if r == r.floor() { str(r.to_int()) } else { str(r) }
 }
 
 fn center(s: String, w: Int) -> String {
