@@ -33,6 +33,17 @@
 //! `VkPhysicalDeviceProperties` is read through an over-sized tail pad —
 //! only the leading fields through `deviceName` are interpreted, and the
 //! pad guarantees the driver's write (824 bytes in 1.0) stays in bounds.
+//!
+//! **This module doubles as the crate's shared Vulkan primitive layer**
+//! (the Vulkan analog of `crate::objc`, promoted the same way — when its
+//! second consumer arrived): the loader ([`loader_gipa`], one
+//! `dlopen` per process), the handle/scalar typedefs, the shared 1.0-core
+//! constants/structs/function-pointer types are `pub(crate)` and consumed
+//! by both this file's compute path and the Linux window backend
+//! (`window/x11/vulkan.rs`). API-surface-specific shapes stay with their
+//! sole consumers — WSI/swapchain/image machinery lives in the window
+//! backend, descriptor/pipeline machinery here — mirroring how AppKit
+//! messages stayed in `window/macos/shared.rs` when `objc.rs` graduated.
 
 #![cfg_attr(
     not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows"))),
@@ -84,14 +95,14 @@ mod libloading {
 // ---------------------------------------------------------------------------
 
 // Dispatchable handles: pointers.
-type VkInstance = *mut c_void;
-type VkPhysicalDevice = *mut c_void;
-type VkDevice = *mut c_void;
-type VkQueue = *mut c_void;
-type VkCommandBuffer = *mut c_void;
+pub(crate) type VkInstance = *mut c_void;
+pub(crate) type VkPhysicalDevice = *mut c_void;
+pub(crate) type VkDevice = *mut c_void;
+pub(crate) type VkQueue = *mut c_void;
+pub(crate) type VkCommandBuffer = *mut c_void;
 // Non-dispatchable handles: 64-bit integers on every platform.
 type VkBuffer = u64;
-type VkDeviceMemory = u64;
+pub(crate) type VkDeviceMemory = u64;
 type VkShaderModule = u64;
 type VkDescriptorSetLayout = u64;
 type VkPipelineLayout = u64;
@@ -99,33 +110,33 @@ type VkPipeline = u64;
 type VkPipelineCache = u64;
 type VkDescriptorPool = u64;
 type VkDescriptorSet = u64;
-type VkCommandPool = u64;
-type VkFence = u64;
+pub(crate) type VkCommandPool = u64;
+pub(crate) type VkFence = u64;
 
-type VkResult = i32;
-const VK_SUCCESS: VkResult = 0;
-const VK_TRUE: u32 = 1;
+pub(crate) type VkResult = i32;
+pub(crate) const VK_SUCCESS: VkResult = 0;
+pub(crate) const VK_TRUE: u32 = 1;
 
-const VK_API_VERSION_1_0: u32 = 1 << 22;
+pub(crate) const VK_API_VERSION_1_0: u32 = 1 << 22;
 const VK_QUEUE_COMPUTE_BIT: u32 = 0x2;
 const VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT: u32 = 0x2;
 const VK_MEMORY_PROPERTY_HOST_COHERENT_BIT: u32 = 0x4;
 const VK_BUFFER_USAGE_STORAGE_BUFFER_BIT: u32 = 0x20;
-const VK_SHARING_MODE_EXCLUSIVE: u32 = 0;
+pub(crate) const VK_SHARING_MODE_EXCLUSIVE: u32 = 0;
 const VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: u32 = 7;
 const VK_SHADER_STAGE_COMPUTE_BIT: u32 = 0x20;
 const VK_PIPELINE_BIND_POINT_COMPUTE: u32 = 1;
-const VK_COMMAND_BUFFER_LEVEL_PRIMARY: u32 = 0;
-const VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: u32 = 0x1;
+pub(crate) const VK_COMMAND_BUFFER_LEVEL_PRIMARY: u32 = 0;
+pub(crate) const VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: u32 = 0x1;
 
 // VkStructureType values (core 1.0).
-const ST_APPLICATION_INFO: i32 = 0;
-const ST_INSTANCE_CREATE_INFO: i32 = 1;
-const ST_DEVICE_QUEUE_CREATE_INFO: i32 = 2;
-const ST_DEVICE_CREATE_INFO: i32 = 3;
-const ST_SUBMIT_INFO: i32 = 4;
-const ST_MEMORY_ALLOCATE_INFO: i32 = 5;
-const ST_FENCE_CREATE_INFO: i32 = 8;
+pub(crate) const ST_APPLICATION_INFO: i32 = 0;
+pub(crate) const ST_INSTANCE_CREATE_INFO: i32 = 1;
+pub(crate) const ST_DEVICE_QUEUE_CREATE_INFO: i32 = 2;
+pub(crate) const ST_DEVICE_CREATE_INFO: i32 = 3;
+pub(crate) const ST_SUBMIT_INFO: i32 = 4;
+pub(crate) const ST_MEMORY_ALLOCATE_INFO: i32 = 5;
+pub(crate) const ST_FENCE_CREATE_INFO: i32 = 8;
 const ST_BUFFER_CREATE_INFO: i32 = 12;
 const ST_SHADER_MODULE_CREATE_INFO: i32 = 16;
 const ST_PIPELINE_SHADER_STAGE_CREATE_INFO: i32 = 18;
@@ -135,83 +146,83 @@ const ST_DESCRIPTOR_SET_LAYOUT_CREATE_INFO: i32 = 32;
 const ST_DESCRIPTOR_POOL_CREATE_INFO: i32 = 33;
 const ST_DESCRIPTOR_SET_ALLOCATE_INFO: i32 = 34;
 const ST_WRITE_DESCRIPTOR_SET: i32 = 35;
-const ST_COMMAND_POOL_CREATE_INFO: i32 = 39;
-const ST_COMMAND_BUFFER_ALLOCATE_INFO: i32 = 40;
-const ST_COMMAND_BUFFER_BEGIN_INFO: i32 = 42;
+pub(crate) const ST_COMMAND_POOL_CREATE_INFO: i32 = 39;
+pub(crate) const ST_COMMAND_BUFFER_ALLOCATE_INFO: i32 = 40;
+pub(crate) const ST_COMMAND_BUFFER_BEGIN_INFO: i32 = 42;
 
 // ---------------------------------------------------------------------------
 // Structs (Vulkan 1.0 core, exact field widths).
 // ---------------------------------------------------------------------------
 
 #[repr(C)]
-struct VkApplicationInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    p_application_name: *const c_char,
-    application_version: u32,
-    p_engine_name: *const c_char,
-    engine_version: u32,
-    api_version: u32,
+pub(crate) struct VkApplicationInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) p_application_name: *const c_char,
+    pub(crate) application_version: u32,
+    pub(crate) p_engine_name: *const c_char,
+    pub(crate) engine_version: u32,
+    pub(crate) api_version: u32,
 }
 #[repr(C)]
-struct VkInstanceCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    p_application_info: *const VkApplicationInfo,
-    enabled_layer_count: u32,
-    pp_enabled_layer_names: *const *const c_char,
-    enabled_extension_count: u32,
-    pp_enabled_extension_names: *const *const c_char,
+pub(crate) struct VkInstanceCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) p_application_info: *const VkApplicationInfo,
+    pub(crate) enabled_layer_count: u32,
+    pub(crate) pp_enabled_layer_names: *const *const c_char,
+    pub(crate) enabled_extension_count: u32,
+    pub(crate) pp_enabled_extension_names: *const *const c_char,
 }
 #[repr(C)]
-struct VkDeviceQueueCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    queue_family_index: u32,
-    queue_count: u32,
-    p_queue_priorities: *const f32,
+pub(crate) struct VkDeviceQueueCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) queue_family_index: u32,
+    pub(crate) queue_count: u32,
+    pub(crate) p_queue_priorities: *const f32,
 }
 #[repr(C)]
-struct VkDeviceCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    queue_create_info_count: u32,
-    p_queue_create_infos: *const VkDeviceQueueCreateInfo,
-    enabled_layer_count: u32,
-    pp_enabled_layer_names: *const *const c_char,
-    enabled_extension_count: u32,
-    pp_enabled_extension_names: *const *const c_char,
-    p_enabled_features: *const c_void,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct VkQueueFamilyProperties {
-    queue_flags: u32,
-    queue_count: u32,
-    timestamp_valid_bits: u32,
-    min_image_transfer_granularity: [u32; 3],
+pub(crate) struct VkDeviceCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) queue_create_info_count: u32,
+    pub(crate) p_queue_create_infos: *const VkDeviceQueueCreateInfo,
+    pub(crate) enabled_layer_count: u32,
+    pub(crate) pp_enabled_layer_names: *const *const c_char,
+    pub(crate) enabled_extension_count: u32,
+    pub(crate) pp_enabled_extension_names: *const *const c_char,
+    pub(crate) p_enabled_features: *const c_void,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct VkMemoryType {
-    property_flags: u32,
-    heap_index: u32,
+pub(crate) struct VkQueueFamilyProperties {
+    pub(crate) queue_flags: u32,
+    pub(crate) queue_count: u32,
+    pub(crate) timestamp_valid_bits: u32,
+    pub(crate) min_image_transfer_granularity: [u32; 3],
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct VkMemoryHeap {
-    size: u64,
-    flags: u32,
+pub(crate) struct VkMemoryType {
+    pub(crate) property_flags: u32,
+    pub(crate) heap_index: u32,
 }
 #[repr(C)]
-struct VkPhysicalDeviceMemoryProperties {
-    memory_type_count: u32,
-    memory_types: [VkMemoryType; 32],
-    memory_heap_count: u32,
-    memory_heaps: [VkMemoryHeap; 16],
+#[derive(Clone, Copy)]
+pub(crate) struct VkMemoryHeap {
+    pub(crate) size: u64,
+    pub(crate) flags: u32,
+}
+#[repr(C)]
+pub(crate) struct VkPhysicalDeviceMemoryProperties {
+    pub(crate) memory_type_count: u32,
+    pub(crate) memory_types: [VkMemoryType; 32],
+    pub(crate) memory_heap_count: u32,
+    pub(crate) memory_heaps: [VkMemoryHeap; 16],
 }
 /// Only the fields through `device_name` are interpreted; the tail pad
 /// covers the rest of the real 1.0 struct (limits + sparse properties,
@@ -239,17 +250,17 @@ struct VkBufferCreateInfo {
     p_queue_family_indices: *const u32,
 }
 #[repr(C)]
-struct VkMemoryRequirements {
-    size: u64,
-    alignment: u64,
-    memory_type_bits: u32,
+pub(crate) struct VkMemoryRequirements {
+    pub(crate) size: u64,
+    pub(crate) alignment: u64,
+    pub(crate) memory_type_bits: u32,
 }
 #[repr(C)]
-struct VkMemoryAllocateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    allocation_size: u64,
-    memory_type_index: u32,
+pub(crate) struct VkMemoryAllocateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) allocation_size: u64,
+    pub(crate) memory_type_index: u32,
 }
 #[repr(C)]
 struct VkShaderModuleCreateInfo {
@@ -347,76 +358,76 @@ struct VkWriteDescriptorSet {
     p_texel_buffer_view: *const c_void,
 }
 #[repr(C)]
-struct VkCommandPoolCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    queue_family_index: u32,
+pub(crate) struct VkCommandPoolCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) queue_family_index: u32,
 }
 #[repr(C)]
-struct VkCommandBufferAllocateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    command_pool: VkCommandPool,
-    level: u32,
-    command_buffer_count: u32,
+pub(crate) struct VkCommandBufferAllocateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) command_pool: VkCommandPool,
+    pub(crate) level: u32,
+    pub(crate) command_buffer_count: u32,
 }
 #[repr(C)]
-struct VkCommandBufferBeginInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    p_inheritance_info: *const c_void,
+pub(crate) struct VkCommandBufferBeginInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
+    pub(crate) p_inheritance_info: *const c_void,
 }
 #[repr(C)]
-struct VkSubmitInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    wait_semaphore_count: u32,
-    p_wait_semaphores: *const c_void,
-    p_wait_dst_stage_mask: *const u32,
-    command_buffer_count: u32,
-    p_command_buffers: *const VkCommandBuffer,
-    signal_semaphore_count: u32,
-    p_signal_semaphores: *const c_void,
+pub(crate) struct VkSubmitInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) wait_semaphore_count: u32,
+    pub(crate) p_wait_semaphores: *const c_void,
+    pub(crate) p_wait_dst_stage_mask: *const u32,
+    pub(crate) command_buffer_count: u32,
+    pub(crate) p_command_buffers: *const VkCommandBuffer,
+    pub(crate) signal_semaphore_count: u32,
+    pub(crate) p_signal_semaphores: *const c_void,
 }
 #[repr(C)]
-struct VkFenceCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
+pub(crate) struct VkFenceCreateInfo {
+    pub(crate) s_type: i32,
+    pub(crate) p_next: *const c_void,
+    pub(crate) flags: u32,
 }
 
 // ---------------------------------------------------------------------------
 // Function-pointer types and the resolved table.
 // ---------------------------------------------------------------------------
 
-type PfnVoidFunction = *mut c_void;
-type FnGetInstanceProcAddr =
+pub(crate) type PfnVoidFunction = *mut c_void;
+pub(crate) type FnGetInstanceProcAddr =
     unsafe extern "system" fn(VkInstance, *const c_char) -> PfnVoidFunction;
-type FnCreateInstance = unsafe extern "system" fn(
+pub(crate) type FnCreateInstance = unsafe extern "system" fn(
     *const VkInstanceCreateInfo,
     *const c_void,
     *mut VkInstance,
 ) -> VkResult;
-type FnDestroyInstance = unsafe extern "system" fn(VkInstance, *const c_void);
-type FnEnumeratePhysicalDevices =
+pub(crate) type FnDestroyInstance = unsafe extern "system" fn(VkInstance, *const c_void);
+pub(crate) type FnEnumeratePhysicalDevices =
     unsafe extern "system" fn(VkInstance, *mut u32, *mut VkPhysicalDevice) -> VkResult;
 type FnGetPhysicalDeviceProperties =
     unsafe extern "system" fn(VkPhysicalDevice, *mut VkPhysicalDevicePropertiesPadded);
-type FnGetPhysicalDeviceQueueFamilyProperties =
+pub(crate) type FnGetPhysicalDeviceQueueFamilyProperties =
     unsafe extern "system" fn(VkPhysicalDevice, *mut u32, *mut VkQueueFamilyProperties);
-type FnGetPhysicalDeviceMemoryProperties =
+pub(crate) type FnGetPhysicalDeviceMemoryProperties =
     unsafe extern "system" fn(VkPhysicalDevice, *mut VkPhysicalDeviceMemoryProperties);
-type FnCreateDevice = unsafe extern "system" fn(
+pub(crate) type FnCreateDevice = unsafe extern "system" fn(
     VkPhysicalDevice,
     *const VkDeviceCreateInfo,
     *const c_void,
     *mut VkDevice,
 ) -> VkResult;
 type FnGetDeviceProcAddr = unsafe extern "system" fn(VkDevice, *const c_char) -> PfnVoidFunction;
-type FnDestroyDevice = unsafe extern "system" fn(VkDevice, *const c_void);
-type FnGetDeviceQueue = unsafe extern "system" fn(VkDevice, u32, u32, *mut VkQueue);
+pub(crate) type FnDestroyDevice = unsafe extern "system" fn(VkDevice, *const c_void);
+pub(crate) type FnGetDeviceQueue = unsafe extern "system" fn(VkDevice, u32, u32, *mut VkQueue);
 type FnCreateShaderModule = unsafe extern "system" fn(
     VkDevice,
     *const VkShaderModuleCreateInfo,
@@ -473,13 +484,13 @@ type FnCreateBuffer = unsafe extern "system" fn(
 type FnDestroyBuffer = unsafe extern "system" fn(VkDevice, VkBuffer, *const c_void);
 type FnGetBufferMemoryRequirements =
     unsafe extern "system" fn(VkDevice, VkBuffer, *mut VkMemoryRequirements);
-type FnAllocateMemory = unsafe extern "system" fn(
+pub(crate) type FnAllocateMemory = unsafe extern "system" fn(
     VkDevice,
     *const VkMemoryAllocateInfo,
     *const c_void,
     *mut VkDeviceMemory,
 ) -> VkResult;
-type FnFreeMemory = unsafe extern "system" fn(VkDevice, VkDeviceMemory, *const c_void);
+pub(crate) type FnFreeMemory = unsafe extern "system" fn(VkDevice, VkDeviceMemory, *const c_void);
 type FnBindBufferMemory =
     unsafe extern "system" fn(VkDevice, VkBuffer, VkDeviceMemory, u64) -> VkResult;
 type FnMapMemory = unsafe extern "system" fn(
@@ -490,19 +501,19 @@ type FnMapMemory = unsafe extern "system" fn(
     u32,
     *mut *mut c_void,
 ) -> VkResult;
-type FnCreateCommandPool = unsafe extern "system" fn(
+pub(crate) type FnCreateCommandPool = unsafe extern "system" fn(
     VkDevice,
     *const VkCommandPoolCreateInfo,
     *const c_void,
     *mut VkCommandPool,
 ) -> VkResult;
-type FnDestroyCommandPool = unsafe extern "system" fn(VkDevice, VkCommandPool, *const c_void);
-type FnAllocateCommandBuffers = unsafe extern "system" fn(
+pub(crate) type FnDestroyCommandPool = unsafe extern "system" fn(VkDevice, VkCommandPool, *const c_void);
+pub(crate) type FnAllocateCommandBuffers = unsafe extern "system" fn(
     VkDevice,
     *const VkCommandBufferAllocateInfo,
     *mut VkCommandBuffer,
 ) -> VkResult;
-type FnBeginCommandBuffer =
+pub(crate) type FnBeginCommandBuffer =
     unsafe extern "system" fn(VkCommandBuffer, *const VkCommandBufferBeginInfo) -> VkResult;
 type FnCmdBindPipeline = unsafe extern "system" fn(VkCommandBuffer, u32, VkPipeline);
 type FnCmdBindDescriptorSets = unsafe extern "system" fn(
@@ -516,23 +527,23 @@ type FnCmdBindDescriptorSets = unsafe extern "system" fn(
     *const u32,
 );
 type FnCmdDispatch = unsafe extern "system" fn(VkCommandBuffer, u32, u32, u32);
-type FnEndCommandBuffer = unsafe extern "system" fn(VkCommandBuffer) -> VkResult;
-type FnQueueSubmit =
+pub(crate) type FnEndCommandBuffer = unsafe extern "system" fn(VkCommandBuffer) -> VkResult;
+pub(crate) type FnQueueSubmit =
     unsafe extern "system" fn(VkQueue, u32, *const VkSubmitInfo, VkFence) -> VkResult;
-type FnCreateFence = unsafe extern "system" fn(
+pub(crate) type FnCreateFence = unsafe extern "system" fn(
     VkDevice,
     *const VkFenceCreateInfo,
     *const c_void,
     *mut VkFence,
 ) -> VkResult;
-type FnDestroyFence = unsafe extern "system" fn(VkDevice, VkFence, *const c_void);
-type FnWaitForFences =
+pub(crate) type FnDestroyFence = unsafe extern "system" fn(VkDevice, VkFence, *const c_void);
+pub(crate) type FnWaitForFences =
     unsafe extern "system" fn(VkDevice, u32, *const VkFence, u32, u64) -> VkResult;
 
 /// `vkGetInstanceProcAddr`, resolved once per process from the dynamically
 /// opened loader (nul = loader missing — every entry point reports "no
 /// adapter"-shaped errors from that).
-fn loader_gipa() -> Option<FnGetInstanceProcAddr> {
+pub(crate) fn loader_gipa() -> Option<FnGetInstanceProcAddr> {
     static CELL: OnceLock<usize> = OnceLock::new();
     let addr = *CELL.get_or_init(|| unsafe {
         let lib = libloading::open();

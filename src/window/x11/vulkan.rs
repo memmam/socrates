@@ -48,67 +48,56 @@
 //! `OUT_OF_DATE`/`SUBOPTIMAL`) rebuilds both the swapchain and the
 //! offscreen target from the surface's current extent.
 //!
-//! The FFI below is deliberately self-contained for this phase (the same
-//! hand-transcribed 1.0-core shapes as `crate::vk`, plus the WSI
-//! extensions) — the shared-core extraction that deduplicates the two
-//! Vulkan consumers is its own follow-up refactor PR, per the project's
-//! extract-at-real-duplication rule (exactly how `crate::objc` graduated
-//! out of `macos/shared.rs` once its second consumer existed).
+//! The 1.0-core primitives (loader, handle types, shared constants/
+//! structs/function-pointer types) come from [`crate::vk`], the crate's
+//! shared Vulkan layer — one `dlopen` per process across the compute and
+//! window paths. Only what is WSI/image-specific (surface, swapchain,
+//! present, image transitions and copies) is transcribed here, with its
+//! sole consumer, per the shared-core discipline `crate::objc` set.
 
 use std::ffi::{c_char, c_ulong, c_void, CString};
 use std::ptr;
 use std::sync::atomic::Ordering;
-use std::sync::OnceLock;
 
 use super::shared::{
     record_x_error, X11WindowState, XDefaultDepth, XDefaultScreen, XDefaultVisual, XOpenDisplay,
     XSetErrorHandler, XSync, X_FALSE, X_PROTOCOL_ERROR,
 };
+use crate::vk::{
+    loader_gipa, FnAllocateCommandBuffers, FnAllocateMemory, FnBeginCommandBuffer,
+    FnCreateCommandPool, FnCreateDevice, FnCreateFence, FnCreateInstance, FnDestroyCommandPool,
+    FnDestroyDevice, FnDestroyFence, FnDestroyInstance, FnEndCommandBuffer,
+    FnEnumeratePhysicalDevices, FnGetDeviceQueue, FnGetInstanceProcAddr,
+    FnGetPhysicalDeviceMemoryProperties, FnGetPhysicalDeviceQueueFamilyProperties, FnFreeMemory,
+    FnQueueSubmit, FnWaitForFences, PfnVoidFunction, VkApplicationInfo,
+    VkCommandBuffer, VkCommandBufferAllocateInfo, VkCommandBufferBeginInfo,
+    VkCommandPool, VkCommandPoolCreateInfo, VkDevice, VkDeviceCreateInfo, VkDeviceMemory,
+    VkDeviceQueueCreateInfo, VkFence, VkFenceCreateInfo, VkInstance, VkInstanceCreateInfo,
+    VkMemoryAllocateInfo, VkMemoryRequirements, VkPhysicalDevice,
+    VkPhysicalDeviceMemoryProperties, VkQueue, VkQueueFamilyProperties, VkResult, VkSubmitInfo,
+    ST_APPLICATION_INFO, ST_COMMAND_BUFFER_ALLOCATE_INFO, ST_COMMAND_BUFFER_BEGIN_INFO,
+    ST_COMMAND_POOL_CREATE_INFO, ST_DEVICE_CREATE_INFO, ST_DEVICE_QUEUE_CREATE_INFO,
+    ST_FENCE_CREATE_INFO, ST_INSTANCE_CREATE_INFO, ST_MEMORY_ALLOCATE_INFO, ST_SUBMIT_INFO,
+    VK_API_VERSION_1_0, VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_SUCCESS, VK_TRUE,
+};
 
 // ---------------------------------------------------------------------------
-// dlopen (same linking note as gl.rs's block: libdl linked explicitly, the
-// loader handle deliberately never dlclose'd).
+// WSI + image machinery (VK_KHR_surface / VK_KHR_xlib_surface /
+// VK_KHR_swapchain, plus the 1.0-core image/barrier/copy subset only this
+// backend uses) — same transcription discipline as `crate::vk`, kept here
+// with its sole consumer. Everything 1.0-core that both Vulkan consumers
+// share is imported from `crate::vk` above instead.
 // ---------------------------------------------------------------------------
-
-#[link(name = "dl")]
-extern "C" {
-    fn dlopen(filename: *const c_char, flag: c_int) -> *mut c_void;
-    fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
-}
-const RTLD_NOW: c_int = 2;
-use std::ffi::c_int;
-
-// ---------------------------------------------------------------------------
-// Vulkan ABI (x86_64/aarch64 Linux: dispatchable handles are pointers,
-// non-dispatchable are u64) — hand-transcribed 1.0 core + VK_KHR_surface /
-// VK_KHR_xlib_surface / VK_KHR_swapchain, same sourcing discipline as
-// `crate::vk` (exact field widths from the registry's stable 1.0 layouts).
-// ---------------------------------------------------------------------------
-
-type VkInstance = *mut c_void;
-type VkPhysicalDevice = *mut c_void;
-type VkDevice = *mut c_void;
-type VkQueue = *mut c_void;
-type VkCommandBuffer = *mut c_void;
 
 type VkSurfaceKhr = u64;
 type VkSwapchainKhr = u64;
 type VkImage = u64;
-type VkDeviceMemory = u64;
-type VkCommandPool = u64;
-type VkFence = u64;
 
-type VkResult = i32;
-const VK_SUCCESS: VkResult = 0;
 const VK_SUBOPTIMAL_KHR: VkResult = 1000001003;
 const VK_ERROR_OUT_OF_DATE_KHR: VkResult = -1000001004;
 
-const VK_API_VERSION_1_0: u32 = 1 << 22;
-const VK_TRUE: u32 = 1;
 const VK_QUEUE_GRAPHICS_BIT: u32 = 0x1;
-const VK_SHARING_MODE_EXCLUSIVE: i32 = 0;
-const VK_COMMAND_BUFFER_LEVEL_PRIMARY: i32 = 0;
-const VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: u32 = 0x1;
 const VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT: u32 = 0x1;
 
 // Formats (the UNORM-preference set — see the module docs).
@@ -143,43 +132,12 @@ const VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR: u32 = 0x1;
 const VK_QUEUE_FAMILY_IGNORED: u32 = !0;
 
 // VkStructureType values.
-const ST_APPLICATION_INFO: i32 = 0;
-const ST_INSTANCE_CREATE_INFO: i32 = 1;
-const ST_DEVICE_QUEUE_CREATE_INFO: i32 = 2;
-const ST_DEVICE_CREATE_INFO: i32 = 3;
-const ST_SUBMIT_INFO: i32 = 4;
-const ST_MEMORY_ALLOCATE_INFO: i32 = 5;
-const ST_FENCE_CREATE_INFO: i32 = 8;
 const ST_IMAGE_CREATE_INFO: i32 = 14;
-const ST_COMMAND_POOL_CREATE_INFO: i32 = 39;
-const ST_COMMAND_BUFFER_ALLOCATE_INFO: i32 = 40;
-const ST_COMMAND_BUFFER_BEGIN_INFO: i32 = 42;
 const ST_IMAGE_MEMORY_BARRIER: i32 = 45;
 const ST_SWAPCHAIN_CREATE_INFO_KHR: i32 = 1000001000;
 const ST_PRESENT_INFO_KHR: i32 = 1000001001;
 const ST_XLIB_SURFACE_CREATE_INFO_KHR: i32 = 1000004000;
 
-#[repr(C)]
-struct VkApplicationInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    app_name: *const c_char,
-    app_version: u32,
-    engine_name: *const c_char,
-    engine_version: u32,
-    api_version: u32,
-}
-#[repr(C)]
-struct VkInstanceCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    app_info: *const VkApplicationInfo,
-    enabled_layer_count: u32,
-    enabled_layers: *const *const c_char,
-    enabled_extension_count: u32,
-    enabled_extensions: *const *const c_char,
-}
 #[repr(C)]
 struct VkXlibSurfaceCreateInfoKhr {
     s_type: i32,
@@ -189,38 +147,9 @@ struct VkXlibSurfaceCreateInfoKhr {
     window: c_ulong,
 }
 #[repr(C)]
-struct VkQueueFamilyProperties {
-    queue_flags: u32,
-    queue_count: u32,
-    timestamp_valid_bits: u32,
-    min_image_transfer_granularity: [u32; 3],
-}
-#[repr(C)]
 struct VkExtensionProperties {
     extension_name: [c_char; 256],
     spec_version: u32,
-}
-#[repr(C)]
-struct VkDeviceQueueCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    queue_family_index: u32,
-    queue_count: u32,
-    queue_priorities: *const f32,
-}
-#[repr(C)]
-struct VkDeviceCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    queue_create_info_count: u32,
-    queue_create_infos: *const VkDeviceQueueCreateInfo,
-    enabled_layer_count: u32,
-    enabled_layers: *const *const c_char,
-    enabled_extension_count: u32,
-    enabled_extensions: *const *const c_char,
-    enabled_features: *const c_void,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -294,60 +223,6 @@ struct VkImageCreateInfo {
     initial_layout: i32,
 }
 #[repr(C)]
-struct VkMemoryRequirements {
-    size: u64,
-    alignment: u64,
-    memory_type_bits: u32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct VkMemoryType {
-    property_flags: u32,
-    heap_index: u32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct VkMemoryHeap {
-    size: u64,
-    flags: u32,
-}
-#[repr(C)]
-struct VkPhysicalDeviceMemoryProperties {
-    memory_type_count: u32,
-    memory_types: [VkMemoryType; 32],
-    memory_heap_count: u32,
-    memory_heaps: [VkMemoryHeap; 16],
-}
-#[repr(C)]
-struct VkMemoryAllocateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    allocation_size: u64,
-    memory_type_index: u32,
-}
-#[repr(C)]
-struct VkCommandPoolCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    queue_family_index: u32,
-}
-#[repr(C)]
-struct VkCommandBufferAllocateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    command_pool: VkCommandPool,
-    level: i32,
-    command_buffer_count: u32,
-}
-#[repr(C)]
-struct VkCommandBufferBeginInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-    inheritance_info: *const c_void,
-}
-#[repr(C)]
 #[derive(Clone, Copy)]
 struct VkImageSubresourceRange {
     aspect_mask: u32,
@@ -393,24 +268,6 @@ struct VkImageCopy {
     extent: VkExtent3D,
 }
 #[repr(C)]
-struct VkFenceCreateInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    flags: u32,
-}
-#[repr(C)]
-struct VkSubmitInfo {
-    s_type: i32,
-    p_next: *const c_void,
-    wait_semaphore_count: u32,
-    wait_semaphores: *const u64,
-    wait_dst_stage_mask: *const u32,
-    command_buffer_count: u32,
-    command_buffers: *const VkCommandBuffer,
-    signal_semaphore_count: u32,
-    signal_semaphores: *const u64,
-}
-#[repr(C)]
 struct VkPresentInfoKhr {
     s_type: i32,
     p_next: *const c_void,
@@ -422,29 +279,12 @@ struct VkPresentInfoKhr {
     results: *mut VkResult,
 }
 
-// Function-pointer types (extern "system" == extern "C" on these targets,
-// matching crate::vk's convention).
-type PfnVoidFunction = *mut c_void;
-type FnGetInstanceProcAddr =
-    unsafe extern "system" fn(VkInstance, *const c_char) -> PfnVoidFunction;
-type FnCreateInstance = unsafe extern "system" fn(
-    *const VkInstanceCreateInfo,
-    *const c_void,
-    *mut VkInstance,
-) -> VkResult;
-type FnDestroyInstance = unsafe extern "system" fn(VkInstance, *const c_void);
-type FnEnumeratePhysicalDevices =
-    unsafe extern "system" fn(VkInstance, *mut u32, *mut VkPhysicalDevice) -> VkResult;
-type FnGetPhysicalDeviceQueueFamilyProperties =
-    unsafe extern "system" fn(VkPhysicalDevice, *mut u32, *mut VkQueueFamilyProperties);
 type FnEnumerateDeviceExtensionProperties = unsafe extern "system" fn(
     VkPhysicalDevice,
     *const c_char,
     *mut u32,
     *mut VkExtensionProperties,
 ) -> VkResult;
-type FnGetPhysicalDeviceMemoryProperties =
-    unsafe extern "system" fn(VkPhysicalDevice, *mut VkPhysicalDeviceMemoryProperties);
 type FnCreateXlibSurfaceKhr = unsafe extern "system" fn(
     VkInstance,
     *const VkXlibSurfaceCreateInfoKhr,
@@ -467,15 +307,7 @@ type FnGetPhysicalDeviceSurfaceFormatsKhr = unsafe extern "system" fn(
 ) -> VkResult;
 type FnGetPhysicalDeviceSurfacePresentModesKhr =
     unsafe extern "system" fn(VkPhysicalDevice, VkSurfaceKhr, *mut u32, *mut i32) -> VkResult;
-type FnCreateDevice = unsafe extern "system" fn(
-    VkPhysicalDevice,
-    *const VkDeviceCreateInfo,
-    *const c_void,
-    *mut VkDevice,
-) -> VkResult;
-type FnDestroyDevice = unsafe extern "system" fn(VkDevice, *const c_void);
 type FnDeviceWaitIdle = unsafe extern "system" fn(VkDevice) -> VkResult;
-type FnGetDeviceQueue = unsafe extern "system" fn(VkDevice, u32, u32, *mut VkQueue);
 type FnCreateSwapchainKhr = unsafe extern "system" fn(
     VkDevice,
     *const VkSwapchainCreateInfoKhr,
@@ -498,32 +330,10 @@ type FnCreateImage = unsafe extern "system" fn(
 type FnDestroyImage = unsafe extern "system" fn(VkDevice, VkImage, *const c_void);
 type FnGetImageMemoryRequirements =
     unsafe extern "system" fn(VkDevice, VkImage, *mut VkMemoryRequirements);
-type FnAllocateMemory = unsafe extern "system" fn(
-    VkDevice,
-    *const VkMemoryAllocateInfo,
-    *const c_void,
-    *mut VkDeviceMemory,
-) -> VkResult;
-type FnFreeMemory = unsafe extern "system" fn(VkDevice, VkDeviceMemory, *const c_void);
 type FnBindImageMemory =
     unsafe extern "system" fn(VkDevice, VkImage, VkDeviceMemory, u64) -> VkResult;
-type FnCreateCommandPool = unsafe extern "system" fn(
-    VkDevice,
-    *const VkCommandPoolCreateInfo,
-    *const c_void,
-    *mut VkCommandPool,
-) -> VkResult;
-type FnDestroyCommandPool = unsafe extern "system" fn(VkDevice, VkCommandPool, *const c_void);
-type FnAllocateCommandBuffers = unsafe extern "system" fn(
-    VkDevice,
-    *const VkCommandBufferAllocateInfo,
-    *mut VkCommandBuffer,
-) -> VkResult;
 type FnFreeCommandBuffers =
     unsafe extern "system" fn(VkDevice, VkCommandPool, u32, *const VkCommandBuffer);
-type FnBeginCommandBuffer =
-    unsafe extern "system" fn(VkCommandBuffer, *const VkCommandBufferBeginInfo) -> VkResult;
-type FnEndCommandBuffer = unsafe extern "system" fn(VkCommandBuffer) -> VkResult;
 type FnCmdPipelineBarrier = unsafe extern "system" fn(
     VkCommandBuffer,
     u32,
@@ -553,40 +363,8 @@ type FnCmdCopyImage = unsafe extern "system" fn(
     u32,
     *const VkImageCopy,
 );
-type FnCreateFence = unsafe extern "system" fn(
-    VkDevice,
-    *const VkFenceCreateInfo,
-    *const c_void,
-    *mut VkFence,
-) -> VkResult;
-type FnDestroyFence = unsafe extern "system" fn(VkDevice, VkFence, *const c_void);
 type FnResetFences = unsafe extern "system" fn(VkDevice, u32, *const VkFence) -> VkResult;
-type FnWaitForFences =
-    unsafe extern "system" fn(VkDevice, u32, *const VkFence, u32, u64) -> VkResult;
-type FnQueueSubmit =
-    unsafe extern "system" fn(VkQueue, u32, *const VkSubmitInfo, VkFence) -> VkResult;
 
-/// `dlopen("libvulkan.so.1")` + `vkGetInstanceProcAddr`, once per process,
-/// result (including failure) cached — the same shape and reasoning as
-/// `gl.rs`'s `GlFns::load` and `crate::vk`'s loader.
-fn loader_gipa() -> Option<FnGetInstanceProcAddr> {
-    static CACHE: OnceLock<Option<usize>> = OnceLock::new();
-    let addr = *CACHE.get_or_init(|| unsafe {
-        let name = CString::new("libvulkan.so.1").unwrap();
-        let lib = dlopen(name.as_ptr(), RTLD_NOW);
-        if lib.is_null() {
-            return None;
-        }
-        let sym = CString::new("vkGetInstanceProcAddr").unwrap();
-        let p = dlsym(lib, sym.as_ptr());
-        if p.is_null() {
-            None
-        } else {
-            Some(p as usize)
-        }
-    });
-    addr.map(|a| unsafe { std::mem::transmute::<usize, FnGetInstanceProcAddr>(a as *mut c_void as usize) })
-}
 
 /// Resolve one entry point through `vkGetInstanceProcAddr` or `Err` — used
 /// for everything past `vkCreateInstance` (instance-level trampolines
@@ -762,9 +540,9 @@ impl Inner {
         let app = VkApplicationInfo {
             s_type: ST_APPLICATION_INFO,
             p_next: ptr::null(),
-            app_name: ptr::null(),
-            app_version: 0,
-            engine_name: ptr::null(),
+            p_application_name: ptr::null(),
+            application_version: 0,
+            p_engine_name: ptr::null(),
             engine_version: 0,
             api_version: VK_API_VERSION_1_0,
         };
@@ -775,11 +553,11 @@ impl Inner {
             s_type: ST_INSTANCE_CREATE_INFO,
             p_next: ptr::null(),
             flags: 0,
-            app_info: &app,
+            p_application_info: &app,
             enabled_layer_count: 0,
-            enabled_layers: ptr::null(),
+            pp_enabled_layer_names: ptr::null(),
             enabled_extension_count: 2,
-            enabled_extensions: inst_exts.as_ptr(),
+            pp_enabled_extension_names: inst_exts.as_ptr(),
         };
         let mut instance: VkInstance = ptr::null_mut();
         let r = create_instance(&ici, ptr::null(), &mut instance);
@@ -926,7 +704,7 @@ impl Inner {
             flags: 0,
             queue_family_index: qfi,
             queue_count: 1,
-            queue_priorities: &prio,
+            p_queue_priorities: &prio,
         };
         let ext_swapchain = CString::new("VK_KHR_swapchain").unwrap();
         let dev_exts = [ext_swapchain.as_ptr()];
@@ -935,12 +713,12 @@ impl Inner {
             p_next: ptr::null(),
             flags: 0,
             queue_create_info_count: 1,
-            queue_create_infos: &qci,
+            p_queue_create_infos: &qci,
             enabled_layer_count: 0,
-            enabled_layers: ptr::null(),
+            pp_enabled_layer_names: ptr::null(),
             enabled_extension_count: 1,
-            enabled_extensions: dev_exts.as_ptr(),
-            enabled_features: ptr::null(),
+            pp_enabled_extension_names: dev_exts.as_ptr(),
+            p_enabled_features: ptr::null(),
         };
         let mut device: VkDevice = ptr::null_mut();
         let r = (fns.create_device)(phys, &dci, ptr::null(), &mut device);
@@ -1216,7 +994,7 @@ impl Inner {
             image_extent: extent,
             image_array_layers: 1,
             image_usage: VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-            image_sharing_mode: VK_SHARING_MODE_EXCLUSIVE,
+            image_sharing_mode: VK_SHARING_MODE_EXCLUSIVE as i32,
             queue_family_index_count: 0,
             queue_family_indices: ptr::null(),
             pre_transform: caps.current_transform,
@@ -1262,7 +1040,7 @@ impl Inner {
             usage: VK_IMAGE_USAGE_TRANSFER_SRC_BIT
                 | VK_IMAGE_USAGE_TRANSFER_DST_BIT
                 | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-            sharing_mode: VK_SHARING_MODE_EXCLUSIVE,
+            sharing_mode: VK_SHARING_MODE_EXCLUSIVE as i32,
             queue_family_index_count: 0,
             queue_family_indices: ptr::null(),
             initial_layout: VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1336,7 +1114,7 @@ impl Inner {
             s_type: ST_COMMAND_BUFFER_BEGIN_INFO,
             p_next: ptr::null(),
             flags: VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-            inheritance_info: ptr::null(),
+            p_inheritance_info: ptr::null(),
         };
         (self.fns.begin_command_buffer)(cmd, &cbi);
         record(&self.fns, cmd);
@@ -1345,12 +1123,12 @@ impl Inner {
             s_type: ST_SUBMIT_INFO,
             p_next: ptr::null(),
             wait_semaphore_count: 0,
-            wait_semaphores: ptr::null(),
-            wait_dst_stage_mask: ptr::null(),
+            p_wait_semaphores: ptr::null(),
+            p_wait_dst_stage_mask: ptr::null(),
             command_buffer_count: 1,
-            command_buffers: &cmd,
+            p_command_buffers: &cmd,
             signal_semaphore_count: 0,
-            signal_semaphores: ptr::null(),
+            p_signal_semaphores: ptr::null(),
         };
         let ok = (self.fns.queue_submit)(self.queue, 1, &si, self.fence) == VK_SUCCESS;
         if ok {
@@ -1633,6 +1411,7 @@ impl Inner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::c_int;
 
     /// The Phase 1 correctness gate, with real pixels as ground truth:
     /// create a Vulkan window, clear the back buffer to a known color,
@@ -1685,29 +1464,39 @@ mod tests {
             ) -> *mut XImagePrefix;
         }
         unsafe {
-            XSync(inner.x11.display, X_FALSE);
-            // One presentation latency grace period, then re-sync — the
-            // present is synchronous on lavapipe, but don't assume.
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            XSync(inner.x11.display, X_FALSE);
-            let img = XGetImage(
-                inner.x11.display,
-                inner.x11.window,
-                160,
-                120,
-                1,
-                1,
-                !0,
-                2, // ZPixmap
-            );
-            assert!(!img.is_null(), "XGetImage failed");
-            // 24-bit ZPixmap on little-endian: bytes are B, G, R.
-            let d = (*img).data;
-            let (b, g, r) = (*d, *d.add(1), *d.add(2));
+            // vkQueuePresentKHR returning does not mean the pixels are in
+            // the window yet: Mesa's X11 WSI queues FIFO presents on an
+            // internal thread, so the XPutImage lands asynchronously even
+            // relative to an XSync on this connection. Poll (bounded) until
+            // the presented color shows up; assert the exact value only at
+            // timeout — under an idle machine the first read already
+            // matches, under full-suite load it can take a few frames.
+            let mut last = (0u8, 0u8, 0u8);
+            for _ in 0..80 {
+                XSync(inner.x11.display, X_FALSE);
+                let img = XGetImage(
+                    inner.x11.display,
+                    inner.x11.window,
+                    160,
+                    120,
+                    1,
+                    1,
+                    !0,
+                    2, // ZPixmap
+                );
+                assert!(!img.is_null(), "XGetImage failed");
+                // 24-bit ZPixmap on little-endian: bytes are B, G, R.
+                let d = (*img).data;
+                last = (*d.add(2), *d.add(1), *d);
+                if last == (255, 128, 0) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
             assert_eq!(
-                (r, g, b),
+                last,
                 (255, 128, 0),
-                "presented pixel is not the linear orange that was cleared"
+                "presented pixel is not the linear orange that was cleared (RGB shown)"
             );
         }
         inner.teardown();
