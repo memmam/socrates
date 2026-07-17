@@ -151,10 +151,10 @@ pub enum Native {
     /// overloading). Ingested natively by the vulkan backend; other
     /// backends report which entry point they want instead.
     GpuRunSpirv,
-    /// `gpu.backend()` (v0.9): `"metal"` | `"vulkan"` | `"opencl"` | `"none"` — which
+    /// `gpu.backend()` (v0.9): `"metal"` | `"vulkan"` | `"cuda"` | `"opencl"` | `"none"` — which
     /// implementation `gpu.run` dispatches to in this build. The `gpu`
     /// analog of `win.backend_name()`: programs branch on it to pick the
-    /// shader dialect (MSL vs. WGSL).
+    /// kernel dialect (MSL or PTX source, or the SPIR-V profile).
     GpuBackend,
 
     // window.* + Window handle methods (v0.8, Linux-only for now). The

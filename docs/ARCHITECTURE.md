@@ -648,6 +648,30 @@ in the OpenCL profile (`GlobalInvocationId` as the `Input` builtin
 variable, `OpPtrAccessChain` with `Aligned` loads/stores), hard-asserting
 the same bytes as its Vulkan twin.
 
+**Native CUDA compute (`src/cu.rs`).** The fourth native compute backend.
+CUDA's kernel input is PTX — NVIDIA's *textual* virtual ISA, JIT'd by the
+driver at `cuModuleLoadData` — so it rides `gpu.run`'s `String` argument
+like MSL does, with its own conventions (`.visible .entry main`, two
+`.param .u64` global pointers, a `(wx, wy, wz)` grid of single-thread
+blocks so `%ctaid` spans the index space); `gpu.run_spirv` redirects, the
+driver API having no SPIR-V ingestion. Mechanically it is `cl.rs`
+restated: `dlopen("libcuda.so.1")`/`nvcuda.dll` (the driver ships the
+library; no CUDA toolkit is involved anywhere), a once-per-process
+fn-pointer table using the `_v2` symbol ABI (the real 64-bit entry points
+since CUDA 3.2), per-call context→module→buffers lifecycle behind a
+`Drop` guard (`cuCtxCreate_v2` binds the context to the calling thread,
+so worker isolates are independent by construction, and `Drop` runs where
+the context is current — the requirement the frees have), zeroed output
+via `cuMemsetD8_v2`, errors named through `cuGetErrorName`/`String` with
+a numeric fallback. **The verification story is honestly weaker than the
+other three**: no software CUDA implementation exists, so no CI runner
+(and not the dev container) can execute a dispatch — CI pins the
+compilation, clippy, precedence lattice, zero-dep tree, and the exact
+graceful no-driver error of `docs/assets/cuda_compute.fable`; the
+battery's hard assert becomes a real gate the first time NVIDIA hardware
+runs it. The precedence when several Linux/Windows backends are compiled
+in is vulkan > cuda > opencl, pinned by unit tests in the pair builds.
+
 Making that coexist under a single `WindowHandle` needed one structural
 change: `win32::Inner` stays a plain struct, aliased directly to
 `PlatformInner`, but `macos::Inner` becomes a small enum —

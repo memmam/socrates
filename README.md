@@ -282,6 +282,7 @@ src/
                   backends (zero-dep raw FFI)
   vk.rs           raw-FFI Vulkan compute + the shared Vulkan primitives
   cl.rs           raw-FFI OpenCL compute (SPIR-V via clCreateProgramWithIL)
+  cu.rs           raw-FFI CUDA compute (PTX text via the driver's JIT)
   mtl.rs, objc.rs raw-FFI Metal + Objective-C shared cores (macOS)
   bundle.rs       fable build: staple a program into a standalone binary
   fmt.rs          comment-preserving, width-aware formatter

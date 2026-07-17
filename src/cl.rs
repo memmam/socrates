@@ -37,6 +37,7 @@
     not(all(
         feature = "opencl",
         not(feature = "vulkan"),
+        not(feature = "cuda"),
         any(target_os = "linux", target_os = "windows")
     )),
     allow(dead_code)

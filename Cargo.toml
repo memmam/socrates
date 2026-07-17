@@ -42,5 +42,9 @@ metal = []
 vulkan = []
 # Native OpenCL compute (Linux/Windows), raw dlopen FFI -- zero deps, like
 # gl/metal/vulkan. Ingests SPIR-V in the OpenCL profile (SPEC section 7.2);
-# vulkan takes precedence when both features are enabled.
+# vulkan and cuda take precedence when also enabled.
 opencl = []
+# Native CUDA compute (Linux/Windows), raw dlopen FFI to the NVIDIA driver
+# (libcuda) -- zero deps; no CUDA toolkit involved. Takes PTX text through
+# gpu.run (SPEC section 7.2); vulkan takes precedence when both are enabled.
+cuda = []

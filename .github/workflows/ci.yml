@@ -414,6 +414,58 @@ jobs:
           echo "$out"
           test "$out" = "ok: [2, 0, 0, 0, 4, 0, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0, 10, 0, 0, 0, 12, 0, 0, 0, 14, 0, 0, 0, 200, 0, 0, 0]"
 
+  cuda:
+    # The roadmap's fourth native compute backend -- raw dlopen FFI to
+    # NVIDIA's driver (libcuda), PTX text JIT'd at cuModuleLoadData time
+    # (no CUDA toolkit anywhere). BLIND-DEV COVERAGE, honestly labeled:
+    # no software CUDA implementation exists and no runner has NVIDIA
+    # hardware, so this job proves compilation, clippy, the graceful
+    # no-driver paths (the battery's exact err line is pinned), the
+    # precedence cfg lattice both ways, and zero-dependency-ness. The
+    # battery program hard-asserts its bytes the first time real NVIDIA
+    # hardware runs it. libx11-dev is for the vulkan,cuda build only
+    # (the vulkan feature carries the Linux window backend, which links
+    # libX11 normally).
+    name: CUDA compute (native, driverless graceful paths)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: X11 dev headers (for the vulkan,cuda build)
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev
+      - name: Build (cuda)
+        run: cargo build --features cuda
+      - name: Clippy (cuda, deny warnings)
+        run: cargo clippy --features cuda --all-targets -- -D warnings
+      - name: Unit + golden spec tests (cuda)
+        run: cargo test --features cuda
+      - name: Build + clippy + tests (vulkan,cuda and cuda,opencl precedence)
+        run: |
+          cargo build --features vulkan,cuda
+          cargo clippy --features vulkan,cuda --all-targets -- -D warnings
+          cargo test --features vulkan,cuda
+          cargo build --features cuda,opencl
+          cargo clippy --features cuda,opencl --all-targets -- -D warnings
+          cargo test --features cuda,opencl
+      - name: Zero dependencies (cuda; vulkan,cuda; cuda,opencl)
+        run: |
+          test "$(cargo tree -e normal --prefix none --features cuda | wc -l)" -eq 1
+          test "$(cargo tree -e normal --prefix none --features vulkan,cuda | wc -l)" -eq 1
+          test "$(cargo tree -e normal --prefix none --features cuda,opencl | wc -l)" -eq 1
+      - name: CUDA battery (graceful no-driver path, exact err line pinned)
+        # On a GPU-less runner the battery must take the err branch with
+        # exactly this message -- a silent behavior change (or GitHub
+        # runners growing NVIDIA hardware) breaks the assert visibly, at
+        # which point this flips to asserting the ok bytes.
+        run: |
+          cargo build --release --features cuda
+          out=$(./target/release/fable docs/assets/cuda_compute.fable)
+          echo "$out"
+          test "$out" = "err: gpu.run: no CUDA driver (libcuda) on this system"
+
   demo-zoo:
     # Proves the release's cross-compile + `fable build` stapling works on
     # every non-native target before a release is ever cut (x86_64-linux is

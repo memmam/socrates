@@ -45,13 +45,23 @@ pub mod types;
 pub mod value;
 /// Raw-FFI OpenCL compute (see the module docs; the roadmap's third native
 /// compute backend and second SPIR-V consumer). Only compiled when it is
-/// the *active* backend — vulkan takes precedence when both features are on.
+/// the *active* backend — vulkan and cuda take precedence when also on.
 #[cfg(all(
     feature = "opencl",
     not(feature = "vulkan"),
+    not(feature = "cuda"),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub(crate) mod cl;
+/// Raw-FFI CUDA compute (see the module docs; the roadmap's fourth native
+/// compute backend — PTX text through `gpu.run`). Only compiled when it is
+/// the *active* backend — vulkan takes precedence when both features are on.
+#[cfg(all(
+    feature = "cuda",
+    not(feature = "vulkan"),
+    any(target_os = "linux", target_os = "windows")
+))]
+pub(crate) mod cu;
 /// Raw-FFI Vulkan compute primitives (see the module docs; the roadmap's
 /// second native compute backend and first SPIR-V consumer).
 #[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]

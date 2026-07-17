@@ -632,16 +632,21 @@ these modules follow the same visibility rules as user code.
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
-The `gpu` namespace dispatches compute shaders. It has three backends,
+The `gpu` namespace dispatches compute shaders. It has four backends,
 all **native and zero-dependency** (since v0.9): **Metal** (MSL kernels;
 raw FFI, behind the `metal` feature on Apple Silicon macOS, the same
 feature as the Metal window backend), **Vulkan** (SPIR-V binaries via
 `gpu.run_spirv`; raw `dlopen` FFI, behind the `vulkan` feature on
-Linux/Windows), and **OpenCL** (SPIR-V binaries via `gpu.run_spirv` in
+Linux/Windows), **OpenCL** (SPIR-V binaries via `gpu.run_spirv` in
 the *OpenCL profile* — see below; raw `dlopen` FFI over the ICD loader,
 behind the `opencl` feature on Linux/Windows; requires an OpenCL 2.1+
-runtime with IL ingestion at run time). Vulkan takes precedence over
-opencl where both are compiled in. The original **wgpu** path (WGSL
+runtime with IL ingestion at run time), and **CUDA** (PTX kernels via
+`gpu.run` — PTX is textual, so it rides the `String` argument like MSL;
+raw `dlopen` FFI to NVIDIA's driver, behind the `cuda` feature on
+Linux/Windows; no CUDA toolkit involved, the driver JITs the PTX). Where
+several are compiled in, the precedence is vulkan > cuda > opencl (the
+CI-proven universal path first, then the vendor GPU path, then OpenCL,
+which commonly resolves to a CPU implementation). The original **wgpu** path (WGSL
 shaders behind a `gpu` cargo feature — v0.7's one quarantined
 dependency) was **removed in v0.9** when this native coverage landed,
 per `CLAUDE.md`'s roadmap: every build of Fable is now zero-dependency
@@ -654,9 +659,9 @@ gracefully as described below.
 |--------|------|-------|
 | `gpu.available()` | `fn() -> Bool` | is a GPU adapter usable? Always `false` without a backend |
 | `gpu.adapter_info()` | `fn() -> String` | `"<name> (<backend>)"`, `"no adapter"`, or `"gpu support not compiled in"`. Never empty |
-| `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch of source-text `src` — MSL on the metal backend (the ABI below). The binary backends (vulkan, opencl) `Err` redirecting to `gpu.run_spirv`. Without a backend: `Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, or --features vulkan or opencl on Linux/Windows)")` |
+| `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch of source-text `src` — MSL on the metal backend, PTX on the cuda backend (the ABIs below). The binary backends (vulkan, opencl) `Err` redirecting to `gpu.run_spirv`. Without a backend: `Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, or --features vulkan, cuda, or opencl on Linux/Windows)")` |
 | `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` | `fn(Bytes, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | (v0.9) `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so the blob rides the buffer type (a sibling, not an overload: Fable has neither default parameters nor overloading). Ingested natively by the vulkan and opencl backends — each in its own SPIR-V *profile* (the two ABI paragraphs below; the blobs are not interchangeable); other backends `Err` naming the entry point they want |
-| `gpu.backend()` | `fn() -> String` | (v0.9) `"metal"`, `"vulkan"`, `"opencl"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (vulkan beats opencl). The `gpu` analog of `win.backend_name()`: branch on it to pick the shader dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
+| `gpu.backend()` | `fn() -> String` | (v0.9) `"metal"`, `"vulkan"`, `"cuda"`, `"opencl"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (vulkan > cuda > opencl). The `gpu` analog of `win.backend_name()`: branch on it to pick the kernel dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
 
 Every failure is an `Err` value, never a panic: bad arguments, no adapter,
 shader compile/validation errors (their messages pass through), device loss.
@@ -733,6 +738,23 @@ The worked example is `docs/assets/opencl_compute.fable` — the
 OpenCL-profile twin of `vulkan_compute.fable`, hard-asserting the same
 doubled bytes (a CPU implementation like pocl counts; no GPU hardware
 needed).
+
+**The PTX ABI (the native CUDA backend, v0.9)** expresses the contract in
+NVIDIA's textual virtual ISA, which the driver JITs for the resident GPU
+at module load — so it travels through `gpu.run`'s `String` argument,
+like MSL. The module must declare `.visible .entry main` taking exactly
+two `.param .u64` pointer parameters (input, then output; convert with
+`cvta.to.global.u64` before global loads/stores). The launch is a
+`(wx, wy, wz)` **grid of single-thread blocks**, so `%ctaid` spans the
+index space — the same shape as the Metal dispatch. `gpu.run_spirv` on
+this backend `Err`s redirecting to `gpu.run`: the driver API has no
+SPIR-V ingestion. The worked example is `docs/assets/cuda_compute.fable`
+(a hand-written PTX doubling kernel, `.version 6.0`/`.target sm_50` for
+broad JIT compatibility). Honesty about verification: no software CUDA
+implementation exists, so unlike the other three backends this one is
+exercised end to end only on real NVIDIA hardware — CI pins the graceful
+no-driver error path, and the battery hard-asserts its bytes the first
+time a GPU runs it.
 
 `gpu.run`'s I/O rides on the `Bytes` buffer type (§ 8.4b), which ships in
 every build — `bytes(n)`/`bytes_of(..)` construct the input, and the LE
