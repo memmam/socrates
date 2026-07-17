@@ -290,6 +290,36 @@ jobs:
         # rendering divergence, not a capability gap.
         run: ./target/release/fable test demos/glcube/main_metal.fable demos/glcube/cube.fable demos/glcube/spec.fable
 
+  vulkan:
+    # The roadmap's second native compute backend -- raw dlopen FFI to
+    # libvulkan, SPIR-V binaries ingested directly (the lingua-franca
+    # decision). Mesa's lavapipe gives every ubuntu runner a software
+    # compute device, so unlike gpu/gl this backend is fully exercised on
+    # plain CI hardware: the battery's assert_eq is a real correctness
+    # gate, not a smoke test.
+    name: Vulkan compute (native, lavapipe)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Software Vulkan device (lavapipe)
+        run: sudo apt-get update && sudo apt-get install -y libvulkan1 mesa-vulkan-drivers
+      - name: Build (vulkan)
+        run: cargo build --features vulkan
+      - name: Clippy (vulkan, deny warnings)
+        run: cargo clippy --features vulkan --all-targets -- -D warnings
+      - name: Unit + golden spec tests (vulkan)
+        run: cargo test --features vulkan
+      - name: Zero dependencies (vulkan feature)
+        run: test "$(cargo tree -e normal --prefix none --features vulkan | wc -l)" -eq 1
+      - name: Vulkan compute battery (hard-asserted bytes)
+        run: |
+          cargo build --release --features vulkan
+          ./target/release/fable docs/assets/vulkan_compute.fable
+
   demo-zoo:
     # Proves the release's cross-compile + `fable build` stapling works on
     # every non-native target before a release is ever cut (x86_64-linux is

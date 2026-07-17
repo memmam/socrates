@@ -764,6 +764,42 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         // ------------------------------------------------------------------
         GpuAvailable => Value::Bool(crate::gpu::available()),
         GpuAdapterInfo => vm.alloc_str(crate::gpu::adapter_info()),
+        GpuRunSpirv => {
+            let spirv = bytes_arg(vm, argc, 0)?.clone();
+            let input = bytes_arg(vm, argc, 1)?.clone();
+            let out_len = int_arg(vm, argc, 2)?;
+            let wx = int_arg(vm, argc, 3)?;
+            let wy = int_arg(vm, argc, 4)?;
+            let wz = int_arg(vm, argc, 5)?;
+            // Argument-domain failures are Err values (the whole API returns
+            // Result), never panics -- mirrors GpuRun exactly.
+            let outcome = match (
+                usize::try_from(out_len),
+                u32::try_from(wx),
+                u32::try_from(wy),
+                u32::try_from(wz),
+            ) {
+                (Ok(out_len), Ok(wx), Ok(wy), Ok(wz)) => {
+                    crate::gpu::run_spirv(&spirv, &input, out_len, wx, wy, wz)
+                }
+                (Err(_), ..) => {
+                    Err(format!("gpu.run_spirv: out_len must be positive, got {out_len}"))
+                }
+                _ => Err(format!(
+                    "gpu.run_spirv: workgroup counts must be positive, got ({wx}, {wy}, {wz})"
+                )),
+            };
+            match outcome {
+                Ok(data) => {
+                    let b = Value::Obj(vm.alloc(Obj::Bytes(data)));
+                    make_ok(vm, b)
+                }
+                Err(msg) => {
+                    let m = vm.alloc_str(msg);
+                    make_err(vm, m)
+                }
+            }
+        }
         GpuBackend => vm.alloc_str(crate::gpu::backend().to_string()),
         GpuRun => {
             let wgsl = str_arg(vm, argc, 0)?;
