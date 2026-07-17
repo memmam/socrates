@@ -365,12 +365,7 @@ impl Sheet {
                     None -> None,
                 };
                 match line {
-                    Some(text) -> {
-                        if out.len() > 0 {
-                            out.push("\n");
-                        }
-                        out.push(text);
-                    },
+                    Some(text) -> out.push_joined("\n", text),
                     None -> {},
                 }
             }

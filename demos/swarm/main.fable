@@ -22,24 +22,16 @@ import std.json;
 import std.deque;
 import std.lists;
 
-fn jnum(n: Int) -> json.Json {
-    json.Json.JNum(n.to_float())
-}
-
-fn jstr(s: String) -> json.Json {
-    json.Json.JStr(s)
-}
-
 fn int_field(j: json.Json, key: String) -> Int {
     j.get(key).unwrap().as_num().unwrap().to_int()
 }
 
 fn job_msg(kind: String, id: Int, lo: Int, hi: Int) -> String {
-    let fields = [("cmd", jstr(kind)), ("job", jnum(id)), ("lo", jnum(lo)), ("hi", jnum(hi))];
-    json.stringify(json.Json.JObj(fields))
+    let fields = [("cmd", json.jstr(kind)), ("job", json.int(id)), ("lo", json.int(lo)), ("hi", json.int(hi))];
+    json.stringify(json.obj(fields))
 }
 
-let quit_msg = json.stringify(json.Json.JObj([("cmd", jstr("quit"))]));
+let quit_msg = json.stringify(json.obj([("cmd", json.jstr("quit"))]));
 
 // worker.spawn is documented to resolve a relative file against the entry
 // script's directory, but in v0.7 an entry script that imports anything
@@ -94,7 +86,7 @@ for (wi, w) in pool.enumerate() {
     w.join().unwrap();
 }
 
-let (champ_job, champ_n, champ_steps) = lists.max_by(champions, |a, b| a.2 - b.2).unwrap();
+let (champ_job, champ_n, champ_steps) = lists.max_by_key(champions, |c| c.2).unwrap();
 println("global champion: n={champ_n} at {champ_steps} steps (job {champ_job})");
 
 // ---- 2. dynamic load balancing ----------------------------------------------

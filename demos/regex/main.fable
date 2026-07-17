@@ -170,14 +170,11 @@ fn bad_bounds() -> List[String] {
 }
 
 // The four 64-bit words of a class's 256-bit membership bitmap, read
-// back out of the Bytes buffer via the v0.7 natives: two little-endian
-// u32 reads make the word (the high half lands on bit 63 via `<<`, which
-// discards overflow), and `Int.to_hex` renders its two's-complement
-// pattern — zero-padded to the full 16 digits. The hand-rolled
-// shift-and-or / nibble loop lives in git history.
+// back out of the Bytes buffer in one `read_u64le` (v0.8: the 8 bytes
+// reinterpreted as Int directly, bit 63 included), and `Int.to_hex`
+// renders the two's-complement pattern — zero-padded to 16 digits.
 fn word_hex(bm: Bytes, j: Int) -> String {
-    let w = bm.read_u32le(8 * j) | bm.read_u32le(8 * j + 4) << 32;
-    w.to_hex().pad_left(16, "0")
+    bm.read_u64le(8 * j).to_hex().pad_left(16, "0")
 }
 
 fn show_bitmap(pattern: String) {

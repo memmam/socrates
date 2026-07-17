@@ -15,12 +15,10 @@ import board;
 // Logical (zero-filling) right shift by k, for k in 1..=63. Fable's `>>`
 // is ARITHMETIC (sign-extending), so treating an Int as 64 unsigned bits
 // means masking off the smeared sign bits after every right shift. The
-// mask is built by shifting Int MAX (63 ones) down — `(1 << 64 - k) - 1`
-// would panic at k == 1 because `1 << 63` is already Int MIN. Precedence
-// is Rust's: `>>` binds tighter than `&`, and `-` tighter than `>>`, so
-// the expression below needs no parentheses at all.
+// Logical (zero-fill) shift right — the `ushr` intrinsic; the masked
+// arithmetic-shift construction lives in git history.
 pub fn lshr(x: Int, k: Int) -> Int {
-    x >> k & 0x7fffffffffffffff >> k - 1
+    x.ushr(k)
 }
 
 // One step of Marsaglia's xorshift64 (shift triple 13/7/17). `<<` simply

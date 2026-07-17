@@ -85,13 +85,10 @@ pub fn generate(width: Int, height: Int, attempts: Int) -> Dungeon {
 
     // The player starts in the first room; the treasure goes in whichever
     // room lies farthest from it (by Manhattan distance between centers).
-    // lists.max_by keeps the first winner on ties, exactly like the fold
-    // it replaced, so the same room wins under either implementation.
+    // lists.max_by_key keeps the first winner on ties, exactly like the
+    // fold it replaced, so the same room wins under either implementation.
     let start = rooms.first().unwrap().center();
-    let by_distance = |a: Room, b: Room| {
-        manhattan(a.center(), start) - manhattan(b.center(), start)
-    };
-    let far = lists.max_by(rooms, by_distance).unwrap();
+    let far = lists.max_by_key(rooms, |r| manhattan(r.center(), start)).unwrap();
     Dungeon { grid, rooms, start, treasure: far.center() }
 }
 

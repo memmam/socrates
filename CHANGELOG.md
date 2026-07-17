@@ -28,6 +28,14 @@ functionality, judged per-architecture. In progress:
 - **`fft.magnitude` moved to `std.fft`** (pure Fable over the `fft`
   primitives; wrapper-shaped natives live in std). `import std.fft;`
   keeps the `fft.` spellings working.
+- **The demo adoption gap, closed**: the v0.8 features added for
+  specific demos are now used by them — bloom's `mul32` is
+  `wrapping_mul` + mask, checkers' `lshr` is `ushr`, spreadsheet and
+  mdsite join through `push_joined`, swarm builds its messages with the
+  `std.json` constructors, regex reads bitmap words in one
+  `read_u64le`, and the Int-key comparator sites use `max_by_key`.
+  Byte-identical goldens; `demos/NOTES.md` records the lesson
+  (adoption is part of shipping a queue item).
 - **math namespace minified**: `math.sqrt/floor/ceil/round/abs/abs_int/
   min/max/min_float/max_float` dropped — verbatim duplicates of the
   Int/Float methods, which are the primitives (`x.sqrt()`, `a.min(b)`,
