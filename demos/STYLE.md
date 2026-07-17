@@ -143,6 +143,11 @@ behind these rules lives in `NOTES.md`.
   instead of returning Strings for parents to join — O(output) instead
   of O(output × depth) (`lisp`). For line-oriented output, emit the
   separator *before* each line gated on `len() > 0` (`spreadsheet`).
+- **Join with `push_joined`, not a length gate** (v0.8): the
+  separator-before-each-piece idiom is `b.push_joined(sep, s)` — it
+  pushes `sep` first unless this is the builder's first piece, replacing
+  the manual `if b.len() > 0 { b.push(sep); }` at every call site
+  (`spreadsheet`, `mdsite`).
 - **Don't force everything through the Builder:** short lines read
   better as `List[String].join(" | ")`; accumulate only the document in
   the Builder (`spreadsheet`).

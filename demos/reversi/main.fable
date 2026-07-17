@@ -40,12 +40,12 @@ while passes < 2 {
     passes = 0;
 
     // Candidates come out of the bitboard in ascending square order, and
-    // lists.max_by keeps the FIRST winner on ties — together that is the
-    // whole tie-break rule.
+    // lists.max_by_key keeps the FIRST winner on ties — together that is
+    // the whole tie-break rule.
     let cands = bits.squares(mvs).map(|sq| {
         (sq, bits.popcount(board.flips(own, opp, bits.bit(sq))))
     });
-    let (sq, fc) = lists.max_by(cands, |a, b| a.1 - b.1).unwrap();
+    let (sq, fc) = lists.max_by_key(cands, |a| a.1).unwrap();
 
     let (own2, opp2) = board.apply(own, opp, sq);
     if black_to_move {

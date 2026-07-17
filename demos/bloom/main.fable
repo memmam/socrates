@@ -52,7 +52,7 @@ let member_sample = member_list.slice(0, 6).join(", ");
 let probe_sample = probe_list.slice(0, 6).join(", ");
 let lens = member_list.map(|w| w.len());
 let mean_len = (lists.sum(lens).to_float() / member_list.len().to_float()).to_fixed(2);
-let longest = lists.max_by(member_list, |a, b| a.len() - b.len()).unwrap();
+let longest = lists.max_by_key(member_list, |w| w.len()).unwrap();
 println("corpus: {member_list.len()} members, {probe_list.len()} probes, disjoint by construction");
 println("        ({rerolled} probe candidates collided with members and were rerolled)");
 println("member sample: {member_sample}");

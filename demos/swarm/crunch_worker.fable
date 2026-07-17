@@ -9,10 +9,6 @@
 
 import std.json;
 
-fn jnum(n: Int) -> json.Json {
-    json.Json.JNum(n.to_float())
-}
-
 fn int_field(j: json.Json, key: String) -> Int {
     j.get(key).unwrap().as_num().unwrap().to_int()
 }
@@ -96,10 +92,10 @@ if worker.is_worker() {
         let hi = int_field(req, "hi");
         let reply = if cmd == "collatz" {
             let (n, steps) = collatz_champion(lo, hi);
-            json.Json.JObj([("job", jnum(id)), ("result", jnum(steps)), ("arg", jnum(n))])
+            json.obj([("job", json.int(id)), ("result", json.int(steps)), ("arg", json.int(n))])
         } else {
             // "primes"
-            json.Json.JObj([("job", jnum(id)), ("result", jnum(count_primes(lo, hi)))])
+            json.obj([("job", json.int(id)), ("result", json.int(count_primes(lo, hi)))])
         };
         worker.send(json.stringify(reply));
     }

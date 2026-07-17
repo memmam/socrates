@@ -228,3 +228,19 @@ Genuinely resolved in v0.8:
   m.get(k).unwrap_or(0) + 1)` is a single line with no repeated pattern
   across the codebase to justify a named primitive. `std` grows reluctantly
   (v0.6/v0.7's own rule) — revisit if more than one demo asks.
+
+### The v0.8 adoption gap, closed (v0.9 minification pass, W1c)
+
+The v0.8 queue's features shipped, but several of the demos that asked
+for them never switched over — the hand-rolled versions stayed behind.
+The minification pass's demo wave closed the gap, byte-identical goldens
+throughout: `bloom`'s 16-bit-halves `mul32` became
+`a.wrapping_mul(b) & 0xFFFFFFFF` (the exact case the intrinsic was added
+for), `checkers`' masked-shift `lshr` became `x.ushr(k)` (the reversi
+precedent, finally applied), `spreadsheet` and `mdsite` adopted
+`push_joined`, `swarm` adopted the `std.json` constructors that were
+added *for it* (`json.int`/`jstr`/`obj`), `regex` reads its bitmap words
+in one `read_u64le`, and the four Int-key comparator sites (`reversi`,
+`swarm`, `bloom`, `dungeon`) moved to `max_by_key`. The lesson for
+future feature queues: adoption is part of shipping — a queue item isn't
+done until the demo that motivated it uses it.

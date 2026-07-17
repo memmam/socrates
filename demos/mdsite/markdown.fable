@@ -172,10 +172,7 @@ pub fn to_html(src: String) -> String {
         // text accumulates first and is inline-rendered once on flush,
         // so spans may cross line boundaries within a paragraph.
         flush_list(out, items);
-        if para.len() > 0 {
-            para.push(" ");
-        }
-        para.push(line.trim());
+        para.push_joined(" ", line.trim());
     }
 
     // Close anything still open (including an unterminated fence).

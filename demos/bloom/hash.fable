@@ -25,12 +25,11 @@ pub fn fnv1a32(s: String) -> Int {
     h
 }
 
-// (a * b) mod 2^32 without tripping the overflow panic: split a into
-// 16-bit halves — each partial product stays under 2^48.
+// (a * b) mod 2^32: wrap in 64 bits, then mask — the exact case
+// `wrapping_mul` exists for (the 16-bit-halves dance lives in git
+// history).
 pub fn mul32(a: Int, b: Int) -> Int {
-    let lo = (a & 0xFFFF) * (b & 0xFFFFFFFF) & 0xFFFFFFFF;
-    let hi = (a >> 16 & 0xFFFF) * (b & 0xFFFF) << 16 & 0xFFFFFFFF;
-    lo + hi & 0xFFFFFFFF
+    a.wrapping_mul(b) & 0xFFFFFFFF
 }
 
 // The avalanche mixer: one xorshift round (13/17/5), then one modular
