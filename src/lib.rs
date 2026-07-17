@@ -43,6 +43,15 @@ pub mod span;
 pub mod token;
 pub mod types;
 pub mod value;
+/// Raw-FFI OpenCL compute (see the module docs; the roadmap's third native
+/// compute backend and second SPIR-V consumer). Only compiled when it is
+/// the *active* backend — vulkan takes precedence when both features are on.
+#[cfg(all(
+    feature = "opencl",
+    not(feature = "vulkan"),
+    any(target_os = "linux", target_os = "windows")
+))]
+pub(crate) mod cl;
 /// Raw-FFI Vulkan compute primitives (see the module docs; the roadmap's
 /// second native compute backend and first SPIR-V consumer).
 #[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]

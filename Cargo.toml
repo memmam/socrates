@@ -40,6 +40,10 @@ metal = []
 # Native Vulkan (Linux/Windows compute; Linux/X11 windowing, additive
 # alongside gl), raw dlopen FFI -- zero deps, like gl/metal.
 vulkan = []
+# Native OpenCL compute (Linux/Windows), raw dlopen FFI -- zero deps, like
+# gl/metal/vulkan. Ingests SPIR-V in the OpenCL profile (SPEC section 7.2);
+# vulkan takes precedence when both features are enabled.
+opencl = []
 
 [dependencies]
 wgpu = { version = "30", optional = true }

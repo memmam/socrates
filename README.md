@@ -277,7 +277,11 @@ src/
   builtins.rs     their type schemes (shared with the checker)
   fft.rs          the native FFT kernel (radix-2 + Bluestein)
   worker.rs       OS-thread worker isolates and their channels
-  gpu.rs          feature-gated GPU compute (wgpu, behind --features gpu)
+  gpu.rs          GPU compute dispatch: native Metal / Vulkan / OpenCL
+                  backends (zero-dep raw FFI) + wgpu behind --features gpu
+  vk.rs           raw-FFI Vulkan compute + the shared Vulkan primitives
+  cl.rs           raw-FFI OpenCL compute (SPIR-V via clCreateProgramWithIL)
+  mtl.rs, objc.rs raw-FFI Metal + Objective-C shared cores (macOS)
   bundle.rs       fable build: staple a program into a standalone binary
   fmt.rs          comment-preserving, width-aware formatter
   repl.rs         incremental REPL with rollback

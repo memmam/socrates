@@ -371,6 +371,55 @@ jobs:
           echo "$out"
           test "$out" = "ok: vulkan window presented 3 frames (backend=vulkan, 320x240)"
 
+  opencl:
+    # The roadmap's third native compute backend -- raw dlopen FFI to the
+    # libOpenCL ICD loader, SPIR-V kernels ingested via clCreateProgramWithIL
+    # (OpenCL 2.1+ core). The kernels use the OpenCL SPIR-V profile
+    # (Kernel/Physical64 -- SPEC section 7.2 documents both dialects; the
+    # Vulkan-profile blob is NOT interchangeable). pocl gives the runner a
+    # CPU device the way lavapipe gives the vulkan job one. The battery
+    # step is BEST-EFFORT for now (output printed, job not failed): it
+    # flips to a hard assert once a green run proves this pocl build's IL
+    # ingestion end to end -- the program itself already hard-asserts the
+    # output bytes whenever the dispatch runs. The vulkan,opencl steps
+    # prove the native-precedence cfg maze compiles both ways (the
+    # gpu::tests::opencl_defers_to_vulkan unit test pins the precedence).
+    name: OpenCL compute (native, pocl)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: OpenCL runtime (pocl) + clinfo + X11 dev headers
+        # libx11-dev is for the vulkan,opencl precedence build only: the
+        # vulkan feature carries the Linux window backend, which links
+        # libX11 normally (see the vulkan job's comment). No X server or
+        # Vulkan loader is installed here -- those tests skip/Err cleanly.
+        run: sudo apt-get update && sudo apt-get install -y ocl-icd-libopencl1 pocl-opencl-icd clinfo libx11-dev
+      - name: clinfo (device + IL-support diagnostics, best effort)
+        run: clinfo || true
+      - name: Build (opencl)
+        run: cargo build --features opencl
+      - name: Clippy (opencl, deny warnings)
+        run: cargo clippy --features opencl --all-targets -- -D warnings
+      - name: Unit + golden spec tests (opencl)
+        run: cargo test --features opencl
+      - name: Build + clippy + tests (vulkan,opencl precedence)
+        run: |
+          cargo build --features vulkan,opencl
+          cargo clippy --features vulkan,opencl --all-targets -- -D warnings
+          cargo test --features vulkan,opencl
+      - name: Zero dependencies (opencl; vulkan,opencl)
+        run: |
+          test "$(cargo tree -e normal --prefix none --features opencl | wc -l)" -eq 1
+          test "$(cargo tree -e normal --prefix none --features vulkan,opencl | wc -l)" -eq 1
+      - name: OpenCL compute battery (best effort until pocl IL ingestion is proven)
+        run: |
+          cargo build --release --features opencl
+          ./target/release/fable docs/assets/opencl_compute.fable || true
+
   demo-zoo:
     # Proves the release's cross-compile + `fable build` stapling works on
     # every non-native target before a release is ever cut (x86_64-linux is

@@ -34,12 +34,16 @@
 //! in here panics the interpreter.
 
 /// Which implementation `gpu.run` dispatches to in THIS build: `"metal"`
-/// (native raw-FFI, macOS/Apple Silicon with `--features metal` — takes
-/// precedence over wgpu when both are compiled in, per CLAUDE.md's
-/// native-backends-first roadmap), `"wgpu"` (the feature-gated portable
-/// fallback, which remains until full native coverage retires it), or
-/// `"none"`. The `gpu` analog of `win.backend_name()`: programs branch on
-/// it to pick the shader dialect `gpu.run` expects (MSL vs. WGSL).
+/// (native raw-FFI, macOS/Apple Silicon with `--features metal`),
+/// `"vulkan"` / `"opencl"` (native raw-dlopen FFI on Linux/Windows —
+/// vulkan takes precedence when both are compiled in), `"wgpu"` (the
+/// feature-gated portable fallback, which remains until full native
+/// coverage retires it; any native backend beats it, per CLAUDE.md's
+/// native-backends-first roadmap), or `"none"`. The `gpu` analog of
+/// `win.backend_name()`: programs branch on it to pick the shader dialect
+/// (MSL vs. WGSL) — and, for `gpu.run_spirv`, the SPIR-V *profile* the
+/// binary must use (Vulkan's GLCompute/Logical vs. OpenCL's
+/// Kernel/Physical64; see SPEC § 7.2).
 #[cfg(all(feature = "metal", target_os = "macos", target_arch = "aarch64"))]
 pub fn backend() -> &'static str {
     "metal"
@@ -49,9 +53,17 @@ pub fn backend() -> &'static str {
     "vulkan"
 }
 #[cfg(all(
+    feature = "opencl",
+    not(feature = "vulkan"),
+    any(target_os = "linux", target_os = "windows")
+))]
+pub fn backend() -> &'static str {
+    "opencl"
+}
+#[cfg(all(
     feature = "gpu",
     not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")),
-    not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))
+    not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))
 ))]
 pub fn backend() -> &'static str {
     "wgpu"
@@ -59,7 +71,7 @@ pub fn backend() -> &'static str {
 #[cfg(all(
     not(feature = "gpu"),
     not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")),
-    not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))
+    not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))
 ))]
 pub fn backend() -> &'static str {
     "none"
@@ -119,20 +131,20 @@ fn validate(input: &[u8], out_len: usize, wx: u32, wy: u32, wz: u32) -> Result<(
 // ---------------------------------------------------------------------------
 
 /// Is a GPU adapter available? Always `false` without the `gpu` feature.
-#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
 pub fn available() -> bool {
     false
 }
 
 /// Describe the adapter `gpu.run` would use.
-#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
 pub fn adapter_info() -> String {
     "gpu support not compiled in".to_string()
 }
 
 /// Run a compute shader (see the module docs for the ABI). Always an error
 /// without the `gpu` feature.
-#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
 pub fn run(
     _wgsl: &str,
     input: &[u8],
@@ -150,7 +162,7 @@ pub fn run(
 // Feature ON: wgpu implementation
 // ---------------------------------------------------------------------------
 
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
 fn request_adapter() -> Result<wgpu::Adapter, String> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -161,14 +173,14 @@ fn request_adapter() -> Result<wgpu::Adapter, String> {
 }
 
 /// Is a GPU adapter available (any backend, software rasterizers included)?
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
 pub fn available() -> bool {
     request_adapter().is_ok()
 }
 
 /// Describe the adapter `gpu.run` would use: `"<name> (<backend>)"`, or
 /// `"no adapter"` when none can be acquired.
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
 pub fn adapter_info() -> String {
     match request_adapter() {
         Ok(adapter) => {
@@ -182,7 +194,7 @@ pub fn adapter_info() -> String {
 /// Run one dispatch of a WGSL compute shader (module docs describe the ABI):
 /// upload `input` to binding 0, dispatch `(wx, wy, wz)` workgroups of the
 /// `main` entry point, and read back `out_len` bytes from binding 1.
-#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
+#[cfg(all(feature = "gpu", not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
 pub fn run(
     wgsl: &str,
     input: &[u8],
@@ -603,7 +615,81 @@ pub fn run_spirv(
     validate(input, out_len, wx, wy, wz)?;
     crate::vk::run_spirv(spirv, input, out_len, wx, wy, wz)
 }
-#[cfg(not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows"))))]
+// ---------------------------------------------------------------------------
+// Native OpenCL backend (Linux/Windows with --features opencl, when vulkan
+// is not also compiled in — the native precedence order is metal > vulkan >
+// opencl > wgpu): raw dlopen FFI over src/cl.rs, no wgpu involved — the
+// SECOND SPIR-V consumer, and the one that forced the profile distinction:
+// SPIR-V is the lingua-franca *format*, but `clCreateProgramWithIL` ingests
+// only the OpenCL dialect (Kernel execution model, Physical64 addressing,
+// OpenCL memory model, buffers as CrossWorkgroup pointer kernel arguments),
+// not Vulkan's (GLCompute/Logical/GLSL450/descriptor sets). gpu.run_spirv's
+// contract is therefore: the blob matches the active backend's profile, and
+// gpu.backend() is the branch point — the same rule that picks GLSL vs. MSL
+// vs. WGSL for source-text shaders. The ABI is otherwise the established
+// one: entry point `main`, input/output as the two kernel arguments,
+// `(wx, wy, wz)` covering the same invocation index space (the global work
+// size — a Vulkan module with LocalSize 1 1 1 dispatches identically),
+// shared `validate` for identical argument errors.
+// ---------------------------------------------------------------------------
+
+#[cfg(all(
+    feature = "opencl",
+    not(feature = "vulkan"),
+    any(target_os = "linux", target_os = "windows")
+))]
+pub fn available() -> bool {
+    crate::cl::available()
+}
+#[cfg(all(
+    feature = "opencl",
+    not(feature = "vulkan"),
+    any(target_os = "linux", target_os = "windows")
+))]
+pub fn adapter_info() -> String {
+    crate::cl::adapter_info()
+}
+/// On the opencl backend, `gpu.run`'s source-text entry point has no
+/// meaning — the same binary-format honesty as the vulkan arm above.
+#[cfg(all(
+    feature = "opencl",
+    not(feature = "vulkan"),
+    any(target_os = "linux", target_os = "windows")
+))]
+pub fn run(
+    _src: &str,
+    input: &[u8],
+    out_len: usize,
+    wx: u32,
+    wy: u32,
+    wz: u32,
+) -> Result<Vec<u8>, String> {
+    validate(input, out_len, wx, wy, wz)?;
+    Err("gpu.run: the opencl backend takes SPIR-V binaries via gpu.run_spirv (gpu.backend() \
+         == \"opencl\")"
+        .to_string())
+}
+
+/// One dispatch of an OpenCL-profile SPIR-V kernel (see the section comment
+/// above and SPEC § 7.2 for the profile ABI).
+#[cfg(all(
+    feature = "opencl",
+    not(feature = "vulkan"),
+    any(target_os = "linux", target_os = "windows")
+))]
+pub fn run_spirv(
+    spirv: &[u8],
+    input: &[u8],
+    out_len: usize,
+    wx: u32,
+    wy: u32,
+    wz: u32,
+) -> Result<Vec<u8>, String> {
+    validate(input, out_len, wx, wy, wz)?;
+    crate::cl::run_spirv(spirv, input, out_len, wx, wy, wz)
+}
+
+#[cfg(not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows"))))]
 pub fn run_spirv(
     _spirv: &[u8],
     input: &[u8],
@@ -617,8 +703,8 @@ pub fn run_spirv(
     Err(match backend() {
         "metal" => "gpu.run_spirv: the metal backend takes MSL source via gpu.run".to_string(),
         "wgpu" => "gpu.run_spirv: the wgpu backend takes WGSL source via gpu.run".to_string(),
-        _ => "gpu.run_spirv: no SPIR-V backend compiled in (build with --features vulkan on \
-              Linux/Windows)"
+        _ => "gpu.run_spirv: no SPIR-V backend compiled in (build with --features vulkan or \
+              opencl on Linux/Windows)"
             .to_string(),
     })
 }
@@ -641,7 +727,7 @@ mod tests {
         assert!(run("", &[0; 4], 4, 1, 1, 70_000).unwrap_err().contains("workgroup count z"));
     }
 
-    #[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))))]
+    #[cfg(all(not(feature = "gpu"), not(all(feature = "metal", target_os = "macos", target_arch = "aarch64")), not(all(any(feature = "vulkan", feature = "opencl"), any(target_os = "linux", target_os = "windows")))))]
     #[test]
     fn stubs_without_feature() {
         assert!(!available());
@@ -657,5 +743,50 @@ mod tests {
     fn run_never_panics_without_adapter_or_with_bad_shader() {
         let r = run("not wgsl at all", &[0; 4], 4, 1, 1, 1);
         assert!(r.is_err(), "bad shader or missing adapter must be an Err");
+    }
+
+    // The native precedence order: vulkan beats opencl when both are
+    // compiled in (and each already beats wgpu by construction).
+    #[cfg(all(
+        feature = "vulkan",
+        feature = "opencl",
+        any(target_os = "linux", target_os = "windows")
+    ))]
+    #[test]
+    fn opencl_defers_to_vulkan() {
+        assert_eq!(backend(), "vulkan");
+    }
+
+    #[cfg(all(
+        feature = "opencl",
+        not(feature = "vulkan"),
+        any(target_os = "linux", target_os = "windows")
+    ))]
+    #[test]
+    fn opencl_run_redirects_to_run_spirv() {
+        assert_eq!(backend(), "opencl");
+        let err = run("kernel", &[0; 4], 4, 1, 1, 1).unwrap_err();
+        assert!(err.contains("gpu.run_spirv"), "got: {err}");
+    }
+
+    // Never panics, whatever the machine has: a non-SPIR-V blob errs on the
+    // magic check; a valid-magic header errs on the missing runtime (this
+    // dev container), a build failure (a header is not a module), or worse
+    // — but always an Err, never a crash.
+    #[cfg(all(
+        feature = "opencl",
+        not(feature = "vulkan"),
+        any(target_os = "linux", target_os = "windows")
+    ))]
+    #[test]
+    fn opencl_run_spirv_never_panics() {
+        let bad_magic = run_spirv(&[0u8; 20], &[0; 4], 4, 1, 1, 1).unwrap_err();
+        assert!(bad_magic.contains("not a SPIR-V binary"), "got: {bad_magic}");
+        let header_only: Vec<u8> = [0x0723_0203u32, 0x0001_0000, 0, 1, 0]
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect();
+        let r = run_spirv(&header_only, &[0; 4], 4, 1, 1, 1);
+        assert!(r.is_err(), "a bare header must never dispatch");
     }
 }

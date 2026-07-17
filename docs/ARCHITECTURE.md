@@ -617,6 +617,37 @@ device runs the hard-asserted doubling battery
 (`docs/assets/vulkan_compute.fable`, its SPIR-V hand-assembled word by
 word) on every ubuntu runner — and in the dev container itself.
 
+**Native OpenCL compute (`src/cl.rs`).** The third native compute
+backend, and the second SPIR-V consumer — the one that forced the
+**profile split** into the open: SPIR-V is the lingua-franca *format*,
+but `clCreateProgramWithIL` ingests only the OpenCL dialect (`Kernel`
+execution model, `Physical64` addressing, `OpenCL` memory model, buffers
+as `CrossWorkgroup` pointer kernel arguments), not Vulkan's
+(`GLCompute`/`Logical`/`GLSL450`/descriptor sets). `gpu.run_spirv`'s
+contract is that the blob matches the active backend's profile, with
+`gpu.backend()` as the branch point (SPEC § 7.2 documents both ABIs).
+Mechanically the module mirrors `vk.rs`: the ICD loader is `dlopen`ed
+(`libOpenCL.so.1` / `OpenCL.dll`) — though with no `GetProcAddr`
+indirection, every entry point being a direct export resolved once per
+process into a fn-pointer table — and each call builds and tears down the
+whole context→queue→program→kernel chain behind a `Drop` guard releasing
+in reverse creation order. `clCreateCommandQueueWithProperties` falls
+back to the deprecated 1.x `clCreateCommandQueue` when absent;
+`clCreateProgramWithIL` (2.1+ core) is resolved as optional so pre-IL
+runtimes get a version-naming error instead of a missing-symbol crash;
+build failures fetch `CL_PROGRAM_BUILD_LOG`. Device selection scans every
+platform and scores devices — SPIR-V support advertised in
+`CL_DEVICE_IL_VERSION` first, GPU over CPU second — so a machine with
+both a vendor GPU driver and pocl picks the GPU, and a pocl-only CI
+runner still resolves. The native precedence order is metal > vulkan >
+opencl > wgpu; when `vulkan` and `opencl` are both compiled in, `cl.rs`
+is not even built (the `lib.rs` gate carries `not(feature = "vulkan")`),
+keeping the dispatch maze honest at compile time. The battery is
+`docs/assets/opencl_compute.fable` — the doubling kernel hand-assembled
+in the OpenCL profile (`GlobalInvocationId` as the `Input` builtin
+variable, `OpPtrAccessChain` with `Aligned` loads/stores), hard-asserting
+the same bytes as its Vulkan twin.
+
 Making that coexist under a single `WindowHandle` needed one structural
 change: `win32::Inner` stays a plain struct, aliased directly to
 `PlatformInner`, but `macos::Inner` becomes a small enum —
