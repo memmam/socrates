@@ -94,13 +94,18 @@ four** architectures — Linux and Windows in single runs, macOS by
 multi-sample majority. The lottery is dead; surface minification is
 unblocked.
 
-**The accepted tradeoff.** enum_match +4.5% on aarch64-linux reproduced
-three times across *two different arm layouts* (H1 and the rejected
-hottest-first reorder), so it is a systematic cost of the compact loop
-on Neoverse, not a placement roll — that bench executes no outlined op.
-Accepted deliberately: one microbench on one architecture, against
-broad reproduced wins on the other three and a lottery-free base for
-every future change.
+**The per-target binding.** enum_match +4.5% on aarch64-linux
+reproduced three times across *two different arm layouts* (H1 and the
+rejected hottest-first reorder), so it is a systematic cost of the
+compact loop on Neoverse, not a placement roll — that bench executes no
+outlined op. Per the CLAUDE.md rule, an irreconcilable per-target
+disagreement is never accepted as a tradeoff: the op bodies live once
+in vm.rs, and an attribute pair binds each target to its
+measured-fastest form — `#[inline(never)]` (compact loop) everywhere
+except aarch64-linux, where a build.rs-emitted `monolithic_dispatch`
+cfg flips them to `#[inline(always)]` and folds the monolith back
+together. Non-aarch64-linux binaries are unchanged by the cfg
+machinery; aarch64-linux is judged on the matrix like everything else.
 
 **macOS measurement protocol.** macos-14 runners are precise but
 per-job biased: an A/A run (identical trees both sides; a

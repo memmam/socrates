@@ -67,7 +67,16 @@ their place fastest.
   workflow) shows flat-or-better on every architecture; where
   architectures disagree, scope **up**, not down — the primitive keeps
   its place, and the minimal set is the minimal set of *universally*
-  performant idioms.
+  performant idioms. And when the disagreement is *irreconcilable* — an
+  implementation form that is measurably best on some targets and a
+  reproducible invariant loss on another — a tradeoff is never accepted:
+  that is the signal to write the missing idiom that defers to the more
+  performant implementation **per target**. Keep one source of truth for
+  the behavior and bind each target to its measured-fastest form (a
+  build.rs-emitted cfg names the binding; `monolithic_dispatch` is the
+  first instance — vm.rs's dispatch-arm bodies outline into the compact
+  loop everywhere except aarch64-linux, which measured the monolith
+  faster and inlines them back).
 - **This applies to whole backend implementations, not just algorithmic
   idioms** — but the trigger is the *platform* actually dropping the older
   path, not merely deprecating it. When a newer backend for the same

@@ -990,12 +990,17 @@ impl Vm {
     }
 
     // ------------------------------------------------------------------
-    // Outlined op bodies. The dispatch loop keeps only compact, frequent
-    // arms inline; bulky or rare bodies live here behind #[inline(never)]
-    // so the hot loop's machine code stays small — with lto=true and
+    // Op bodies with per-target binding (bench/RESULTS.md, "The dispatch
+    // restructure"). The bodies live here once; the attribute pair binds
+    // each target to its measured-fastest form. Default (compact loop):
+    // #[inline(never)] keeps bulky or rare bodies out of run(), so the
+    // hot loop's machine code stays small — with lto=true and
     // codegen-units=1, any edit anywhere shifts every function address,
     // and a large run() amplifies those layout shifts into measurable
-    // dispatch swings (bench/RESULTS.md, the dispatch codegen lottery).
+    // dispatch swings (the codegen lottery). aarch64-linux
+    // (`monolithic_dispatch`, emitted by build.rs): #[inline(always)]
+    // folds the bodies back into run() — the compact loop measured a
+    // reproducible enum_match cost there and the monolith measured none.
     // ------------------------------------------------------------------
 
     #[cold]
@@ -1010,7 +1015,8 @@ impl Vm {
         self.err_at(ip, format!("global `{name}` used before initialization"))
     }
 
-    #[inline(never)]
+    #[cfg_attr(not(monolithic_dispatch), inline(never))]
+    #[cfg_attr(monolithic_dispatch, inline(always))]
     fn op_set_upvalue(&mut self, i: u16, ip: usize) -> Result<(), VmError> {
         let v = self.pop();
         let closure = self.frames.last().unwrap().closure.expect("no closure");
@@ -1030,7 +1036,8 @@ impl Vm {
         Ok(())
     }
 
-    #[inline(never)]
+    #[cfg_attr(not(monolithic_dispatch), inline(never))]
+    #[cfg_attr(monolithic_dispatch, inline(always))]
     fn op_closure(&mut self, p: u32, base: usize, ip: usize) -> Result<(), VmError> {
         self.gc_checkpoint();
         let parent_closure = self.frames.last().unwrap().closure;
@@ -1054,7 +1061,8 @@ impl Vm {
         Ok(())
     }
 
-    #[inline(never)]
+    #[cfg_attr(not(monolithic_dispatch), inline(never))]
+    #[cfg_attr(monolithic_dispatch, inline(always))]
     fn op_to_string(&mut self, ip: usize) -> Result<(), VmError> {
         self.sync_ip(ip);
         let v = self.peek(0);
@@ -1072,7 +1080,8 @@ impl Vm {
         Ok(())
     }
 
-    #[inline(never)]
+    #[cfg_attr(not(monolithic_dispatch), inline(never))]
+    #[cfg_attr(monolithic_dispatch, inline(always))]
     fn op_concat(&mut self, n: u16, ip: usize) -> Result<(), VmError> {
         self.sync_ip(ip);
         let n = n as usize;
@@ -1101,7 +1110,8 @@ impl Vm {
         Ok(())
     }
 
-    #[inline(never)]
+    #[cfg_attr(not(monolithic_dispatch), inline(never))]
+    #[cfg_attr(monolithic_dispatch, inline(always))]
     fn op_make_map(&mut self, n: u16, ip: usize) -> Result<(), VmError> {
         self.sync_ip(ip);
         self.gc_checkpoint();
@@ -1128,7 +1138,8 @@ impl Vm {
         Ok(())
     }
 
-    #[inline(never)]
+    #[cfg_attr(not(monolithic_dispatch), inline(never))]
+    #[cfg_attr(monolithic_dispatch, inline(always))]
     fn op_make_range(&mut self, inclusive: bool, ip: usize) -> Result<(), VmError> {
         self.gc_checkpoint();
         let hi = self.pop();
@@ -1141,7 +1152,8 @@ impl Vm {
         Ok(())
     }
 
-    #[inline(never)]
+    #[cfg_attr(not(monolithic_dispatch), inline(never))]
+    #[cfg_attr(monolithic_dispatch, inline(always))]
     fn op_make_struct_empty(&mut self, def: u32) {
         self.gc_checkpoint();
         let nfields = match &self.program.defs[def as usize] {
@@ -1155,7 +1167,8 @@ impl Vm {
         self.stack.push(Value::Obj(h));
     }
 
-    #[inline(never)]
+    #[cfg_attr(not(monolithic_dispatch), inline(never))]
+    #[cfg_attr(monolithic_dispatch, inline(always))]
     fn op_for_prep(&mut self, ip: usize) -> Result<(), VmError> {
         let v = self.peek(0);
         let state = match v {
@@ -1171,7 +1184,8 @@ impl Vm {
     }
 
     /// Returns the (possibly jumped) next `ip`.
-    #[inline(never)]
+    #[cfg_attr(not(monolithic_dispatch), inline(never))]
+    #[cfg_attr(monolithic_dispatch, inline(always))]
     fn op_for_next(&mut self, off: i32, ip: usize) -> Result<usize, VmError> {
         let state = self.peek(0);
         let iter = self.peek(1);
