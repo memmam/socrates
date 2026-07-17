@@ -22,5 +22,19 @@ fn main() {
     if target == "aarch64-apple-darwin" {
         println!("cargo:rustc-link-arg-bins=-Wl,-stack_size,0x20000000");
     }
+
+    // Per-target implementation binding (bench/RESULTS.md, "The dispatch
+    // restructure"): when one form of an implementation is measurably best
+    // on some targets and an invariant loss on another, each target binds
+    // its measured-fastest form through a cfg emitted here — one predicate,
+    // one place to record which targets bind which form. First instance:
+    // the VM dispatch loop's arm bodies outline behind #[inline(never)]
+    // everywhere (the compact loop that killed the codegen lottery) except
+    // aarch64-linux, which measured the monolithic loop faster (enum_match
+    // +4.5% under outlining, reproduced across two layouts).
+    if target.starts_with("aarch64") && target.contains("linux") {
+        println!("cargo:rustc-cfg=monolithic_dispatch");
+    }
+    println!("cargo:rustc-check-cfg=cfg(monolithic_dispatch)");
     println!("cargo:rerun-if-changed=build.rs");
 }

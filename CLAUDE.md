@@ -56,6 +56,27 @@ their place fastest.
   spellings become minimal wrappers over it** (the efficiency-pass rule —
   hand-rolled popcount/ushr/hex became one-line wrappers over natives).
   Every such change stays byte-identical in observable behavior.
+- **Universality gates minification.** "Most performant" is judged across
+  every tier-1 target (x86_64 + aarch64 Linux, x86_64 Windows, aarch64
+  macOS — the release matrix), not on one box: simplifying an idiom down
+  to pure primitives can run better on one architecture and worse on
+  another (I-cache geometry, indirect-branch cost, and code layout all
+  vote differently per arch — the dispatch-loop codegen lottery is the
+  recorded instance). A simplification is accepted only if the
+  interleaved A/B (`bench/ab.py`, fanned per-arch by the Bench A/B
+  workflow) shows flat-or-better on every architecture; where
+  architectures disagree, scope **up**, not down — the primitive keeps
+  its place, and the minimal set is the minimal set of *universally*
+  performant idioms. And when the disagreement is *irreconcilable* — an
+  implementation form that is measurably best on some targets and a
+  reproducible invariant loss on another — a tradeoff is never accepted:
+  that is the signal to write the missing idiom that defers to the more
+  performant implementation **per target**. Keep one source of truth for
+  the behavior and bind each target to its measured-fastest form (a
+  build.rs-emitted cfg names the binding; `monolithic_dispatch` is the
+  first instance — vm.rs's dispatch-arm bodies outline into the compact
+  loop everywhere except aarch64-linux, which measured the monolith
+  faster and inlines them back).
 - **This applies to whole backend implementations, not just algorithmic
   idioms** — but the trigger is the *platform* actually dropping the older
   path, not merely deprecating it. When a newer backend for the same
