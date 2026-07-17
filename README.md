@@ -27,9 +27,9 @@ println("total area: {total.to_fixed(2)}");
 Everything here — lexer, parser, unification-based type inference, Maranget
 exhaustiveness checking, bytecode compiler, stack VM, mark-and-sweep garbage
 collector, REPL, formatter, language server, and disassembler — lives in
-about 22,500 lines of dependency-free Rust in `src/`. It is pinned down by
-309 golden spec tests (every one a runnable Fable program), a book whose 134
-snippets execute in CI, and seventeen demo programs whose complete output is
+about 40,000 lines of dependency-free Rust in `src/`. It is pinned down by
+311 golden spec tests (every one a runnable Fable program), a book whose 136
+snippets execute in CI, and eighteen demo programs whose complete output is
 golden-tested. This image is Fable output too:
 
 <p align="center">
@@ -91,6 +91,15 @@ golden-tested. This image is Fable output too:
   helper) and a `gpu` compute path with five native zero-dependency
   backends (Metal, Vulkan, Direct3D 12, CUDA, OpenCL — MSL, SPIR-V,
   HLSL, and PTX kernels).
+- **Native graphics, three backends.** The `window` namespace opens real
+  OS windows — OpenGL on Linux/X11, Windows, and macOS; Metal on Apple
+  Silicon (additive, never replacing GL); Vulkan on Linux and Windows over
+  one shared backend — and `gfx` is a GL-shaped draw-call surface that
+  behaves identically on all of them (the `glcube` demo renders
+  byte-identical golden frames on GL, Metal, and Vulkan). Shader input
+  follows the backend (GLSL, MSL, SPIR-V); `std.glm` supplies the
+  GLM-shaped `vec3`/`Mat4`/`Quat` math in pure Fable. All raw FFI, zero
+  dependencies, like everything else.
 - **Batteries.** 150+ built-in methods across `List`, `Map`, `String`,
   `Bytes`, `Option`, `Result`, `Range` (short-circuiting `any`/`all`),
   `Int`, `Float`; `math`/`fs`/`os`/`fft` namespaces (Result-based and
@@ -104,7 +113,7 @@ golden-tested. This image is Fable output too:
 
 - **A test runner.** `fable test dir/` — any `.fable` file with
   `//? expect/error/panic` directives is a golden test; the interpreter's
-  own 309-test suite runs through the same command's code. `--bless`
+  own 311-test suite runs through the same command's code. `--bless`
   rewrites a mismatched `//? expect:` line in place when the value changed
   but the print statements around it didn't, instead of making you retype it.
 - **A language server.** `fable lsp` — diagnostics as you type, hover
@@ -138,7 +147,7 @@ golden-tested. This image is Fable output too:
 - **A real GC, stress-tested.** Tracing mark-and-sweep with checkpoint
   rooting. Run anything with `FABLE_GC_STRESS=1` to collect before *every*
   allocation — the entire test suite passes under it.
-- **An executable book.** All 134 runnable snippets in [`book/`](book/)
+- **An executable book.** All 136 runnable snippets in [`book/`](book/)
   execute in CI — including the deliberate-error demos, verified to fail
   the way the prose says they do.
 - **Seventeen golden-tested demos.** [`demos/`](demos/) holds a mini-Lisp, a
@@ -183,7 +192,7 @@ cargo build --release
 ./target/release/fable demos/csvql/main.fable \
   "select city, pop where continent == Asia order by pop desc limit 3"
 
-# Golden-test the spec suite and all seventeen demos with the built-in runner
+# Golden-test the spec suite and all eighteen demos with the built-in runner
 ./target/release/fable test tests/spec demos
 
 # Poke at the machinery
@@ -279,13 +288,16 @@ src/
   builtins.rs     their type schemes (shared with the checker)
   fft.rs          the native FFT kernel (radix-2 + Bluestein)
   worker.rs       OS-thread worker isolates and their channels
-  gpu.rs          GPU compute dispatch: native Metal / Vulkan / OpenCL
-                  backends (zero-dep raw FFI)
+  gpu.rs          GPU compute dispatch across the five native backends
+                  (Metal / Vulkan / D3D12 / CUDA / OpenCL, zero-dep raw FFI)
   vk.rs           raw-FFI Vulkan compute + the shared Vulkan primitives
   cl.rs           raw-FFI OpenCL compute (SPIR-V via clCreateProgramWithIL)
   cu.rs           raw-FFI CUDA compute (PTX text via the driver's JIT)
   dx.rs           COM-FFI Direct3D 12 compute (HLSL via the OS compiler)
   mtl.rs, objc.rs raw-FFI Metal + Objective-C shared cores (macOS)
+  window/         the window + gfx namespaces: GL (X11/WGL/CGL), Metal,
+                  and Vulkan backends; vulkan.rs is the platform-neutral
+                  Vulkan core shared by the Linux and Windows shims
   bundle.rs       fable build: staple a program into a standalone binary
   fmt.rs          comment-preserving, width-aware formatter
   repl.rs         incremental REPL with rollback
@@ -301,7 +313,7 @@ book/             the Fable book (every snippet runs in CI)
 tests/spec/       golden tests (expect / error / panic directives)
 examples/         mandelbrot, raytracer, game of life, brainfuck,
                   JSON parser, algorithms, a tiny text adventure
-demos/            seventeen field-test programs (lisp, checkers, sudoku,
+demos/            eighteen field-test programs (lisp, checkers, sudoku,
                   png, synthwave, reversi, swarm, ...) + STYLE.md, NOTES.md
 ports/            transpilation layers + ports (jsl: ICAA; pyl: claudewave)
 bench/            the benchmark harness and results

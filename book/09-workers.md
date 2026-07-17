@@ -136,11 +136,12 @@ println(fft.magnitude(re, im));
 The `gpu` namespace hands a compute kernel and a `Bytes` buffer to the
 GPU and reads the result back. The backends are native raw-FFI code with
 zero Cargo dependencies — Metal on Apple Silicon macOS (`--features
-metal`), Vulkan and OpenCL on Linux/Windows (`--features vulkan` /
-`opencl`) — so they live behind cargo features only because they are
-platform code, not because they pull anything in. A default build stays
-lean, and the namespace still type-checks and runs — it just reports that
-it is unavailable.
+metal`); Vulkan, CUDA, and OpenCL on Linux/Windows (`--features vulkan` /
+`cuda` / `opencl`); Direct3D 12 on Windows (`--features d3d12`) — so they
+live behind cargo features only because they are platform code, not
+because they pull anything in. A default build stays lean, and the
+namespace still type-checks and runs — it just reports that it is
+unavailable.
 
 ```fable
 println(gpu.available());   // false in a default build; true with a native backend + device
@@ -151,8 +152,9 @@ Build with a backend feature and, on a machine with a usable device,
 the `Bytes`, dispatches the `x·y·z` index space, and returns the output
 bytes as a `Result`. The kernel's dialect follows the backend —
 `gpu.backend()` tells you which one is live: MSL source through `gpu.run`
-on Metal, SPIR-V binaries through `gpu.run_spirv` on Vulkan and OpenCL
-(each in its own SPIR-V profile — the spec's § 7.2 documents both):
+on Metal, PTX on CUDA, HLSL on Direct3D 12, and SPIR-V binaries through
+`gpu.run_spirv` on Vulkan and OpenCL (each in its own SPIR-V profile —
+the spec's § 7.2 documents both):
 
 ```fable skip
 let shader = "...MSL that doubles each f32...";
@@ -163,8 +165,9 @@ match gpu.run(shader, input, 16, 4, 1, 1) {
 }
 ```
 
-`docs/assets/metal_compute.fable`, `vulkan_compute.fable`, and
-`opencl_compute.fable` are the runnable versions, one per backend. Fable
+`docs/assets/metal_compute.fable`, `vulkan_compute.fable`,
+`opencl_compute.fable`, `cuda_compute.fable`, and `d3d12_compute.fable`
+are the runnable versions, one per backend. Fable
 once took its single Cargo dependency here (wgpu, quarantined behind a
 `gpu` feature); the native backends replaced it, and today every build of
 Fable — any feature set — is the same zero-dependency language the rest

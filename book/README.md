@@ -22,7 +22,8 @@ CI before it is published; the output shown is real output.
 7. [Programs Across Files](07-modules.md) — modules and `import`, `pub`
    visibility, module semantics, and the `FABLE_PATH` search path.
 8. [The Standard Library and System Namespaces](08-stdlib.md) — `fs`/`os`,
-   and the embedded standard library: json, collections, iterators, and more.
+   the embedded standard library (json, collections, iterators, `std.glm`
+   3D math), and native graphics with `window` and `gfx`.
 9. [Workers, `fft`, and the GPU](09-workers.md) — parallel isolates, the
    native FFT namespace, and feature-gated GPU compute.
 10. [Under the Hood](10-under-the-hood.md) — bytecode, closures at runtime,
