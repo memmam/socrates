@@ -42,6 +42,11 @@ functionality, judged per-architecture. In progress:
   ...). `Float.min`/`Float.max` added to complete the method set. `math`
   keeps what only it provides: trig, logs, `exp`, `pow`, `fmod`, the
   PRNG, and the constants.
+- **`std.json` serializer fast path**: `escape()` returns clean strings
+  (no `\` `"` `\n` `\t`) as-is instead of running four always-allocating
+  `String.replace` passes — the common case goes four allocations to
+  zero per string and per object key. Byte-identical output;
+  bench_json −6.9% in the local interleaved A/B.
 
 ## v0.8.0 — native graphics and compute; the demo round's feature queue
 
