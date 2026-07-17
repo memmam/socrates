@@ -8,15 +8,15 @@
 //! Cocoa, not linked GL symbols; only the plain `gl*` draw calls need to be
 //! resolved from the framework, via `dlopen("/System/Library/Frameworks/
 //! OpenGL.framework/OpenGL")` + `dlsym` — the same `dlopen`/`dlsym` strategy
-//! `x11.rs` uses for `libGL.so.1` (Apple's `OpenGL.framework` has no stable
+//! `x11/gl.rs` uses for `libGL.so.1` (Apple's `OpenGL.framework` has no stable
 //! dev-symlink story either).
 //!
 //! `GlFns` carries a GL 3.3 core-profile function table (shaders, programs,
 //! buffers, VAOs, textures, uniforms, draw calls) beyond the
-//! `glClearColor`/`glClear` pair — mirrors `x11.rs`'s `GlFns` exactly (same
+//! `glClearColor`/`glClear` pair — mirrors `x11/gl.rs`'s `GlFns` exactly (same
 //! field names/signatures, cross-corroborated against Khronos's own
 //! `glcorearb.h` and the Linux OpenGL ABI spec), but simpler to resolve:
-//! unlike `libGL.so.1`'s GL-1.2 static-export floor (`x11.rs` needs
+//! unlike `libGL.so.1`'s GL-1.2 static-export floor (`x11/gl.rs` needs
 //! `glXGetProcAddress` for anything newer) or `opengl32.dll`'s equivalent
 //! floor (`win32.rs` needs `wglGetProcAddress`), Apple's `OpenGL.framework`
 //! exports every core-profile entry point this table needs directly, so all
@@ -44,11 +44,11 @@ const GL_COLOR_BUFFER_BIT: u32 = 0x0000_4000;
 // GL 3.3-core enum tokens (gl.h / glcorearb.h; stable, unrevised values
 // cross-corroborated against Khronos's own `glcorearb.h`) needed by the
 // function table below and its `gfx` namespace callers — identical values
-// to `x11.rs`'s copy of this same block.
+// to `x11/gl.rs`'s copy of this same block.
 const GL_FALSE: u32 = 0x0000_0000;
 // GL_TRUE/GL_NO_ERROR/GL_UNPACK_ALIGNMENT/GL_NEAREST/GL_REPEAT are part of
 // the contracted GL 3.3-core token set but have no call site in the current
-// `gfx` v1 surface — reserved for a fuller `gfx` API, matching `x11.rs`'s
+// `gfx` v1 surface — reserved for a fuller `gfx` API, matching `x11/gl.rs`'s
 // identical note.
 #[allow(dead_code)]
 const GL_TRUE: u32 = 0x0000_0001;
@@ -88,7 +88,7 @@ const GL_INFO_LOG_LENGTH: u32 = 0x0000_8B84;
 
 // ---------------------------------------------------------------------------
 // GL function pointers, resolved at runtime via dlopen/dlsym — mirrors
-// `x11.rs`'s `GlFns` exactly, just against `OpenGL.framework` instead of
+// `x11/gl.rs`'s `GlFns` exactly, just against `OpenGL.framework` instead of
 // `libGL.so.1`, and all resolved the same single way (see the module doc
 // comment: no proc-address split is needed on this platform). The GL
 // context itself is created/bound through Cocoa (`NSOpenGLContext`), not
@@ -107,7 +107,7 @@ type FnClear = unsafe extern "C" fn(u32);
 
 // GL 3.3 core-profile function pointer types, resolved at runtime via
 // `dlsym` against `OpenGL.framework` — every one of them, unlike
-// `x11.rs`/`win32.rs` which split into a direct-link subset and a
+// `x11/gl.rs`/`win32.rs` which split into a direct-link subset and a
 // proc-address subset (see the module doc comment). GLenum/GLuint/GLint/
 // GLsizei map to `u32`/`i32`, GLboolean to `u8`, GLfloat to `f32`, and
 // GLsizeiptr to `isize` (pointer-width).
@@ -173,7 +173,7 @@ type FnReadPixels = unsafe extern "C" fn(i32, i32, i32, i32, u32, u32, *mut c_vo
 /// (`clear_color`/`clear`), plus a GL 3.3 core-profile function table
 /// (shaders/programs/buffers/VAOs/textures/uniforms/draw calls) for the
 /// backend-neutral `gfx` draw-call namespace that consumes it — mirrors
-/// `x11.rs`'s `GlFns` field-for-field. Plain function pointers, `Copy`: the
+/// `x11/gl.rs`'s `GlFns` field-for-field. Plain function pointers, `Copy`: the
 /// underlying library load is process-wide and permanent (see
 /// [`GlFns::load`]), so there is nothing here for a `Drop` to release.
 #[derive(Clone, Copy)]
@@ -237,14 +237,14 @@ struct GlFns {
     disable: FnDisable,
     // Resolved but not yet called anywhere: no `gfx.*` member currently
     // surfaces raw GL error state to Fable. Reserved for a fuller `gfx` API,
-    // matching `x11.rs`'s identical note.
+    // matching `x11/gl.rs`'s identical note.
     #[allow(dead_code)]
     get_error: FnGetError,
     read_pixels: FnReadPixels,
 }
 
 impl GlFns {
-    /// Loaded once per process, cached — same reasoning as `x11.rs::GlFns`:
+    /// Loaded once per process, cached — same reasoning as `x11/gl.rs::GlFns`:
     /// never `dlclose`d, a broken driver reports the same cached `Err` on
     /// every subsequent attempt rather than retrying.
     fn load() -> Result<Self, String> {
@@ -373,7 +373,7 @@ fn gl_buffer_target(kind: crate::window::GfxBufferKind) -> u32 {
 }
 
 /// Fetch a GL info log sized exactly via a prior `GL_INFO_LOG_LENGTH` query
-/// — never a guessed fixed buffer size. Mirrors `x11.rs`'s helper of the
+/// — never a guessed fixed buffer size. Mirrors `x11/gl.rs`'s helper of the
 /// same name exactly.
 unsafe fn fetch_info_log(log_len: i32, get_log: impl FnOnce(i32, *mut i32, *mut c_char)) -> String {
     if log_len <= 1 {
@@ -387,7 +387,7 @@ unsafe fn fetch_info_log(log_len: i32, get_log: impl FnOnce(i32, *mut i32, *mut 
 }
 
 /// Compile one shader stage; `Err` carries the driver's compile log. Mirrors
-/// `x11.rs`'s helper of the same name exactly (`GlFns` is `Copy`, so this
+/// `x11/gl.rs`'s helper of the same name exactly (`GlFns` is `Copy`, so this
 /// needs no `&Inner` borrow).
 unsafe fn compile_shader_stage(gl: &GlFns, kind: u32, src: &str) -> Result<u32, String> {
     let shader = (gl.create_shader)(kind);
@@ -432,7 +432,7 @@ impl Inner {
 
         // Safety: every call below follows the standard minimal Cocoa
         // "create a GL-capable pixel format + context, bind to the window's
-        // content view" recipe (the direct analog of `x11.rs::create`'s GLX
+        // content view" recipe (the direct analog of `x11/gl.rs::create`'s GLX
         // recipe); every fallible step (a null return from `alloc`/
         // `init...`) is checked and anything already created is released
         // before returning `Err`.
@@ -480,7 +480,7 @@ impl Inner {
                 std::ptr::null_mut(),
             );
             // `fmt` is only needed for this call — release right after,
-            // mirroring `x11.rs` freeing `XVisualInfo` right after
+            // mirroring `x11/gl.rs` freeing `XVisualInfo` right after
             // `glXCreateContext`.
             send0_void(fmt, sel("release"));
             if ctx.is_null() {
@@ -528,7 +528,7 @@ impl Inner {
     pub fn clear(&mut self, r: f32, g: f32, b: f32, a: f32) {
         // Safety: makes this window's context current before issuing GL
         // calls — necessary if another `Window` made itself current since
-        // this one was created (matches `x11.rs::clear`'s same caveat for
+        // this one was created (matches `x11/gl.rs::clear`'s same caveat for
         // GLX).
         unsafe {
             send0_void(self.ctx, sel("makeCurrentContext"));
@@ -550,7 +550,7 @@ impl Inner {
     // -----------------------------------------------------------------
     // gfx.* (v0.8) — GL 3.3 core-profile draw calls against this window's
     // context, consumed through `WindowHandle`'s `gl_*` wrappers
-    // (`src/window/mod.rs`). Mirrors `x11.rs`'s equivalent block exactly,
+    // (`src/window/mod.rs`). Mirrors `x11/gl.rs`'s equivalent block exactly,
     // method-for-method — only the current-context call itself
     // (`[ctx makeCurrentContext]` vs. `glXMakeCurrent`) differs, and it
     // never fails the way GLX/WGL's can (no bool return to check), so
@@ -826,9 +826,9 @@ impl Inner {
     /// Idempotent teardown, called by both `WindowHandle::close` and its
     /// `Drop` (see the module docs on `src/window/mod.rs`). Releases the GL
     /// context, then the window, in that order (reverse of creation) —
-    /// matches `x11.rs::teardown`'s ordering discipline. Does not release
+    /// matches `x11/gl.rs::teardown`'s ordering discipline. Does not release
     /// the process-lifetime `NSApplication`/autorelease pool/OpenGL
-    /// framework handle, exactly as `x11.rs` never closes its X `Display`'s
+    /// framework handle, exactly as `x11/gl.rs` never closes its X `Display`'s
     /// underlying `libGL.so.1` `dlopen` handle — those are process-lifetime
     /// resources, not per-window ones.
     pub fn teardown(self) {

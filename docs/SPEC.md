@@ -746,6 +746,7 @@ and has no plan to be** (see the macOS backend note below for why)),
 |--------|------|-------|
 | `window.create(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | opens an OS window of size `w`×`h` with a current GL context. Without the feature (or backend): `Err("windowing support not compiled in (build with --features gl)")` |
 | `window.create_metal(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | (v0.9, macOS/Apple Silicon only) opens a Metal-backed window — a sibling of `create`, additive alongside it, never a replacement (see the macOS Metal backend note below). Without the feature (or off Apple Silicon macOS): `Err("Metal windowing support not compiled in (build with --features metal, aarch64-apple-darwin only)")` |
+| `window.create_vulkan(title, w, h)` | `fn(String, Int, Int) -> Result[Window, String]` | (v0.9, Linux/X11 only) will open a Vulkan-backed window — `create_metal`'s Linux analog, riding the same `vulkan` cargo feature as `gpu.run_spirv` (see the Linux Vulkan backend note below). Without the feature (or off Linux): `Err("Vulkan windowing support not compiled in (build with --features vulkan, Linux/X11 only for now)")`. **Currently scaffolding**: with the feature on it returns `Err("window.create_vulkan: Vulkan window backend not yet implemented ...")` until the backend's rendering phases land |
 
 `Window` is a nameable opaque type (§ 8.4d) — the handle `create` returns on
 success.
@@ -819,9 +820,10 @@ call shape and behavior regardless of backend.
 
 Internally, `src/window/macos/mod.rs`'s `Inner` is a small enum
 (`Gl(gl::Inner)` / `Metal(metal::Inner)`, each gated on its own cargo
-feature) rather than the plain single-backend struct `x11`/`win32` each
-use — the only way one compiled binary can transparently hold either kind
-of live window.
+feature) rather than the plain single-backend struct `win32` uses — the
+only way one compiled binary can transparently hold either kind of live
+window. (`x11` adopted the same enum shape when its Vulkan sibling
+arrived — see the Linux Vulkan backend note below.)
 
 `create_metal` opens a real window (`MTLDevice` + command queue +
 `CAMetalLayer` hosted by the content view), and the entire `Window` +
@@ -871,6 +873,27 @@ Metal shader conventions:
   `demos/glcube/main_metal.fable`, whose golden pins are byte-identical
   to the OpenGL `main.fable`'s (the cross-backend pixel-parity proof,
   asserted in CI on real Apple Silicon hardware).
+
+### window namespace, Linux Vulkan backend (v0.9, additive — scaffolding)
+
+`window.create_vulkan` is the Linux analog of `create_metal`: a **sibling**
+to `create`'s OpenGL/GLX path, additive alongside it, never a replacement,
+riding the same zero-Cargo-dependency `vulkan` cargo feature the
+`gpu.run_spirv` compute backend (§ 7.2) ships under — both backends compile
+into the same binary under `--features gl,vulkan`, and a program picks
+per-window which one it wants by calling `create` or `create_vulkan`.
+Internally, `src/window/x11/`'s `Inner` adopted `macos/`'s two-variant enum
+shape (`Gl(gl::Inner)` / `Vulkan(vulkan::Inner)`, each gated on its own
+cargo feature) over a shared `X11WindowState` (Xlib window creation + event
+pump, written once in `x11/shared.rs`).
+
+**Current status: scaffolding only.** The entry point, feature gating,
+enum dispatch, and `backend_name()` plumbing are wired end-to-end, but
+`create_vulkan` returns `Err("window.create_vulkan: Vulkan window backend
+not yet implemented ...")` until the backend's rendering phases land
+(device/swapchain, then the full `gfx.*` surface with SPIR-V shader input,
+then glcube pixel parity — the same phase sequence the Metal backend
+followed). This paragraph is updated as each phase ships.
 
 ### 7.4 The gfx namespace (v0.8, feature-gated)
 
@@ -1128,9 +1151,10 @@ method, so the `gfx` namespace (§ 7.4) has an explicit window to target:
 every `gfx.*` call operates against whichever window last called
 `make_current()`.
 
-`backend_name() -> String` (v0.9): `"opengl"` or `"metal"` — see the macOS
-Metal backend note above (§ 7.3). On Linux and Windows, where only the
-OpenGL backend exists, this always returns `"opengl"`.
+`backend_name() -> String` (v0.9): `"opengl"`, `"metal"` (macOS,
+`create_metal`), or `"vulkan"` (Linux, `create_vulkan`) — see the macOS
+Metal and Linux Vulkan backend notes above (§ 7.3). On Windows, where only
+the OpenGL backend exists, this always returns `"opengl"`.
 
 ### 8.5 Numeric methods
 

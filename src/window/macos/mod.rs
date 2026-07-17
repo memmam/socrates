@@ -15,7 +15,7 @@
 //! `gl`/`metal` enabled doesn't try to compile the other's module at all.
 //! Every method below is a small `match` that forwards to whichever variant
 //! is live; `window/mod.rs`'s generic `WindowHandle` code (shared with
-//! `x11.rs`/`win32.rs`, which are plain structs) never needs to know which
+//! `x11/gl.rs`/`win32.rs`, which are plain structs) never needs to know which
 //! backend it's talking to.
 //!
 //! **`window.create()` vs. `window.create_metal()`**: the *default*,

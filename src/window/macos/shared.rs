@@ -15,7 +15,7 @@
 //! `objc_msgSend` shapes below, the AppKit constants, and the
 //! window/event-pump state machine.
 //!
-//! **Linking strategy** (mirrors `x11.rs`'s doc comment): `Cocoa` (pulls in
+//! **Linking strategy** (mirrors `x11/gl.rs`'s doc comment): `Cocoa` (pulls in
 //! AppKit + Foundation transitively) is linked normally (`#[link(...)]`) —
 //! every Mac has it, it's part of the OS. `libobjc` is linked by
 //! `crate::objc`.
@@ -23,7 +23,7 @@
 //! **Memory management (no ARC in raw FFI)** — this file uses the coarse,
 //! process-lifetime pattern rather than fine-grained manual retain/release
 //! bookkeeping, deliberately (simplicity over precision, per the task brief
-//! and in the same spirit as `x11.rs` never `dlclose`-ing `libGL.so.1`):
+//! and in the same spirit as `x11/gl.rs` never `dlclose`-ing `libGL.so.1`):
 //! - One `NSAutoreleasePool` is created for the whole process (in
 //!   `ensure_app_init`, once, via a `OnceLock`) and intentionally never
 //!   drained/released. Every `alloc`-less convenience constructor used here
@@ -33,7 +33,7 @@
 //!   poll-once-per-frame program that never wraps the loop in its own inner
 //!   pool, autoreleased objects simply accumulate for the process's lifetime
 //!   instead of being reclaimed promptly — acceptable here for the same
-//!   reason `x11.rs` accepts `libGL.so.1` staying `dlopen`'d forever: bounded
+//!   reason `x11/gl.rs` accepts `libGL.so.1` staying `dlopen`'d forever: bounded
 //!   by process lifetime, not by anything this module loops over unboundedly
 //!   per-frame (no autoreleased object is created more than a small constant
 //!   number of times per `poll()` call).
@@ -137,7 +137,7 @@ pub(super) fn ensure_app_init() {
         let app_class = class("NSApplication");
         let app = send0(app_class, sel("sharedApplication"));
         // Return value (did the policy change take effect) intentionally
-        // ignored — this mirrors x11.rs's "only check calls whose failure
+        // ignored — this mirrors x11/gl.rs's "only check calls whose failure
         // blocks progress" convention; a regular-policy app that somehow
         // keeps its prior policy still creates and shows windows fine.
         let _ = send1_int_bool(
@@ -164,7 +164,7 @@ pub(super) fn ensure_app_init() {
         // `didFinishLaunching`, running an installed delegate's launch
         // hooks — don't apply here (this file installs no
         // `NSApplicationDelegate` and drives its own event loop directly in
-        // `CocoaWindowState::poll`, mirroring `x11.rs`'s manual
+        // `CocoaWindowState::poll`, mirroring `x11/gl.rs`'s manual
         // `XPending`/`XNextEvent` pump rather than handing control to
         // `[NSApp run]`). The one remaining externally-visible effect worth
         // keeping — bringing the app/window to the front so it can become
@@ -196,7 +196,7 @@ pub(super) fn shared_app() -> *mut Object {
 
 /// The `NSWindow` plus polling-state (pressed keys, mouse position,
 /// dimensions, close-requested flag) every backend composes by holding one
-/// of these, exactly the state `x11.rs`/`win32.rs`'s own `Inner` structs
+/// of these, exactly the state `x11/gl.rs`/`win32.rs`'s own `Inner` structs
 /// hold inline — factored out here only because macOS now has two backends
 /// that would otherwise duplicate this ~100 lines of event-pump logic
 /// identically.
@@ -204,7 +204,7 @@ pub(super) struct CocoaWindowState {
     pub(super) window: *mut Object,
     /// `charactersIgnoringModifiers` text of keys currently held (inserted
     /// on `KeyDown`, removed on `KeyUp` — see [`CocoaWindowState::poll`]),
-    /// so `key_down(name)` can match by name the way `x11.rs` matches by
+    /// so `key_down(name)` can match by name the way `x11/gl.rs` matches by
     /// `XStringToKeysym`. See [`CocoaWindowState::key_down`]'s doc comment
     /// for the caveat this approach has that X11's keysym model doesn't.
     pressed: std::collections::HashSet<String>,
@@ -223,7 +223,7 @@ impl CocoaWindowState {
     pub(super) fn create_window(title: &str, w: i32, h: i32) -> Result<CocoaWindowState, String> {
         ensure_app_init();
         // Safety: standard minimal Cocoa "create a window" recipe (the
-        // direct analog of `x11.rs::create`'s window-creation half); the
+        // direct analog of `x11/gl.rs::create`'s window-creation half); the
         // one fallible step (a null return from `alloc`/`init...`) is
         // checked.
         unsafe {
@@ -287,7 +287,7 @@ impl CocoaWindowState {
         // Safety: `nextEventMatchingMask:untilDate:inMode:dequeue:` with
         // `untilDate: [NSDate distantPast]` is the standard non-blocking
         // idiom (return immediately with `nil` if nothing is queued) — the
-        // direct structural analog of `x11.rs::poll`'s
+        // direct structural analog of `x11/gl.rs::poll`'s
         // `while XPending(display) > 0 { XNextEvent(...) }` loop: drain
         // everything currently queued, once per frame, never block.
         unsafe {
@@ -346,7 +346,7 @@ impl CocoaWindowState {
                         // `locationInWindow` returns an `NSPoint` (two
                         // `f64`s) in the window's flipped-from-AppKit
                         // (bottom-left-origin) coordinate system; used
-                        // as-is, matching `x11.rs`'s equally raw
+                        // as-is, matching `x11/gl.rs`'s equally raw
                         // top-left-origin `XMotionEvent.x/y` — this
                         // namespace doesn't normalize coordinate origin
                         // conventions across platforms (a pre-existing
@@ -378,7 +378,7 @@ impl CocoaWindowState {
             }
 
             // `contentView`'s frame reflects live resizes; keep width/height
-            // in sync the same way `x11.rs::poll` updates them from
+            // in sync the same way `x11/gl.rs::poll` updates them from
             // `CONFIGURE_NOTIFY`.
             let content_view = send0(self.window, sel("contentView"));
             if !content_view.is_null() {
@@ -395,7 +395,7 @@ impl CocoaWindowState {
     /// arrow-key private-use characters AppKit assigns), inserted on
     /// `KeyDown`/removed on `KeyUp` in [`poll`](Self::poll). **Semantic
     /// caveat** (called out explicitly in the research brief): this is
-    /// text, not a hardware-key identity — unlike `x11.rs`'s
+    /// text, not a hardware-key identity — unlike `x11/gl.rs`'s
     /// `XStringToKeysym`/`XLookupKeysym` pairing, which resolves a *keysym
     /// name* independent of any live keyboard layout, `characters`-based
     /// matching is layout/shift-sensitive. Good enough for the same simple

@@ -839,7 +839,8 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         // ------------------------------------------------------------------
         // window.* (v0.8: Linux/Windows/macOS via `gl`; v0.9 adds a
         // Metal-backed `create_metal` sibling on macOS, additive alongside
-        // `gl`, never a replacement) — implementation lives in
+        // `gl`, never a replacement; Linux then gains a Vulkan-backed
+        // `create_vulkan` sibling the same way) — implementation lives in
         // src/window/; without the relevant cargo feature each entry point
         // degrades gracefully (see src/window/mod.rs).
         // ------------------------------------------------------------------
@@ -865,6 +866,23 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             let w = int_arg(vm, argc, 1)?;
             let h = int_arg(vm, argc, 2)?;
             match crate::window::create_metal(&title, w as i32, h as i32) {
+                Ok(handle) => {
+                    let h = vm.heap.alloc(Obj::Window(std::rc::Rc::new(
+                        std::cell::RefCell::new(handle),
+                    )));
+                    make_ok(vm, Value::Obj(h))
+                }
+                Err(msg) => {
+                    let m = vm.alloc_str(msg);
+                    make_err(vm, m)
+                }
+            }
+        }
+        WindowCreateVulkan => {
+            let title = str_arg(vm, argc, 0)?;
+            let w = int_arg(vm, argc, 1)?;
+            let h = int_arg(vm, argc, 2)?;
+            match crate::window::create_vulkan(&title, w as i32, h as i32) {
                 Ok(handle) => {
                     let h = vm.heap.alloc(Obj::Window(std::rc::Rc::new(
                         std::cell::RefCell::new(handle),
@@ -2275,12 +2293,18 @@ fn gfx_window_msg(
     vm: &Vm,
 ) -> Result<std::rc::Rc<std::cell::RefCell<crate::window::WindowHandle>>, String> {
     // Checking `gl` alone would wrongly report every `gfx.*` call as "not
-    // compiled in" on a `--features metal`-only build, even with a live
-    // Metal window current -- `gfx` is backend-neutral, so it's compiled in
-    // whenever either rendering backend is.
-    if !cfg!(feature = "gl") && !cfg!(feature = "metal") {
+    // compiled in" on a `--features metal`- or `--features vulkan`-only
+    // build, even with a live Metal/Vulkan window current -- `gfx` is
+    // backend-neutral, so it's compiled in whenever any rendering backend
+    // is. (Vulkan windowing is Linux-only, hence the platform-qualified
+    // check: on a Windows `--features vulkan` build only the compute path
+    // exists, and `gfx.*` really isn't compiled in.)
+    if !cfg!(feature = "gl")
+        && !cfg!(feature = "metal")
+        && !cfg!(all(feature = "vulkan", target_os = "linux"))
+    {
         return Err(
-            "gfx support not compiled in (build with --features gl or --features metal)"
+            "gfx support not compiled in (build with --features gl, metal, or vulkan)"
                 .to_string(),
         );
     }

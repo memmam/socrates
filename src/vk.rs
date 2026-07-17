@@ -8,7 +8,7 @@
 //!
 //! **Zero dependencies**: the Vulkan loader is resolved at runtime with
 //! `dlopen("libvulkan.so.1")` on Linux / `LoadLibraryA("vulkan-1.dll")` on
-//! Windows — the same dynamic-resolution strategy `x11.rs` uses for
+//! Windows — the same dynamic-resolution strategy `window/x11/gl.rs` uses for
 //! `libGL.so.1`, and for the same reason: the loader ships with GPU
 //! drivers (and with Mesa's software rasterizer), not with the OS's
 //! link-time SDK. Every entry point is then resolved through
@@ -43,7 +43,7 @@ use std::ffi::{c_char, c_void, CStr};
 use std::sync::OnceLock;
 
 // ---------------------------------------------------------------------------
-// Loader resolution (dlopen / LoadLibrary), mirroring x11.rs's GL strategy.
+// Loader resolution (dlopen / LoadLibrary), mirroring window/x11/gl.rs's GL strategy.
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "linux")]

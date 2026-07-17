@@ -167,6 +167,11 @@ pub enum Native {
     /// exception). Without the `metal` cargo feature it degrades
     /// gracefully, same as `WindowCreate` without `gl`.
     WindowCreateMetal,
+    /// Vulkan-backed sibling of `window.create` (Linux/X11), riding the
+    /// same `vulkan` cargo feature as `gpu.run_spirv`'s compute backend.
+    /// Without it (or off Linux) it degrades gracefully, same as
+    /// `WindowCreateMetal` off Apple Silicon macOS.
+    WindowCreateVulkan,
     WindowHandlePoll,
     WindowHandleShouldClose,
     WindowHandleClose,
@@ -535,11 +540,12 @@ impl Native {
                 _ => return None,
             })),
             "window" => Some(MathMember::Fn(match member {
-                // Only `create`/`create_metal` are namespace-level free
-                // functions; the rest are methods on the `Window` receiver
-                // (METHOD_TABLE).
+                // Only `create`/`create_metal`/`create_vulkan` are
+                // namespace-level free functions; the rest are methods on
+                // the `Window` receiver (METHOD_TABLE).
                 "create" => WindowCreate,
                 "create_metal" => WindowCreateMetal,
+                "create_vulkan" => WindowCreateVulkan,
                 _ => return None,
             })),
             "gfx" => Some(MathMember::Fn(match member {
@@ -768,6 +774,7 @@ impl Native {
             GpuBackend => "gpu.backend",
             WindowCreate => "window.create",
             WindowCreateMetal => "window.create_metal",
+            WindowCreateVulkan => "window.create_vulkan",
             WindowHandlePoll => "poll",
             WindowHandleShouldClose => "should_close",
             WindowHandleClose => "close",
@@ -1030,11 +1037,13 @@ impl Native {
             ),
             GpuBackend => (vec![], TStr, 0),
 
-            // window.* (v0.8; macOS also gained a Metal-backed sibling
-            // entry point in v0.9). `create`/`create_metal` mirror
-            // `worker.spawn`'s `Result[_, String]` shape.
+            // window.* (v0.8; macOS gained a Metal-backed sibling entry
+            // point in v0.9, Linux a Vulkan-backed one after that). The
+            // `create*` family mirrors `worker.spawn`'s `Result[_, String]`
+            // shape.
             WindowCreate => (vec![TStr, Int, Int], res(Type::Window, TStr), 0),
             WindowCreateMetal => (vec![TStr, Int, Int], res(Type::Window, TStr), 0),
+            WindowCreateVulkan => (vec![TStr, Int, Int], res(Type::Window, TStr), 0),
             WindowHandlePoll => (vec![], Unit, 0),
             WindowHandleShouldClose => (vec![], Bool, 0),
             WindowHandleClose => (vec![], Unit, 0),

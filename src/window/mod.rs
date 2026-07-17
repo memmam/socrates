@@ -11,32 +11,34 @@
 //! same-named methods.
 //!
 //! This module is **always compiled**; only its internals are gated on the
-//! `gl`/`metal` cargo features, mirroring `src/gpu.rs` exactly. Both
-//! features add **zero** Cargo dependencies — it is raw FFI to system
-//! libraries and frameworks (X11/Win32 linked normally, GL/GLX/WGL resolved
-//! with `dlopen`+`dlsym` or `LoadLibrary`+`GetProcAddress` at runtime,
-//! Cocoa/NSOpenGL/Metal messaged via `objc_msgSend`) — so `cargo tree -e
-//! normal` stays a single line with or without either.
+//! `gl`/`metal`/`vulkan` cargo features, mirroring `src/gpu.rs` exactly.
+//! All three features add **zero** Cargo dependencies — it is raw FFI to
+//! system libraries and frameworks (X11/Win32 linked normally,
+//! GL/GLX/WGL/Vulkan resolved with `dlopen`+`dlsym` or
+//! `LoadLibrary`+`GetProcAddress` at runtime, Cocoa/NSOpenGL/Metal messaged
+//! via `objc_msgSend`) — so `cargo tree -e normal` stays a single line with
+//! or without any of them.
 //!
 //! Three platform backends, each behind its own submodule: [`x11`] (Linux,
-//! any arch, `gl` only), [`win32`] (Windows, any arch, `gl` only), [`macos`]
+//! any arch), [`win32`] (Windows, any arch, `gl` only), [`macos`]
 //! (macOS — gated on `target_arch = "aarch64"` **in addition to**
 //! `target_os`, not just by convention: it sidesteps the struct-return
 //! `objc_msgSend_stret` ABI split that only exists on x86_64, so an
 //! accidental `x86_64-apple-darwin` build must not silently compile the same
-//! code in and hit that split at runtime). `x11`/`win32` each expose exactly
-//! one `Inner` struct, aliased directly to `PlatformInner`; `macos` is the
-//! one platform with **two** independently-togglable backends (`gl`/
-//! OpenGL-CGL and `metal`, additive per CLAUDE.md's standing Metal
-//! exception — never a replacement), so its `Inner` (still aliased to
-//! `PlatformInner`) is a small enum over both, letting a single compiled
-//! binary open either kind of window at runtime via [`create`] or
-//! [`create_metal`] (see `macos/mod.rs`'s module docs for why). Either way,
-//! [`WindowHandle`]'s method bodies are written once and never see which
-//! platform (or, on macOS, which backend) they're actually running on,
-//! except for the one deliberate escape hatch, [`WindowHandle::backend_name`]
-//! (shader *source text* is inherently GLSL vs. MSL). On any other target
-//! (or with the relevant feature off), [`create`]/[`create_metal`] degrade
+//! code in and hit that split at runtime). `win32` exposes exactly one
+//! `Inner` struct, aliased directly to `PlatformInner`; `macos` and `x11`
+//! each carry **two** independently-togglable backends (OpenGL plus,
+//! respectively, `metal` — additive per CLAUDE.md's standing Metal
+//! exception, never a replacement — and `vulkan`), so their `Inner` (still
+//! aliased to `PlatformInner`) is a small enum over both, letting a single
+//! compiled binary open either kind of window at runtime via [`create`],
+//! [`create_metal`], or [`create_vulkan`] (see `macos/mod.rs`'s module docs
+//! for why an enum). Either way, [`WindowHandle`]'s method bodies are
+//! written once and never see which platform (or which backend) they're
+//! actually running on, except for the one deliberate escape hatch,
+//! [`WindowHandle::backend_name`] (shader *source text* is inherently
+//! GLSL vs. MSL vs. SPIR-V). On any other target (or with the relevant
+//! feature off), [`create`]/[`create_metal`]/[`create_vulkan`] degrade
 //! gracefully to `Err`, the same way `gpu::run` does without the `gpu`
 //! feature.
 //!
@@ -53,9 +55,9 @@
 //! second teardown is a no-op (the same shape as `WorkerHandle::join`'s
 //! cached-result idempotency).
 
-#[cfg(all(feature = "gl", target_os = "linux"))]
+#[cfg(all(any(feature = "gl", feature = "vulkan"), target_os = "linux"))]
 pub mod x11;
-#[cfg(all(feature = "gl", target_os = "linux"))]
+#[cfg(all(any(feature = "gl", feature = "vulkan"), target_os = "linux"))]
 use x11::Inner as PlatformInner;
 
 #[cfg(all(feature = "gl", target_os = "windows"))]
@@ -71,7 +73,8 @@ use macos::Inner as PlatformInner;
 /// Buffer-binding target for `gfx.bind_buffer`/`gfx.upload_buffer` (v0.8):
 /// mirrors `GL_ARRAY_BUFFER` / `GL_ELEMENT_ARRAY_BUFFER` as a plain Rust enum
 /// so the raw GL enum values stay encapsulated inside each platform backend
-/// (`x11.rs`/`win32.rs`/`macos/gl.rs`), instead of leaking out to `natives.rs`.
+/// (`x11/gl.rs`/`win32.rs`/`macos/gl.rs`), instead of leaking out to
+/// `natives.rs`.
 /// Always compiled (unlike `WindowHandle`'s GL-calling methods below) since
 /// it carries no platform state — just a tag `natives.rs` maps a Fable
 /// `"vertex"`/`"index"` string onto.
@@ -87,7 +90,7 @@ pub enum GfxBufferKind {
 /// only OS/GL handles, same reasoning as `Obj::Worker`.
 pub struct WindowHandle {
     #[cfg(any(
-        all(feature = "gl", target_os = "linux"),
+        all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
         all(feature = "gl", target_os = "windows"),
         all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
     ))]
@@ -104,7 +107,7 @@ impl std::fmt::Debug for WindowHandle {
 /// current. Always an `Err` without the `gl` feature or on an unsupported
 /// target.
 #[cfg(not(any(
-    all(feature = "gl", target_os = "linux"),
+    all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
     all(feature = "gl", target_os = "windows"),
     all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 )))]
@@ -113,7 +116,7 @@ pub fn create(_title: &str, _w: i32, _h: i32) -> Result<WindowHandle, String> {
 }
 
 #[cfg(any(
-    all(feature = "gl", target_os = "linux"),
+    all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
     all(feature = "gl", target_os = "windows"),
     all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 ))]
@@ -144,8 +147,32 @@ pub fn create_metal(title: &str, w: i32, h: i32) -> Result<WindowHandle, String>
     Ok(WindowHandle { inner: Some(inner) })
 }
 
+/// Create a Vulkan-backed window (Linux/X11 only for now) — additive
+/// alongside [`create`]'s OpenGL/GLX path, never a replacement, exactly the
+/// shape [`create_metal`] established on macOS (and a sibling function
+/// rather than a `backend` parameter on `create` for the same reason: Fable
+/// has neither default parameters nor overloading). Rides the same `vulkan`
+/// cargo feature as the `gpu.run_spirv` compute backend. Always an `Err`
+/// without the `vulkan` feature or off Linux — and, until the Vulkan
+/// graphics arc's Phase 1 lands, a clean "not yet implemented" `Err` even
+/// with it on (see `x11/vulkan.rs`).
+#[cfg(not(all(feature = "vulkan", target_os = "linux")))]
+pub fn create_vulkan(_title: &str, _w: i32, _h: i32) -> Result<WindowHandle, String> {
+    Err(
+        "Vulkan windowing support not compiled in (build with --features vulkan, \
+         Linux/X11 only for now)"
+            .to_string(),
+    )
+}
+
+#[cfg(all(feature = "vulkan", target_os = "linux"))]
+pub fn create_vulkan(title: &str, w: i32, h: i32) -> Result<WindowHandle, String> {
+    let inner = x11::Inner::create_vulkan(title, w, h)?;
+    Ok(WindowHandle { inner: Some(inner) })
+}
+
 #[cfg(any(
-    all(feature = "gl", target_os = "linux"),
+    all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
     all(feature = "gl", target_os = "windows"),
     all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 ))]
@@ -197,11 +224,11 @@ impl WindowHandle {
         self.inner.as_ref().map_or(0, |i| i.height())
     }
 
-    /// `"opengl"` or `"metal"` — the one place a Fable program needs to
-    /// branch when writing a single codebase that targets both backends,
-    /// since shader *source text* (GLSL vs. MSL) is inherently
-    /// backend-specific; everything else about the `gfx` call shape is
-    /// identical across backends.
+    /// `"opengl"`, `"metal"`, or `"vulkan"` — the one place a Fable program
+    /// needs to branch when writing a single codebase that targets multiple
+    /// backends, since shader *source text* (GLSL vs. MSL vs. SPIR-V) is
+    /// inherently backend-specific; everything else about the `gfx` call
+    /// shape is identical across backends.
     pub fn backend_name(&self) -> String {
         self.inner.as_ref().map_or("?", |i| i.backend_name()).to_string()
     }
@@ -419,7 +446,7 @@ impl WindowHandle {
 }
 
 #[cfg(any(
-    all(feature = "gl", target_os = "linux"),
+    all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
     all(feature = "gl", target_os = "windows"),
     all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 ))]
@@ -439,7 +466,7 @@ impl Drop for WindowHandle {
 // ---------------------------------------------------------------------------
 
 #[cfg(not(any(
-    all(feature = "gl", target_os = "linux"),
+    all(any(feature = "gl", feature = "vulkan"), target_os = "linux"),
     all(feature = "gl", target_os = "windows"),
     all(any(feature = "gl", feature = "metal"), target_os = "macos", target_arch = "aarch64")
 )))]
@@ -597,5 +624,20 @@ mod tests {
         let err = create_metal("fable window test", 320, 240).unwrap_err();
         assert!(err.contains("Metal windowing support not compiled in"));
         assert!(err.contains("--features metal"));
+    }
+
+    /// The same graceful degradation for `create_vulkan` off Linux (or with
+    /// the `vulkan` feature disabled) — deterministic, no display or
+    /// hardware needed, runs in every CI environment. (With the feature on,
+    /// on Linux, `x11/mod.rs`'s own test covers the Phase-0 stub `Err`.)
+    #[test]
+    fn create_vulkan_stub_errs_without_linux_vulkan() {
+        if cfg!(all(feature = "vulkan", target_os = "linux")) {
+            eprintln!("skipping: vulkan windowing is actually compiled in on this target");
+            return;
+        }
+        let err = create_vulkan("fable window test", 320, 240).unwrap_err();
+        assert!(err.contains("Vulkan windowing support not compiled in"));
+        assert!(err.contains("--features vulkan"));
     }
 }

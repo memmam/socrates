@@ -501,7 +501,7 @@ untouched, leaving the original mismatch as a normal failure. `error:`/
 
 **`gfx`** is a backend-neutral OpenGL 3.3 core-profile draw-call namespace
 built on top of `window`'s per-platform `GlFns` function-pointer table
-(each of `x11.rs`/`win32.rs`/`macos/gl.rs` already carries the full shader/
+(each of `x11/gl.rs`/`win32.rs`/`macos/gl.rs` already carries the full shader/
 program/buffer/VAO/texture/uniform/draw-call table, resolved at `Window`
 creation time). Two design choices make this a thin layer rather than a
 new subsystem:
@@ -599,7 +599,7 @@ compute analog of `win.backend_name()`.
 backend, and the first SPIR-V consumer: `gpu.run_spirv` takes the binary
 as `Bytes` (a sibling entry point — Fable has no overloading — and an
 honest one: base64 in `gpu.run`'s String would launder the format). The
-loader is `dlopen`ed (`libvulkan.so.1` / `vulkan-1.dll`, the `x11.rs`
+loader is `dlopen`ed (`libvulkan.so.1` / `vulkan-1.dll`, the `x11/gl.rs`
 strategy) and every entry point resolved through
 `vkGetInstanceProcAddr`/`vkGetDeviceProcAddr`; all structs are
 hand-transcribed 1.0 core with exact field widths, with
@@ -618,12 +618,15 @@ device runs the hard-asserted doubling battery
 word) on every ubuntu runner — and in the dev container itself.
 
 Making that coexist under a single `WindowHandle` needed one structural
-change: `x11::Inner`/`win32::Inner` stay plain structs, aliased directly to
+change: `win32::Inner` stays a plain struct, aliased directly to
 `PlatformInner`, but `macos::Inner` becomes a small enum —
 `Gl(gl::Inner)` / `Metal(metal::Inner)`, each variant `#[cfg]`-gated on its
 own feature — because a type alias resolves to exactly one type, and only
 a sum type underneath it lets one `WindowHandle` transparently hold either
-a live GL-backed or Metal-backed window in the same compiled binary. Every
+a live GL-backed or Metal-backed window in the same compiled binary.
+(`x11::Inner` was a plain struct too until the Vulkan window backend
+arrived and it adopted the identical enum shape — see the Vulkan window
+scaffolding section below.) Every
 `Inner` method becomes a two-armed `match` forwarding to whichever variant
 is live; `#[allow(clippy::large_enum_variant)]` on the enum itself
 (`gl::Inner` carries the ~45-function-pointer `GlFns` table, ~456 bytes,
@@ -696,6 +699,31 @@ between a 2-state `MTLDepthStencilState` cache (`Less`+write /
 `read_pixels` swizzles the BGRA target to RGBA and reverses rows to match
 `glReadPixels`' bottom-up contract, so demos/glcube's corner-pixel pins
 mean the same physical pixels on both backends.
+
+**Vulkan window scaffolding (`src/window/x11/`).** The Vulkan graphics
+arc's Phase 0 replayed the Metal arc's Phase 0 on Linux, mechanically:
+`src/window/x11.rs` split into `x11/{mod,shared,gl,vulkan}.rs`, with
+`shared.rs` holding everything X11/Xlib-generic — the type/extern/constant
+transcriptions, the async protocol-error watch, and `X11WindowState`
+(window creation parameterized by the caller's visual/depth, since GLX
+picks its own visual while Vulkan can take the screen default; the
+`poll()` event pump; teardown) — which `gl.rs`'s `Inner` now holds by
+composition, exactly `CocoaWindowState`'s role on macOS. `x11::Inner` is
+the same `#[cfg]`-per-variant `Gl`/`Vulkan` enum `macos::Inner` is, and
+`window.create_vulkan` mirrors `create_metal` end-to-end (natives,
+`backend_name()` `"vulkan"`, graceful `Err` stubs off-feature/off-Linux).
+The Vulkan windowing path deliberately rides the *existing* `vulkan`
+feature rather than adding a new one — same API, same loader
+(`crate::vk`'s `dlopen`), same zero-dependency shape — gated to Linux for
+windowing (`all(feature = "vulkan", target_os = "linux")`) while the
+compute half stays Linux+Windows; `gfx_window_msg`'s feature-off check
+gained that same platform-qualified clause. `vulkan.rs` itself is a
+Phase-0 stub (`create` returns a clean `Err`); unlike Metal, the phases
+that fill it in are developed and hard-asserted locally and on plain
+ubuntu CI — lavapipe supplies the Vulkan device, Xvfb the X server — so
+the `vulkan` CI job builds/tests `--features vulkan` and `--features
+gl,vulkan` (real coexistence, mirroring `gl-macos-metal`'s `gl,metal`
+proof) with the GL window smoke rendering under Xvfb in the same binary.
 
 ## Testing strategy
 

@@ -7,16 +7,18 @@
 //! `dlopen`/`dlsym` dance here: `user32`/`gdi32`/`opengl32` are linked
 //! normally, and `wglCreateContext`/`wglMakeCurrent`/`wglDeleteContext` are
 //! declared as plain `extern "system"` items against `opengl32.dll`,
-//! mirroring how `x11.rs` links `libX11` normally while only `libGL` is
-//! resolved dynamically (the reasons for dynamic GL resolution there don't
-//! apply on Windows: `opengl32.dll` is a guaranteed system component).
+//! mirroring how the Linux backend (`x11/shared.rs`) links `libX11`
+//! normally while only `libGL` is resolved dynamically (the reasons for
+//! dynamic GL resolution there don't apply on Windows: `opengl32.dll` is a
+//! guaranteed system component).
 //!
 //! Struct layouts and function prototypes below are drawn from the frozen
 //! Win32 ABI (`winuser.h`/`wingdi.h`, unrevised since Windows NT 3.1/95) —
 //! this session's egress policy blocked a direct fetch of the MSDN/header
 //! text, so field order/values were cross-corroborated via web search
 //! against multiple independent sources rather than read from a single raw
-//! header, the same caveat `x11.rs`'s module docs note for its GLX tokens.
+//! header, the same caveat `x11/gl.rs`'s module docs note for its GLX
+//! tokens.
 //!
 //! **The WNDPROC / `GWLP_USERDATA` pattern.** Unlike Xlib (poll-based, no
 //! callback), Win32 delivers window messages through a C callback
@@ -27,15 +29,18 @@
 //! (null-checked: it's `0` for the handful of messages that arrive before
 //! that `SetWindowLongPtrW` call, e.g. `WM_NCCREATE`/`WM_CREATE`) to mutate
 //! through the raw pointer. This is `Inner`'s only unusual ownership
-//! wrinkle relative to `x11.rs`: `Inner` itself stays a single, directly
-//! owned struct (matching `x11.rs`'s shape), but the fields `wndproc` needs
-//! to touch (should_close/mouse/width/height/pressed keys) are boxed
-//! separately so a raw pointer to them can outlive the `Inner::create` call
-//! and be recovered from the window later. `Inner::teardown` frees that
-//! box, mirroring `x11.rs`'s single-owner teardown discipline.
+//! wrinkle relative to the Linux backend: `Inner` itself stays a single,
+//! directly owned struct — the one plain-struct `PlatformInner` left, now
+//! that `x11` and `macos` are both two-backend enums — but the fields
+//! `wndproc` needs to touch (should_close/mouse/width/height/pressed keys)
+//! are boxed separately so a raw pointer to them can outlive the
+//! `Inner::create` call and be recovered from the window later.
+//! `Inner::teardown` frees that box, mirroring `x11/gl.rs`'s single-owner
+//! teardown discipline.
 
 // This module's type names (`HWND`, `LPCWSTR`, `WNDPROC`, ...) match Win32's
-// own naming exactly, on purpose — same call `x11.rs` makes for `XID`.
+// own naming exactly, on purpose — same call `x11/shared.rs` makes for
+// `XID`.
 #![allow(clippy::upper_case_acronyms)]
 
 use std::collections::HashSet;
@@ -159,7 +164,7 @@ const GL_COLOR_BUFFER_BIT: u32 = 0x0000_4000;
 const GL_FALSE: u32 = 0x0000_0000;
 // GL_TRUE/GL_NO_ERROR/GL_UNPACK_ALIGNMENT/GL_NEAREST/GL_REPEAT are part of
 // the contracted GL 3.3-core token set but have no call site in the current
-// `gfx` v1 surface — reserved for a fuller `gfx` API, matching `x11.rs`'s
+// `gfx` v1 surface — reserved for a fuller `gfx` API, matching `x11/gl.rs`'s
 // identical note.
 #[allow(dead_code)]
 const GL_TRUE: u32 = 0x0000_0001;
@@ -253,7 +258,7 @@ extern "system" {
     fn wglGetCurrentContext() -> HGLRC;
     /// Resolves any GL entry point past the static ABI floor `opengl32.dll`
     /// exports (GL 1.2, matching `libGL.so.1`'s guaranteed floor on Linux —
-    /// see `x11.rs`'s module doc comment) — only returns a valid pointer
+    /// see `x11/gl.rs`'s module doc comment) — only returns a valid pointer
     /// once a WGL context is current on this thread (see `GlFns::load`'s
     /// doc comment, below).
     fn wglGetProcAddress(lpsz_proc: *const c_char) -> *mut c_void;
@@ -361,7 +366,7 @@ type FnUniform4F = unsafe extern "system" fn(i32, f32, f32, f32, f32);
 type FnUniformMatrix4Fv = unsafe extern "system" fn(i32, i32, u8, *const f32);
 
 /// The GL function table this namespace calls — the same GLEW-equivalent
-/// loader concept as `x11.rs`'s `GlFns`, extended here from the original two
+/// loader concept as `x11/gl.rs`'s `GlFns`, extended here from the original two
 /// GL 1.0 draw calls (`clear_color`/`clear`) to the full GL 3.3+
 /// core-profile table `gfx.*` (a later PR) needs. Two families of field,
 /// resolved differently:
@@ -369,7 +374,7 @@ type FnUniformMatrix4Fv = unsafe extern "system" fn(i32, i32, u8, *const f32);
 /// - **Direct-link** (`clear_color`/`clear` plus the twelve GL 1.0–1.2
 ///   fields below them): statically exported by `opengl32.dll` — every
 ///   Windows install's guaranteed GL ABI floor, the same guarantee
-///   `libGL.so.1` makes on Linux (see `x11.rs`'s module doc comment).
+///   `libGL.so.1` makes on Linux (see `x11/gl.rs`'s module doc comment).
 ///   Declared as plain `extern "system"` items in the
 ///   `#[link(name = "opengl32")]` block above; no runtime resolution is
 ///   needed, so `GlFns::load` just assigns each linked item straight into
@@ -377,7 +382,7 @@ type FnUniformMatrix4Fv = unsafe extern "system" fn(i32, i32, u8, *const f32);
 /// - **Proc-address** (everything else, *including* `active_texture` — GL
 ///   1.3, one minor version past the static floor, so it does NOT get a
 ///   free ride despite looking "old"): resolved with `wglGetProcAddress`.
-///   Unlike `x11.rs`'s `glXGetProcAddress` (context-independent, safely
+///   Unlike `x11/gl.rs`'s `glXGetProcAddress` (context-independent, safely
 ///   cached process-wide in a `OnceLock`) or this file's sibling platforms'
 ///   plain `dlsym`, `wglGetProcAddress` only returns a valid pointer once a
 ///   WGL context is current *on the calling thread*, and MSDN documents it
@@ -388,7 +393,7 @@ type FnUniformMatrix4Fv = unsafe extern "system" fn(i32, i32, u8, *const f32);
 ///   first succeeds, never memoized process-wide.
 ///
 /// Plain function pointers, `Copy`: nothing here owns a resource a `Drop`
-/// would need to release, exactly like `x11.rs`/`macos/gl.rs`'s `GlFns`.
+/// would need to release, exactly like `x11/gl.rs`/`macos/gl.rs`'s `GlFns`.
 #[derive(Clone, Copy)]
 struct GlFns {
     clear_color: FnClearColor,
@@ -401,7 +406,7 @@ struct GlFns {
     disable: FnDisable,
     // Resolved but not yet called anywhere: no `gfx.*` member currently
     // surfaces raw GL error state to Fable. Reserved for a fuller `gfx` API,
-    // matching `x11.rs`'s identical note.
+    // matching `x11/gl.rs`'s identical note.
     #[allow(dead_code)]
     get_error: FnGetError,
     gen_textures: FnGenTextures,
@@ -452,7 +457,7 @@ struct GlFns {
 impl GlFns {
     /// Resolve every field above against *this thread's currently current*
     /// WGL context — see the struct doc comment for why this, unlike
-    /// `x11.rs`/`macos/gl.rs`'s `GlFns::load`, is neither `OnceLock`-cached nor
+    /// `x11/gl.rs`/`macos/gl.rs`'s `GlFns::load`, is neither `OnceLock`-cached nor
     /// safe to call before `wglMakeCurrent` has succeeded. Any failure
     /// (a symbol the driver doesn't expose) is a clean `Err`, matching this
     /// module's "no partial resource leaks on a fallible step" discipline —
@@ -634,7 +639,7 @@ fn gl_buffer_target(kind: crate::window::GfxBufferKind) -> u32 {
 }
 
 /// Fetch a GL info log sized exactly via a prior `GL_INFO_LOG_LENGTH` query
-/// — never a guessed fixed buffer size. Mirrors `x11.rs`'s helper of the
+/// — never a guessed fixed buffer size. Mirrors `x11/gl.rs`'s helper of the
 /// same name exactly.
 unsafe fn fetch_info_log(log_len: i32, get_log: impl FnOnce(i32, *mut i32, *mut c_char)) -> String {
     if log_len <= 1 {
@@ -648,7 +653,7 @@ unsafe fn fetch_info_log(log_len: i32, get_log: impl FnOnce(i32, *mut i32, *mut 
 }
 
 /// Compile one shader stage; `Err` carries the driver's compile log. Mirrors
-/// `x11.rs`'s helper of the same name exactly (`GlFns` is `Copy`, so this
+/// `x11/gl.rs`'s helper of the same name exactly (`GlFns` is `Copy`, so this
 /// needs no `&Inner` borrow).
 unsafe fn compile_shader_stage(gl: &GlFns, kind: u32, src: &str) -> Result<u32, String> {
     let shader = (gl.create_shader)(kind);
@@ -714,7 +719,7 @@ impl Inner {
             // Registering the same class name twice (e.g. a second `Window`
             // in the same process) fails with `ERROR_CLASS_ALREADY_EXISTS`;
             // that's fine — the class is already usable — so its return
-            // value is deliberately not checked, matching `x11.rs`'s general
+            // value is deliberately not checked, matching `x11/gl.rs`'s general
             // "only check the calls whose failure actually blocks progress"
             // discipline.
             RegisterClassExW(&wc);
@@ -834,7 +839,7 @@ impl Inner {
             }
             // `wndproc` (running via `DispatchMessageW` above) mutated the
             // shared state through `GWLP_USERDATA`; mirror it onto `self`'s
-            // public fields, exactly like `x11.rs`'s `poll` updates `self`
+            // public fields, exactly like `x11/gl.rs`'s `poll` updates `self`
             // directly from the events it just pumped.
             let state = &*self.state;
             self.mouse = state.mouse;
@@ -908,7 +913,7 @@ impl Inner {
     // -----------------------------------------------------------------
     // gfx.* (v0.8) — GL 3.3 core-profile draw calls against this window's
     // context, consumed through `WindowHandle`'s `gl_*` wrappers
-    // (`src/window/mod.rs`). Mirrors `x11.rs`'s equivalent block exactly,
+    // (`src/window/mod.rs`). Mirrors `x11/gl.rs`'s equivalent block exactly,
     // method-for-method — only the current-context call itself
     // (`wglMakeCurrent` vs. `glXMakeCurrent`) differs.
     // -----------------------------------------------------------------
@@ -1257,7 +1262,7 @@ impl Inner {
 /// ASCII (`'A'..'Z' = 0x41..0x5A`, `'0'..'9' = 0x30..0x39`); everything else
 /// is a small hand-written table of the named keys worth covering — no
 /// `XStringToKeysym`-style name→code library call exists on this platform,
-/// so (unlike `x11.rs`) this is not exhaustive, matching the task's stated
+/// so (unlike `x11/gl.rs`) this is not exhaustive, matching the task's stated
 /// scope.
 fn vk_from_name(name: &str) -> Option<u32> {
     if name.len() == 1 {
@@ -1332,7 +1337,7 @@ mod tests {
     /// events, confirm it isn't asking to close, then tear it down. Skips
     /// gracefully (doesn't panic the suite) if window creation fails for any
     /// environment-specific reason (e.g. no display session), matching
-    /// `x11.rs`'s test's graceful-skip style. On `windows-latest` in CI —
+    /// `x11/gl.rs`'s test's graceful-skip style. On `windows-latest` in CI —
     /// a real Windows machine, unlike this module's own author's Linux dev
     /// environment — this exercises the whole pipe for real.
     #[test]

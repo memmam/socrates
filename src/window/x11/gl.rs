@@ -1,242 +1,40 @@
-//! Linux/X11/GLX backend for the `window` namespace.
+//! OpenGL/GLX backend for the `window` namespace on Linux — the rendering
+//! half of the original single-file `x11.rs`. The X11-generic half (Xlib
+//! types/externs, window creation, the event-pump loop, the async
+//! protocol-error watch) lives in [`super::shared`] as [`X11WindowState`],
+//! which this backend composes; `vulkan.rs` composes the same state around
+//! its own rendering objects instead of duplicating it.
 //!
-//! **Linking strategy** (deliberate):
-//! - X11 is linked normally (`#[link(name = "X11")]`) against the system
-//!   `libX11.so` — `libx11-dev`-equivalent headers/libs are standard on any
-//!   Linux desktop dev machine, unlike GL dev packages, which vary a lot.
-//! - GL/GLX is resolved dynamically via `dlopen("libGL.so.1")` + `dlsym` at
-//!   runtime. Many real target machines (this container included) have no
-//!   `libGL.so` dev symlink/headers, so linking against GL statically would
-//!   be fragile. This also matches the shape the later general `gl`
-//!   draw-call namespace's function-pointer loader will extend.
+//! **Linking strategy** (deliberate): GL/GLX is resolved dynamically via
+//! `dlopen("libGL.so.1")` + `dlsym` at runtime. Many real target machines
+//! (this container included) have no `libGL.so` dev symlink/headers, so
+//! linking against GL statically would be fragile. (X11 itself is linked
+//! normally — see `shared.rs`'s module docs.)
 //!
-//! Struct layouts and function prototypes below were read directly from
-//! `/usr/include/X11/{Xlib,X,Xutil}.h` in this container; GLX prototypes and
-//! token values (stable, unrevised GLX 1.x ABI) are cross-corroborated from
-//! multiple independent mirrors (GLEW, libglvnd, Mesa, Khronos refpages,
-//! X.org man pages) rather than a single raw fetch of `glx.h` (this
-//! session's egress policy blocked a direct fetch of it).
+//! GLX prototypes and token values (stable, unrevised GLX 1.x ABI) are
+//! cross-corroborated from multiple independent mirrors (GLEW, libglvnd,
+//! Mesa, Khronos refpages, X.org man pages) rather than a single raw fetch
+//! of `glx.h` (this session's egress policy blocked a direct fetch of it).
 //!
 //! `GlFns` also carries a GL 3.3 core-profile function table (shaders,
 //! programs, buffers, VAOs, textures, uniforms, draw calls) beyond the
-//! GLX/GL-1.0 handful above, for the upcoming backend-neutral `gfx`
-//! draw-call namespace. Signatures and token values are cross-corroborated
-//! against Khronos's own `glcorearb.h` and the Linux OpenGL ABI spec (which
+//! GLX/GL-1.0 handful above, for the backend-neutral `gfx` draw-call
+//! namespace. Signatures and token values are cross-corroborated against
+//! Khronos's own `glcorearb.h` and the Linux OpenGL ABI spec (which
 //! guarantees `libGL.so.1` statically exports every entry point through GL
 //! 1.2 — everything newer is resolved dynamically via `glXGetProcAddress`,
 //! *including* GL-1.3-vintage `glActiveTexture`, which is one release past
 //! that static-export floor).
 
-use std::collections::HashSet;
-use std::ffi::{c_char, c_int, c_long, c_uint, c_ulong, c_void, CString};
+use std::ffi::{c_char, c_int, c_uint, c_void, CString};
 use std::ptr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::OnceLock;
 
-// ---------------------------------------------------------------------------
-// X11 types (Xlib.h / X.h / Xutil.h) — field layouts confirmed against the
-// headers on disk in this container.
-// ---------------------------------------------------------------------------
-
-#[repr(C)]
-pub struct Display {
-    _private: [u8; 0],
-}
-#[repr(C)]
-pub struct Visual {
-    _private: [u8; 0],
-}
-
-#[allow(clippy::upper_case_acronyms)] // matches X11's own `XID` name
-type XID = c_ulong;
-type Window = XID;
-type Colormap = XID;
-type Atom = XID;
-type KeySym = XID;
-type Time = c_ulong;
-type XBool = c_int; // Xlib's `Bool` is a plain `int`
-
-/// `Xutil.h:287-302`. Field order/types confirmed on disk.
-#[repr(C)]
-struct XVisualInfo {
-    visual: *mut Visual,
-    visualid: c_ulong,
-    screen: c_int,
-    depth: c_int,
-    class: c_int,
-    red_mask: c_ulong,
-    green_mask: c_ulong,
-    blue_mask: c_ulong,
-    colormap_size: c_int,
-    bits_per_rgb: c_int,
-}
-
-/// `Xlib.h:290-306`.
-#[repr(C)]
-struct XSetWindowAttributes {
-    background_pixmap: c_ulong,
-    background_pixel: c_ulong,
-    border_pixmap: c_ulong,
-    border_pixel: c_ulong,
-    bit_gravity: c_int,
-    win_gravity: c_int,
-    backing_store: c_int,
-    backing_planes: c_ulong,
-    backing_pixel: c_ulong,
-    save_under: XBool,
-    event_mask: c_long,
-    do_not_propagate_mask: c_long,
-    override_redirect: XBool,
-    colormap: Colormap,
-    cursor: XID,
-}
-
-/// `Xlib.h:558-571`.
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct XKeyEvent {
-    type_: c_int,
-    serial: c_ulong,
-    send_event: XBool,
-    display: *mut Display,
-    window: Window,
-    root: Window,
-    subwindow: Window,
-    time: Time,
-    x: c_int,
-    y: c_int,
-    x_root: c_int,
-    y_root: c_int,
-    state: c_uint,
-    keycode: c_uint,
-    same_screen: XBool,
-}
-
-/// `Xlib.h:598-611` — same prefix as `XKeyEvent` through `state`.
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct XMotionEvent {
-    type_: c_int,
-    serial: c_ulong,
-    send_event: XBool,
-    display: *mut Display,
-    window: Window,
-    root: Window,
-    subwindow: Window,
-    time: Time,
-    x: c_int,
-    y: c_int,
-    x_root: c_int,
-    y_root: c_int,
-    state: c_uint,
-    is_hint: c_char,
-    same_screen: XBool,
-}
-
-/// `Xlib.h:768-780`.
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct XConfigureEvent {
-    type_: c_int,
-    serial: c_ulong,
-    send_event: XBool,
-    display: *mut Display,
-    event: Window,
-    window: Window,
-    x: c_int,
-    y: c_int,
-    width: c_int,
-    height: c_int,
-    border_width: c_int,
-    above: Window,
-    override_redirect: XBool,
-}
-
-/// `Xlib.h:897-910`. `data` is itself a C union (`b`/`s`/`l`); we represent
-/// it as its largest variant (`l: [long; 5]`, 40 bytes) since only
-/// `data.l[0]` is ever read (the `WM_DELETE_WINDOW` atom comparison) — that
-/// matches the union's memory layout exactly.
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct XClientMessageEvent {
-    type_: c_int,
-    serial: c_ulong,
-    send_event: XBool,
-    display: *mut Display,
-    window: Window,
-    message_type: Atom,
-    format: c_int,
-    data_l: [c_long; 5],
-}
-
-/// `Xlib.h:973-1009`. `pad: [long; 24]` matches the real union's declared
-/// padding exactly, so this union is binary-compatible with the real
-/// `XEvent` even though we only name a handful of its members.
-#[repr(C)]
-#[derive(Clone, Copy)]
-union XEvent {
-    type_: c_int,
-    key: XKeyEvent,
-    motion: XMotionEvent,
-    configure: XConfigureEvent,
-    client: XClientMessageEvent,
-    pad: [c_long; 24],
-}
-
-/// `Xlib.h:924-932`.
-#[repr(C)]
-struct XErrorEvent {
-    type_: c_int,
-    display: *mut Display,
-    resourceid: XID,
-    serial: c_ulong,
-    error_code: u8,
-    request_code: u8,
-    minor_code: u8,
-}
-
-type XErrorHandler = unsafe extern "C" fn(*mut Display, *mut XErrorEvent) -> c_int;
-
-/// Set by [`record_x_error`] while a temporary error handler is installed
-/// during window creation (see `Inner::create`). Xlib delivers protocol
-/// errors (e.g. `BadMatch`/`BadWindow` from a misconfigured visual)
-/// asynchronously — the request that caused one can return a normal-looking
-/// value, with the error only surfacing later, typically on the next
-/// server round-trip. Xlib's *default* handler calls `exit()`
-/// unconditionally on any such error, which would take down the whole
-/// Fable process — contrary to every other failure mode in this module (and
-/// Fable's own convention that nothing panics the interpreter). Installing
-/// this handler for the risky span of `create` and `XSync`-ing before
-/// declaring success converts that into a normal, catchable `Err` instead.
-static X_PROTOCOL_ERROR: AtomicBool = AtomicBool::new(false);
-
-unsafe extern "C" fn record_x_error(_display: *mut Display, _event: *mut XErrorEvent) -> c_int {
-    X_PROTOCOL_ERROR.store(true, Ordering::SeqCst);
-    0
-}
-
-// X.h event-type / mask / misc constants (ground-truthed against
-// /usr/include/X11/X.h in this container).
-const KEY_PRESS: c_int = 2;
-const KEY_RELEASE: c_int = 3;
-const MOTION_NOTIFY: c_int = 6;
-const CONFIGURE_NOTIFY: c_int = 22;
-const CLIENT_MESSAGE: c_int = 33;
-
-const KEY_PRESS_MASK: c_long = 1 << 0;
-const KEY_RELEASE_MASK: c_long = 1 << 1;
-const BUTTON_PRESS_MASK: c_long = 1 << 2;
-const BUTTON_RELEASE_MASK: c_long = 1 << 3;
-const POINTER_MOTION_MASK: c_long = 1 << 6;
-const STRUCTURE_NOTIFY_MASK: c_long = 1 << 17;
-
-const INPUT_OUTPUT: c_uint = 1;
-const CW_BORDER_PIXEL: c_ulong = 1 << 3;
-const CW_EVENT_MASK: c_ulong = 1 << 11;
-const CW_COLORMAP: c_ulong = 1 << 13;
-const ALLOC_NONE: c_int = 0;
-const X_FALSE: XBool = 0;
-const X_TRUE: XBool = 1;
+use super::shared::{
+    record_x_error, Display, X11WindowState, XBool, XCloseDisplay, XDefaultScreen, XFree,
+    XOpenDisplay, XSetErrorHandler, XSync, XVisualInfo, X_FALSE, X_PROTOCOL_ERROR, X_TRUE, XID,
+};
 
 // GLX_* visual attribute tokens (glx.h, stable since GLX 1.0).
 const GLX_RGBA: c_int = 4;
@@ -291,54 +89,6 @@ const GL_COMPILE_STATUS: u32 = 0x0000_8B81;
 const GL_LINK_STATUS: u32 = 0x0000_8B82;
 const GL_INFO_LOG_LENGTH: u32 = 0x0000_8B84;
 
-#[link(name = "X11")]
-extern "C" {
-    fn XOpenDisplay(display_name: *const c_char) -> *mut Display;
-    fn XCloseDisplay(display: *mut Display) -> c_int;
-    fn XDefaultScreen(display: *mut Display) -> c_int;
-    fn XRootWindow(display: *mut Display, screen_number: c_int) -> Window;
-    fn XCreateColormap(
-        display: *mut Display,
-        w: Window,
-        visual: *mut Visual,
-        alloc: c_int,
-    ) -> Colormap;
-    fn XFreeColormap(display: *mut Display, colormap: Colormap) -> c_int;
-    #[allow(clippy::too_many_arguments)]
-    fn XCreateWindow(
-        display: *mut Display,
-        parent: Window,
-        x: c_int,
-        y: c_int,
-        width: c_uint,
-        height: c_uint,
-        border_width: c_uint,
-        depth: c_int,
-        class: c_uint,
-        visual: *mut Visual,
-        valuemask: c_ulong,
-        attributes: *mut XSetWindowAttributes,
-    ) -> Window;
-    fn XDestroyWindow(display: *mut Display, w: Window) -> c_int;
-    fn XMapWindow(display: *mut Display, w: Window) -> c_int;
-    fn XStoreName(display: *mut Display, w: Window, window_name: *const c_char) -> c_int;
-    fn XInternAtom(display: *mut Display, atom_name: *const c_char, only_if_exists: XBool)
-        -> Atom;
-    fn XSetWMProtocols(
-        display: *mut Display,
-        w: Window,
-        protocols: *mut Atom,
-        count: c_int,
-    ) -> c_int;
-    fn XNextEvent(display: *mut Display, event_return: *mut XEvent) -> c_int;
-    fn XPending(display: *mut Display) -> c_int;
-    fn XLookupKeysym(key_event: *mut XKeyEvent, index: c_int) -> KeySym;
-    fn XStringToKeysym(string: *const c_char) -> KeySym;
-    fn XFree(data: *mut c_void) -> c_int;
-    fn XSetErrorHandler(handler: Option<XErrorHandler>) -> Option<XErrorHandler>;
-    fn XSync(display: *mut Display, discard: XBool) -> c_int;
-}
-
 // dlopen/dlsym (libdl — merged into libc on modern glibc, but linked
 // explicitly for portability to older glibc where they live in libdl.so).
 // No `dlclose`: see `GlFns`'s doc comment — the library is loaded once and
@@ -369,7 +119,8 @@ type FnClear = unsafe extern "C" fn(c_uint);
 // `proc_addr!` macro in `GlFns::load_uncached` below). GLenum/GLuint/GLint/
 // GLsizei map to `u32`/`i32`, GLboolean to `u8`, GLfloat to `f32`, and
 // GLsizeiptr to `isize` (pointer-width) — all fixed-width regardless of
-// platform C ABI, unlike the `c_long`-based Xlib/GLX structs above.
+// platform C ABI, unlike the `c_long`-based Xlib/GLX structs in
+// `shared.rs`.
 type FnGetProcAddress = unsafe extern "C" fn(*const u8) -> *mut c_void;
 
 // SHADERS
@@ -432,10 +183,10 @@ type FnReadPixels = unsafe extern "C" fn(i32, i32, i32, i32, u32, u32, *mut c_vo
 /// The GLX/GL 1.0 entry points this namespace's window plumbing needs, plus
 /// a GL 3.3 core-profile function table (shaders/programs/buffers/VAOs/
 /// textures/uniforms/draw calls) for the backend-neutral `gfx` draw-call
-/// namespace that consumes it (a separate, later PR — this struct and its
-/// loader are the GLEW-equivalent groundwork). Plain function pointers,
-/// `Copy`: the underlying library load is process-wide and permanent (see
-/// [`load`]), so there is nothing here for a `Drop` to release.
+/// namespace that consumes it (this struct and its loader are the
+/// GLEW-equivalent groundwork). Plain function pointers, `Copy`: the
+/// underlying library load is process-wide and permanent (see [`load`]),
+/// so there is nothing here for a `Drop` to release.
 #[derive(Clone, Copy)]
 struct GlFns {
     choose_visual: FnChooseVisual,
@@ -717,20 +468,13 @@ unsafe fn compile_shader_stage(gl: &GlFns, kind: u32, src: &str) -> Result<u32, 
     Ok(shader)
 }
 
-/// The real guts of a `WindowHandle` (see `src/window/mod.rs`) — an X11
-/// window plus a current-capable GLX context.
+/// The OpenGL/GLX half of a `WindowHandle` on Linux — an [`X11WindowState`]
+/// (the window + event pump, composed from `shared.rs`) plus a
+/// current-capable GLX context.
 pub struct Inner {
-    display: *mut Display,
-    window: Window,
-    colormap: Colormap,
+    x11: X11WindowState,
     ctx: GlxContext,
     gl: GlFns,
-    wm_delete: Atom,
-    pressed: HashSet<KeySym>,
-    pub mouse: (f64, f64),
-    pub width: i32,
-    pub height: i32,
-    pub should_close: bool,
 }
 
 impl Inner {
@@ -766,67 +510,39 @@ impl Inner {
             // From here on, requests (XCreateWindow/XCreateColormap in
             // particular) can provoke an async X protocol error that Xlib
             // delivers later rather than as a return value. Install a
-            // temporary handler (see `record_x_error`'s doc comment) so
-            // that ends up a catchable `Err` instead of Xlib's default
-            // handler's unconditional `exit()`. Every exit from here on
-            // restores the previous handler before returning.
+            // temporary handler (see `record_x_error`'s doc comment in
+            // `shared.rs`) so that ends up a catchable `Err` instead of
+            // Xlib's default handler's unconditional `exit()`. Every exit
+            // from here on restores the previous handler before returning —
+            // and only after all of this function's own X calls (teardown's
+            // included) are done, so none of them can hit the restored
+            // default handler.
             X_PROTOCOL_ERROR.store(false, Ordering::SeqCst);
             let prev_handler = XSetErrorHandler(Some(record_x_error));
 
-            let root = XRootWindow(display, screen);
-            let colormap = XCreateColormap(display, root, (*vi).visual, ALLOC_NONE);
-
-            let mut attrs: XSetWindowAttributes = std::mem::zeroed();
-            attrs.colormap = colormap;
-            attrs.border_pixel = 0;
-            attrs.event_mask = KEY_PRESS_MASK
-                | KEY_RELEASE_MASK
-                | BUTTON_PRESS_MASK
-                | BUTTON_RELEASE_MASK
-                | POINTER_MOTION_MASK
-                | STRUCTURE_NOTIFY_MASK;
-
-            let window = XCreateWindow(
+            let x11 = X11WindowState::create_window(
                 display,
-                root,
-                0,
-                0,
-                w as c_uint,
-                h as c_uint,
-                0,
-                (*vi).depth,
-                INPUT_OUTPUT,
+                screen,
                 (*vi).visual,
-                CW_COLORMAP | CW_BORDER_PIXEL | CW_EVENT_MASK,
-                &mut attrs,
+                (*vi).depth,
+                title,
+                w,
+                h,
             );
-
-            let title_c = CString::new(title).unwrap_or_else(|_| CString::new("").unwrap());
-            XStoreName(display, window, title_c.as_ptr());
-
-            let delete_name = CString::new("WM_DELETE_WINDOW").unwrap();
-            let mut wm_delete = XInternAtom(display, delete_name.as_ptr(), X_FALSE);
-            XSetWMProtocols(display, window, &mut wm_delete, 1);
-
-            XMapWindow(display, window);
 
             let ctx = (gl.create_context)(display, vi, ptr::null_mut(), X_TRUE);
             if ctx.is_null() {
                 XFree(vi as *mut c_void);
-                XDestroyWindow(display, window);
-                XFreeColormap(display, colormap);
+                x11.teardown();
                 XSetErrorHandler(prev_handler);
-                XCloseDisplay(display);
                 return Err("window.create: glXCreateContext failed".to_string());
             }
 
-            if (gl.make_current)(display, window as GlxDrawable, ctx) == X_FALSE {
+            if (gl.make_current)(display, x11.window as GlxDrawable, ctx) == X_FALSE {
                 (gl.destroy_context)(display, ctx);
                 XFree(vi as *mut c_void);
-                XDestroyWindow(display, window);
-                XFreeColormap(display, colormap);
+                x11.teardown();
                 XSetErrorHandler(prev_handler);
-                XCloseDisplay(display);
                 return Err("window.create: glXMakeCurrent failed".to_string());
             }
 
@@ -838,104 +554,46 @@ impl Inner {
             // this window is actually usable.
             XSync(display, X_FALSE);
             let protocol_error = X_PROTOCOL_ERROR.load(Ordering::SeqCst);
-            XSetErrorHandler(prev_handler);
             if protocol_error {
                 (gl.destroy_context)(display, ctx);
-                XDestroyWindow(display, window);
-                XFreeColormap(display, colormap);
-                XCloseDisplay(display);
+                x11.teardown();
+                XSetErrorHandler(prev_handler);
                 return Err(
                     "window.create: an X protocol error occurred while creating the window \
                      (misconfigured visual?)"
                         .to_string(),
                 );
             }
+            XSetErrorHandler(prev_handler);
 
-            Ok(Inner {
-                display,
-                window,
-                colormap,
-                ctx,
-                gl,
-                wm_delete,
-                pressed: HashSet::new(),
-                mouse: (0.0, 0.0),
-                width: w,
-                height: h,
-                should_close: false,
-            })
+            Ok(Inner { x11, ctx, gl })
         }
     }
 
     pub fn poll(&mut self) {
-        // Safety: `XPending`/`XNextEvent` are the standard Xlib event-pump
-        // pair; `ev` is zero-initialized before `XNextEvent` fills it in, so
-        // reading any union field it didn't touch (we only ever read the
-        // field matching `ev.type_`) is still defined (all-zero bytes).
-        unsafe {
-            while XPending(self.display) > 0 {
-                let mut ev: XEvent = std::mem::zeroed();
-                XNextEvent(self.display, &mut ev);
-                match ev.type_ {
-                    KEY_PRESS | KEY_RELEASE => {
-                        let mut key_ev = ev.key;
-                        let keysym = XLookupKeysym(&mut key_ev, 0);
-                        if ev.type_ == KEY_PRESS {
-                            self.pressed.insert(keysym);
-                        } else {
-                            self.pressed.remove(&keysym);
-                        }
-                    }
-                    MOTION_NOTIFY => {
-                        self.mouse = (ev.motion.x as f64, ev.motion.y as f64);
-                    }
-                    CONFIGURE_NOTIFY => {
-                        self.width = ev.configure.width;
-                        self.height = ev.configure.height;
-                    }
-                    CLIENT_MESSAGE if ev.client.data_l[0] as u64 == self.wm_delete => {
-                        self.should_close = true;
-                    }
-                    _ => {}
-                }
-            }
-        }
+        self.x11.poll();
     }
 
     pub fn key_down(&self, name: &str) -> bool {
-        let Ok(cname) = CString::new(name) else {
-            return false;
-        };
-        // Safety: `XStringToKeysym` takes a `const char*` and returns a
-        // plain integer (`NoSymbol` = 0 for an unrecognized name); no
-        // pointer is retained.
-        let keysym = unsafe { XStringToKeysym(cname.as_ptr()) };
-        keysym != 0 && self.pressed.contains(&keysym)
+        self.x11.key_down(name)
     }
 
-    // Method-shaped accessors alongside the public fields above: macOS's
-    // `Inner` is a two-backend enum (see `macos/mod.rs`), which can't expose
-    // shared state via dot-field syntax across variants the way a plain
-    // struct can — `window/mod.rs`'s generic `WindowHandle` code calls these
-    // uniformly across all three platforms instead. Field and method share a
-    // name safely (separate namespaces: `.should_close` is the field,
-    // `.should_close()` is this method).
+    // Method-shaped accessors over the composed X11 state: `x11/mod.rs`'s
+    // `Inner` is a two-backend enum (like `macos/mod.rs`'s), which can't
+    // expose shared state via dot-field syntax across variants the way a
+    // plain struct can — `window/mod.rs`'s generic `WindowHandle` code
+    // calls these uniformly across all three platforms instead.
     pub fn mouse(&self) -> (f64, f64) {
-        self.mouse
+        self.x11.mouse
     }
     pub fn width(&self) -> i32 {
-        self.width
+        self.x11.width
     }
     pub fn height(&self) -> i32 {
-        self.height
+        self.x11.height
     }
     pub fn should_close(&self) -> bool {
-        self.should_close
-    }
-    /// This backend is always OpenGL/GLX — no Metal-equivalent exists on
-    /// Linux, so unlike macOS's `Inner` enum this never varies.
-    pub fn backend_name(&self) -> &'static str {
-        "opengl"
+        self.x11.should_close
     }
 
     pub fn clear(&mut self, r: f32, g: f32, b: f32, a: f32) {
@@ -946,7 +604,7 @@ impl Inner {
         // reset) — skip the GL calls rather than issue them with no context
         // bound, which the GL spec leaves undefined.
         unsafe {
-            if (self.gl.make_current)(self.display, self.window as GlxDrawable, self.ctx)
+            if (self.gl.make_current)(self.x11.display, self.x11.window as GlxDrawable, self.ctx)
                 != X_FALSE
             {
                 (self.gl.clear_color)(r, g, b, a);
@@ -958,10 +616,10 @@ impl Inner {
     pub fn swap_buffers(&mut self) {
         // Safety: same current-context caveat as `clear`.
         unsafe {
-            if (self.gl.make_current)(self.display, self.window as GlxDrawable, self.ctx)
+            if (self.gl.make_current)(self.x11.display, self.x11.window as GlxDrawable, self.ctx)
                 != X_FALSE
             {
-                (self.gl.swap_buffers)(self.display, self.window as GlxDrawable);
+                (self.gl.swap_buffers)(self.x11.display, self.x11.window as GlxDrawable);
             }
         }
     }
@@ -981,7 +639,8 @@ impl Inner {
     /// (they inline the same call) and every gfx method below.
     fn ensure_current(&mut self) -> bool {
         unsafe {
-            (self.gl.make_current)(self.display, self.window as GlxDrawable, self.ctx) != X_FALSE
+            (self.gl.make_current)(self.x11.display, self.x11.window as GlxDrawable, self.ctx)
+                != X_FALSE
         }
     }
 
@@ -1331,21 +990,21 @@ impl Inner {
     /// `Drop` (see the module docs on `src/window/mod.rs`). Order: release
     /// current (only if *this* context is the one bound on this thread —
     /// blindly releasing would break a second, still-live `Window`),
-    /// destroy the GL context, destroy the X window, free the colormap,
-    /// close the display connection.
+    /// destroy the GL context, then the X11 half (destroy the X window,
+    /// free the colormap, close the display connection — see
+    /// [`X11WindowState::teardown`]).
     pub fn teardown(self) {
-        // Safety: every handle here was produced by the matching X11/GLX
-        // create call in `Inner::create` and is torn down in the reverse
-        // order it was created, exactly once (this method consumes `self`).
+        // Safety: the GLX context was produced by the matching create call
+        // in `Inner::create` and is destroyed exactly once (this method
+        // consumes `self`), against a display `X11WindowState::teardown`
+        // only closes afterward.
         unsafe {
             if (self.gl.get_current_context)() == self.ctx {
-                (self.gl.make_current)(self.display, 0, ptr::null_mut());
+                (self.gl.make_current)(self.x11.display, 0, ptr::null_mut());
             }
-            (self.gl.destroy_context)(self.display, self.ctx);
-            XDestroyWindow(self.display, self.window);
-            XFreeColormap(self.display, self.colormap);
-            XCloseDisplay(self.display);
+            (self.gl.destroy_context)(self.x11.display, self.ctx);
         }
+        self.x11.teardown();
     }
 }
 
@@ -1372,12 +1031,12 @@ mod tests {
             }
         };
         let mut inner = inner;
-        assert_eq!(inner.width, 320);
-        assert_eq!(inner.height, 240);
+        assert_eq!(inner.width(), 320);
+        assert_eq!(inner.height(), 240);
         inner.clear(0.1, 0.2, 0.3, 1.0);
         inner.swap_buffers();
         inner.poll();
-        assert!(!inner.should_close);
+        assert!(!inner.should_close());
         inner.teardown();
     }
 }

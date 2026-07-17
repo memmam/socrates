@@ -296,8 +296,14 @@ jobs:
     # decision). Mesa's lavapipe gives every ubuntu runner a software
     # compute device, so unlike gpu/gl this backend is fully exercised on
     # plain CI hardware: the battery's assert_eq is a real correctness
-    # gate, not a smoke test.
-    name: Vulkan compute (native, lavapipe)
+    # gate, not a smoke test. Since the Vulkan graphics arc's Phase 0 the
+    # same feature also carries the Linux window backend scaffolding
+    # (window.create_vulkan, the x11/ gl-vs-vulkan enum split), so this
+    # job additionally proves real GL/Vulkan coexistence: `--features
+    # gl,vulkan` together, mirroring the gl-macos-metal job's gl,metal
+    # builds. libx11-dev is needed for that half only (`--features gl`
+    # links libX11 normally -- see the `gl` job's comment).
+    name: Vulkan compute + window scaffolding (native, lavapipe)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -305,16 +311,31 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Software Vulkan device (lavapipe)
-        run: sudo apt-get update && sudo apt-get install -y libvulkan1 mesa-vulkan-drivers
+      - name: Software Vulkan device (lavapipe) + X11 dev headers + Xvfb
+        run: sudo apt-get update && sudo apt-get install -y libvulkan1 mesa-vulkan-drivers libx11-dev xvfb
       - name: Build (vulkan)
         run: cargo build --features vulkan
       - name: Clippy (vulkan, deny warnings)
         run: cargo clippy --features vulkan --all-targets -- -D warnings
       - name: Unit + golden spec tests (vulkan)
         run: cargo test --features vulkan
-      - name: Zero dependencies (vulkan feature)
-        run: test "$(cargo tree -e normal --prefix none --features vulkan | wc -l)" -eq 1
+      - name: Build (gl,vulkan coexistence)
+        run: cargo build --features gl,vulkan
+      - name: Clippy (gl,vulkan, deny warnings)
+        run: cargo clippy --features gl,vulkan --all-targets -- -D warnings
+      - name: Unit + golden spec tests (gl,vulkan, under Xvfb)
+        # Exercises both backends in one binary: the GL window smoke test
+        # (create_clear_swap_poll_close) renders against Xvfb while the
+        # x11::tests::create_vulkan_errs_cleanly test pins the Phase-0
+        # create_vulkan Err through the same enum dispatch.
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          sleep 1
+          DISPLAY=:99 cargo test --features gl,vulkan
+      - name: Zero dependencies (vulkan; gl,vulkan)
+        run: |
+          test "$(cargo tree -e normal --prefix none --features vulkan | wc -l)" -eq 1
+          test "$(cargo tree -e normal --prefix none --features gl,vulkan | wc -l)" -eq 1
       - name: Vulkan compute battery (hard-asserted bytes)
         run: |
           cargo build --release --features vulkan
