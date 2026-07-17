@@ -91,43 +91,22 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::c_void;
 
-use super::shared::{
-    class, is_main_thread, ns_string, objc_msgSend, sel, send0, send0_ptr, send0_uint, send0_void,
-    send1_bool_void, send1_obj, CocoaWindowState, NsSize, NsUInteger, Object, ObjcBool, OBJC_NO,
-    OBJC_YES, SEL,
+use super::shared::{is_main_thread, CocoaWindowState};
+use crate::mtl::{
+    new_library, send_new_buffer, send_new_buffer_len, MTLCreateSystemDefaultDevice,
+    MTL_RESOURCE_STORAGE_MODE_SHARED,
 };
-
-#[link(name = "Metal", kind = "framework")]
-extern "C" {
-    /// Returns a +1 reference (Create rule) or nil when no Metal-capable GPU
-    /// exists in this environment (some headless VMs).
-    fn MTLCreateSystemDefaultDevice() -> *mut Object;
-}
+use crate::objc::{
+    class, ns_string, nsstring_to_owned, objc_msgSend, sel, send0, send0_uint, send0_void,
+    send1_bool_void, send1_f64_void, send1_obj, send1_obj_obj, send1_size_void, send1_uint_obj,
+    send1_uint_void, send2_obj_uint_void, send2_obj_void, AutoreleasePool, NsSize, NsUInteger,
+    Object, ObjcBool, OBJC_NO, OBJC_YES, SEL,
+};
 
 // `CAMetalLayer` lives in QuartzCore, not Metal — linking the framework is
 // what makes `objc_getClass("CAMetalLayer")` resolve at runtime.
 #[link(name = "QuartzCore", kind = "framework")]
 extern "C" {}
-
-#[link(name = "objc")]
-extern "C" {
-    fn objc_autoreleasePoolPush() -> *mut c_void;
-    fn objc_autoreleasePoolPop(pool: *mut c_void);
-}
-
-/// RAII autorelease pool — see the module doc comment on why this file
-/// needs per-call pools when `shared.rs` gets away without them.
-struct AutoreleasePool(*mut c_void);
-impl AutoreleasePool {
-    fn push() -> AutoreleasePool {
-        AutoreleasePool(unsafe { objc_autoreleasePoolPush() })
-    }
-}
-impl Drop for AutoreleasePool {
-    fn drop(&mut self) {
-        unsafe { objc_autoreleasePoolPop(self.0) };
-    }
-}
 
 /// `MTLClearColor`: four `f64`s. On arm64 a 4-double aggregate is a
 /// homogeneous floating-point aggregate passed directly in `v0`-`v3` — no
@@ -183,9 +162,6 @@ const MTL_TEXTURE_USAGE_RENDER_TARGET: NsUInteger = 1 << 2;
 const MTL_STORAGE_MODE_SHARED: NsUInteger = 0;
 /// GPU-only — the depth texture is never read back.
 const MTL_STORAGE_MODE_PRIVATE: NsUInteger = 2;
-/// `MTLResourceOptions` with storage-mode Shared (bits 4+ = 0) and default
-/// CPU cache mode — the plain `0` every `newBufferWith...` call here wants.
-const MTL_RESOURCE_STORAGE_MODE_SHARED: NsUInteger = 0;
 const MTL_PRIMITIVE_TYPE_TRIANGLE: NsUInteger = 3;
 /// `gfx.draw_elements` indices are 32-bit on every backend (`gl.rs` uses
 /// `GL_UNSIGNED_INT`).
@@ -205,31 +181,6 @@ const MTL_PIPELINE_OPTION_REFLECTION: NsUInteger = (1 << 0) | (1 << 1);
 // Metal-shaped `objc_msgSend` wrappers beyond `shared.rs`'s set — same
 // one-named-wrapper-per-call-shape discipline (see `shared.rs`'s doc comment
 // on why that beats a variadic-emulating macro here).
-unsafe fn send1_uint_void(recv: *mut Object, s: SEL, arg: NsUInteger) {
-    let f: unsafe extern "C" fn(*mut Object, SEL, NsUInteger) =
-        std::mem::transmute(objc_msgSend as *const ());
-    f(recv, s, arg)
-}
-unsafe fn send1_uint_obj(recv: *mut Object, s: SEL, arg: NsUInteger) -> *mut Object {
-    let f: unsafe extern "C" fn(*mut Object, SEL, NsUInteger) -> *mut Object =
-        std::mem::transmute(objc_msgSend as *const ());
-    f(recv, s, arg)
-}
-unsafe fn send1_obj_obj(recv: *mut Object, s: SEL, arg: *mut Object) -> *mut Object {
-    let f: unsafe extern "C" fn(*mut Object, SEL, *mut Object) -> *mut Object =
-        std::mem::transmute(objc_msgSend as *const ());
-    f(recv, s, arg)
-}
-unsafe fn send1_size_void(recv: *mut Object, s: SEL, arg: NsSize) {
-    let f: unsafe extern "C" fn(*mut Object, SEL, NsSize) =
-        std::mem::transmute(objc_msgSend as *const ());
-    f(recv, s, arg)
-}
-unsafe fn send1_f64_void(recv: *mut Object, s: SEL, arg: f64) {
-    let f: unsafe extern "C" fn(*mut Object, SEL, f64) =
-        std::mem::transmute(objc_msgSend as *const ());
-    f(recv, s, arg)
-}
 unsafe fn send1_clear_color_void(recv: *mut Object, s: SEL, arg: MtlClearColor) {
     let f: unsafe extern "C" fn(*mut Object, SEL, MtlClearColor) =
         std::mem::transmute(objc_msgSend as *const ());
@@ -239,16 +190,6 @@ unsafe fn send1_viewport_void(recv: *mut Object, s: SEL, arg: MtlViewport) {
     let f: unsafe extern "C" fn(*mut Object, SEL, MtlViewport) =
         std::mem::transmute(objc_msgSend as *const ());
     f(recv, s, arg)
-}
-unsafe fn send2_obj_void(recv: *mut Object, s: SEL, a: *mut Object, b: *mut Object) {
-    let f: unsafe extern "C" fn(*mut Object, SEL, *mut Object, *mut Object) =
-        std::mem::transmute(objc_msgSend as *const ());
-    f(recv, s, a, b)
-}
-unsafe fn send2_obj_uint_void(recv: *mut Object, s: SEL, a: *mut Object, b: NsUInteger) {
-    let f: unsafe extern "C" fn(*mut Object, SEL, *mut Object, NsUInteger) =
-        std::mem::transmute(objc_msgSend as *const ());
-    f(recv, s, a, b)
 }
 unsafe fn send_texture_descriptor(
     recv: *mut Object,
@@ -268,23 +209,6 @@ unsafe fn send_texture_descriptor(
     ) -> *mut Object = std::mem::transmute(objc_msgSend as *const ());
     f(recv, s, format, w, h, mipmapped)
 }
-/// `newLibraryWithSource:options:error:`.
-unsafe fn send_new_library(
-    recv: *mut Object,
-    s: SEL,
-    src: *mut Object,
-    options: *mut Object,
-    error: *mut *mut Object,
-) -> *mut Object {
-    let f: unsafe extern "C" fn(
-        *mut Object,
-        SEL,
-        *mut Object,
-        *mut Object,
-        *mut *mut Object,
-    ) -> *mut Object = std::mem::transmute(objc_msgSend as *const ());
-    f(recv, s, src, options, error)
-}
 /// `newRenderPipelineStateWithDescriptor:options:reflection:error:`.
 unsafe fn send_new_pipeline(
     recv: *mut Object,
@@ -303,35 +227,6 @@ unsafe fn send_new_pipeline(
         *mut *mut Object,
     ) -> *mut Object = std::mem::transmute(objc_msgSend as *const ());
     f(recv, s, desc, options, reflection, error)
-}
-/// `newBufferWithBytes:length:options:`.
-unsafe fn send_new_buffer(
-    recv: *mut Object,
-    s: SEL,
-    bytes: *const c_void,
-    len: NsUInteger,
-    options: NsUInteger,
-) -> *mut Object {
-    let f: unsafe extern "C" fn(
-        *mut Object,
-        SEL,
-        *const c_void,
-        NsUInteger,
-        NsUInteger,
-    ) -> *mut Object = std::mem::transmute(objc_msgSend as *const ());
-    f(recv, s, bytes, len, options)
-}
-/// `newBufferWithLength:options:` — for GL's legal zero-byte upload edge
-/// case (`newBufferWithBytes` rejects a zero length).
-unsafe fn send_new_buffer_len(
-    recv: *mut Object,
-    s: SEL,
-    len: NsUInteger,
-    options: NsUInteger,
-) -> *mut Object {
-    let f: unsafe extern "C" fn(*mut Object, SEL, NsUInteger, NsUInteger) -> *mut Object =
-        std::mem::transmute(objc_msgSend as *const ());
-    f(recv, s, len, options)
 }
 /// `setVertexBuffer:offset:atIndex:`.
 unsafe fn send_set_vertex_buffer(
@@ -415,42 +310,6 @@ unsafe fn send_get_bytes(
     let f: unsafe extern "C" fn(*mut Object, SEL, *mut c_void, NsUInteger, MtlRegion, NsUInteger) =
         std::mem::transmute(objc_msgSend as *const ());
     f(recv, s, out, per_row, region, level)
-}
-
-/// Copy an `NSString` into an owned Rust `String` (via `UTF8String` — see
-/// `shared.rs`'s poll loop for why the NSString pointer itself must never be
-/// read as text).
-unsafe fn nsstring_to_owned(ns: *mut Object) -> String {
-    if ns.is_null() {
-        return String::new();
-    }
-    let p = send0_ptr(ns, sel("UTF8String"));
-    if p.is_null() {
-        return String::new();
-    }
-    std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned()
-}
-
-/// Compile one MSL source into an `MTLLibrary` (+1), turning the `NSError`
-/// into the same kind of driver-log `Err` text GL's compile path produces.
-unsafe fn new_library(device: *mut Object, src: &str) -> Result<*mut Object, String> {
-    let mut err: *mut Object = std::ptr::null_mut();
-    let lib = send_new_library(
-        device,
-        sel("newLibraryWithSource:options:error:"),
-        ns_string(src),
-        std::ptr::null_mut(),
-        &mut err,
-    );
-    if lib.is_null() {
-        let msg = if err.is_null() {
-            "unknown MSL compile error".to_string()
-        } else {
-            nsstring_to_owned(send0(err, sel("localizedDescription")))
-        };
-        return Err(msg);
-    }
-    Ok(lib)
 }
 
 /// Build an offscreen texture. `RenderTarget` usage always;
