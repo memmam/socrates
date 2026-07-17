@@ -744,11 +744,27 @@ every submission is synchronous (one fence, submit → wait), matching
 Metal's `waitUntilCompleted` and keeping the offscreen image's tracked
 layout honest with zero cross-frame hazard reasoning. Presentation is
 pixel-verified end to end: a unit test clears, presents, and `XGetImage`s
-the exact linear color back out of the X window. The FFI is deliberately
-self-contained in `vulkan.rs` for now (the same hand-transcribed shapes
-as `crate::vk` plus the WSI extensions); deduplicating the two Vulkan
-consumers into a shared primitive module is its own follow-up refactor,
-per the extract-at-real-duplication rule (`crate::objc`'s precedent).
+the exact linear color back out of the X window. (That pixel readback
+re-presents and polls bounded rather than reading once after a sleep,
+for two empirically-hit reasons: Mesa's X11 WSI queues FIFO presents on
+an internal thread, so `vkQueuePresentKHR` returning — even followed by
+`XSync` — doesn't mean the `XPutImage` has landed; and the GL window
+smoke runs concurrently with both windows stacked at (0, 0) under
+Xvfb's WM-less placement, and `XGetImage` on an occluded or
+freshly-re-exposed X11 window reads the occluder's pixels or stale
+content — X never repaints exposed regions, so the retry loop redraws
+each iteration the way a real frame loop self-heals exposure damage.)
+
+Once the window backend existed, the two Vulkan consumers' shared
+1.0-core FFI graduated into `crate::vk` as the crate's Vulkan primitive
+layer — the exact `crate::objc` precedent, extraction as its own
+pure-refactor change shaped by two real in-tree consumers: the loader
+(`loader_gipa`, now one `dlopen` per process), handle/scalar typedefs,
+the common constants/structure-types, fifteen shared `#[repr(C)]`
+structs, and the shared function-pointer types are `pub(crate)` there;
+WSI/swapchain/image machinery stays in `x11/vulkan.rs` and
+descriptor/pipeline machinery in `vk.rs`'s compute path, each with its
+sole consumer.
 
 ## Testing strategy
 
