@@ -137,7 +137,7 @@ fn text_bars_scene() -> image.Image {
 // Mirror of jsl.image's write quantization: round(c * 255), clamped.
 fn byte_of(c: Float) -> Int {
     let v = (c * 255.0).round().to_int();
-    math.max(0, math.min(v, 255))
+    (0).max(v.min(255))
 }
 
 let args = os.args();

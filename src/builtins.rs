@@ -71,8 +71,9 @@ pub enum Native {
     BytesToList,
     BytesUtf8,
     StrToBytes,
-    // math namespace
-    MathSqrt,
+    // math namespace (v0.9: sqrt/floor/ceil/round/abs/abs_int/min/max/
+    // min_float/max_float dropped — verbatim dups of Int/Float methods;
+    // the method spellings are the primitives)
     MathSin,
     MathCos,
     MathTan,
@@ -82,15 +83,6 @@ pub enum Native {
     MathLog2,
     MathExp,
     MathPow,
-    MathFloor,
-    MathCeil,
-    MathRound,
-    MathAbsInt,
-    MathAbs,
-    MathMin,
-    MathMax,
-    MathMinFloat,
-    MathMaxFloat,
     MathRandom,
     MathSeed,
     MathRandInt,
@@ -340,6 +332,8 @@ pub enum Native {
     FloatCeil,
     FloatRound,
     FloatSqrt,
+    FloatMin,
+    FloatMax,
     FloatIsNan,
     FloatToFixed,
     // Option methods
@@ -592,9 +586,8 @@ impl Native {
     pub fn namespace_members(ns: &str) -> &'static [&'static str] {
         match ns {
             "math" => &[
-                "pi", "e", "sqrt", "sin", "cos", "tan", "atan", "atan2", "log", "log2",
-                "log10", "exp", "pow", "fmod", "floor", "ceil", "round", "abs_int", "abs",
-                "min", "max", "min_float", "max_float", "random", "seed", "rand_int",
+                "pi", "e", "sin", "cos", "tan", "atan", "atan2", "log", "log2", "log10",
+                "exp", "pow", "fmod", "random", "seed", "rand_int",
             ],
             "fs" => &[
                 "read", "write", "append", "exists", "is_dir", "list_dir", "create_dir",
@@ -646,7 +639,6 @@ impl Native {
         Some(match name {
             "pi" => MathMember::Const(std::f64::consts::PI),
             "e" => MathMember::Const(std::f64::consts::E),
-            "sqrt" => MathMember::Fn(MathSqrt),
             "sin" => MathMember::Fn(MathSin),
             "cos" => MathMember::Fn(MathCos),
             "tan" => MathMember::Fn(MathTan),
@@ -656,15 +648,6 @@ impl Native {
             "log2" => MathMember::Fn(MathLog2),
             "exp" => MathMember::Fn(MathExp),
             "pow" => MathMember::Fn(MathPow),
-            "floor" => MathMember::Fn(MathFloor),
-            "ceil" => MathMember::Fn(MathCeil),
-            "round" => MathMember::Fn(MathRound),
-            "abs_int" => MathMember::Fn(MathAbsInt),
-            "abs" => MathMember::Fn(MathAbs),
-            "min" => MathMember::Fn(MathMin),
-            "max" => MathMember::Fn(MathMax),
-            "min_float" => MathMember::Fn(MathMinFloat),
-            "max_float" => MathMember::Fn(MathMaxFloat),
             "random" => MathMember::Fn(MathRandom),
             "seed" => MathMember::Fn(MathSeed),
             "rand_int" => MathMember::Fn(MathRandInt),
@@ -718,7 +701,6 @@ impl Native {
             BytesToList => "to_list",
             BytesUtf8 => "utf8",
             StrToBytes => "to_bytes",
-            MathSqrt => "math.sqrt",
             MathSin => "math.sin",
             MathCos => "math.cos",
             MathTan => "math.tan",
@@ -728,15 +710,6 @@ impl Native {
             MathLog2 => "math.log2",
             MathExp => "math.exp",
             MathPow => "math.pow",
-            MathFloor => "math.floor",
-            MathCeil => "math.ceil",
-            MathRound => "math.round",
-            MathAbsInt => "math.abs_int",
-            MathAbs => "math.abs",
-            MathMin => "math.min",
-            MathMax => "math.max",
-            MathMinFloat => "math.min_float",
-            MathMaxFloat => "math.max_float",
             MathRandom => "math.random",
             MathSeed => "math.seed",
             MathRandInt => "math.rand_int",
@@ -907,6 +880,8 @@ impl Native {
             FloatCeil => "ceil",
             FloatRound => "round",
             FloatSqrt => "sqrt",
+            FloatMin => "min",
+            FloatMax => "max",
             FloatIsNan => "is_nan",
             FloatToFixed => "to_fixed",
             OptIsSome => "is_some",
@@ -953,13 +928,9 @@ impl Native {
             // try(f) runs f and catches runtime panics.
             TryCall => (vec![func(vec![], p0())], res(p0(), TStr), 1),
 
-            MathSqrt | MathSin | MathCos | MathTan | MathAtan | MathLog | MathLog2 | MathLog10
-            | MathExp | MathFloor | MathCeil | MathRound | MathAbs => (vec![Float], Float, 0),
-            MathAtan2 | MathPow | MathMinFloat | MathMaxFloat | MathFmod => {
-                (vec![Float, Float], Float, 0)
-            }
-            MathAbsInt => (vec![Int], Int, 0),
-            MathMin | MathMax => (vec![Int, Int], Int, 0),
+            MathSin | MathCos | MathTan | MathAtan | MathLog | MathLog2 | MathLog10
+            | MathExp => (vec![Float], Float, 0),
+            MathAtan2 | MathPow | MathFmod => (vec![Float, Float], Float, 0),
             MathRandom => (vec![], Float, 0),
             MathSeed => (vec![Int], Unit, 0),
             MathRandInt => (vec![Int, Int], Int, 0),
@@ -1169,6 +1140,7 @@ impl Native {
             FloatToInt => (vec![], Int, 0),
             FloatToString => (vec![], TStr, 0),
             FloatAbs | FloatFloor | FloatCeil | FloatRound | FloatSqrt => (vec![], Float, 0),
+            FloatMin | FloatMax => (vec![Float], Float, 0),
             FloatIsNan => (vec![], Bool, 0),
             FloatToFixed => (vec![Int], TStr, 0),
 
@@ -1301,6 +1273,8 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::Float, "ceil", Native::FloatCeil),
     (Recv::Float, "round", Native::FloatRound),
     (Recv::Float, "sqrt", Native::FloatSqrt),
+    (Recv::Float, "min", Native::FloatMin),
+    (Recv::Float, "max", Native::FloatMax),
     (Recv::Float, "is_nan", Native::FloatIsNan),
     (Recv::Float, "to_fixed", Native::FloatToFixed),
     (Recv::Str, "to_bytes", Native::StrToBytes),

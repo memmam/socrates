@@ -538,16 +538,17 @@ Fallible operations return `Result[_, String]` whose `Err` carries
 | `os.exit(code)` | `[T] fn(Int) -> T` | ends the process immediately; like `panic`, typechecks at any expected type (v0.6) |
 | `os.time()` | `fn() -> Float` | Unix-epoch seconds (`clock()` is monotonic) |
 
-Namespaced (no import needed): `math.pi`, `math.e`, `math.sqrt(Float)`,
+Namespaced (no import needed): `math.pi`, `math.e`,
 `math.sin/cos/tan/atan/atan2/log/log2/log10/exp` (Float; `log` is the
 **natural** logarithm), `math.pow(Float, Float)`,
 `math.fmod(Float, Float) -> Float` (IEEE remainder with the sign of the
-dividend — the `%` operator stays Int-only), `math.floor/ceil/round(Float) ->
-Float`, `math.abs_int(Int) -> Int`, `math.abs(Float) -> Float`,
-`math.min/max(Int, Int) -> Int`, `math.min_float/max_float(Float, Float) ->
-Float`, `math.random() -> Float` (uniform [0, 1), xorshift PRNG),
-`math.rand_int(lo, hi) -> Int` (uniform in the **inclusive** range; panics if
-`lo > hi`), `math.seed(Int) -> Unit`.
+dividend — the `%` operator stays Int-only), `math.random() -> Float`
+(uniform [0, 1), xorshift PRNG), `math.rand_int(lo, hi) -> Int` (uniform in
+the **inclusive** range; panics if `lo > hi`), `math.seed(Int) -> Unit`.
+Rounding, `sqrt`, `abs`, and `min`/`max` are Int/Float **methods**
+(`x.sqrt()`, `x.abs()`, `a.min(b)`, `x.floor()`, ... — § Methods): the
+former `math.` spellings were verbatim duplicates and were dropped in v0.9
+(the method spellings are the primitives).
 
 `math.seed` scrambles the seed through SplitMix64 before installing it
 (v0.6), so nearby seeds produce unrelated streams; the same seed always
@@ -1309,7 +1310,9 @@ covers a 32-bit wrap too: mask after wrapping (`a.wrapping_mul(b) &
 
 `Float`: `to_int() -> Int` (truncates toward zero; panics on NaN or out of Int
 range), `to_string() -> String`, `abs()`, `floor()`, `ceil()`, `round()`,
-`sqrt()`, `is_nan() -> Bool`, `to_fixed(Int) -> String` (v0.6: exactly n
+`sqrt()`, `min(Float) -> Float` / `max(Float) -> Float` (v0.9: IEEE-754
+min/max — a NaN argument yields the other operand, as in Rust's
+`f64::min`/`max`), `is_nan() -> Bool`, `to_fixed(Int) -> String` (v0.6: exactly n
 decimal places, half-away-from-zero as in Rust's `{:.n}`; n clamps to
 `[0, 17]`; a result that is all zeros drops its minus sign, so no `-0.00`).
 

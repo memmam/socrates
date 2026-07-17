@@ -48,7 +48,7 @@ pub fn render_crickets(dur_s: Float, sr: Int, chirp_rate_hz: Float,
     let mut i = 0;
     while i < n {
         if rng.random_() < p_chirp {
-            let end = math.min(n, i + chirp_dur);
+            let end = n.min(i + chirp_dur);
             let tt = nd.arange(end - i).divs(srf);
             let env = tt.muls(-80.0).expv().mul(tt.muls(-400.0).expv().k_minus(1.0));
             // out[i:end] += cnoise[i:end] * env * uniform(0.4, 1.0)

@@ -102,4 +102,4 @@ let values = primes_below(60).map(|p| p.to_float());
 let n = values.len().to_float();
 let mean = values.fold(0.0, |a, v| a + v) / n;
 let variance = values.fold(0.0, |a, v| a + (v - mean) * (v - mean)) / n;
-println("mean {mean}, stddev {math.sqrt(variance)}");
+println("mean {mean}, stddev {variance.sqrt()}");

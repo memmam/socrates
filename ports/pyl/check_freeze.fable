@@ -135,7 +135,7 @@ for id in ids {
             for (ci, a) in mine.enumerate() {
                 let e = frozen[si][ci];
                 let diff = (a - e).abs();
-                let scale = math.max_float(a.abs(), e.abs());
+                let scale = a.abs().max(e.abs());
                 let rel = if scale > 0.0 { diff / scale } else { 0.0 };
                 if rel > design_worst { design_worst = rel; }
                 if rel > worst_rel {

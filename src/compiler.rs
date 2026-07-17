@@ -934,7 +934,7 @@ impl<'a> Compiler<'a> {
                         self.emit(Op::Call(args.len() as u8), e.span);
                     }
                     Some(Res::NativeFn(native)) => {
-                        // `math.sqrt(x)` — the receiver is a namespace.
+                        // `math.sin(x)` — the receiver is a namespace.
                         for a in args {
                             self.expr(a);
                         }

@@ -79,7 +79,7 @@ impl Stream {
     pub fn randint(self, a: Int, b: Int) -> Int {
         let u = self.random_();
         let v = a + (u * (b - a + 1).to_float()).floor().to_int();
-        math.min(v, b)
+        v.min(b)
     }
 
     pub fn choice_pm1(self) -> Float {
@@ -90,7 +90,7 @@ impl Stream {
     pub fn gauss(self) -> Float {
         let u1 = self.random_();
         let u2 = self.random_();
-        math.sqrt(-2.0 * math.log(math.max_float(u1, 1e-300))) * math.cos(2.0 * math.pi * u2)
+        (-2.0 * math.log(u1.max(1e-300))).sqrt() * math.cos(2.0 * math.pi * u2)
     }
 
     // n successive gauss() draws as a mono array

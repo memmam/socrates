@@ -4,6 +4,37 @@ Each release was shipped as one reviewed pull request. Golden spec tests pin
 every feature listed here; `docs/SPEC.md` marks each with the version that
 introduced it, and `CLAUDE.md` keeps the release ledger.
 
+## Unreleased (v0.9) — the minification pass
+
+The maximally performant set of minimal idioms that covers all
+functionality, judged per-architecture. In progress:
+
+- **The four-arch Bench A/B gate** (`bench/ab.py` + the Bench A/B
+  workflow): every interpreter/idiom change is judged by interleaved A/B
+  on one runner per tier-1 architecture; CLAUDE.md's universality
+  principle is the acceptance rule. macOS is judged by multi-sample
+  majority (`bench/RESULTS.md` documents the per-job modulation that
+  makes single macOS runs unreliable below ~6%).
+- **The compact dispatch loop with per-target binding**: `run()` keeps
+  only compact, frequent arms inline; bulky or rare op bodies outline
+  behind `#[inline(never)]` — killing the codegen lottery that made
+  ±5–14% phantom swings out of unrelated edits — except on
+  aarch64-linux, where a `build.rs`-emitted `monolithic_dispatch` cfg
+  folds them back in (the compact loop measured a reproducible
+  enum_match cost there; per CLAUDE.md, an irreconcilable per-target
+  disagreement binds each target to its measured-fastest form instead
+  of accepting a tradeoff). Broad wins elsewhere: up to −27% on
+  Apple-Silicon micro benches, −3..−8% across x86_64 Linux/Windows.
+- **`fft.magnitude` moved to `std.fft`** (pure Fable over the `fft`
+  primitives; wrapper-shaped natives live in std). `import std.fft;`
+  keeps the `fft.` spellings working.
+- **math namespace minified**: `math.sqrt/floor/ceil/round/abs/abs_int/
+  min/max/min_float/max_float` dropped — verbatim duplicates of the
+  Int/Float methods, which are the primitives (`x.sqrt()`, `a.min(b)`,
+  ...). `Float.min`/`Float.max` added to complete the method set. `math`
+  keeps what only it provides: trig, logs, `exp`, `pow`, `fmod`, the
+  PRNG, and the constants.
+
 ## v0.8.0 — native graphics and compute; the demo round's feature queue
 
 One release, two workstreams. First, the standing directive from

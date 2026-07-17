@@ -343,7 +343,7 @@ expression*:
 let hypotenuse = {
     let a = 3.0;
     let b = 4.0;
-    math.sqrt(a * a + b * b)
+    (a * a + b * b).sqrt()
 };
 println(hypotenuse);
 ```

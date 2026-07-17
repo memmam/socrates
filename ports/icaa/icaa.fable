@@ -53,13 +53,13 @@ fn luma_at(img: image.Image, p: vec.Vec2) -> Float { luma_of(img.sample(p)) }
 fn area_le(nrm: vec.Vec2, d: Float) -> Float {
     let ax = nrm.x.abs();
     let ay = nrm.y.abs();
-    let hi = math.max_float(ax, ay);
-    let lo = math.min_float(ax, ay);
+    let hi = ax.max(ay);
+    let lo = ax.min(ay);
     let s = (hi + lo) * 0.5; // corner distance
     let q = (hi - lo) * 0.5; // linear-zone half width
 
     let linear = shade.clampf(d / hi + 0.5, 0.0, 1.0);
-    let lo_safe = math.max_float(lo, 1e-3);
+    let lo_safe = lo.max(1e-3);
     let cut_low = (d + s) * (d + s) / (hi * lo_safe * 2.0);
     let cut_high = 1.0 - (s - d) * (s - d) / (hi * lo_safe * 2.0);
 
@@ -104,9 +104,9 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
     let l_e = luma_of(c_e);
     let l_w = luma_of(c_w);
 
-    let max_cross = math.max_float(l_c, math.max_float(math.max_float(l_n, l_s), math.max_float(l_e, l_w)));
-    let min_cross = math.min_float(l_c, math.min_float(math.min_float(l_n, l_s), math.min_float(l_e, l_w)));
-    let threshold = math.max_float(params.contrast_abs, params.contrast_rel * max_cross);
+    let max_cross = l_c.max(l_n.max(l_s).max(l_e.max(l_w)));
+    let min_cross = l_c.min(l_n.min(l_s).min(l_e.min(l_w)));
+    let threshold = params.contrast_abs.max(params.contrast_rel * max_cross);
 
     if probe_on {
         pv("lC", l_c);
@@ -133,8 +133,8 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
     let l_sw = luma_of(c_sw);
     let l_se = luma_of(c_se);
 
-    let max_l = math.max_float(max_cross, math.max_float(math.max_float(l_nw, l_ne), math.max_float(l_sw, l_se)));
-    let min_l = math.min_float(min_cross, math.min_float(math.min_float(l_nw, l_ne), math.min_float(l_sw, l_se)));
+    let max_l = max_cross.max(l_nw.max(l_ne).max(l_sw.max(l_se)));
+    let min_l = min_cross.min(l_nw.min(l_ne).min(l_sw.min(l_se)));
     let range = max_l - min_l;
 
     if probe_on { pv("range", range); }
@@ -158,7 +158,7 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
 
     let tr = jxx + jyy;
     let half_diff = (jxx - jyy) * 0.5;
-    let disc = math.sqrt(math.max_float(half_diff * half_diff + jxy * jxy, 0.0));
+    let disc = (half_diff * half_diff + jxy * jxy).max(0.0).sqrt();
     let coh = disc * 2.0 / (tr + 1e-7);
 
     if probe_on { pv("coh", coh); }
@@ -231,7 +231,7 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
         // the grid rows already provide the +-1 plateau estimates.
         let l_p2 = luma_at(img, p + (n_base * texel).scale(2.0));
         let l_n2 = luma_at(img, p - (n_base * texel).scale(2.0));
-        let unflat = ((l_p2 - l_plus).abs() + (l_n2 - l_minus).abs()) / math.max_float(amp2, 1e-4);
+        let unflat = ((l_p2 - l_plus).abs() + (l_n2 - l_minus).abs()) / amp2.max(1e-4);
         w_flat = 1.0 - shade.smoothstep(0.28, 0.65, unflat);
 
         // three grid stations
@@ -253,13 +253,13 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
             let w_sum = p_ab.w + p_bc.w + p_ac.w * 0.5;
             let v_star = shade.clampf(
                 (p_ab.w * p_ab.v + p_bc.w * p_bc.v + p_ac.w * 0.5 * p_ac.v)
-                    / math.max_float(w_sum, 1e-6),
+                    / w_sum.max(1e-6),
                 -1.2, 1.2);
 
             let w = w_base
                 * (if p_ab.has != p_bc.has { 1.0 } else { 0.0 })
                 * (1.0 - shade.smoothstep(0.75, 1.02, v_star.abs()))
-                * shade.smoothstep(0.0, math.max_float(amp2 * 0.25, 1e-4), c - a);
+                * shade.smoothstep(0.0, (amp2 * 0.25).max(1e-4), c - a);
 
             s_w += w;
             s_ws += w * s;
@@ -289,14 +289,14 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
             let w_sum = p_ab.w + p_bc.w + p_ac.w * 0.5;
             let v_star = shade.clampf(
                 (p_ab.w * p_ab.v + p_bc.w * p_bc.v + p_ac.w * 0.5 * p_ac.v)
-                    / math.max_float(w_sum, 1e-6),
+                    / w_sum.max(1e-6),
                 -1.2, 1.2);
             let u = v_star + d_stag;
 
             let w = w_base
                 * (if p_ab.has != p_bc.has { 1.0 } else { 0.0 })
                 * (1.0 - shade.smoothstep(0.75, 1.02, v_star.abs()))
-                * shade.smoothstep(0.0, math.max_float(amp2 * 0.25, 1e-4), c - a);
+                * shade.smoothstep(0.0, (amp2 * 0.25).max(1e-4), c - a);
 
             s_w += w;
             s_ws += w * s;
@@ -320,7 +320,7 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
         // is a 9-tap average and therefore phase-stable, so a strong prior
         // also damps temporal wobble of the fit.
         let lp = 1.2;
-        let d = math.max_float(s_w * (s_wss + lp) - s_ws * s_ws, 1e-5);
+        let d = (s_w * (s_wss + lp) - s_ws * s_ws).max(1e-5);
         let s_wsu_p = s_wsu + m_t * lp;
         u0 = ((s_wss + lp) * s_wu - s_ws * s_wsu_p) / d;
         m = shade.clampf((s_w * s_wsu_p - s_ws * s_wu) / d, -1.2, 1.2);
@@ -331,7 +331,7 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
             s_r = s_r + st.w * e * e;
         }
 
-        rms = math.sqrt(s_r / math.max_float(s_w, 1e-4));
+        rms = (s_r / s_w.max(1e-4)).sqrt();
 
     } else {
 
@@ -350,7 +350,7 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
         // plateau-flatness confirmation: veto gratings/thin strokes
         let l_plus2 = luma_at(img, p + (n_dir * texel).scale(2.0));
         let l_minus2 = luma_at(img, p - (n_dir * texel).scale(2.0));
-        let unflat = ((l_plus2 - l_plus).abs() + (l_minus2 - l_minus).abs()) / math.max_float(amp2, 1e-4);
+        let unflat = ((l_plus2 - l_plus).abs() + (l_minus2 - l_minus).abs()) / amp2.max(1e-4);
         w_flat = 1.0 - shade.smoothstep(0.28, 0.65, unflat);
 
         // isoline crossings at stations along the tangent, LSQ line fit
@@ -388,12 +388,12 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
             let w_sum = p_ab.w + p_bc.w + p_ac.w * 0.5;
             let v_star = shade.clampf(
                 (p_ab.w * p_ab.v + p_bc.w * p_bc.v + p_ac.w * 0.5 * p_ac.v)
-                    / math.max_float(w_sum, 1e-6),
+                    / w_sum.max(1e-6),
                 -1.2, 1.2);
 
             let w_raw = (if p_ab.has != p_bc.has { 1.0 } else { 0.0 })
                 * (1.0 - shade.smoothstep(0.75, 1.02, v_star.abs()))
-                * shade.smoothstep(0.0, math.max_float(amp2 * 0.25, 1e-4), c - a);
+                * shade.smoothstep(0.0, (amp2 * 0.25).max(1e-4), c - a);
 
             StationEst { u: u_pred + v_star, w_raw }
         };
@@ -433,7 +433,7 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
         let lambda = 0.25; // ridge prior on the slope
 
         let fit = |sw: Float, sws: Float, swss: Float, swu: Float, swsu: Float| -> Fit {
-            let d = math.max_float(sw * (swss + lambda) - sws * sws, 1e-5);
+            let d = (sw * (swss + lambda) - sws * sws).max(1e-5);
             let u0f = ((swss + lambda) * swu - sws * swsu) / d;
             let mf = shade.clampf((sw * swsu - sws * swu) / d, -1.2, 1.2);
             Fit { u0f, mf }
@@ -445,7 +445,7 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
                 let e = st.u - u0r - mr * st.s;
                 s_r = s_r + st.w * e * e;
             }
-            math.sqrt(s_r / math.max_float(swr, 1e-4))
+            (s_r / swr.max(1e-4)).sqrt()
         };
 
         // pass-1 fit over the 9 staggered stations
@@ -490,7 +490,7 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
         let u0_i = f_i.u0f;
         let m_i = f_i.mf;
         let inner_stations = stations.slice(0, s1.len()).filter(|st| st.s.abs() <= 0.7);
-        let rms_i = math.max_float(residual(u0_i, m_i, inner_stations, t_w), 0.06);
+        let rms_i = residual(u0_i, m_i, inner_stations, t_w).max(0.06);
 
         // lean on the local fit when the straight-line model misfits (curvature)
         let w_loc = shade.smoothstep(0.10, 0.35, rms_f);
@@ -520,7 +520,7 @@ fn apply_icaa(img: image.Image, params: IcaaParams, uv_in: vec.Vec2, texel: vec.
 
     // uncertainty-adaptive sharpness: confident fits produce a sharp
     // analytic ramp; noisy fits get a slightly wider transition
-    let sigma = rms * shade.inverse_sqrt(math.max_float(s_w, 0.5));
+    let sigma = rms * shade.inverse_sqrt(s_w.max(0.5));
     let width = shade.clampf(sigma * params.width_k + params.width_base, 1.0, 2.5);
 
     let a_le = area_le(n2, d0 / width); // dark-side area

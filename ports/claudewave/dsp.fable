@@ -21,7 +21,7 @@ pub fn set_stream(s: rand.Stream) { rng = s; }
 
 // Default target_db=-18.0.
 pub fn rms_normalize(y: nd.Nd, target_db: Float) -> nd.Nd {
-    let rms = math.sqrt(y.mul(y).mean_all() + 1e-12);
+    let rms = (y.mul(y).mean_all() + 1e-12).sqrt();
     y.muls(math.pow(10.0, target_db / 20.0) / (rms + 1e-12))
 }
 

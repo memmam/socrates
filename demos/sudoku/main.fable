@@ -78,7 +78,7 @@ fn run_puzzle(name: String, clues: String, timed: Bool) -> Result[Unit, String] 
     board.verify(grid, givens)?;
     println("verified OK: {st.line()}");
     if timed {
-        println("  solved in {math.round(elapsed * 1000.0)} ms");
+        println("  solved in {(elapsed * 1000.0).round()} ms");
     }
     Ok(())
 }

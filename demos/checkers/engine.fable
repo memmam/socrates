@@ -38,7 +38,7 @@ pub fn evaluate(b: board.Board) -> Int {
             let c = sq % 8;
             let mut v = 0;
             if board.is_king(p) {
-                v = 160 + 2 * (math.min(r, 7 - r) + math.min(c, 7 - c));
+                v = 160 + 2 * (r.min(7 - r) + c.min(7 - c));
             } else {
                 let adv = if s == board.black { 7 - r } else { r };
                 v = 100 + 4 * adv;

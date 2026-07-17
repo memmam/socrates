@@ -65,7 +65,7 @@ impl Frame {
 
 // Round a raw step up to 1, 2, or 5 times a power of ten.
 fn nice_step(raw: Float) -> Float {
-    let mag = math.pow(10.0, math.floor(math.log10(raw)));
+    let mag = math.pow(10.0, math.log10(raw).floor());
     let n = raw / mag;
     if n <= 1.0 {
         mag
@@ -114,7 +114,7 @@ fn dodge(ys: List[Float], gap: Float) -> List[Float] {
     let out = ys.clone();
     let mut prev = -1.0e18;
     for (i, y) in order {
-        let placed = math.max_float(y, prev + gap);
+        let placed = y.max(prev + gap);
         out[i] = placed;
         prev = placed;
     }
@@ -139,10 +139,10 @@ impl Chart {
         let mut y_lo = s0.ys[0];
         let mut y_hi = s0.ys[0];
         for s in self.series {
-            x_lo = math.min_float(x_lo, lists.min_float(s.xs).unwrap());
-            x_hi = math.max_float(x_hi, lists.max_float(s.xs).unwrap());
-            y_lo = math.min_float(y_lo, lists.min_float(s.ys).unwrap());
-            y_hi = math.max_float(y_hi, lists.max_float(s.ys).unwrap());
+            x_lo = x_lo.min(lists.min_float(s.xs).unwrap());
+            x_hi = x_hi.max(lists.max_float(s.xs).unwrap());
+            y_lo = y_lo.min(lists.min_float(s.ys).unwrap());
+            y_hi = y_hi.max(lists.max_float(s.ys).unwrap());
         }
         // A flat series still needs a non-degenerate frame.
         let pad = if y_hi - y_lo < 1.0e-12 { 1.0 } else { (y_hi - y_lo) * 0.08 };
@@ -276,6 +276,6 @@ pub fn sparkline(ys: List[Float]) -> String {
     let span = if hi - lo < 1.0e-12 { 1.0 } else { hi - lo };
     ys.map(|y| {
         let level = ((y - lo) / span * 7.0).round().to_int();
-        glyphs[math.min(math.max(level, 0), 7)]
+        glyphs[level.max(0).min(7)]
     }).join("")
 }

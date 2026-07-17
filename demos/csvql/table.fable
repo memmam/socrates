@@ -110,7 +110,7 @@ impl Table {
         let numeric: List[Bool] = [];
         for c in 0..cols {
             let widest = lists.max(shown.map(|r| r[c].len())).unwrap_or(0);
-            widths.push(math.max(self.headers[c].len(), widest));
+            widths.push((self.headers[c].len()).max(widest));
             numeric.push(!self.rows.is_empty() && self.rows.all(|r| r[c].is_num()));
         }
 

@@ -40,7 +40,7 @@ pub fn render_vocoder_carrier(bar_chords: List[(Float, Float, String)], total_s:
         for p in pitches0 { pitches.push(p + 12); }
 
         let bs_i = (bs * srf).to_int();
-        let be_i = math.min(n_total, ((be + 0.2) * srf).to_int());
+        let be_i = n_total.min(((be + 0.2) * srf).to_int());
         let n_bar = be_i - bs_i;
         if n_bar <= 0 { continue; }
         let t_bar = nd.arange(n_bar).divs(srf);
@@ -91,7 +91,7 @@ pub fn channel_vocoder(modulator: nd.Nd, carrier: nd.Nd, sr: Int, n_bands: Int,
         let lo = bands.data[i];
         let hi = bands.data[i + 1];
         let sos = signal.butter(4, lo / (srf / 2.0),
-                                math.min_float(hi / (srf / 2.0), 0.99), "band");
+                                (hi / (srf / 2.0)).min(0.99), "band");
         let voc_band = signal.sosfilt(sos, mod_mono);
         let env = signal.sosfilt(sos_env, voc_band.absv()).muls(band_gain);
         let car_l = signal.sosfilt(sos, carrier.channel(0));

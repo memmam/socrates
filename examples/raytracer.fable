@@ -12,7 +12,7 @@ impl Vec3 {
     fn sub(self, b: Vec3) -> Vec3 { v3(self.x - b.x, self.y - b.y, self.z - b.z) }
     fn scale(self, s: Float) -> Vec3 { v3(self.x * s, self.y * s, self.z * s) }
     fn dot(self, b: Vec3) -> Float { self.x * b.x + self.y * b.y + self.z * b.z }
-    fn norm(self) -> Vec3 { self.scale(1.0 / math.sqrt(self.dot(self))) }
+    fn norm(self) -> Vec3 { self.scale(1.0 / self.dot(self).sqrt()) }
     fn reflect(self, n: Vec3) -> Vec3 { self.sub(n.scale(2.0 * self.dot(n))) }
 }
 
@@ -40,7 +40,7 @@ fn hit_sphere(s: Sphere, origin: Vec3, dir: Vec3) -> Option[Float] {
     if disc < 0.0 {
         None
     } else {
-        let sq = math.sqrt(disc);
+        let sq = disc.sqrt();
         let t1 = (0.0 - b - sq) / 2.0;
         let t2 = (0.0 - b + sq) / 2.0;
         if t1 > 0.001 { Some(t1) } else if t2 > 0.001 { Some(t2) } else { None }
@@ -101,7 +101,7 @@ let light = v3(-4.0, 5.0, 1.0);
 
 fn in_shadow(p: Vec3) -> Bool {
     let to_light = light.sub(p);
-    let dist = math.sqrt(to_light.dot(to_light));
+    let dist = to_light.dot(to_light).sqrt();
     let dir = to_light.scale(1.0 / dist);
     match closest_hit(p, dir) {
         Some(h) -> h.t < dist,
@@ -119,7 +119,7 @@ fn trace(origin: Vec3, dir: Vec3, depth: Int) -> Vec3 {
         None -> sky(dir),
         Some(h) -> {
             let ldir = light.sub(h.point).norm();
-            let diffuse = math.max_float(0.0, h.normal.dot(ldir));
+            let diffuse = (0.0).max(h.normal.dot(ldir));
             let lit = if in_shadow(h.point) { 0.0 } else { diffuse };
             let ambient = 0.12;
             let mut color = h.color.scale(ambient + 0.88 * lit);
@@ -134,7 +134,7 @@ fn trace(origin: Vec3, dir: Vec3, depth: Int) -> Vec3 {
 
 fn to_byte(c: Float) -> Int {
     // Gamma 2.0, clamped.
-    let g = math.sqrt(math.max_float(0.0, math.min_float(1.0, c)));
+    let g = ((0.0).max((1.0).min(c))).sqrt();
     (g * 255.0).round().to_int()
 }
 

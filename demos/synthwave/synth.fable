@@ -176,7 +176,7 @@ pub fn render_drums(
 // [-1, 1] float mix -> 16-bit PCM ints (clamped, round half-away-from-zero).
 pub fn quantize(mix: List[Float]) -> List[Int] {
     mix.map(|x| {
-        let c = math.max_float(-1.0, math.min_float(1.0, x));
+        let c = (-1.0).max((1.0).min(x));
         (c * 32767.0).round().to_int()
     })
 }
