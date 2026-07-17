@@ -376,15 +376,19 @@ jobs:
     # libOpenCL ICD loader, SPIR-V kernels ingested via clCreateProgramWithIL
     # (OpenCL 2.1+ core). The kernels use the OpenCL SPIR-V profile
     # (Kernel/Physical64 -- SPEC section 7.2 documents both dialects; the
-    # Vulkan-profile blob is NOT interchangeable). pocl gives the runner a
-    # CPU device the way lavapipe gives the vulkan job one. The battery
-    # step is BEST-EFFORT for now (output printed, job not failed): it
-    # flips to a hard assert once a green run proves this pocl build's IL
-    # ingestion end to end -- the program itself already hard-asserts the
-    # output bytes whenever the dispatch runs. The vulkan,opencl steps
-    # prove the native-precedence cfg maze compiles both ways (the
-    # gpu::tests::opencl_defers_to_vulkan unit test pins the precedence).
-    name: OpenCL compute (native, pocl)
+    # Vulkan-profile blob is NOT interchangeable). The Intel oneAPI CPU
+    # runtime provides the IL-capable device (Debian's pocl build ships
+    # WITHOUT the SPIR-V translator -- clinfo reports "IL version (n/a)"
+    # and clCreateProgramWithIL returns CL_INVALID_VALUE, the exact err
+    # PR #61's best-effort run recorded). pocl stays installed anyway:
+    # two ICD platforms make cl.rs's device scoring (IL-capable first)
+    # a real multi-platform test, not a single-choice formality. The
+    # battery hard-asserts the exact ok line -- the program itself
+    # additionally hard-asserts the output bytes whenever the dispatch
+    # runs. The vulkan,opencl steps prove the native-precedence cfg maze
+    # compiles both ways (the gpu::tests::opencl_defers_to_vulkan unit
+    # test pins the precedence).
+    name: OpenCL compute (native, Intel CPU runtime + pocl)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -398,6 +402,15 @@ jobs:
         # libX11 normally (see the vulkan job's comment). No X server or
         # Vulkan loader is installed here -- those tests skip/Err cleanly.
         run: sudo apt-get update && sudo apt-get install -y ocl-icd-libopencl1 pocl-opencl-icd clinfo libx11-dev
+      - name: Intel oneAPI CPU OpenCL runtime (the SPIR-V IL device)
+        # SPIR-V IL ingestion on any x86_64 CPU -- what this Debian pocl
+        # build lacks. Registered as a second ICD platform next to pocl.
+        run: |
+          wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+            | sudo gpg --dearmor -o /usr/share/keyrings/oneapi-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+            | sudo tee /etc/apt/sources.list.d/oneAPI.list
+          sudo apt-get update && sudo apt-get install -y intel-oneapi-runtime-opencl
       - name: clinfo (device + IL-support diagnostics, best effort)
         run: clinfo || true
       - name: Build (opencl)
@@ -415,10 +428,15 @@ jobs:
         run: |
           test "$(cargo tree -e normal --prefix none --features opencl | wc -l)" -eq 1
           test "$(cargo tree -e normal --prefix none --features vulkan,opencl | wc -l)" -eq 1
-      - name: OpenCL compute battery (best effort until pocl IL ingestion is proven)
+      - name: OpenCL compute battery (real SPIR-V dispatch, hard-asserted bytes)
+        # The exact ok line is asserted, so a silent fall-through to the
+        # err branch fails the job; the program itself also hard-asserts
+        # the doubled bytes (a wrong result panics, exit 70).
         run: |
           cargo build --release --features opencl
-          ./target/release/fable docs/assets/opencl_compute.fable || true
+          out=$(./target/release/fable docs/assets/opencl_compute.fable)
+          echo "$out"
+          test "$out" = "ok: [2, 0, 0, 0, 4, 0, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0, 10, 0, 0, 0, 12, 0, 0, 0, 14, 0, 0, 0, 200, 0, 0, 0]"
 
   demo-zoo:
     # Proves the release's cross-compile + `fable build` stapling works on
