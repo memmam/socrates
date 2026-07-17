@@ -1,0 +1,81 @@
+name: Bench A/B
+
+# The universal-performance gate for interpreter/idiom changes (CLAUDE.md's
+# universality principle): an interleaved A/B between two refs, run on one
+# runner per tier-1 architecture. A simplification is accepted only if no
+# architecture regresses beyond the noise floor — "fast on the dev box" is
+# one vote, not a verdict.
+#
+# Trigger it by hand (Actions -> Bench A/B -> Run workflow) with the branch
+# under test; each job posts its delta table to the run's summary page.
+
+on:
+  workflow_dispatch:
+    inputs:
+      head_ref:
+        description: "Ref under test (branch/sha)"
+        required: true
+      base_ref:
+        description: "Baseline ref"
+        required: false
+        default: "main"
+      micro_n:
+        description: "Interleaved rounds per micro bench"
+        required: false
+        default: "5"
+      macro_n:
+        description: "Interleaved rounds per macro bench"
+        required: false
+        default: "3"
+      targets:
+        description: "Comma-separated target filter (empty = all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  ab:
+    name: A/B ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: x86_64-linux
+          - os: ubuntu-24.04-arm
+            label: aarch64-linux
+          - os: windows-latest
+            label: x86_64-windows
+          - os: macos-14
+            label: aarch64-macos
+    steps:
+      - name: Checkout head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.head_ref }}
+          path: head
+      - name: Checkout base
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.base_ref }}
+          path: base
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build both sides
+        shell: bash
+        run: |
+          cargo build --release --manifest-path base/Cargo.toml
+          cargo build --release --manifest-path head/Cargo.toml
+      - name: Interleaved A/B
+        shell: bash
+        run: |
+          python3 head/bench/ab.py base head \
+            --micro-n "${{ inputs.micro_n }}" \
+            --macro-n "${{ inputs.macro_n }}" \
+            --targets "${{ inputs.targets }}" | tee ab.md
+          {
+            echo "## ${{ matrix.label }} — ${{ inputs.head_ref }} vs ${{ inputs.base_ref }}"
+            cat ab.md
+          } >> "$GITHUB_STEP_SUMMARY"

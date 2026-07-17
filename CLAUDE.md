@@ -56,6 +56,18 @@ their place fastest.
   spellings become minimal wrappers over it** (the efficiency-pass rule —
   hand-rolled popcount/ushr/hex became one-line wrappers over natives).
   Every such change stays byte-identical in observable behavior.
+- **Universality gates minification.** "Most performant" is judged across
+  every tier-1 target (x86_64 + aarch64 Linux, x86_64 Windows, aarch64
+  macOS — the release matrix), not on one box: simplifying an idiom down
+  to pure primitives can run better on one architecture and worse on
+  another (I-cache geometry, indirect-branch cost, and code layout all
+  vote differently per arch — the dispatch-loop codegen lottery is the
+  recorded instance). A simplification is accepted only if the
+  interleaved A/B (`bench/ab.py`, fanned per-arch by the Bench A/B
+  workflow) shows flat-or-better on every architecture; where
+  architectures disagree, scope **up**, not down — the primitive keeps
+  its place, and the minimal set is the minimal set of *universally*
+  performant idioms.
 - **This applies to whole backend implementations, not just algorithmic
   idioms** — but the trigger is the *platform* actually dropping the older
   path, not merely deprecating it. When a newer backend for the same

@@ -14,6 +14,21 @@ a claimed win must beat that noise or be backed by instruction/allocation
 counts. Absolute times drift between machines and over a day — trust the
 relative delta, not the absolute seconds.
 
+**And across architectures.** One box is one vote: code layout,
+indirect-branch cost, and cache geometry vote differently per
+architecture, so a simplification that measures flat on x86_64 can
+regress on aarch64 (and vice versa). `bench/ab.py BASE_DIR HEAD_DIR`
+runs the interleaved A/B between two full checkouts — each side runs its
+own tree, so the comparison stays fair when bench/demo sources differ
+between the refs (this is also why the spec suite is not an A/B target:
+its sources move with each ref). The **Bench A/B workflow**
+(`.github/workflows/bench.yml`, run by hand with the branch under test)
+fans the same script across one runner per tier-1 architecture —
+x86_64-linux, aarch64-linux, x86_64-windows, aarch64-macos — and posts
+each delta table to the run summary. The acceptance rule is CLAUDE.md's
+universality principle: flat-or-better everywhere, or the idiom keeps
+its primitive.
+
 ## The efficiency pass (v0.7)
 
 A measured audit of every interpreter hot path, integrated in three merged
