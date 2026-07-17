@@ -194,7 +194,17 @@ jobs:
           cargo test --features gl,vulkan
           cargo build --features vulkan
           cargo clippy --features vulkan --all-targets -- -D warnings
-          ls "C:/Windows/System32/vulkan-1.dll" && echo "vulkan-1.dll PRESENT" || echo "no vulkan-1.dll on this runner"
+      - name: Win32 Vulkan window smoke (best effort; the loader exists, a device may not)
+        # PR #66's probe proved vulkan-1.dll ships with windows-latest, but
+        # a loader without an ICD errs at instance/device creation — so this
+        # asserts exit 0 and echoes the ok/err line. If the log ever shows
+        # the ok line (a device enumerates), flip to the hard-asserted
+        # exact-line discipline like the Linux vulkan job's smoke.
+        shell: bash
+        run: |
+          cargo build --release --features gl,vulkan
+          out=$(./target/release/fable.exe docs/assets/vulkan_window.fable)
+          echo "$out"
 
   gl-macos:
     # Real Apple Silicon hardware (unlike this repo's own dev/CI containers,

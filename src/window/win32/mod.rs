@@ -12,20 +12,20 @@
 //! same compiled program. Every method below is a small `match` forwarding
 //! to whichever variant is live.
 //!
-//! **Phase 0 status**: [`vulkan::Inner`] is deliberately *uninhabited*
-//! (its `create` always `Err`s — see its module docs), so every `Vulkan`
-//! match arm below is the statically-unreachable `match *i {}`. The WSI
-//! phase replaces those arms with real forwards, exactly as `x11/mod.rs`'s
-//! arms became real when `x11/vulkan.rs` grew its implementation.
+//! **Status**: [`vulkan::Inner`] is real as of the WSI phase — window
+//! lifecycle (create/clear/present/events/teardown) works end to end; the
+//! `gfx.*` draw-call arms panic via [`vulkan_gfx_todo`] until draw-call
+//! parity lands (the same intermediate the x11 backend had between its
+//! Phase 1 and Phase 2).
 //!
 //! Win32 primitives (window creation, the message pump, key mapping) that
 //! both backends need are factored into [`shared`], composed by each
 //! backend rather than duplicated.
 
-// With `gl` off (a vulkan-only build), every dispatch method's parameters
-// flow only into the statically-unreachable `Vulkan` arm — the same
-// Phase-0 shape `x11/mod.rs` had, silenced the same way until the WSI
-// phase makes the arms real.
+// With `gl` off (a vulkan-only build), the gfx methods' parameters flow
+// only into the diverging `vulkan_gfx_todo` arms — the x11 backend's
+// identical intermediate shape, silenced the same way until draw-call
+// parity makes those arms real.
 #![cfg_attr(not(feature = "gl"), allow(unused_variables))]
 
 #[cfg(feature = "gl")]
@@ -35,8 +35,8 @@ mod shared;
 mod vulkan;
 
 /// Either a live OpenGL/WGL window ([`gl::Inner`]) or a live Vulkan window
-/// ([`vulkan::Inner`], uninhabited until the WSI phase) — see the module
-/// doc comment for why this is an enum rather than a plain struct.
+/// ([`vulkan::Inner`]) — see the module doc comment for why this is an
+/// enum rather than a plain struct.
 #[allow(clippy::large_enum_variant)]
 pub enum Inner {
     #[cfg(feature = "gl")]
@@ -60,7 +60,7 @@ impl Inner {
     }
 
     /// The `window.create_vulkan()` entry point — never produces the `Gl`
-    /// variant. Phase 0: always a clean `Err` (see `vulkan`'s module docs).
+    /// variant.
     #[cfg(feature = "vulkan")]
     pub fn create_vulkan(title: &str, w: i32, h: i32) -> Result<Inner, String> {
         vulkan::Inner::create(title, w, h).map(Inner::Vulkan)
@@ -79,7 +79,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.poll(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => i.poll(),
         }
     }
     pub fn key_down(&self, name: &str) -> bool {
@@ -87,7 +87,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.key_down(name),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => i.key_down(name),
         }
     }
     pub fn mouse(&self) -> (f64, f64) {
@@ -95,7 +95,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.mouse(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => i.mouse(),
         }
     }
     pub fn width(&self) -> i32 {
@@ -103,7 +103,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.width(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => i.width(),
         }
     }
     pub fn height(&self) -> i32 {
@@ -111,7 +111,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.height(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => i.height(),
         }
     }
     pub fn should_close(&self) -> bool {
@@ -119,7 +119,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.should_close(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => i.should_close(),
         }
     }
     pub fn backend_name(&self) -> &'static str {
@@ -127,7 +127,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.backend_name(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => i.backend_name(),
         }
     }
     pub fn clear(&mut self, r: f32, g: f32, b: f32, a: f32) {
@@ -135,7 +135,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.clear(r, g, b, a),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => i.clear(r, g, b, a),
         }
     }
     pub fn swap_buffers(&mut self) {
@@ -143,7 +143,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.swap_buffers(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => i.swap_buffers(),
         }
     }
     pub fn make_current(&mut self) {
@@ -151,7 +151,7 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.make_current(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => i.make_current(),
         }
     }
     pub fn compile_program_spirv(&mut self, vs: &[u8], fs: &[u8]) -> Result<u32, String> {
@@ -159,7 +159,14 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.compile_program_spirv(vs, fs),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = (vs, fs, i);
+                Err(
+                    "gfx.compile_program_spirv: not yet implemented on the Windows Vulkan \
+                     backend (draw-call parity lands in a later phase)"
+                        .to_string(),
+                )
+            },
         }
     }
     pub fn compile_program(&mut self, vertex_src: &str, fragment_src: &str) -> Result<u32, String> {
@@ -167,7 +174,15 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.compile_program(vertex_src, fragment_src),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = (vertex_src, fragment_src, i);
+                Err(
+                    "gfx.compile_program: not yet implemented on the Windows Vulkan backend \
+                     (draw-call parity lands in a later phase; use window.create() / OpenGL \
+                     for gfx.* today)"
+                        .to_string(),
+                )
+            },
         }
     }
     pub fn use_program(&mut self, program: u32) {
@@ -175,7 +190,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.use_program(program),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn delete_program(&mut self, program: u32) {
@@ -183,7 +201,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_program(program),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn create_buffer(&mut self) -> u32 {
@@ -191,7 +212,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.create_buffer(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn delete_buffer(&mut self, buffer: u32) {
@@ -199,7 +223,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_buffer(buffer),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn bind_buffer(&mut self, kind: crate::window::GfxBufferKind, buffer: u32) {
@@ -207,7 +234,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.bind_buffer(kind, buffer),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn upload_buffer(&mut self, kind: crate::window::GfxBufferKind, data: &[u8], dynamic: bool) {
@@ -215,7 +245,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.upload_buffer(kind, data, dynamic),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn create_vertex_array(&mut self) -> u32 {
@@ -223,7 +256,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.create_vertex_array(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn bind_vertex_array(&mut self, vao: u32) {
@@ -231,7 +267,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.bind_vertex_array(vao),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn delete_vertex_array(&mut self, vao: u32) {
@@ -239,7 +278,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_vertex_array(vao),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn set_vertex_attrib(&mut self, index: u32, size: i32, stride: i32, offset: i32) {
@@ -247,7 +289,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_vertex_attrib(index, size, stride, offset),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn disable_vertex_attrib(&mut self, index: u32) {
@@ -255,7 +300,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.disable_vertex_attrib(index),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn create_texture(&mut self) -> u32 {
@@ -263,7 +311,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.create_texture(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn delete_texture(&mut self, tex: u32) {
@@ -271,7 +322,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.delete_texture(tex),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn bind_texture(&mut self, tex: u32) {
@@ -279,7 +333,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.bind_texture(tex),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn active_texture_unit(&mut self, unit: u32) {
@@ -287,7 +344,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.active_texture_unit(unit),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn upload_texture(&mut self, data: &[u8], width: i32, height: i32, has_alpha: bool) {
@@ -295,7 +355,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.upload_texture(data, width, height, has_alpha),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn set_uniform_int(&mut self, program: u32, name: &str, v: i32) {
@@ -303,7 +366,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_int(program, name, v),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn set_uniform_float(&mut self, program: u32, name: &str, v: f32) {
@@ -311,7 +377,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_float(program, name, v),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn set_uniform_vec2(&mut self, program: u32, name: &str, x: f32, y: f32) {
@@ -319,7 +388,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_vec2(program, name, x, y),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn set_uniform_vec3(&mut self, program: u32, name: &str, x: f32, y: f32, z: f32) {
@@ -327,7 +399,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_vec3(program, name, x, y, z),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn set_uniform_vec4(&mut self, program: u32, name: &str, x: f32, y: f32, z: f32, w: f32) {
@@ -335,7 +410,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_vec4(program, name, x, y, z, w),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn set_uniform_mat4(&mut self, program: u32, name: &str, values: &[f32; 16]) {
@@ -343,7 +421,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_uniform_mat4(program, name, values),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn draw_arrays(&mut self, first: i32, count: i32) {
@@ -351,7 +432,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.draw_arrays(first, count),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn draw_elements(&mut self, count: i32, byte_offset: i32) {
@@ -359,7 +443,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.draw_elements(count, byte_offset),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn gfx_clear(&mut self, r: f32, g: f32, b: f32, a: f32) {
@@ -367,7 +454,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.gfx_clear(r, g, b, a),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn set_depth_test(&mut self, enabled: bool) {
@@ -375,7 +465,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.set_depth_test(enabled),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn viewport(&mut self, x: i32, y: i32, w: i32, h: i32) {
@@ -383,7 +476,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.viewport(x, y, w, h),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn read_pixels(&mut self, x: i32, y: i32, w: i32, h: i32) -> Vec<u8> {
@@ -391,7 +487,10 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.read_pixels(x, y, w, h),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match *i {},
+            Inner::Vulkan(i) => {
+                let _ = i;
+                vulkan_gfx_todo()
+            },
         }
     }
     pub fn teardown(self) {
@@ -399,22 +498,36 @@ impl Inner {
             #[cfg(feature = "gl")]
             Inner::Gl(i) => i.teardown(),
             #[cfg(feature = "vulkan")]
-            Inner::Vulkan(i) => match i {},
+            Inner::Vulkan(i) => i.teardown(),
         }
     }
 }
 
+/// Reaching a `gfx.*` call on a live Vulkan window is a real program state
+/// as of the WSI phase, so these paths must say what's missing (removed
+/// when draw-call parity lands, the way `x11/mod.rs`'s arms became real).
+#[cfg(feature = "vulkan")]
+fn vulkan_gfx_todo() -> ! {
+    panic!(
+        "gfx: draw calls are not yet implemented on the Windows Vulkan backend (draw-call \
+         parity lands in a later phase; use window.create() / OpenGL for gfx.* today)"
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    /// `create_vulkan` end-to-end through the enum dispatch: Phase 0's
-    /// stub (feature on) and the feature-off stub both return a clean,
-    /// prefixed `Err` — deterministic in every build shape, no panic
-    /// paths. (The `Ok` arm becomes reachable when the WSI phase lands,
-    /// at which point this test grows the x11 version's real-window arm.)
+    /// `create_vulkan` end-to-end through the enum dispatch: with the
+    /// `vulkan` feature on and a Vulkan loader + device present it opens
+    /// a real window (torn down immediately); on a driverless machine or
+    /// with the feature off it returns a clean, prefixed `Err`. Every
+    /// build shape is deterministic — no panic paths.
     #[test]
-    fn create_vulkan_errs_cleanly_in_phase0() {
+    fn create_vulkan_opens_or_errs_cleanly() {
         match super::Inner::create_vulkan("fable window test", 320, 240) {
-            Ok(_) => unreachable!("Phase 0 create_vulkan cannot succeed"),
+            Ok(inner) => {
+                assert_eq!(inner.backend_name(), "vulkan");
+                inner.teardown();
+            }
             Err(err) => {
                 assert!(err.contains("window.create_vulkan"), "got: {err}");
                 if !cfg!(feature = "vulkan") {
