@@ -50,6 +50,7 @@ pub mod value;
     feature = "opencl",
     not(feature = "vulkan"),
     not(feature = "cuda"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub(crate) mod cl;
@@ -59,9 +60,16 @@ pub(crate) mod cl;
 #[cfg(all(
     feature = "cuda",
     not(feature = "vulkan"),
+    not(all(feature = "d3d12", target_os = "windows")),
     any(target_os = "linux", target_os = "windows")
 ))]
 pub(crate) mod cu;
+/// COM-vtable-FFI Direct3D 12 compute (see the module docs; the roadmap's
+/// fifth native compute backend — HLSL through the OS's own compiler,
+/// WARP-executable on any Windows machine). Only compiled when it is the
+/// *active* backend — vulkan takes precedence when both features are on.
+#[cfg(all(feature = "d3d12", not(feature = "vulkan"), target_os = "windows"))]
+pub(crate) mod dx;
 /// Raw-FFI Vulkan compute primitives (see the module docs; the roadmap's
 /// second native compute backend and first SPIR-V consumer).
 #[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]

@@ -670,7 +670,33 @@ compilation, clippy, precedence lattice, zero-dep tree, and the exact
 graceful no-driver error of `docs/assets/cuda_compute.fable`; the
 battery's hard assert becomes a real gate the first time NVIDIA hardware
 runs it. The precedence when several Linux/Windows backends are compiled
-in is vulkan > cuda > opencl, pinned by unit tests in the pair builds.
+in is vulkan > d3d12 > cuda > opencl, pinned by unit tests in the pair
+builds.
+
+**Native Direct3D 12 compute (`src/dx.rs`).** The fifth native compute
+backend, and Windows' always-available one: WARP, the OS's software
+D3D12 adapter, guarantees a device on every Windows 10+ machine — so,
+like lavapipe (Vulkan) and the Intel CPU runtime (OpenCL), plain CI
+runners execute the battery's dispatch for real. Kernel input is HLSL
+source through `gpu.run`, compiled at dispatch time by
+`d3dcompiler_47.dll` — an OS component `LoadLibraryA`'d like `d3d12.dll`
+and `dxgi.dll` themselves, so the compiler adds no dependency (the
+`D3DCompile` error blob passes through as the `Err`, the OpenCL
+build-log analog). COM is called through hand-transcribed vtable
+indices (`com_call!`: fn pointer at slot N, `this` first) with a tiny
+`Com` guard tying `IUnknown::Release` to scope — the objc.rs role,
+COM-shaped. The dispatch machinery deliberately avoids descriptor
+heaps: the root signature is two *root UAV* parameters bound by GPU
+virtual address, and one UPLOAD-heap staging buffer (holding
+`[input | zeros]` — D3D12 doesn't guarantee zeroed resources, so the
+zeroed-output contract is made true by copying) feeds two DEFAULT-heap
+UAV buffers; a fence + Win32 event makes the dispatch synchronous, and
+a READBACK-heap copy is mapped for the result. Device acquisition tries
+the default adapter, then falls back to `IDXGIFactory4::EnumWarpAdapter`
+explicitly — the headless-runner path. Developed blind from the Linux
+container against `cargo check --target x86_64-pc-windows-msvc` (the
+cross-target is installed for the release demo zoo), then proven on
+windows CI.
 
 Making that coexist under a single `WindowHandle` needed one structural
 change: `win32::Inner` stays a plain struct, aliased directly to

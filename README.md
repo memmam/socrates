@@ -88,8 +88,9 @@ golden-tested. This image is Fable output too:
   string channels — shared-nothing isolates with panic isolation. `recv`
   blocks; `try_recv` doesn't, for a parent polling several workers without
   picking one to wait on. Plus a native `fft` namespace (with a `magnitude`
-  helper) and a `gpu` compute path with native zero-dependency backends
-  (Metal, Vulkan, OpenCL — MSL and SPIR-V kernels).
+  helper) and a `gpu` compute path with five native zero-dependency
+  backends (Metal, Vulkan, Direct3D 12, CUDA, OpenCL — MSL, SPIR-V,
+  HLSL, and PTX kernels).
 - **Batteries.** 150+ built-in methods across `List`, `Map`, `String`,
   `Bytes`, `Option`, `Result`, `Range` (short-circuiting `any`/`all`),
   `Int`, `Float`; `math`/`fs`/`os`/`fft` namespaces (Result-based and
@@ -283,6 +284,7 @@ src/
   vk.rs           raw-FFI Vulkan compute + the shared Vulkan primitives
   cl.rs           raw-FFI OpenCL compute (SPIR-V via clCreateProgramWithIL)
   cu.rs           raw-FFI CUDA compute (PTX text via the driver's JIT)
+  dx.rs           COM-FFI Direct3D 12 compute (HLSL via the OS compiler)
   mtl.rs, objc.rs raw-FFI Metal + Objective-C shared cores (macOS)
   bundle.rs       fable build: staple a program into a standalone binary
   fmt.rs          comment-preserving, width-aware formatter
