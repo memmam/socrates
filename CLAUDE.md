@@ -427,9 +427,11 @@ numbers: `bench/RESULTS.md`.
   - Branches are deleted only in user-directed cleanups, never
     unilaterally (the 2026-07-18 bulk cleanup is the precedent).
     Before a cleanup, anything a standing record references moves to
-    an `archive/*` branch — and the deletions themselves are the
-    user's to run: the App's credentials can create refs but not
-    delete them.
+    an `archive/*` branch. The App's credentials can create refs but
+    not delete them, so deletions run through the release-by-PR
+    pattern: a user-directed PR edits `.github/CLEANUP_BRANCHES`, and
+    `cleanup.yml` (contents: write; refuses `main`, `archive/*`,
+    `claude/*`) performs the deletions when the change lands on main.
   - A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
   - Never run bare `cargo fmt`.

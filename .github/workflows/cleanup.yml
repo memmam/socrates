@@ -1,0 +1,47 @@
+name: Branch cleanup
+
+# The branch-scoped-actor pattern release.yml documents, applied to
+# deletions: the session App's credentials can create refs but not
+# delete them (the git proxy 403s ref deletion), so a cleanup lands as
+# a PR editing .github/CLEANUP_BRANCHES and CI — which holds
+# contents: write — performs the deletions after the merge. Guards:
+# main, archive/*, and claude/* are never deleted, ever; absent
+# branches are skipped; per-branch failures are reported, not fatal.
+on:
+  push:
+    branches: [main]
+    paths: [".github/CLEANUP_BRANCHES"]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Delete listed branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete branches listed in .github/CLEANUP_BRANCHES
+        run: |
+          set -u
+          deleted=0; skipped=0; failed=0
+          while IFS= read -r b || [ -n "$b" ]; do
+            b="$(echo "$b" | tr -d '[:space:]')"
+            case "$b" in
+              ''|'#'*) continue ;;
+              main|archive/*|claude/*)
+                echo "PROTECTED, refusing: $b"; skipped=$((skipped+1)); continue ;;
+            esac
+            if git ls-remote --exit-code --heads origin "$b" > /dev/null 2>&1; then
+              if git push origin --delete "$b"; then
+                echo "deleted: $b"; deleted=$((deleted+1))
+              else
+                echo "FAILED: $b"; failed=$((failed+1))
+              fi
+            else
+              echo "absent, skipping: $b"; skipped=$((skipped+1))
+            fi
+          done < .github/CLEANUP_BRANCHES
+          echo "== cleanup: $deleted deleted, $skipped skipped, $failed failed =="
+          [ "$failed" -eq 0 ]
