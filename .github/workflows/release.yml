@@ -277,10 +277,12 @@ jobs:
             echo "release $TAG already exists; refreshing assets and notes"
             gh release upload "$TAG" "${assets[@]}" --clobber
             # Re-runs (e.g. once macOS notarization is configured) must also
-            # refresh the body and re-point the draft at the current commit —
-            # otherwise a re-cut keeps its first notes and its first target, so
-            # publishing would tag an old commit that predates later fixes.
-            gh release edit "$TAG" --target "$GITHUB_SHA" --notes-file .github/RELEASE_NOTES.md
+            # refresh the body, the title, and the target commit — otherwise a
+            # re-cut keeps its first notes, its first name, and its first
+            # target, so publishing would tag an old commit that predates
+            # later fixes (the rename re-cut kept "Fable v0.8.0" as the title
+            # this way — the recorded instance).
+            gh release edit "$TAG" --target "$GITHUB_SHA" --title "Socrates $TAG" --notes-file .github/RELEASE_NOTES.md
           else
             gh release create "$TAG" \
               --draft \
