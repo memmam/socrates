@@ -354,6 +354,11 @@ pub fn parse(text: String) -> Result[Json, String] {
 // ---- serialization ----
 
 fn escape(s: String) -> String {
+    // Each replace() allocates a fresh String even when nothing matches,
+    // so strings with no escapable byte (the common case) return as-is.
+    if !s.contains("\\") && !s.contains("\"") && !s.contains("\n") && !s.contains("\t") {
+        return s;
+    }
     s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\t", "\\t")
 }
 
