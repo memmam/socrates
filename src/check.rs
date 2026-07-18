@@ -1898,6 +1898,26 @@ impl Checker {
                     }
                 }
             }
+            Native::ListSum => {
+                if let Type::List(t) = &resolved {
+                    let tt = self.uni.zonk(t);
+                    if !matches!(tt, Type::Int | Type::Var(_)) {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "E0423",
+                                format!(
+                                    "`sum` requires `List[Int]`, found `List[{}]`",
+                                    self.show(&tt)
+                                ),
+                            )
+                            .with_label(recv.span, "")
+                            .with_note("for floats use `lists.sum_float`; otherwise fold: `.fold(0, |acc, x| ...)`"),
+                        );
+                    } else {
+                        let _ = self.uni.unify(t, &Type::Int);
+                    }
+                }
+            }
             Native::ListSort => {
                 if let Type::List(t) = &resolved {
                     // Concrete non-sortable element types are compile errors;

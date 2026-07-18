@@ -185,7 +185,7 @@ build is GL-compute, if a concrete need appears. Settled decisions:
 - **Everything observable is golden-tested and byte-identical.** Every
   demo's full stdout is pinned (`demos/`), every ```soc block in `book/`
   executes in CI except the rare fragment fence-tagged `skip` (one today —
-  135 of 136 execute), and the spec suite (`tests/spec/`, 311 tests) runs
+  135 of 136 execute), and the spec suite (`tests/spec/`, 312 tests) runs
   through the same `socrates test` path users get. A refactor that changes any
   pinned output is wrong unless the output change is the point.
 - **GC-stress must stay green.** `SOCRATES_GC_STRESS=1` collects before every
@@ -201,7 +201,7 @@ cargo test                                    # unit + golden spec suite
 SOCRATES_GC_STRESS=1 cargo test --test spec_runner
 cargo clippy --all-targets -- -D warnings
 cargo build --release
-./target/release/socrates test tests/spec        # 311
+./target/release/socrates test tests/spec        # 312
 # glcube's three mains need a live GL/Metal/Vulkan window (CI runs them in
 # the windowing jobs); everything else, cube.soc/spec.soc included:
 shopt -s extglob

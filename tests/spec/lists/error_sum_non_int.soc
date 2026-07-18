@@ -1,0 +1,4 @@
+// SPEC 8.2: sum is only available on List[Int] — E0423 otherwise.
+//? error: E0423
+let xs = [1.0, 2.0, 3.0];
+println(xs.sum());

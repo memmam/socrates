@@ -11,15 +11,10 @@ pub fn fill[T](n: Int, v: T) -> List[T] {
     out
 }
 
+// One-line wrapper over the native List[Int] `sum` method (the old
+// index loop lives in git history).
 pub fn sum(xs: List[Int]) -> Int {
-    let mut acc = 0;
-    let n = xs.len();
-    let mut i = 0;
-    while i < n {
-        acc += xs[i];
-        i += 1;
-    }
-    acc
+    xs.sum()
 }
 
 pub fn sum_float(xs: List[Float]) -> Float {

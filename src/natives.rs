@@ -1509,6 +1509,21 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             with_list_mut(vm, argc, |items| items.clear())?;
             Value::Unit
         }
+        ListSum => {
+            // One pass over the backing Vec, no per-element dispatch.
+            // checked_add matches `+`'s Int overflow panic; no allocation,
+            // so no rooting is needed.
+            let mut acc: i64 = 0;
+            for &it in list_ref(vm, argc)? {
+                let Value::Int(v) = it else {
+                    return Err(vm.error("internal: expected Int element (VM bug)"));
+                };
+                acc = acc
+                    .checked_add(v)
+                    .ok_or_else(|| vm.error("integer overflow"))?;
+            }
+            Value::Int(acc)
+        }
 
         // ------------------------------------------------------------------
         // String methods

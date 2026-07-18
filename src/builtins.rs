@@ -262,6 +262,7 @@ pub enum Native {
     ListJoin,
     ListClone,
     ListClear,
+    ListSum,
     // String methods
     StrLen,
     StrByteLen,
@@ -826,6 +827,7 @@ impl Native {
             ListJoin => "join",
             ListClone => "clone",
             ListClear => "clear",
+            ListSum => "sum",
             StrLen => "len",
             StrByteLen => "byte_len",
             StrIsEmpty => "is_empty",
@@ -1099,6 +1101,7 @@ impl Native {
             ListJoin => (vec![TStr], TStr, 1), // receiver constrained to List[String] at check time
             ListClone => (vec![], list(p0()), 1),
             ListClear => (vec![], Unit, 1),
+            ListSum => (vec![], Int, 1), // receiver constrained to List[Int] at check time
 
             StrLen | StrByteLen => (vec![], Int, 0),
             StrIsEmpty => (vec![], Bool, 0),
@@ -1219,6 +1222,7 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
     (Recv::List, "join", Native::ListJoin),
     (Recv::List, "clone", Native::ListClone),
     (Recv::List, "clear", Native::ListClear),
+    (Recv::List, "sum", Native::ListSum),
     (Recv::Str, "len", Native::StrLen),
     (Recv::Str, "byte_len", Native::StrByteLen),
     (Recv::Str, "is_empty", Native::StrIsEmpty),

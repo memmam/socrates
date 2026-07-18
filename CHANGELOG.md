@@ -136,6 +136,15 @@ of minimal idioms that covers all functionality, judged per-architecture,
 then a consistency sweep aligning every claim in the tree with what CI
 actually enforces — and, landing with them, the rename:
 
+- **`List.sum()` native + `lists.sum` as its wrapper**: the audit's
+  keep-or-drop probe — only a native pass over the backing storage
+  beats the std index loop, and it did: bench_lists **−57%** in both
+  local samples (controls flat; the four-arch matrix is the gate).
+  Constrained to `List[Int]` at check time via the house E0423
+  mechanism (a new pinned spec test brings the suite to 312); overflow
+  panics exactly as `+` does. Per the popcount precedent the native is
+  the primitive and `lists.sum` is a one-line wrapper; `min`/`max`
+  variants deliberately deferred pending their own measurements.
 - **Renamed — the language formerly called Fable is now Socrates**
   (binary and Cargo package `socrates`, source extension `.soc`, env vars
   `SOCRATES_*`, Mach-O payload section `__DATA,__socrateszoo`). Why:

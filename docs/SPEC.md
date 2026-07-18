@@ -1132,7 +1132,10 @@ input order, so tied results are deterministic), `map[U](fn(T) -> U) -> List[U]`
 (length = shorter), `enumerate() -> List[(Int, T)]`,
 `slice(Int, Int) -> List[T]` (start inclusive, end exclusive, clamped, new list),
 `concat(List[T]) -> List[T]` (new list), `join(String) -> String`
-(only `List[String]`), `clone() -> List[T]` (shallow), `clear() -> Unit`.
+(only `List[String]`), `clone() -> List[T]` (shallow), `clear() -> Unit`,
+`sum() -> Int` (v0.8: only `List[Int]` — E0423 otherwise; panics
+"integer overflow" exactly where `+` would; `std.lists.sum` is a
+one-line wrapper over it).
 
 `contains`, `index_of` use structural equality. List literals: `[1, 2, 3]`, `[]`.
 The callback-taking methods (`map`, `filter`, `each`, `fold`, `any`, `all`, `find`,
