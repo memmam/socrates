@@ -165,8 +165,9 @@ their place fastest.
   working memory, and (iv) triggers an immediate consistency audit of
   the existing tree and policies *against the new rule* — retroactive
   application is part of codifying, because a forward-only rule leaves
-  its whole class dirty behind it. The footer rule's 90-PR sweep is
-  the model; the standing-watch class, codified without step iv, left
+  its whole class dirty behind it. A 90-PR retroactive sweep (2026-07-18)
+  is the model for what step iv looks like at scale; the standing-watch
+  class, codified without step iv, left
   the other negative-results entries unexamined — step iv, run late,
   found two whose stated premise (the dispatch codegen lottery) H1 had
   since killed. Standing instances:
@@ -443,9 +444,7 @@ numbers: `bench/RESULTS.md`.
 - Commit messages state what changed and (for perf) the measured delta,
   and end with the two attribution trailers (`Co-Authored-By` and the
   `Claude-Session` link) — the accepted channel for session
-  attribution, and the *only* one; the footer rule below exists because
-  "trailers accepted" was once remembered as "footers accepted" —
-  record decisions with their scope.
+  attribution, and the *only* one.
 - The spec-suite count is stated in exactly five places — `README.md`
   (×2), this file (×2), and `.github/RELEASE_NOTES.md` — and a count
   change updates all five in the same PR (the release draft that
@@ -459,14 +458,6 @@ numbers: `bench/RESULTS.md`.
   sentence reworded without updating its anchor fails just as loudly
   ("anchor matched nothing"), which is the intended fail-closed
   behavior — re-anchor in the same PR that reworks the prose.
-- **GitHub-facing bodies carry no hand-written footer — none, ever.**
-  The tooling appends its own attribution footer to PR bodies by
-  default; hand-appending another (or any variant of one) stacks
-  duplicates (the triple-footer incident, 2026-07-18, swept clean the
-  same day by user directive). PR, issue, and comment bodies end with
-  their content, full stop — do not append, edit, or restyle any
-  footer beyond what the tooling adds on its own. Commit-message
-  trailers are a different channel and unaffected.
 - **A fixed target does not rot.** When CI fails on a pinned, fixed
   artifact — a runner image, an action pinned by SHA, a vendored blob —
   the artifact is the *last* suspect: the failure is almost always the
