@@ -81,7 +81,7 @@ jobs:
             label: aarch64-macos-15
     steps:
       - name: Checkout head
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.head_ref || github.ref }}
           path: head
@@ -102,7 +102,7 @@ jobs:
           fi
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
       - name: Checkout base
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.baseref.outputs.ref }}
           path: base
