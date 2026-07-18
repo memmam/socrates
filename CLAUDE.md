@@ -527,7 +527,14 @@ numbers: `bench/RESULTS.md`.
     exact count).
   - The model identifier appears in no pushed artifact — chat only
     (this restates the hosted-environment policy so the rule survives
-    outside it).
+    outside it). This includes the commit-trailer `Co-Authored-By`
+    *name*, not just prose: "Claude Fable 5" is a model-identifier
+    variant and leaked into every commit trailer for a full session
+    before being caught (2026-07-18) — the existing wording didn't
+    name the trailer explicitly, so it didn't get checked against a
+    channel the rule already covered in principle. The trailer name
+    is plain `Claude`, nothing else, going forward; past commits are
+    not rewritten (history is not edited retroactively for this).
   - Decision forks go to the user as plain-text lettered options, not
     interactive question UI.
   - Long CI waits are handled by scheduled self check-ins, never
