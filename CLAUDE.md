@@ -418,6 +418,20 @@ numbers: `bench/RESULTS.md`.
   their content, full stop — do not append, edit, or restyle any
   footer beyond what the tooling adds on its own. Commit-message
   trailers are a different channel and unaffected.
+- **A fixed target does not rot.** When CI fails on a pinned, fixed
+  artifact — a runner image, an action pinned by SHA, a vendored blob —
+  the artifact is the *last* suspect: the failure is almost always the
+  DNS/access/infrastructure layer around it, and even scheduled
+  "brownouts" are access denials imposed on a still-working image, not
+  material failures of it. Diagnose by reading the log for the infra
+  signature first (DNS resolution, download retries, 403/429, runner
+  provisioning); the remedy ladder is retry — a failed run never
+  restarts itself, so act immediately: push or empty-commit re-fire —
+  then user-level intervention for persistent access/policy failures.
+  Re-scoping or retiring the fixed target is never the inferred fix.
+  First instance: the 2026-07-18 macos-14 job whose runner's DNS
+  failed resolving codeload mid-job after fetching from the same host
+  seconds earlier.
 - **Session mechanics — durable on purpose.** Rules that lived only in
   session memory kept getting dropped between sessions (session ledgers
   die with their containers), so they live here now; a session ledger
