@@ -15,13 +15,18 @@ on:
 permissions:
   contents: write
 
+# Serialize cleanups; never cancel one mid-deletion.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   cleanup:
     name: Delete listed branches
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Delete branches listed in .github/CLEANUP_BRANCHES
         run: |
           set -u

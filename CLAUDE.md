@@ -123,7 +123,15 @@ their place fastest.
   is for") — build for where each platform's ecosystem is actively headed,
   not for carrying yesterday's compatibility weight up front. Older
   platforms broadly are still in scope long-term; the ordering is
-  capability-justified breadth, not defensive breadth-first.
+  capability-justified breadth, not defensive breadth-first (recorded
+  long-term instance: Intel-based Mac as a potential legacy target).
+  The mirror-image rule for things currently supported: **deprecated is
+  not discontinued** — a platform or CI image marked deprecated counts
+  as supported in practice until its actual removal date, and interim
+  brownouts or discrepancies are cause to *expand* coverage to span old
+  and new (the macos-14/macos-15 dual CI rows are the first instance;
+  the 14 rows retire 2026-11-02 when GitHub actually removes the image),
+  never cause to early-retire the older one.
 - **When artifacts are consolidated or split, record the intent.** Any
   time artifacts merge or one splits, write down what each resulting
   artifact is *for*, how the pieces compose, and why the split or merge
@@ -136,7 +144,18 @@ their place fastest.
   decisions with their *scope* — what exactly was approved, no wider:
   an overbroad memory of a narrow decision is how conventions drift
   (the footer incident began as "trailers accepted in commits"
-  remembered as "footers accepted"). Standing instances:
+  remembered as "footers accepted"). And codification itself is a
+  four-step act, not a sentence: a rule that gets codified (i) lands
+  in the repo file where it operationally binds, (ii) lands here with
+  its scope and first instance, (iii) is copied into the session's
+  working memory, and (iv) triggers an immediate consistency audit of
+  the existing tree and policies *against the new rule* — retroactive
+  application is part of codifying, because a forward-only rule leaves
+  its whole class dirty behind it. The footer rule's 90-PR sweep is
+  the model; the standing-watch class, codified without step iv, left
+  the other negative-results entries unexamined — step iv, run late,
+  found two whose stated premise (the dispatch codegen lottery) H1 had
+  since killed. Standing instances:
   the bench files' `// Bench:` measurand headers and `bench/RESULTS.md`'s
   epoch bridge; the demos' deliberate-divergence comments; the ports'
   READMEs describing exactly what CI enforces; and RESULTS.md's
@@ -410,6 +429,20 @@ numbers: `bench/RESULTS.md`.
   their content, full stop — do not append, edit, or restyle any
   footer beyond what the tooling adds on its own. Commit-message
   trailers are a different channel and unaffected.
+- **A fixed target does not rot.** When CI fails on a pinned, fixed
+  artifact — a runner image, an action pinned by SHA, a vendored blob —
+  the artifact is the *last* suspect: the failure is almost always the
+  DNS/access/infrastructure layer around it, and even scheduled
+  "brownouts" are access denials imposed on a still-working image, not
+  material failures of it. Diagnose by reading the log for the infra
+  signature first (DNS resolution, download retries, 403/429, runner
+  provisioning); the remedy ladder is retry — a failed run never
+  restarts itself, so act immediately: push or empty-commit re-fire —
+  then user-level intervention for persistent access/policy failures.
+  Re-scoping or retiring the fixed target is never the inferred fix.
+  First instance: the 2026-07-18 macos-14 job whose runner's DNS
+  failed resolving codeload mid-job after fetching from the same host
+  seconds earlier.
 - **Session mechanics — durable on purpose.** Rules that lived only in
   session memory kept getting dropped between sessions (session ledgers
   die with their containers), so they live here now; a session ledger

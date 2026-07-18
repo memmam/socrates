@@ -46,10 +46,20 @@ on:
 permissions:
   contents: read
 
+# Serialize runs per bench branch WITHOUT cancelling: every completed
+# run is a wanted sample (the empty-commit resample mechanism), so a
+# newer push queues instead of killing a sample mid-measurement — the
+# same 2026-07-16 orphaned-runs incident class ci.yml fixed, adapted
+# to a workflow whose in-flight runs must finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   ab:
     name: A/B ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -62,6 +72,13 @@ jobs:
             label: x86_64-windows
           - os: macos-14
             label: aarch64-macos
+          # Deprecated-not-discontinued (ci.yml's macos note): the
+          # macos-15 leg expands macOS coverage so a macos-14 brownout
+          # day cannot blind the universality verdict. aarch64-macos
+          # keeps its label and its RESULTS.md characterization until
+          # the 2026-11-02 removal, when this leg inherits the arch.
+          - os: macos-15
+            label: aarch64-macos-15
     steps:
       - name: Checkout head
         uses: actions/checkout@v5
@@ -71,9 +88,13 @@ jobs:
       - name: Resolve base ref
         id: baseref
         shell: bash
+        # Inputs routed through env, never interpolated into the script
+        # (the injection guard release.yml already uses).
+        env:
+          INPUT_BASE_REF: ${{ inputs.base_ref }}
         run: |
-          if [ -n "${{ inputs.base_ref }}" ]; then
-            ref='${{ inputs.base_ref }}'
+          if [ -n "$INPUT_BASE_REF" ]; then
+            ref="$INPUT_BASE_REF"
           elif [ -f head/bench/BASE ]; then
             ref=$(tr -d '[:space:]' < head/bench/BASE)
           else
@@ -85,7 +106,7 @@ jobs:
         with:
           ref: ${{ steps.baseref.outputs.ref }}
           path: base
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
       - name: Build both sides
         shell: bash
         run: |
@@ -115,12 +136,20 @@ jobs:
           echo "**binaries: $verdict**" >> "$GITHUB_STEP_SUMMARY"
       - name: Interleaved A/B
         shell: bash
+        # Env-routed inputs (injection guard); the :-defaults also
+        # remove the duplicate fallback values the YAML side carried.
+        env:
+          MICRO_N: ${{ inputs.micro_n }}
+          MACRO_N: ${{ inputs.macro_n }}
+          TARGETS: ${{ inputs.targets }}
+          HEAD_LABEL: ${{ inputs.head_ref || github.ref_name }}
+          BASE_LABEL: ${{ steps.baseref.outputs.ref }}
         run: |
           python3 head/bench/ab.py base head \
-            --micro-n "${{ inputs.micro_n || '5' }}" \
-            --macro-n "${{ inputs.macro_n || '3' }}" \
-            --targets "${{ inputs.targets || '' }}" | tee ab.md
+            --micro-n "${MICRO_N:-5}" \
+            --macro-n "${MACRO_N:-3}" \
+            --targets "${TARGETS:-}" | tee ab.md
           {
-            echo "## ${{ matrix.label }} — ${{ inputs.head_ref || github.ref_name }} vs ${{ steps.baseref.outputs.ref }}"
+            echo "## ${{ matrix.label }} — ${HEAD_LABEL} vs ${BASE_LABEL}"
             cat ab.md
           } >> "$GITHUB_STEP_SUMMARY"

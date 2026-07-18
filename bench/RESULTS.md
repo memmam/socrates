@@ -174,7 +174,13 @@ may conclude on two samples when its decision does not hinge on
 convicting any contested row — the no-GLC probe's verdict rested on the
 for_range recovery being sub-floor twice plus reproducible costs on the
 fusion's own rows, so a third sample could not have changed the
-outcome.
+outcome. This whole characterization is a property of the macos-14
+image bench.yml pins: re-run the A/A characterization whenever the
+macOS runner image changes. The aarch64-macos-15 leg (added 2026-07-18
+under the deprecated-is-not-discontinued rule) starts its own record —
+its first A/A is the audit-batch matrix run that introduced it — and
+inherits the aarch64-macos label when macos-14 is actually removed
+(2026-11-02).
 
 Two instrument facts worth keeping: release builds are deterministic
 (bit-identical across checkouts) only when the checkout paths have

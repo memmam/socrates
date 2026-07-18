@@ -33,10 +33,16 @@ on:
 permissions:
   contents: write
 
+# Never cancel a release build mid-flight; a re-push queues.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -60,6 +66,11 @@ jobs:
             target: aarch64-pc-windows-msvc
             label: aarch64-windows
             ext: ".exe"
+          # Stays on macos-14 until its actual 2026-11-02 removal:
+          # release binaries built on the older image carry the
+          # broadest macOS compatibility (deprecated != discontinued;
+          # CLAUDE.md platform-scoping rule). Switch on the removal
+          # date, not before.
           - os: macos-14
             target: aarch64-apple-darwin
             label: aarch64-macos
@@ -90,7 +101,7 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "releasing $TAG for ${{ matrix.label }}"
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           targets: ${{ matrix.target }}
 
@@ -231,6 +242,7 @@ jobs:
     needs: build
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
@@ -249,12 +261,12 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Gather built artifacts
-        # download-artifact has no Node 24 major yet (v4/v5/v6 all declare
-        # node20), so pinning higher wouldn't silence the runner's node20
-        # warning here — and v6 changes the no-`name` multi-artifact layout
-        # this step relies on (each artifact under artifacts/<name>/). Stay on
-        # the validated v5 until an upstream node24 release exists.
-        uses: actions/download-artifact@v5
+        # v7 is the node24 major (shipped 2025-12-12 — the stay-put
+        # comment that previously lived here had its own re-open
+        # condition met). The draft step below is layout-agnostic
+        # (find, not hardcoded subdirectory paths), so the v6+ change
+        # to the no-`name` multi-artifact layout does not bite.
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -264,7 +276,7 @@ jobs:
         run: |
           # The x86_64-linux job carries validation; if it failed, its
           # artifacts are absent and we must not draft a release.
-          if [ ! -f "artifacts/release-x86_64-linux/socrates-${TAG}-x86_64-linux.tar.gz" ]; then
+          if ! find artifacts -type f -name "socrates-${TAG}-x86_64-linux.tar.gz" | grep -q .; then
             echo "x86_64-linux artifacts missing (validation failed?); refusing to draft" >&2
             exit 1
           fi
