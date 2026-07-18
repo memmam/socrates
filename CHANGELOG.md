@@ -59,6 +59,22 @@ functionality, judged per-architecture. In progress:
   wording fixed across SPEC (§ 7.1 module count, § 8.4d Windows
   Vulkan, fmod semantics, cross-references) and the gpu/window doc
   comments (SPIR-V's two consumers, the five-backend precedence).
+- **Consistency pass — the ports validate against what CI actually
+  enforces**: the upstream implementation is the only oracle.
+  claudewave's `compare_paw` now enforces a per-item expected-max
+  residual table (29 items measured bit-identical in the reference
+  environment; the three f64-floor items bounded at ~2e-16..4e-17;
+  enforcement floors at 2e-15 because the oracle's own numpy/libm
+  output drifts by a few ulps across environments — an item can no
+  longer silently degrade under the old blanket 1e-9 gate); icaa CI
+  gained all 90 debug-view comparisons and a permanent deterministic
+  adversarial battery (`ports/icaa/adversarial.fable`: 47
+  SplitMix64-drawn perturbation scenes — sub-threshold edges, thin
+  lines, rings, noise fields, degenerate 1×1/8×1 resolutions —
+  rendered by both implementations at both presets, 94 pixel-exact
+  comparisons). 184 new cross-checks, all max_diff=0 on first run;
+  the port READMEs and CONTRACT now describe exactly what CI
+  enforces, with the one-time review rounds moved to history.
 - **Consistency pass — the bench harness enforces what it claims**:
   ab.py now captures every rep's stdout and fails the run on a
   checksum instability or (when sources are identical between trees)

@@ -217,13 +217,39 @@ re-specification, per row per architecture. Numbers recorded before
 the conversion are comparable to numbers after it only through this
 table:
 
-| target (re-specified rows) | x86_64-linux | aarch64-linux | x86_64-windows | aarch64-macos |
-|----------------------------|-------------:|--------------:|---------------:|---------------:|
-| TBD                        |     TBD      |      TBD      |      TBD       |      TBD       |
+| converted row | x86_64-linux | aarch64-linux | x86_64-windows | aarch64-macos |
+|---------------|-------------:|--------------:|---------------:|--------------:|
+| bench_call_return | -13.9% | -9.5% | -12.3% | -9.5% |
+| bench_deque | -8.1% | -7.0% | -7.5% | -9.1% |
+| bench_display | -0.0% | +0.1% | -0.8% | -0.3% |
+| bench_env_maps | -3.8% | -3.3% | -2.7% | -5.1% |
+| bench_json | -1.9% | +0.4% | -0.1% | +0.2% |
+| bench_list_churn | -14.1% | -9.8% | -7.8% | -13.5% |
+| bench_lists | -3.2% | -2.2% | -3.4% | -2.2% |
+| bitwise_masks | -5.8% | -4.4% | -3.0% | -4.5% |
+| closure_churn | -18.0% | -13.1% | -12.9% | -16.8% |
+| enum_match | -15.4% | -11.4% | -11.5% | -13.8% |
+| float_loop | -1.9% | -0.6% | +0.0% | -0.7% |
+| list_ops | -23.3% | -14.1% | -21.7% | -17.8% |
+| map_ops | -6.4% | -7.9% | -7.2% | -6.9% |
+| method_dispatch | -26.3% | -17.6% | -23.2% | -20.0% |
+| string_build | -18.8% | -11.6% | -16.1% | -13.8% |
+| string_interp | -12.6% | -9.0% | -9.8% | -10.2% |
 
-*(TBD: the orchestrator fills this table from the conversion commit's
-Bench A/B run — every converted row with a marked delta, plus
-bench_join_heavy and for_range as new-baseline rows.)*
+New-baseline rows (head seconds; no valid cross-epoch delta exists):
+bench_join_heavy 0.1648 / 0.1924 / 0.2112 / 0.1392 (the old row measured
+a different workload) and for_range 0.1536 / 0.1579 / 0.1602 / 0.1229
+(added in this epoch), in the same arch order as the table.
+
+Controls behaved as the bridge premise demands (run 29625034983,
+2026-07-18): arith_loop, the kept-while row, sat at -0.3/-0.6/+0.6/+0.5
+across the four arches; the unchanged demo macros were flat everywhere
+except one x86_64-linux checkers -8.0% -- provably runner noise, since
+the job's Compare-binaries step printed `binaries: BIT-IDENTICAL` and
+the demo sources (and enforced checksums) were identical on both sides.
+The converted rows' uniform improvements are the fused range loop's
+cheaper bookkeeping, not an interpreter change -- that is precisely the
+workload re-specification this table exists to bridge.
 
 ## Negative results (measured, rejected — do not re-attempt without new evidence)
 

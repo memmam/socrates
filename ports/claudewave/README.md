@@ -41,7 +41,10 @@ CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt \
 FABLE_PATH=ports CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt \
     ./target/release/fable ports/claudewave/battery.fable /tmp/cw/fable
 
-# 4. numeric comparison, item by item (exit 0 iff max abs diff <= 1e-9)
+# 4. numeric comparison, item by item (exit 0 iff each item's max abs
+#    diff is within max(its row in compare_paw.py's expected-max
+#    table, the 2e-15 oracle-drift floor), 1e-9 as the global outer
+#    bound)
 for p in /tmp/cw/truth/*.paw; do
   python3 ports/claudewave/reference/compare_paw.py "$p" "/tmp/cw/fable/$(basename "$p")"
 done
@@ -59,19 +62,28 @@ every item is independently reproducible on both sides;
 All randomness is a pre-generated unit-float stream consumed identically
 by both sides; Butterworth designs are pinned by the 33-design
 coefficient freeze (`reference/sos_freeze.txt`, cross-checked against
-real scipy in CI). Parity is judged numerically: arithmetic-only paths
-bit-equal, libm-transcendental paths allowed ≤ 1e-9 abs per sample.
+real scipy in CI). Parity is judged numerically, per item:
+`compare_paw.py` carries a per-item expected-max residual table, and
+each item must stay within **its own row** (with a global 1e-9 outer
+bound on every item).
 
-Current state, re-verified by CI on every push — **32/32 items pass**,
-and 29 of 32 are **bit-identical** (`max_abs_diff=0.0`). The three
-non-zero items sit at the f64 rounding floor, five to seven orders of
-magnitude under the allowance:
+Enforced by CI on every push — **32/32 items pass their rows**. 29 rows
+are `0.0`: those items measured **bit-identical** in the reference
+environment (python 3.11 / numpy 2.4 / scipy 1.17). Enforcement is
+`max(row, 2e-15)` — the small floor exists because the *upstream
+oracle's own output* drifts by a few ulps across numpy/libm
+environments (recorded instance: `dsp_rms_normalize`, `0.0` in the
+reference environment, `6.7e-16` on the CI runner the same day), while
+anything algorithmic lands orders of magnitude above it — so an item
+still can never silently degrade. The three remaining rows are 2× the
+measured residual — the residues sit at the f64 rounding floor,
+five-plus orders of magnitude under the 1e-9 outer bound:
 
-| item | max abs diff | source of the residue |
-|------|--------------|-----------------------|
-| `voice_slap_bass_110` | 1.39e-16 | layer `tanh` (exp-based formula vs libm tanh) |
-| `voice_whistle_880` | 1.11e-16 | order-3 bandpass SOS coefficients (≤ 1.78e-16 relative vs shim) |
-| `amb_crickets` | 2.08e-17 | order-3 bandpass SOS coefficients (same freeze residue) |
+| item | measured max abs diff | enforced row | source of the residue |
+|------|-----------------------|--------------|-----------------------|
+| `voice_slap_bass_110` | 1.39e-16 | 2.8e-16 | layer `tanh` (exp-based formula vs libm tanh) |
+| `voice_whistle_880` | 1.11e-16 | 2.3e-16 | order-3 bandpass SOS coefficients (≤ 1.78e-16 relative vs shim) |
+| `amb_crickets` | 2.08e-17 | 4.2e-17 | order-3 bandpass SOS coefficients (same freeze residue) |
 
 `chords.txt` (the chord-helper ground truth: parse/root/voicing/pad plus
 `midi_to_hz` reprs) is byte-identical between the two sides.
