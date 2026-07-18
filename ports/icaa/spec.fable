@@ -99,8 +99,5 @@ println(checksum(ramp_f) == checksum(ramp));  //? expect: true
 let dbg = icaa.default_params(false);
 dbg.debug = 2;
 let dv = icaa.apply(edge, dbg);
-let mut ok = true;
-for i in 0..dv.px.len() {
-    if dv.px[i] < 0.0 || dv.px[i] > 1.0 { ok = false; }
-}
+let ok = dv.px.all(|v| v >= 0.0 && v <= 1.0);
 println(ok);                                  //? expect: true

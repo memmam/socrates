@@ -111,6 +111,53 @@ jobs:
               node ports/icaa/reference/compare.mjs "/tmp/icaa-scenes/${name}_${preset}_js.ppm" "/tmp/icaa-scenes/${name}_${preset}_fb.ppm"
             done
           done
+      - name: ICAA debug-view cross-validation (Fable vs JS reference)
+        # All five debug views (1=confidence 2=coverage 3=distance
+        # 4=orientation 5=rms) on every base scene at both presets:
+        # 9 x 2 x 5 = 90 pixel-exact comparisons. Scenes are regenerated
+        # into a fresh dir so the glob can't pick up the previous step's
+        # rendered outputs.
+        run: |
+          mkdir -p /tmp/icaa-dbg/scenes /tmp/icaa-dbg/out
+          FABLE_PATH=ports ./target/release/fable ports/icaa/scenes.fable /tmp/icaa-dbg/scenes > /dev/null
+          count=0
+          for scene in /tmp/icaa-dbg/scenes/*.ppm; do
+            name=$(basename "$scene" .ppm)
+            for preset in quality fast; do
+              for view in 1 2 3 4 5; do
+                node ports/icaa/reference/icaa-cpu.mjs "$scene" "/tmp/icaa-dbg/out/${name}_${preset}_d${view}_js.ppm" "$preset" debug "$view"
+                FABLE_PATH=ports ./target/release/fable ports/icaa/main.fable "$scene" "/tmp/icaa-dbg/out/${name}_${preset}_d${view}_fb.ppm" "$preset" debug "$view"
+                node ports/icaa/reference/compare.mjs "/tmp/icaa-dbg/out/${name}_${preset}_d${view}_js.ppm" "/tmp/icaa-dbg/out/${name}_${preset}_d${view}_fb.ppm"
+                count=$((count+1))
+              done
+            done
+          done
+          echo "debug-view comparisons: $count"
+          test "$count" -eq 90
+      - name: ICAA adversarial perturbation battery (Fable vs JS reference)
+        # The original one-time adversarial review round, reconstructed as
+        # a permanent deterministic corpus: adversarial.fable draws 47
+        # perturbed scenes (edges down to slope 0.02, thin lines, rings,
+        # discs, noise fields, gratings, ramps, bars, and 1x1/8x1-class
+        # tiny images) from a fixed-seed hand-rolled SplitMix64 stream —
+        # never math.seed, so the corpus outlives releases — and every
+        # scene is rendered by both implementations at both presets:
+        # 47 x 2 = 94 pixel-exact comparisons.
+        run: |
+          mkdir -p /tmp/icaa-adv/scenes /tmp/icaa-adv/out
+          FABLE_PATH=ports ./target/release/fable ports/icaa/adversarial.fable /tmp/icaa-adv/scenes
+          count=0
+          for scene in /tmp/icaa-adv/scenes/*.ppm; do
+            name=$(basename "$scene" .ppm)
+            for preset in quality fast; do
+              node ports/icaa/reference/icaa-cpu.mjs "$scene" "/tmp/icaa-adv/out/${name}_${preset}_js.ppm" "$preset"
+              FABLE_PATH=ports ./target/release/fable ports/icaa/main.fable "$scene" "/tmp/icaa-adv/out/${name}_${preset}_fb.ppm" "$preset"
+              node ports/icaa/reference/compare.mjs "/tmp/icaa-adv/out/${name}_${preset}_js.ppm" "/tmp/icaa-adv/out/${name}_${preset}_fb.ppm"
+              count=$((count+1))
+            done
+          done
+          echo "adversarial comparisons: $count"
+          test "$count" -eq 94
 
   gl:
     name: window feature (X11/GLX)

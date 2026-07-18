@@ -1,8 +1,11 @@
 // pyl.audio — PAW audio I/O for ported Python code.
 //
 // Part of the Python-to-Fable translation layer (see ports/README.md and
-// ports/pyl/CONTRACT.md §Audio). Fable cannot write binary files, so
-// audio travels as PAW, a PPM-spirited text format:
+// ports/pyl/CONTRACT.md §Audio). Audio travels as PAW, a PPM-spirited
+// text format chosen for diffability (when the format was chosen Fable
+// had no binary file I/O — the gap that became v0.7's `Bytes`; the Fable
+// side can now emit binary formats directly, but PAW remains the
+// parity-comparison format):
 //
 //   PAW1
 //   <sr> <ch> <n>
