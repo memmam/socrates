@@ -42,8 +42,9 @@ FABLE_PATH=ports CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt \
     ./target/release/fable ports/claudewave/battery.fable /tmp/cw/fable
 
 # 4. numeric comparison, item by item (exit 0 iff each item's max abs
-#    diff is within its row in compare_paw.py's expected-max table,
-#    1e-9 as the global outer bound)
+#    diff is within max(its row in compare_paw.py's expected-max
+#    table, the 2e-15 oracle-drift floor), 1e-9 as the global outer
+#    bound)
 for p in /tmp/cw/truth/*.paw; do
   python3 ports/claudewave/reference/compare_paw.py "$p" "/tmp/cw/fable/$(basename "$p")"
 done
@@ -67,11 +68,16 @@ each item must stay within **its own row** (with a global 1e-9 outer
 bound on every item).
 
 Enforced by CI on every push — **32/32 items pass their rows**. 29 rows
-are `0.0`: those items must be **bit-identical** (`max_abs_diff=0.0`),
-so a bit-exact item can never silently degrade. The three remaining
-rows are 2× the measured residual — the residues sit at the f64
-rounding floor, five-plus orders of magnitude under the 1e-9 outer
-bound:
+are `0.0`: those items measured **bit-identical** in the reference
+environment (python 3.11 / numpy 2.4 / scipy 1.17). Enforcement is
+`max(row, 2e-15)` — the small floor exists because the *upstream
+oracle's own output* drifts by a few ulps across numpy/libm
+environments (recorded instance: `dsp_rms_normalize`, `0.0` in the
+reference environment, `6.7e-16` on the CI runner the same day), while
+anything algorithmic lands orders of magnitude above it — so an item
+still can never silently degrade. The three remaining rows are 2× the
+measured residual — the residues sit at the f64 rounding floor,
+five-plus orders of magnitude under the 1e-9 outer bound:
 
 | item | measured max abs diff | enforced row | source of the residue |
 |------|-----------------------|--------------|-----------------------|

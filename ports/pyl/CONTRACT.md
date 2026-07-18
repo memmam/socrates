@@ -170,8 +170,11 @@ listening; `wav2paw.py` converts back.
 
 `python3 compare_paw.py truth.paw candidate.paw` → prints
 `max_abs_diff=<float> frames=<n> ch=<c> allowed=<float>` and exits 0 iff
-`max_abs_diff` is within the battery item's row in the script's
-per-item expected-max residual table (item name = `truth.paw`'s
-basename; `0.0` for items measured bit-identical, 2× the measured
-residual for the rest) AND within the global 1e-9 outer bound. An item
-with no table row is a comparison error. Shapes must match exactly.
+`max_abs_diff` is within `max(row, 2e-15)` for the battery item's row
+in the script's per-item expected-max residual table (item name =
+`truth.paw`'s basename; `0.0` for items measured bit-identical in the
+reference environment, 2× the measured residual for the rest; the
+2e-15 floor tolerates the oracle's own few-ulp drift across
+numpy/libm environments) AND within the global 1e-9 outer bound. An
+item with no table row is a comparison error. Shapes must match
+exactly.

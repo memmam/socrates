@@ -6,16 +6,25 @@ Usage:
     python3 compare_paw.py truth.paw candidate.paw
 
 Prints `max_abs_diff=<float> frames=<n> ch=<c> allowed=<float>` and exits
-0 iff max_abs_diff <= the battery item's row in EXPECTED_MAX below AND
-<= the global 1e-9 outer bound.  The item name is the first argument's
-basename without `.paw`; a name with no row is a comparison error (exit
-2) — every battery item must have an explicit expected-max residual, so
-a bit-exact item cannot silently degrade to "still under 1e-9".
+0 iff max_abs_diff <= max(the battery item's row in EXPECTED_MAX below,
+ULP_FLOOR) AND <= the global 1e-9 outer bound.  The item name is the
+first argument's basename without `.paw`; a name with no row is a
+comparison error (exit 2) — every battery item must have an explicit
+expected-max residual, so an item cannot silently degrade to "still
+under 1e-9".
 
-Rows are 0.0 for the 29 items measured bit-identical, and 2x the
-measured residual (still six-plus orders of magnitude under 1e-9) for
-the three items whose divergence sits at the f64 rounding floor
-(measured 2026-07-18 against the shim-run upstream battery):
+Rows are the RECORD of what was measured in the reference environment
+(python 3.11 / numpy 2.4 / scipy 1.17, 2026-07-18): 0.0 for the 29
+items measured bit-identical there, and 2x the measured residual for
+the three items whose divergence sits at the f64 rounding floor.
+Enforcement adds ULP_FLOOR because the upstream oracle's own output
+drifts by a few ulps across environments — the recorded instance:
+dsp_rms_normalize measured 0.0 in the reference environment and
+6.7e-16 on the ubuntu-latest CI runner's numpy the same day (the Fable
+side is deterministic, so upstream(CI) != upstream(local)).  The floor
+still fails anything algorithmic (a real degradation lands orders of
+magnitude above 2e-15); only oracle-side libm/numpy rounding hides
+under it.
 
     voice_slap_bass_110   1.3877787807814457e-16  (layer tanh vs libm tanh)
     voice_whistle_880     1.1102230246251565e-16  (order-3 bandpass SOS)
@@ -68,6 +77,11 @@ EXPECTED_MAX = {
 
 GLOBAL_BOUND = 1e-9  # the outer bound; every row above is far under it
 
+# Oracle-environment drift tolerance (see the module docstring): the
+# enforced bound per item is max(row, ULP_FLOOR). A few ulps at unit
+# scale — algorithmic drift lands far above it.
+ULP_FLOOR = 2e-15
+
 
 def read_paw(path):
     with open(path, 'r') as f:
@@ -106,7 +120,7 @@ def main():
         sys.stderr.write('error: no EXPECTED_MAX row for battery item %r '
                          '(add one to compare_paw.py)\n' % item)
         return 2
-    allowed = EXPECTED_MAX[item]
+    allowed = max(EXPECTED_MAX[item], ULP_FLOOR)
     try:
         sr_a, ch_a, n_a, da = read_paw(sys.argv[1])
         sr_b, ch_b, n_b, db = read_paw(sys.argv[2])
