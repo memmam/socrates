@@ -95,15 +95,28 @@ their place fastest.
   `bench/RESULTS.md`, never waived silently (the superinstruction
   wave's aarch64-macos for_range row is the first instance).
 - **A verdict needs ≥5 samples, no exception, before it is final** —
-  whether that's a macOS CI-matrix mark being convicted or dismissed,
-  or a local single-box probe's keep/drop call. (Raised 2026-07-18 from
-  a ≥3 macOS floor that carried a same-decision escape hatch down to
-  two samples; the escape hatch is what let a real mark get dismissed
-  on 1-of-2 — the W2 enum_match errata in `bench/RESULTS.md` is the
+  every CI-matrix leg (not macOS alone — widened 2026-07-18, since a
+  leg converging cleanly most of the time is not a reason to demand
+  less evidence of it when it does show a mark) and every local
+  single-box probe's keep/drop call. (Raised 2026-07-18 from a ≥3
+  macOS floor that carried a same-decision escape hatch down to two
+  samples; the escape hatch is what let a real mark get dismissed on
+  1-of-2 — the W2 enum_match errata in `bench/RESULTS.md` is the
   recorded instance — and no floor at all existed for local probes,
   which had informally run on two samples every time. Fewer than 5
   samples is an inconclusive result, not a negative one; it does not
-  license a DROP or a dismissal, only more sampling.) The full
+  license a DROP or a dismissal, only more sampling.)
+  **The floor is a floor, not a ceiling reached by counting: when 5
+  samples don't converge, escalate the *kind* of evidence, not the
+  count.** Wall-clock A/B on a shared runner has an irreducible noise
+  source; past the point that noise dominates a marginal signal, a 6th
+  same-kind sample just re-measures the same noise. The next probe
+  changes what's measured — a deterministic instrument immune to
+  scheduler jitter (instruction/cache counts), or escalation to an
+  entity outside the automated loop (the user) — not the sample count.
+  First instances: `bench/h3-probe-no-glc` (mechanism isolation,
+  recognized as this pattern after the fact) and
+  `bench/h1-binding-recheck` (the first deliberate instance). The full
   protocol, case law, and the revalidation notes on verdicts that
   predate this floor live in `bench/RESULTS.md` — this is the one
   other file that states the number, per the intent-tracking

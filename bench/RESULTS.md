@@ -200,6 +200,41 @@ insufficient for any keep/drop verdict, full stop; a probe that only
 gathered two samples before this rule lands has an inconclusive, not
 negative, result — see the revalidation note under H2, below.
 
+**The floor is uniform across every leg, not macOS-only** (widened
+2026-07-18): x86_64/aarch64-linux and x86_64-windows convictions need
+≥5 samples too, even though those legs converge cleanly far more often
+than macOS does — a leg being usually-clean is not a reason to demand
+less evidence of it when it does show a mark. This reopens H1's
+aarch64-linux `enum_match` cost, accepted as real on 3 reproductions
+across 2 layouts (H1 sample 1/2, the rejected H1b reorder) — one short
+of the current bar — and, more precisely, the `monolithic_dispatch`
+per-target binding built to erase it, which was verified clean on
+exactly *one* matrix sample. `bench/h1-binding-recheck` (never merges)
+re-measures the binding's own effect — forced off vs `bench/BASE` =
+main with the binding on — at 5 samples on aarch64-linux; see the
+per-target binding note above for the outcome once read.
+
+**The sixth probe: when 5 samples don't resolve, escalate the
+*kind* of evidence, not the count.** The floor exists to stop premature
+verdicts on too little data, but it is a floor, not a ceiling reached
+by counting forever: wall-clock A/B on a shared runner has an
+irreducible noise source (scheduler/machine-state jitter), and once
+that noise dominates a genuinely marginal signal, a 6th, 7th, or 8th
+sample of the *same kind* stops adding resolving power — it just
+re-measures the same noise distribution. When 5 samples are in and the
+picture still doesn't converge (direction unstable, or a systematic
+mechanism can't be independently confirmed), the next probe changes
+what's being measured, not how many times: either a deterministic
+instrument that removes the noise source entirely (instruction/cache
+counts via `perf stat` or cachegrind, immune to scheduler jitter the
+way wall-clock timing isn't), or escalation to an entity outside the
+automated sampling loop — the user, whose judgment and context the
+loop itself can't supply. Two instances, one recognized after the
+fact: `bench/h3-probe-no-glc` (isolated the `get_local_const` fusion's
+own contribution rather than re-running the aggregate H3-vs-main A/B a
+4th and 5th time) was already this pattern before it had a name;
+`bench/h1-binding-recheck` (above) is the second, deliberate instance.
+
 **aarch64-macos-15's first A/A** (identical binaries both sides, the
 audit-batch-1 run that introduced the leg): macros dead flat (checkers
 −0.5%, lisp +0.5%) — consistent with macos-14's own macro behavior.
