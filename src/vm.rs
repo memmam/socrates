@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use crate::bytecode::{CompiledProgram, Const, Op, RtDef};
 use crate::source::Source;
-use crate::value::{FMap, Handle, Heap, Obj, Upval, Value};
+use crate::value::{FMap, Handle, Heap, Obj, Upval, UpvalStorage, Value};
 
 const DEFAULT_MAX_FRAMES: usize = 4096;
 
@@ -646,7 +646,7 @@ impl Vm {
                 Op::GetUpvalue(i) => {
                     let closure = self.frames.last().unwrap().closure.expect("no closure");
                     let uh = match self.heap.get(closure) {
-                        Obj::Closure { upvals, .. } => upvals[i as usize],
+                        Obj::Closure { upvals, .. } => upvals.as_slice()[i as usize],
                         _ => return Err(self.err_at(ip, "internal: bad closure (VM bug)")),
                     };
                     let v = match self.heap.get(uh) {
@@ -662,7 +662,7 @@ impl Vm {
                     if let Some(v) = self.fn_closures[p as usize] {
                         self.stack.push(v);
                     } else {
-                        let h = self.alloc(Obj::Closure { proto: p, upvals: Vec::new() });
+                        let h = self.alloc(Obj::Closure { proto: p, upvals: UpvalStorage::new() });
                         let v = Value::Obj(h);
                         self.fn_closures[p as usize] = Some(v);
                         self.stack.push(v);
@@ -1058,7 +1058,7 @@ impl Vm {
         let v = self.pop();
         let closure = self.frames.last().unwrap().closure.expect("no closure");
         let uh = match self.heap.get(closure) {
-            Obj::Closure { upvals, .. } => upvals[i as usize],
+            Obj::Closure { upvals, .. } => upvals.as_slice()[i as usize],
             _ => return Err(self.err_at(ip, "internal: bad closure (VM bug)")),
         };
         match self.heap.get_mut(uh) {
@@ -1079,15 +1079,16 @@ impl Vm {
         self.gc_checkpoint();
         let parent_closure = self.frames.last().unwrap().closure;
         let n_upvals = self.program.protos[p as usize].upvals.len();
-        let mut upvals = Vec::with_capacity(n_upvals);
+        let mut upvals = UpvalStorage::with_capacity(n_upvals);
         for k in 0..n_upvals {
             let d = self.program.protos[p as usize].upvals[k];
             if d.from_local {
-                upvals.push(self.capture_upvalue(base + d.index as usize));
+                let h = self.capture_upvalue(base + d.index as usize);
+                upvals.push(h);
             } else {
                 let pc = parent_closure.expect("upvalue chain without closure");
                 let uh = match self.heap.get(pc) {
-                    Obj::Closure { upvals, .. } => upvals[d.index as usize],
+                    Obj::Closure { upvals, .. } => upvals.as_slice()[d.index as usize],
                     _ => return Err(self.err_at(ip, "internal: bad closure (VM bug)")),
                 };
                 upvals.push(uh);
