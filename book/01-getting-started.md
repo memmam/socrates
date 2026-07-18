@@ -155,10 +155,9 @@ println(square(7));
 ;   [0] 7
 
 fn square (proto 0, arity 1, 0 upvalues, max locals 3)
-     0  get_local   0
-     1  get_local   0
-     2  mul
-     3  return
+     0  get_local2  0 0
+     1  mul
+     2  return
 
 fn <script> (proto 1, arity 0, 0 upvalues, max locals 1)
      0  const       0 ; 7

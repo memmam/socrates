@@ -136,6 +136,23 @@ pub enum Op {
 
     /// A `match` fell through all arms (unreachable if the checker passed).
     MatchFail,
+
+    // Superinstructions (H3): the compiler's post-patch fusion pass
+    // (`compiler.rs::fuse_superinstructions`) rewrites the hottest
+    // *fall-through-adjacent* op pairs — measured on the macro/micro bench
+    // battery — into single fused ops, saving one dispatch per occurrence.
+    // A pair is never fused when a jump lands on its second op (a branch
+    // target must stay an instruction start). Each fused op is the exact
+    // sequential composition of its two constituents: same stack effect,
+    // same error behavior, no control flow inside the pair.
+    /// `GetLocal(a)` ; `GetLocal(b)`.
+    GetLocal2(u16, u16),
+    /// `GetLocal(s)` ; `Const(i)`.
+    GetLocalConst(u16, u32),
+    /// `GetGlobal(g)` ; `Const(i)`.
+    GetGlobalConst(u16, u32),
+    /// `GetLocal(s)` ; `TestVariant(v)` (match-arm scrutinee test).
+    GetLocalTestVariant(u16, u16),
 }
 
 /// A compile-time constant.
