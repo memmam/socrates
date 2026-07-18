@@ -4,8 +4,8 @@
 // 12/8 bars at 8000 Hz into 16-bit PCM, packed into a real RIFF/WAVE file
 // with the v0.7 Bytes pushers. The demo then turns around and checks
 // itself: the committed track.wav must equal the freshly built bytes,
-// the RIFF header is decoded back out of those bytes with raw get()
-// arithmetic, and fft.rfft must find each probe note's fundamental on
+// the RIFF header is decoded back out of those bytes with the native LE
+// readers, and fft.rfft must find each probe note's fundamental on
 // exactly the intended bin.
 //
 //   ./target/release/fable demos/synthwave/main.fable   # from the repo root
@@ -142,8 +142,6 @@ println("");
 
 let step_samples = 1000;
 let total = 24 * step_samples;
-// Bound to a local because `synth.sample_rate.to_float()` trips a v0.7
-// resolver bug (E0413 "no enum `sample_rate` in module `synth`").
 let rate = synth.sample_rate;
 let mix = lists.fill(total, 0.0);
 
@@ -158,10 +156,7 @@ println("lead : {lead_notes} notes over 24 steps, pitches {pitches(lead)}");
 println("bass : {bass_notes} notes over 24 steps, pitches {pitches(bass)}");
 println("drums: {drum_hits} hits, 9-bit lfsr (taps 9,5), period {synth.lfsr(1).period()} of 511");
 
-let peak = mix.fold(0.0, |m, x| {
-    let a = x.abs();
-    if a > m { a } else { m }
-});
+let peak = mix.fold(0.0, |m, x| m.max(x.abs()));
 let secs = (total.to_float() / rate.to_float()).to_fixed(1);
 println("mix  : {total} samples at {rate} Hz = {secs} s, float peak {peak.to_fixed(3)}");
 println("");
@@ -182,7 +177,7 @@ let committed = fs.read_bytes(path).unwrap();
 println("regeneration: {path} == rebuilt bytes -> {committed == built}");
 println("");
 
-println("decoded header (get() arithmetic over our own bytes):");
+println("decoded header (native LE readers over our own bytes):");
 println("  '{wav.tag_at(built, 0)}' size={wav.u32_at(built, 4)} format={wav.tag_at(built, 8)}");
 println("  '{wav.tag_at(built, 12)}' size={wav.u32_at(built, 16)} codec={wav.u16_at(built, 20)} channels={wav.u16_at(built, 22)}");
 println("  rate={wav.u32_at(built, 24)} byte_rate={wav.u32_at(built, 28)} align={wav.u16_at(built, 32)} bits={wav.u16_at(built, 34)}");
@@ -191,10 +186,7 @@ println("  '{wav.tag_at(built, 36)}' size={wav.u32_at(built, 40)} -> {wav.u32_at
 let mut decoded_peak = 0;
 let mut off = 44;
 while off < built.len() {
-    let a = wav.i16_at(built, off).abs();
-    if a > decoded_peak {
-        decoded_peak = a;
-    }
+    decoded_peak = decoded_peak.max(wav.i16_at(built, off).abs());
     off += 2;
 }
 let q_peak = lists.max(pcm.map(|v| v.abs())).unwrap();
@@ -236,7 +228,7 @@ for (kind, osc, f) in probes {
 //? expect: wav: 48044 bytes = 44 header + 48000 data
 //? expect: regeneration: demos/synthwave/track.wav == rebuilt bytes -> true
 //? expect:
-//? expect: decoded header (get() arithmetic over our own bytes):
+//? expect: decoded header (native LE readers over our own bytes):
 //? expect:   'RIFF' size=48036 format=WAVE
 //? expect:   'fmt ' size=16 codec=1 channels=1
 //? expect:   rate=8000 byte_rate=16000 align=2 bits=16

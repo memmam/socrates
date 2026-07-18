@@ -306,23 +306,16 @@ fn holds(v: table.Val, op: String, want: table.Val) -> Bool {
         };
     }
     let c = v.cmp(want);
-    if op == "<" {
-        c < 0
-    } else if op == "<=" {
-        c <= 0
-    } else if op == ">" { c > 0 } else { c >= 0 }
+    if op == "<" { c < 0 } else if op == "<=" { c <= 0 } else if op == ">" { c > 0 } else { c >= 0 }
 }
 
 // No grouping and no aggregates: order (by any source column), cut, project.
 fn run_plain(t: table.Table, rows: List[List[table.Val]], q: Query) -> Result[table.Table, String] {
     let mut out = rows;
-    match q.order {
-        Some((key, desc)) -> {
-            let i = col_index(t, key)?;
-            let sign = if desc { -1 } else { 1 };
-            out = out.sort_by(|a, b| a[i].cmp(b[i]) * sign); // stable, so ties keep file order
-        },
-        None -> {},
+    if let Some((key, desc)) = q.order {
+        let i = col_index(t, key)?;
+        let sign = if desc { -1 } else { 1 };
+        out = out.sort_by(|a, b| a[i].cmp(b[i]) * sign); // stable, so ties keep file order
     }
     out = cut(out, q.limit);
 
@@ -393,15 +386,14 @@ fn run_grouped(
     }
 
     let mut out = out_rows;
-    match q.order {
-        Some((key, desc)) -> match names.index_of(key) {
+    if let Some((key, desc)) = q.order {
+        match names.index_of(key) {
             Some(i) -> {
                 let sign = if desc { -1 } else { 1 };
                 out = out.sort_by(|a, b| a[i].cmp(b[i]) * sign);
             },
             None -> return Err("'order by {key}' must name an output column ({names.join(", ")})"),
-        },
-        None -> {},
+        }
     }
     Ok(table.Table { headers: names, rows: cut(out, q.limit) })
 }

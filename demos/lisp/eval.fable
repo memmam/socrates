@@ -30,10 +30,10 @@ pub struct Closure {
 // holding one see later defines in it — that is what makes recursive
 // (define (fact n) ... (fact ...)) work.
 //
-// `specials` is the dialect's reserved-word set. Fable has no module-level
-// constants, so the one Set built by global_env rides along in every scope
-// (structs are references — each child copies the pointer, not the set),
-// making the special-form check in eval_form a single probe.
+// `specials` is the dialect's reserved-word set: one Set built by
+// global_env rides along in every scope for free (structs are references
+// — each child copies the pointer, not the set), making the special-form
+// check in eval_form a single probe with no global lookup.
 pub struct Env {
     vars: Map[String, Value],
     parent: Option[Env],
@@ -144,13 +144,10 @@ fn eval_form(items: List[reader.Sexp], env: Env) -> Result[Value, String] {
     }
     // Special forms receive their arguments unevaluated. One set probe
     // decides special-vs-application, replacing a chain of head compares.
-    match items[0] {
-        Sym(s) -> {
-            if env.specials.contains(s) {
-                return eval_special(s, items, env);
-            }
-        },
-        _ -> {},
+    if let Sym(s) = items[0] {
+        if env.specials.contains(s) {
+            return eval_special(s, items, env);
+        }
     }
     // Anything else is application: evaluate head and args, then apply.
     let f = eval(items[0], env)?;

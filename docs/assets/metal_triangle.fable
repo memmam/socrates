@@ -13,7 +13,7 @@
 // — and exits 0 either way (this file runs on machines with and without a
 // GPU / window server, e.g. macOS CI runners).
 // Not wired into the golden test suite: the output is build- and
-// environment-dependent, same as gl_triangle.fable / gpu_double.fable.
+// environment-dependent, same as gl_triangle.fable.
 
 fn run() -> Result[Unit, String] {
     let win = window.create_metal("metal_triangle", 320, 240)?;

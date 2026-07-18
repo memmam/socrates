@@ -8,11 +8,10 @@
 // when gl support isn't compiled in or no display/driver is available — and
 // exits 0 either way (this file runs on machines with and without a live
 // X/GLX display, e.g. under Xvfb).
-// Not wired into the golden test suite: like docs/assets/gpu_double.fable,
-// the output is build- and environment-dependent (see demos/glcube for a
-// fuller gfx demo that *is* golden-tested via pixel spot-checks, which only
-// requires a live GL context because the whole point is to check real
-// rendered pixels).
+// Not wired into the golden test suite: the output is build- and
+// environment-dependent (see demos/glcube for a fuller gfx demo that *is*
+// golden-tested via pixel spot-checks, which only requires a live GL
+// context because the whole point is to check real rendered pixels).
 
 fn run() -> Result[Unit, String] {
     let win = window.create("gl_triangle", 320, 240)?;

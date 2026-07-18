@@ -45,7 +45,7 @@ println("{synth.lfsr(1).period()} {synth.lfsr(300).period()} {synth.lfsr(0).peri
 println(str(synth.quantize([0.0, 0.5, -0.5, 1.0, -1.0, 2.0, -2.0])));
 //? expect: [0, 16384, -16384, 32767, -32767, 32767, -32767]
 
-// --- WAV: encode with LE pushers, decode with get() arithmetic ------------------
+// --- WAV: encode with the LE pushers, decode with the LE readers ------------------
 
 let b = wav.encode([0, 32767, -32768, -1], 8000);
 println("{str(b)} len={b.len()}");
@@ -60,7 +60,7 @@ println("{wav.u32_at(b, 24)} {wav.u32_at(b, 28)} {wav.u16_at(b, 32)} {wav.u16_at
 println("{wav.tag_at(b, 36)} {wav.u32_at(b, 40)}");
 //? expect: data 8
 
-// the sample bytes, raw and sign-folded back to the input
+// the sample bytes, raw and read back signed by read_i16le
 println(str(b.slice(44, 52).to_list()));
 //? expect: [0, 0, 255, 127, 0, 128, 255, 255]
 println(str([wav.i16_at(b, 44), wav.i16_at(b, 46), wav.i16_at(b, 48), wav.i16_at(b, 50)]));

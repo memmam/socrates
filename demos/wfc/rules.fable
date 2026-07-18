@@ -77,8 +77,7 @@ pub fn learn(sample: List[String]) -> Rules {
                 let nx = x + dir_dx[d];
                 let ny = y + dir_dy[d];
                 if nx >= 0 && nx < w && ny >= 0 && ny < h {
-                    let k = ai * 4 + d;
-                    allow[k] = allow[k] | 1 << index[grid[ny][nx]];
+                    allow[ai * 4 + d] |= 1 << index[grid[ny][nx]];
                 }
             }
         }

@@ -111,6 +111,27 @@ functionality, judged per-architecture. In progress:
   count re-measured: about 41,000 lines of Rust, ~250 natives, 135 of
   136 book snippets execute (one `skip`), eighteen demos, nineteen
   benches.
+- **Consistency pass — STYLE.md is normative and the demos conform**:
+  the style spec gains its named rules — R1 aggregates (with a
+  specified exemption clause for hot/early-exit/allocation-sensitive
+  scans), R2 method extremes (`worst = worst.max(dr)`), R3 std idioms
+  in non-hot code (ports' internals included; upstream-mirroring API
+  surfaces exempt), and R4 the deliberate-divergence convention (an
+  uncommented divergence is a bug even when the divergence is right) —
+  and § 5 now teaches `while let` for the worker main loop. The sweep
+  then lands the v0.8/v0.9 adoption the demos had skipped: compound
+  assignment across five demos (indexed lvalues included), fourteen
+  `if let`/`while let` conversions, `push_joined` at the two remaining
+  manual gates, `trailing_zeros` for wfc's hand-rolled bit scan,
+  reversi's `file_h` written as the full-width hex literal it always
+  was, vestigial one-line wrappers inlined (bloom's Bytes readers,
+  checkers' `lshr`), and method `min`/`max` for every running extreme.
+  Exactly two goldens were deliberately re-pinned — printed strings
+  that described deleted code (bloom's "SWAR" popcount line,
+  synthwave's "get() arithmetic" header) — and every other golden is
+  byte-identical, also under GC-stress. `demos/NOTES.md` gains the R4
+  divergence ledger; a dozen demo READMEs and comments now describe
+  the code as it is, not as it was.
 
 ## v0.8.0 — native graphics and compute; the demo round's feature queue
 

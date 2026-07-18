@@ -15,7 +15,7 @@ fully spec-conformant PNG possible with nothing but framing.
 
 | File | What it holds |
 |------|---------------|
-| `bits.fable` | hex formatting (`to_hex`, `dump`) and big-endian u32 / little-endian u16 accessors — all shifts and masks |
+| `bits.fable` | hex formatting (`to_hex`, `dump`) and big-endian u32 / little-endian u16 accessors — thin wrappers over the v0.7 natives (`Int.to_hex`, `push_u32be`/`read_u32be`/`read_u16le`); the shift-and-or bodies live in git history |
 | `crc.fable` | CRC-32 (reflected, poly `0xEDB88320`, 256-entry table built with eight shift-xor steps per byte) and Adler-32 |
 | `zlib.fable` | RFC 1950 stream of RFC 1951 stored blocks: `deflate_stored` and its adversary `inflate_stored`, which re-checks header, LEN/NLEN, and the Adler trailer |
 | `image.fable` | a 48x32 plasma in pure integer math — the sine is Bhaskara I's rational approximation, so the pixels (and therefore the PNG bytes) are identical on every machine |
@@ -42,4 +42,4 @@ fully spec-conformant PNG possible with nothing but framing.
   `slice`/`concat` assemble chunks, `==` is deep), the bitwise operators
   everywhere a checksum or a nibble is extracted, `fs.read_bytes` /
   `fs.write_bytes` for the binary round-trip, and `strings.Builder` for
-  the hex and ASCII-preview accumulation.
+  the ASCII-preview accumulation.

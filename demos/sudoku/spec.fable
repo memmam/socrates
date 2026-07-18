@@ -23,9 +23,9 @@ println("full mask   : {board.full_mask} popcount={board.popcount(board.full_mas
 println("digit bits  : {bit_row}");
 
 // digit_bit and lowest_digit are inverses across all nine digits, and an
-// empty mask has no bits. (Range has map/filter but no all — filter for
-// counterexamples instead.)
-let round_trip = (1..=9).filter(|d| board.lowest_digit(board.digit_bit(d)) != d).is_empty();
+// empty mask has no bits. (Range.all landed in v0.8; the filter-for-
+// counterexamples spelling it replaced lives in git history.)
+let round_trip = (1..=9).all(|d| board.lowest_digit(board.digit_bit(d)) == d);
 println("round trip  : {round_trip} popcount(0)={board.popcount(0)}");
 
 // Set algebra is bitwise arithmetic: union |, intersection &, complement

@@ -17,7 +17,7 @@ observed rate.
 
 | File | What it holds |
 |------|---------------|
-| `hash.fable` | FNV-1a 32 (xor, multiply, mask), `mul32` (32x32 multiply mod 2^32 that cannot trip the overflow panic), the xorshift* mixer, SWAR popcount, hex formatting |
+| `hash.fable` | FNV-1a 32 (xor, multiply, mask), `mul32` (32x32 multiply mod 2^32 that cannot trip the overflow panic), the xorshift* mixer, popcount over the `count_ones` intrinsic, hex formatting |
 | `words.fable` | the corpus generator: a C-standard LCG written out in plain integer arithmetic — no `math.random`, so the corpus is identical in every release forever |
 | `bloom.fable` | the filter: bit i at byte `i >> 3` under mask `1 << (i & 7)`, double-hashed probes `h1 + i*h2` with the stride forced odd, popcount/fill, a 14-byte serialization format, and the theoretical estimates |
 | `main.fable` | corpus in, contract out: false negatives (0), exact false positives vs the `std.set` oracle, theory alongside, a geometry sweep, bit-level introspection, and the committed-artifact round-trip |
@@ -38,8 +38,9 @@ observed rate.
   bytes.
 - **The overflow panic shapes the code.** Fable's Int panics on overflow,
   so 32-bit hashing masks with `& 0xFFFFFFFF` after every step and a full
-  32x32 multiply is done in 16-bit halves (`mul32`). The arithmetic `>>`
-  hazard is pinned on purpose: `-8 >> 1 = -4`, mask after shifting.
+  32x32 multiply wraps in 64 bits and masks (`mul32`, one line over
+  `wrapping_mul`). The arithmetic `>>` hazard is pinned on purpose:
+  `-8 >> 1 = -4`, mask after shifting.
 - **A geometry sweep on the same corpus**: 1024 bits drown (fp rate 0.48),
   16384 bits with k=8 let exactly one probe through (rate 0.0005) — the
   whole time/space trade-off in four pinned lines.

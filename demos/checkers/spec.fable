@@ -114,14 +114,14 @@ println(m1 == m2); //? expect: true
 println(r1.nodes == r2.nodes); //? expect: true
 
 // ---- zobrist: the key stream is pure bitwise, so pinning it is safe ----
-// Fable's `>>` is arithmetic; lshr masks the smeared sign bits off, and
-// the two disagree exactly on negative inputs.
+// Fable's `>>` is arithmetic; the `ushr` intrinsic zero-fills, and the
+// two disagree exactly on negative inputs.
 let zkeys = zobrist.keys; // (a method call directly on `zobrist.keys` misparses as an enum path)
 println(zkeys.len()); //? expect: 257
 println(zobrist.keys[0]); //? expect: 8748534153485358512
 println(zobrist.step(zobrist.keys[0])); //? expect: 3040900993826735515
 println(-1 >> 60); //? expect: -1
-println(zobrist.lshr(-1, 60)); //? expect: 15
+println((-1).ushr(60)); //? expect: 15
 
 // ---- the hash is an xor fold: flipping side to move xors in one key,
 // ---- applying a move changes the hash, and undo restores it exactly ----

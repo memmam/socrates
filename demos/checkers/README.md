@@ -14,7 +14,7 @@ About 500 lines of Fable in five files:
 |------|--------------|
 | `board.fable` | piece codes, board rendering (a `strings.Builder`, not `+=`), the move generator (forced captures, multi-jumps, crowning), and `apply`/`undo_move` so the search mutates one shared board instead of copying it |
 | `engine.fable` | positional evaluation, negamax + alpha-beta with a capture extension, and `Stats` (whose `add` method overloads `+` for tallying) |
-| `zobrist.fable` | 64-bit Zobrist position hashing built on the v0.7 bitwise operators — an xorshift64 key table written in Fable itself (pure `^`/`<<`/`>>`), one key per (square, piece) plus a side-to-move key |
+| `zobrist.fable` | 64-bit Zobrist position hashing built on the v0.7 bitwise operators — an xorshift64 key table written in Fable itself (pure `^`/`<<`/`ushr`), one key per (square, piece) plus a side-to-move key |
 | `main.fable` | the self-play loop: draw detection (threefold repetition via Zobrist hashes in two `std.set`s, 50 quiet plies), periodic board printing, final result and node statistics |
 | `spec.fable` | golden tests for the rules, the search, and the hashing |
 
@@ -81,10 +81,10 @@ self-play checkers.
   reports whether the set changed, so two sets count to three:
   a hash rejected by the first set is a revisit, one rejected by both is
   the third occurrence and the game is drawn. The key table comes from a
-  xorshift64 generator written in Fable (`^`, `<<`, and a masked `>>` —
-  Fable's `>>` is arithmetic, so a logical shift is shift-then-mask),
-  which keeps the table, and thus the pinned transcript, stable across
-  releases — unlike `math.seed` streams.
+  xorshift64 generator written in Fable (`^`, `<<`, and the logical-shift
+  `ushr` intrinsic — Fable's `>>` is arithmetic and would smear the sign
+  bit), which keeps the table, and thus the pinned transcript, stable
+  across releases — unlike `math.seed` streams.
 - **Determinism:** move generation order is fixed (board scan order), and
   the root keeps the *first* best-scoring move, so the whole game — every
   move, every node count — is reproducible. `main.fable` carries

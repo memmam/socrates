@@ -46,10 +46,6 @@ let t = match load() {
 println("csvql — {t.rows.len()} cities loaded ({t.headers.join(", ")})");
 println("");
 
-// NOTE: this file is deliberately NOT `fable fmt`-canonical. The v0.7
-// formatter hoists comments that sit inside a list literal (leading OR
-// trailing) out below the enclosing statement, which would strand every
-// per-query annotation below `];`. Reformat once that is fixed.
 let showcase = [
     // projection + filter + generic sort + limit
     "select city, country, pop where continent == Europe order by pop desc limit 3",

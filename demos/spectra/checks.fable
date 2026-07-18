@@ -79,14 +79,8 @@ let (nr, ni) = naive_dft(sig);
 let (fr, fi) = fft.fft(sig, lists.fill(12, 0.0));
 let mut worst = 0.0;
 for k in 0..12 {
-    let dr = (nr[k] - fr[k]).abs();
-    if dr > worst {
-        worst = dr;
-    }
-    let di = (ni[k] - fi[k]).abs();
-    if di > worst {
-        worst = di;
-    }
+    worst = worst.max((nr[k] - fr[k]).abs());
+    worst = worst.max((ni[k] - fi[k]).abs());
 }
 println("naive dft == fft.fft at n=12 within 1e-9 -> {worst < 1e-9}");
 //? expect: naive dft == fft.fft at n=12 within 1e-9 -> true

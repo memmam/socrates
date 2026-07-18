@@ -89,14 +89,8 @@ fn analyze(id: Int, title: String, partials: List[(Int, Float)], n: Int) -> Stri
     let (br, bi) = fft.ifft(fr, fi);
     let mut worst = 0.0;
     for t in 0..n {
-        let dr = (br[t] - x[t]).abs();
-        if dr > worst {
-            worst = dr;
-        }
-        let di = bi[t].abs();
-        if di > worst {
-            worst = di;
-        }
+        worst = worst.max((br[t] - x[t]).abs());
+        worst = worst.max(bi[t].abs());
     }
     let roundtrip_ok = worst < 1e-9;
 
@@ -104,14 +98,8 @@ fn analyze(id: Int, title: String, partials: List[(Int, Float)], n: Int) -> Stri
     let (rr, ri) = fft.rfft(x);
     let mut rdiff = 0.0;
     for i in 0..rr.len() {
-        let dr = (rr[i] - fr[i]).abs();
-        if dr > rdiff {
-            rdiff = dr;
-        }
-        let di = (ri[i] - fi[i]).abs();
-        if di > rdiff {
-            rdiff = di;
-        }
+        rdiff = rdiff.max((rr[i] - fr[i]).abs());
+        rdiff = rdiff.max((ri[i] - fi[i]).abs());
     }
     let half_ok = rdiff < 1e-9;
 

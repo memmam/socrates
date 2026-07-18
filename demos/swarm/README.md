@@ -17,7 +17,7 @@ despite true parallelism — determinism by protocol, not by luck.
 
 1. **Static assignment** — job `k` always goes to worker `k % 3` and the
    parent drains one worker at a time (per-worker replies are FIFO), so
-   per-job lines, per-worker totals, and the `std.lists.max_by` global
+   per-job lines, per-worker totals, and the `std.lists.max_by_key` global
    champion are all pinnable.
 2. **Dynamic balancing** — the block sizes are deliberately lopsided; each
    worker holds one job in flight and is handed the next from the deque
@@ -43,8 +43,10 @@ From the repo root:
 `crunch_worker.fable` is guarded by `worker.is_worker()`, so run standalone
 it prints nothing and the golden harness passes it through.
 
-Note: `worker.spawn`'s relative-path resolution loses the entry script's
-directory when the script has imports (v0.7 bug), so `main.fable` spawns
-through a two-candidate `spawn_cruncher` helper that works both from the
-repo root and from this directory — and keeps working once the bug is
-fixed.
+Note: this demo found the v0.7 bug where `worker.spawn`'s relative-path
+resolution lost the entry script's directory whenever the script had
+imports. The bug was fixed in-round, with
+`tests/spec/workers/spawn_with_import.fable` as the regression test, so
+`main.fable` now spawns `crunch_worker.fable` script-relative directly;
+the two-candidate fallback helper it carried while reporting the bug
+lives in git history.

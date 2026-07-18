@@ -76,9 +76,8 @@ pub fn generate(width: Int, height: Int, attempts: Int) -> Dungeon {
             continue; // collides with an earlier room: reroll
         }
         carve_room(grid, room);
-        match rooms.last() {
-            Some(prev) -> carve_corridor(grid, prev.center(), room.center()),
-            None -> {},
+        if let Some(prev) = rooms.last() {
+            carve_corridor(grid, prev.center(), room.center());
         }
         rooms.push(room);
     }
@@ -150,7 +149,7 @@ pub fn render(grid: List[List[String]]) -> List[String] {
         let mut bits = 0;
         for (x, t) in row.enumerate() {
             if t != wall {
-                bits = bits | 1 << x;
+                bits |= 1 << x;
             }
         }
         bits
@@ -159,10 +158,10 @@ pub fn render(grid: List[List[String]]) -> List[String] {
     (0..height).map(|y| {
         let mut near = spread[y];
         if y > 0 {
-            near = near | spread[y - 1];
+            near |= spread[y - 1];
         }
         if y < height - 1 {
-            near = near | spread[y + 1];
+            near |= spread[y + 1];
         }
         let b = strings.builder();
         for (x, t) in grid[y].enumerate() {

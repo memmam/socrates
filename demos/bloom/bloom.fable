@@ -70,6 +70,9 @@ impl Bloom {
     // Bytes byte_lo..byte_hi rendered as bits IN INDEX ORDER: the leftmost
     // character of byte j's group is bit 8j (the byte's LSB, mask 1), so
     // reading left to right walks filter indices 0, 1, 2, ...
+    // Deliberately not push_joined (STYLE.md § 6, an R4 divergence): the
+    // body is an alloc-free push_char loop, and the manual separator gate
+    // keeps it that way — push_joined would need a String piece per byte.
     pub fn bit_string(self, byte_lo: Int, byte_hi: Int) -> String {
         let sb = strings.builder();
         for j in byte_lo..byte_hi {
@@ -96,16 +99,8 @@ impl Bloom {
 }
 
 // Deserialization reads the integers back with the v0.7 little-endian
-// readers — the shift-and-or reassembly these wrapped lives in git
-// history.
-fn read_u16le(b: Bytes, off: Int) -> Int {
-    b.read_u16le(off)
-}
-
-fn read_u32le(b: Bytes, off: Int) -> Int {
-    b.read_u32le(off)
-}
-
+// readers (the shift-and-or reassembly they replaced lives in git
+// history).
 pub fn deserialize(b: Bytes) -> Result[Bloom, String] {
     if b.len() < 14 {
         return Err("bloom.deserialize: {b.len()} bytes is shorter than the 14-byte header");
@@ -114,9 +109,9 @@ pub fn deserialize(b: Bytes) -> Result[Bloom, String] {
     if magic != "BLM1" {
         return Err("bloom.deserialize: bad magic \"{magic}\"");
     }
-    let k = read_u16le(b, 4);
-    let m = read_u32le(b, 6);
-    let inserted = read_u32le(b, 10);
+    let k = b.read_u16le(4);
+    let m = b.read_u32le(6);
+    let inserted = b.read_u32le(10);
     let body = b.slice(14, b.len());
     if m < 8 || m & m - 1 != 0 || body.len() != m >> 3 {
         return Err("bloom.deserialize: m={m} does not match {body.len()} filter bytes");

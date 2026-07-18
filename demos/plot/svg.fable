@@ -30,13 +30,10 @@ pub fn doc(width: Int, height: Int) -> Doc {
 }
 
 impl Doc {
-    // Escape hatch: append any element verbatim. Elements are separated by
-    // newlines; Builder.len() is O(1), so "am I the first element?" is free.
+    // Escape hatch: append any element verbatim, newline-separated —
+    // push_joined lands the separator only between elements.
     pub fn add(self, element: String) {
-        if self.body.len() > 0 {
-            self.body.push("\n");
-        }
-        self.body.push(element);
+        self.body.push_joined("\n", element);
     }
 
     pub fn rect(self, x: Float, y: Float, w: Float, h: Float, fill: String) {

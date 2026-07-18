@@ -29,6 +29,9 @@ fn collatz_steps(start: Int) -> Int {
 }
 
 // The n in [lo, hi) with the longest Collatz trajectory: (n, steps).
+// (Hand scan, not lists.max_by_key — a STYLE.md R1 allocation exemption:
+// the aggregate would materialize a (n, steps) pair list per job in the
+// worker's hot loop; the scan allocates nothing.)
 fn collatz_champion(lo: Int, hi: Int) -> (Int, Int) {
     let mut best_n = lo;
     let mut best_steps = -1;
@@ -74,11 +77,8 @@ fn count_primes(lo: Int, hi: Int) -> Int {
 
 if worker.is_worker() {
     let fragile = os.args().contains("fragile");
-    while true {
-        let msg = match worker.recv() {
-            Some(m) -> m,
-            None -> break, // parent hung up: implicit shutdown
-        };
+    // None means the parent hung up: implicit shutdown.
+    while let Some(msg) = worker.recv() {
         let req = json.parse(msg).unwrap();
         let cmd = req.get("cmd").unwrap().as_str().unwrap();
         if cmd == "quit" {

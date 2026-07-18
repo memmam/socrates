@@ -6,27 +6,21 @@
 // a seeded xorshift64 stream. A position's hash is the xor of the keys of
 // its occupied squares; xor is its own inverse, so any single change to
 // the position flips the hash. The generator is written in Fable itself —
-// pure `^`/`<<`/`>>`, no multiplies, no additions — so the table (and
+// pure `^`/`<<`/`ushr`, no multiplies, no additions — so the table (and
 // therefore the pinned game transcript) is stable across releases, unlike
 // `math.seed` streams.
 
 import board;
 
-// Logical (zero-filling) right shift by k, for k in 1..=63. Fable's `>>`
-// is ARITHMETIC (sign-extending), so treating an Int as 64 unsigned bits
-// means masking off the smeared sign bits after every right shift. The
-// Logical (zero-fill) shift right — the `ushr` intrinsic; the masked
-// arithmetic-shift construction lives in git history.
-pub fn lshr(x: Int, k: Int) -> Int {
-    x.ushr(k)
-}
-
 // One step of Marsaglia's xorshift64 (shift triple 13/7/17). `<<` simply
-// discards bits pushed past the top, so no step here can overflow.
+// discards bits pushed past the top, so no step here can overflow; the
+// right shift is the logical (zero-filling) `ushr` intrinsic, since `>>`
+// is arithmetic — the masked shift-then-mask construction this file once
+// carried lives in git history.
 pub fn step(s: Int) -> Int {
     let mut x = s;
     x = x ^ x << 13;
-    x = x ^ lshr(x, 7);
+    x = x ^ x.ushr(7);
     x = x ^ x << 17;
     x
 }
