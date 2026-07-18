@@ -23,6 +23,10 @@ println("not hex".parse_hex());        //? expect: None
 println("".parse_hex());               //? expect: None
 println("0x".parse_hex());             //? expect: None
 
+// "No sign" means a leading `+` is rejected too, prefixed or not.
+println("+ff".parse_hex());            //? expect: None
+println("0x+ff".parse_hex());          //? expect: None
+
 // Round trip for every Int, including negatives.
 println((-1).to_hex().parse_hex() == Some(-1));       //? expect: true
 println(255.to_hex().parse_hex() == Some(255));       //? expect: true

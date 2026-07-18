@@ -137,8 +137,11 @@ pub enum Native {
     /// the blob rides the buffer type instead of masquerading as text. A
     /// sibling rather than an overload for the same reason as
     /// `window.create_metal` (Fable has neither default parameters nor
-    /// overloading). Ingested natively by the vulkan backend; other
-    /// backends report which entry point they want instead.
+    /// overloading). Ingested natively by the vulkan backend
+    /// (GLCompute/Logical/GLSL450 profile) and the opencl backend
+    /// (Kernel/Physical64 profile — the two blobs are not
+    /// interchangeable); other backends report which entry point they
+    /// want instead.
     GpuRunSpirv,
     /// `gpu.backend()` (v0.8): `"metal"` | `"vulkan"` | `"d3d12"` | `"cuda"` | `"opencl"` | `"none"` — which
     /// implementation `gpu.run` dispatches to in this build. The `gpu`
@@ -156,10 +159,10 @@ pub enum Native {
     /// exception). Without the `metal` cargo feature it degrades
     /// gracefully, same as `WindowCreate` without `gl`.
     WindowCreateMetal,
-    /// Vulkan-backed sibling of `window.create` (Linux/X11), riding the
-    /// same `vulkan` cargo feature as `gpu.run_spirv`'s compute backend.
-    /// Without it (or off Linux) it degrades gracefully, same as
-    /// `WindowCreateMetal` off Apple Silicon macOS.
+    /// Vulkan-backed sibling of `window.create` (Linux/X11 and Windows),
+    /// riding the same `vulkan` cargo feature as `gpu.run_spirv`'s
+    /// compute backend. Without it (or off Linux/Windows) it degrades
+    /// gracefully, same as `WindowCreateMetal` off Apple Silicon macOS.
     WindowCreateVulkan,
     WindowHandlePoll,
     WindowHandleShouldClose,
@@ -174,10 +177,11 @@ pub enum Native {
     /// one every subsequent `gfx.*` native operates against (mirrors
     /// `glfwMakeContextCurrent`) — see `Vm::gfx_current_window`.
     WindowHandleMakeCurrent,
-    /// `win.backend_name()` (v0.8): `"opengl"` | `"metal"` — the one
-    /// deliberate escape hatch for backend-specific behavior (shader
-    /// source text is inherently GLSL vs. MSL); everything else about the
-    /// `gfx.*` call shape stays identical across backends.
+    /// `win.backend_name()` (v0.8): `"opengl"` | `"metal"` | `"vulkan"` —
+    /// the one deliberate escape hatch for backend-specific behavior
+    /// (shader input is inherently GLSL vs. MSL source text vs. SPIR-V
+    /// binaries); everything else about the `gfx.*` call shape stays
+    /// identical across backends.
     WindowHandleBackendName,
 
     // gfx.* (v0.8, feature-gated on `gl`, same as `window`) — OpenGL 3.3
@@ -582,7 +586,8 @@ impl Native {
     }
 
     /// Every member name of a builtin namespace (for completion). A unit
-    /// test asserts each listed name resolves via `namespace_member`.
+    /// test asserts these lists and `namespace_member`'s accepted names
+    /// agree exactly, in both directions.
     pub fn namespace_members(ns: &str) -> &'static [&'static str] {
         match ns {
             "math" => &[
@@ -595,11 +600,12 @@ impl Native {
             ],
             "os" => &["args", "env", "run", "exit", "time"],
             "fft" => &["fft", "ifft", "rfft"],
-            "worker" => &["spawn", "send", "recv", "is_worker"],
-            "gpu" => &["available", "adapter_info", "run"],
-            "window" => &["create"],
+            "worker" => &["spawn", "send", "recv", "try_recv", "is_worker"],
+            "gpu" => &["available", "adapter_info", "run", "run_spirv", "backend"],
+            "window" => &["create", "create_metal", "create_vulkan"],
             "gfx" => &[
                 "compile_program",
+                "compile_program_spirv",
                 "use_program",
                 "delete_program",
                 "create_buffer",
@@ -997,7 +1003,7 @@ impl Native {
 
             GpuAvailable => (vec![], Bool, 0),
             GpuAdapterInfo => (vec![], TStr, 0),
-            // gpu.run(wgsl, input, out_len, wx, wy, wz)
+            // gpu.run(src, input, out_len, wx, wy, wz)
             GpuRun => (
                 vec![TStr, Type::Bytes, Int, Int, Int, Int],
                 res(Type::Bytes, TStr),
@@ -1352,6 +1358,70 @@ const METHOD_TABLE: &[(Recv, &str, Native)] = &[
 mod namespace_tests {
     use super::*;
 
+    /// Every name `namespace_member` accepts, per namespace. The resolver
+    /// is a string match, so its accepted names can't be enumerated
+    /// programmatically — this table is hand-maintained from its match
+    /// arms. `namespace_members_match_resolver` below asserts set-equality
+    /// with `namespace_members` in both directions, so adding a member to
+    /// the resolver without listing it for completion (or vice versa)
+    /// fails the test.
+    const RESOLVER_MEMBERS: &[(&str, &[&str])] = &[
+        (
+            "math",
+            &[
+                "pi", "e", "sin", "cos", "tan", "atan", "atan2", "log", "log2", "exp", "pow",
+                "random", "seed", "rand_int", "log10", "fmod",
+            ],
+        ),
+        (
+            "fs",
+            &[
+                "read", "write", "append", "exists", "is_dir", "list_dir", "create_dir",
+                "remove", "read_bytes", "write_bytes",
+            ],
+        ),
+        ("os", &["args", "env", "run", "exit", "time"]),
+        ("fft", &["fft", "ifft", "rfft"]),
+        ("worker", &["spawn", "send", "recv", "try_recv", "is_worker"]),
+        ("gpu", &["available", "adapter_info", "run", "run_spirv", "backend"]),
+        ("window", &["create", "create_metal", "create_vulkan"]),
+        (
+            "gfx",
+            &[
+                "compile_program",
+                "compile_program_spirv",
+                "use_program",
+                "delete_program",
+                "create_buffer",
+                "delete_buffer",
+                "bind_buffer",
+                "upload_buffer",
+                "create_vertex_array",
+                "bind_vertex_array",
+                "delete_vertex_array",
+                "set_vertex_attrib",
+                "disable_vertex_attrib",
+                "create_texture",
+                "delete_texture",
+                "bind_texture",
+                "active_texture_unit",
+                "upload_texture",
+                "set_uniform_int",
+                "set_uniform_float",
+                "set_uniform_vec2",
+                "set_uniform_vec3",
+                "set_uniform_vec4",
+                "set_uniform_mat4",
+                "draw_arrays",
+                "draw_elements",
+                "clear",
+                "set_depth_test",
+                "viewport",
+                "read_pixels",
+            ],
+        ),
+    ];
+
     #[test]
     fn listed_namespace_members_resolve() {
         for ns in ["math", "fs", "os", "fft", "worker", "gpu", "window", "gfx"] {
@@ -1359,6 +1429,37 @@ mod namespace_tests {
                 assert!(
                     Native::namespace_member(ns, name).is_some(),
                     "{ns}.{name} listed but does not resolve"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn namespace_members_match_resolver() {
+        // The table covers every namespace, and nothing else.
+        let mut table_namespaces: Vec<&str> = RESOLVER_MEMBERS.iter().map(|(ns, _)| *ns).collect();
+        let mut namespaces: Vec<&str> =
+            vec!["math", "fs", "os", "fft", "worker", "gpu", "window", "gfx"];
+        table_namespaces.sort_unstable();
+        namespaces.sort_unstable();
+        assert_eq!(table_namespaces, namespaces, "RESOLVER_MEMBERS namespace coverage");
+
+        for (ns, resolver_names) in RESOLVER_MEMBERS {
+            let listed = Native::namespace_members(ns);
+            for name in *resolver_names {
+                assert!(
+                    Native::namespace_member(ns, name).is_some(),
+                    "{ns}.{name} in RESOLVER_MEMBERS but does not resolve — stale table"
+                );
+                assert!(
+                    listed.contains(name),
+                    "{ns}.{name} resolves but is missing from namespace_members (completion)"
+                );
+            }
+            for name in listed {
+                assert!(
+                    resolver_names.contains(name),
+                    "{ns}.{name} listed for completion but absent from RESOLVER_MEMBERS"
                 );
             }
         }

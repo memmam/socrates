@@ -46,7 +46,19 @@ functionality, judged per-architecture. In progress:
   (no `\` `"` `\n` `\t`) as-is instead of running four always-allocating
   `String.replace` passes — the common case goes four allocations to
   zero per string and per object key. Byte-identical output;
-  bench_json −6.9% in the local interleaved A/B.
+  bench_json −6.9% in the local interleaved A/B (confirmed on the
+  four-arch matrix: −4.5..−7.5% across all tier-1 targets).
+- **Consistency pass — SPEC↔implementation reconciliation**:
+  `String.parse_hex()` now rejects a leading `+` (`"+ff"` → `None`),
+  closing the one behavioral gap against SPEC's "no sign" rule; LSP
+  namespace completion gained the six v0.8 members it was missing
+  (`worker.try_recv`, `gpu.run_spirv`/`gpu.backend`,
+  `window.create_metal`/`window.create_vulkan`,
+  `gfx.compile_program_spirv`), and the unit test now asserts the
+  completion lists and the resolver agree in both directions; stale
+  wording fixed across SPEC (§ 7.1 module count, § 8.4d Windows
+  Vulkan, fmod semantics, cross-references) and the gpu/window doc
+  comments (SPIR-V's two consumers, the five-backend precedence).
 
 ## v0.8.0 — native graphics and compute; the demo round's feature queue
 
