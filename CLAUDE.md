@@ -185,7 +185,7 @@ build is GL-compute, if a concrete need appears. Settled decisions:
 - **Everything observable is golden-tested and byte-identical.** Every
   demo's full stdout is pinned (`demos/`), every ```soc block in `book/`
   executes in CI except the rare fragment fence-tagged `skip` (one today —
-  135 of 136 execute), and the spec suite (`tests/spec/`, 312 tests) runs
+  135 of 136 execute), and the spec suite (`tests/spec/`, 313 tests) runs
   through the same `socrates test` path users get. A refactor that changes any
   pinned output is wrong unless the output change is the point.
 - **GC-stress must stay green.** `SOCRATES_GC_STRESS=1` collects before every
@@ -201,7 +201,7 @@ cargo test                                    # unit + golden spec suite
 SOCRATES_GC_STRESS=1 cargo test --test spec_runner
 cargo clippy --all-targets -- -D warnings
 cargo build --release
-./target/release/socrates test tests/spec        # 312
+./target/release/socrates test tests/spec        # 313
 # glcube's three mains need a live GL/Metal/Vulkan window (CI runs them in
 # the windowing jobs); everything else, cube.soc/spec.soc included:
 shopt -s extglob
@@ -340,7 +340,10 @@ numbers: `bench/RESULTS.md`.
   loop with the per-target `monolithic_dispatch` binding; `fft.magnitude`
   moved to `std.fft`; the math namespace minified to what only it
   provides; the `std.json` escape fast path; the demo adoption gap
-  closed), the consistency passes (SPEC↔implementation reconciliation,
+  closed; the `List.sum()` native with `lists.sum` as its one-line
+  wrapper; four VM superinstructions fusing the hottest operand-fetch
+  pairs, with jump-target-safe fusion after patching), the consistency
+  passes (SPEC↔implementation reconciliation,
   ports validating exactly what CI enforces with 184 new cross-checks,
   the bench harness enforcing its own claims, the core docs re-measured
   against the current system, STYLE.md made normative with the demos

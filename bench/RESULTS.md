@@ -266,12 +266,27 @@ workload re-specification this table exists to bridge.
   new map_ops +4.4% there) and broke x86_64-linux (enum_match −3.1% →
   +4.6%, bench_display +6.7%). Arm order on top of H1 is a pure dice
   roll; H1's source order stands.
+- An inline-small-list `Obj::List` representation (`ListInline { len,
+  slots: [Value; 3] }` as a second flattened variant — N=3 the largest
+  capacity keeping `Obj` at its existing 64 bytes, capacity-based spill
+  to the heap `Vec`). The mechanism works: bench_list_churn improved
+  −7.3%/−7.8% across two interleaved samples. The *target* did not:
+  checkers moved −0.2%/−0.1% — its 13.0M movegen allocations are real
+  (measured: 96.9% of lists die at len ≤ 2) but tcache-cheap, so
+  allocation *count* was never the cost — and bench_display regressed
+  reproducibly (+8.2%/+4.5%, container display paying the
+  representation branch). Dropped per the pre-registered gate.
+  Re-attempt only if a genuinely churn-bound hot workload becomes a
+  target; the full implementation (gauntlet-green, goldens
+  byte-identical) is archived on branch `h2-small-list`.
 
 ## Known headroom (identified, not yet taken)
 
-- checkers' 13.5M movegen `List` allocations are its biggest single cost
-  pool; an inline-small-list `Obj::List` representation is the real fix.
-- Superinstructions for the `GetLocal`/`Const`/`JumpIfFalse` hot triple
-  (45% of dispatched ops) — unblocked now that the H1 dispatch
-  restructure landed (the lottery that made such changes unjudgeable is
-  gone; judge on the four-arch matrix).
+Both items the v0.8 pass identified are now consumed: the
+movegen-allocation item was measured and rejected (the inline-small-list
+entry above — the pool is real but allocator-cheap), and the
+superinstruction item was executed as the four fused operand-fetch ops
+(a dynamic *pair* profile replaced the original static "45% hot triple"
+estimate; judged, like every dispatch change, on the four-arch matrix).
+Nothing further is currently identified — new items come from fresh
+profiling, not from this list's history.
