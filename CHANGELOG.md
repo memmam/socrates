@@ -4,6 +4,20 @@ Each release was shipped as one reviewed pull request. Golden spec tests pin
 every feature listed here; `docs/SPEC.md` marks each with the version that
 introduced it, and `CLAUDE.md` keeps the release ledger.
 
+## Unreleased
+
+- **Closures capturing ≤2 upvalues no longer heap-allocate a `Vec` for
+  them** — `Obj::Closure`'s upvalue storage is now `UpvalStorage`, an
+  inline-slots-or-spill representation (`Obj` size unchanged: the new
+  enum is the same 24 bytes as the `Vec` it replaces). This reopens and
+  reverses a standing negative result (`bench/RESULTS.md`'s "inline ≤2
+  upvals" entry, rejected pre-H1 on a codegen-lottery premise H1 later
+  killed). Local single-box evidence is strong (closure_churn −15.6%
+  to −18.3% across all 7 samples gathered); shipped for four-arch
+  matrix judgment (`bench/inline-upvals`) per the universality
+  principle before this bullet's verdict — or this section's fate — is
+  final.
+
 ## v0.8.0 — native graphics and compute; the demo round's feature queue
 
 One release, three workstreams (the third folded in before the release
