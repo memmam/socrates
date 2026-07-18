@@ -1,0 +1,14 @@
+# Official mechanism for keeping Actions versions current. The audit that
+# added this (2026-07-18) found a checkout@v4 straggler and an expired
+# download-artifact stay-put rationale — both the exact failure mode this
+# file's weekly grouped PR would have caught. Scope: workflow actions only;
+# the interpreter itself has zero dependencies for Dependabot to watch.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

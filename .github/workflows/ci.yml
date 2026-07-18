@@ -15,6 +15,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least-privilege token: nothing in CI writes to the repo (bench and
+# cleanup declare their own grants). Added 2026-07-18, audit batch 1.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -25,7 +30,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           components: clippy
       - name: Build
@@ -165,7 +170,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           components: clippy
       - name: Install X11 dev headers + Xvfb
@@ -181,7 +186,10 @@ jobs:
       - name: Unit + golden spec tests (gl, under Xvfb)
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
-          sleep 1
+          # xvfb-run is the standard tool, but this server is shared by
+          # later steps in the job (glcube pins, doc snippets), so wait
+          # on the display socket instead of a race-prone fixed sleep.
+          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
           DISPLAY=:99 cargo test --features gl
       - name: glcube demo golden tests (gl, under Xvfb, real rendered pixels)
         # The one demo whose golden test needs an actual GL context (SPEC
@@ -213,7 +221,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           components: clippy
       - name: Build (gl)
@@ -261,12 +269,21 @@ jobs:
     # since `cargo test --features gl` on macOS runs against the real
     # window server, and `macos/gl.rs`'s test skips gracefully if that's
     # restricted in this environment (see its module docs).
-    name: window feature (Cocoa/NSOpenGL, Apple Silicon)
-    runs-on: macos-14
+    name: window feature (Cocoa/NSOpenGL, Apple Silicon, ${{ matrix.os }})
+    # macos-14 is deprecated upstream (brownouts since 2026-07-06,
+    # removal 2026-11-02). Deprecated is not discontinued: both images
+    # run until 14 is actually removed — brownouts expand coverage,
+    # they never early-retire it (CLAUDE.md platform-scoping rule).
+    # Drop the macos-14 row on the removal date.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           components: clippy
       - name: Build (gl)
@@ -285,12 +302,19 @@ jobs:
     # check (the `metal` feature is raw FFI like `gl`, not a new Cargo
     # dependency). `gl-macos` above stays untouched as the OpenGL-only
     # regression check.
-    name: window feature (Metal, Apple Silicon)
-    runs-on: macos-14
+    name: window feature (Metal, Apple Silicon, ${{ matrix.os }})
+    # Dual-image per the gl-macos note above. The Metal-capable
+    # paravirtual-GPU claim below is image-specific: the macos-15 row
+    # IS its revalidation on the successor image.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           components: clippy
       - name: Build (metal)
@@ -358,7 +382,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           components: clippy
       - name: Software Vulkan device (lavapipe) + X11 dev headers + Xvfb
@@ -380,7 +404,10 @@ jobs:
         # create_vulkan Err through the same enum dispatch.
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
-          sleep 1
+          # xvfb-run is the standard tool, but this server is shared by
+          # later steps in the job (glcube pins, doc snippets), so wait
+          # on the display socket instead of a race-prone fixed sleep.
+          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
           DISPLAY=:99 cargo test --features gl,vulkan
       - name: Zero dependencies (vulkan; gl,vulkan)
         run: |
@@ -443,7 +470,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           components: clippy
       - name: OpenCL runtime (pocl) + clinfo + X11 dev headers
@@ -505,7 +532,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           components: clippy
       - name: X11 dev headers (for the vulkan,cuda build)
@@ -554,7 +581,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           components: clippy
       - name: Build (d3d12)
@@ -624,7 +651,7 @@ jobs:
             run: false
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
         with:
           targets: ${{ matrix.target }}
       - name: Cross linker (aarch64 linux)
@@ -665,11 +692,16 @@ jobs:
     # section (`ld -sectcreate`). This proves the whole chain on Apple Silicon:
     # emit the payload, link it in, sign, and run — matching the source run.
     name: macOS single-file demo (aarch64)
-    runs-on: macos-14
+    # Dual-image per the gl-macos note (deprecated != discontinued).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable branch, resolved 2026-07-18
       - name: Spec + demo golden suites on Apple Silicon
         # demos/glcube/main.soc needs a live GL context (this job builds
         # without --features gl) — see the `gl`/`gl-macos` jobs' own

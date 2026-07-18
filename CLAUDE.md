@@ -123,7 +123,15 @@ their place fastest.
   is for") — build for where each platform's ecosystem is actively headed,
   not for carrying yesterday's compatibility weight up front. Older
   platforms broadly are still in scope long-term; the ordering is
-  capability-justified breadth, not defensive breadth-first.
+  capability-justified breadth, not defensive breadth-first (recorded
+  long-term instance: Intel-based Mac as a potential legacy target).
+  The mirror-image rule for things currently supported: **deprecated is
+  not discontinued** — a platform or CI image marked deprecated counts
+  as supported in practice until its actual removal date, and interim
+  brownouts or discrepancies are cause to *expand* coverage to span old
+  and new (the macos-14/macos-15 dual CI rows are the first instance;
+  the 14 rows retire 2026-11-02 when GitHub actually removes the image),
+  never cause to early-retire the older one.
 - **When artifacts are consolidated or split, record the intent.** Any
   time artifacts merge or one splits, write down what each resulting
   artifact is *for*, how the pieces compose, and why the split or merge
