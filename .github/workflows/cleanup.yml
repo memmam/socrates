@@ -1,12 +1,16 @@
 name: Branch cleanup
 
 # The branch-scoped-actor pattern release.yml documents, applied to
-# deletions: the session App's credentials can create refs but not
-# delete them (the git proxy 403s ref deletion), so a cleanup lands as
-# a PR editing .github/CLEANUP_BRANCHES and CI — which holds
-# contents: write — performs the deletions after the merge. Guards:
-# main, archive/*, and claude/* are never deleted, ever; absent
-# branches are skipped; per-branch failures are reported, not fatal.
+# deletions: the official path (`git push --delete` from the session)
+# is blocked because the session App's credentials can create refs but
+# not delete them (the git proxy 403s ref deletion), so a cleanup lands
+# as a PR editing .github/CLEANUP_BRANCHES and CI — which holds
+# contents: write — performs the deletions after the merge. Re-check
+# this workaround whenever the App's permission scope changes (same
+# 403 boundary bench/RESULTS.md's empty-commit resampling note
+# records). Guards: main, archive/*, and claude/* are never deleted,
+# ever; absent branches are skipped; per-branch failures are reported,
+# not fatal.
 on:
   push:
     branches: [main]

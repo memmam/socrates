@@ -66,6 +66,13 @@ jobs:
         run: |
           shopt -s extglob
           ./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc > /dev/null
+      - name: Prose counts match the live suite
+        # The five spec-count places, the book executed/total pair, the
+        # demo-suite count, and the spelled-out demo-program count —
+        # extracted from prose by exact anchor and diffed against a
+        # fresh run, so a stale number (the 311-vs-313 release-notes
+        # incident) fails here instead of shipping.
+        run: ./tools/check_counts.sh ./target/release/socrates
       - name: Self-contained demo binary (socrates build)
         # Staple a data-reading demo and a worker demo into standalone
         # binaries and prove each reproduces its source run byte-for-byte

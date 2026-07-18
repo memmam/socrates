@@ -4,11 +4,15 @@ The measurement instrument is `bench/ab.py BASE_DIR HEAD_DIR` — an
 interleaved cross-binary A/B between two full checkouts — fanned across
 one runner per tier-1 architecture by the Bench A/B workflow
 (`.github/workflows/bench.yml`), which fires on pushing a `bench/<name>`
-branch (the bot account's API calls to workflow_dispatch and re-run
-return 403, so extra samples are obtained by pushing empty commits to
-the bench branch). `bench/run.sh [N]` is a single-binary sequential
-profiling convenience — where does one binary spend its time? — not the
-gate. Micro-benchmarks (`bench/*.soc`) isolate one cost centre each,
+branch — the official re-sampling path would be re-dispatching the
+workflow or re-running a job, but the bot account's API calls to
+workflow_dispatch and re-run both return 403, so extra samples are
+obtained by pushing empty commits to the bench branch instead; re-check
+this workaround whenever the App's permission scope changes (the same
+403 boundary `cleanup.yml`'s header comment records).
+`bench/run.sh [N]` is a single-binary sequential profiling convenience
+— where does one binary spend its time? — not the gate.
+Micro-benchmarks (`bench/*.soc`) isolate one cost centre each,
 stated in each file's `// Bench:` measurand header; macros are the heavy
 demo mains. The spec suite appears only in run.sh's single-tree rows,
 never as an A/B target (its sources move with each ref — see below).

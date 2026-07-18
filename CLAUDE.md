@@ -162,6 +162,19 @@ their place fastest.
   standing-watch entries — a rejected change that keeps its re-open
   condition attached to the record, so the correction path is itself
   part of the memory rather than a fact someone must rediscover.
+  **The workaround-recording triple** is the content rule the
+  four-step act doesn't cover on its own: any recorded manual rule or
+  workaround states (i) the official mechanism it bypasses, (ii) the
+  blocker that forced the bypass, and (iii) a dated condition under
+  which the blocker gets re-checked — so the record can't silently
+  outlive its own premise. `cleanup.yml`'s release-by-PR pattern is
+  the model (bypasses `git push --delete`; blocked by the App's
+  branch-scoped credentials; re-check whenever the App's token scope
+  changes) and the empty-commit bench-resampling method is a second
+  instance (bypasses `workflow_dispatch`/rerun; blocked by both
+  returning 403 for the bot account; re-check on any App permission
+  change). A workaround recorded without the triple is exactly the
+  gap the reflexive codification audit exists to catch.
 
 ## Native graphics & compute roadmap (standing directive)
 
@@ -420,7 +433,15 @@ numbers: `bench/RESULTS.md`.
   (×2), this file (×2), and `.github/RELEASE_NOTES.md` — and a count
   change updates all five in the same PR (the release draft that
   shipped saying 311 while the suite stood at 313 is why this list
-  exists).
+  exists). The same discipline covers every other prose-stated count
+  — book snippets executed/total, the demo-golden count, the spelled-
+  out demo-program count — each with its own set of stating places.
+  `tools/check_counts.sh` (run in CI's Test job) is the enforcement:
+  it extracts every counted sentence by exact anchor and diffs it
+  against a fresh run, so drift fails loudly instead of shipping; a
+  sentence reworded without updating its anchor fails just as loudly
+  ("anchor matched nothing"), which is the intended fail-closed
+  behavior — re-anchor in the same PR that reworks the prose.
 - **GitHub-facing bodies carry no hand-written footer — none, ever.**
   The tooling appends its own attribution footer to PR bodies by
   default; hand-appending another (or any variant of one) stacks
