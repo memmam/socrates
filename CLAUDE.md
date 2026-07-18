@@ -135,7 +135,10 @@ their place fastest.
   recording the correction, not deleting the record. Standing instances:
   the bench files' `// Bench:` measurand headers and `bench/RESULTS.md`'s
   epoch bridge; the demos' deliberate-divergence comments; the ports'
-  READMEs describing exactly what CI enforces.
+  READMEs describing exactly what CI enforces; and RESULTS.md's
+  standing-watch entries — a rejected change that keeps its re-open
+  condition attached to the record, so the correction path is itself
+  part of the memory rather than a fact someone must rediscover.
 
 ## Native graphics & compute roadmap (standing directive)
 
@@ -239,7 +242,11 @@ numbers: `bench/RESULTS.md`.
   notarization for the macOS demo-zoo binaries (the six repo secrets).
 - `bench/RESULTS.md` — the bench method and instrument facts, the standing
   numbers, the negative-results ledger (measured and rejected — do not
-  re-attempt without new evidence), the known-headroom list, and the epoch
+  re-attempt without new evidence; an entry may instead carry a
+  **standing watch**: dated sightings of its trigger signal accumulate
+  in the entry itself, and enough of them across genuinely different
+  cases re-opens the item — the inline-small-list entry is the first),
+  the known-headroom list, and the epoch
   bridge that keeps pre-/post-re-specification numbers comparable. No
   other file holds any of these.
 - `demos/NOTES.md` — the field-test triage ledgers: every papercut demo
