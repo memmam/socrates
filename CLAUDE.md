@@ -374,6 +374,14 @@ numbers: `bench/RESULTS.md`.
   gated on a clean four-arch Bench A/B matrix verdict. Feature work
   happens on a dedicated branch off `main`.
 - Commit messages state what changed and (for perf) the measured delta.
+- **GitHub-facing bodies carry no hand-written footer — none, ever.**
+  The tooling appends its own attribution footer to PR bodies by
+  default; hand-appending another (or any variant of one) stacks
+  duplicates (the triple-footer incident, 2026-07-18, swept clean the
+  same day by user directive). PR, issue, and comment bodies end with
+  their content, full stop — do not append, edit, or restyle any
+  footer beyond what the tooling adds on its own. Commit-message
+  trailers are a different channel and unaffected.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,
