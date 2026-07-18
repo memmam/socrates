@@ -388,7 +388,7 @@ numbers: `bench/RESULTS.md`.
   existing verdict without a re-run. Feature work happens on a
   dedicated branch off `main`.
 - Non-landing work is pushed for durability without a PR: a dropped
-  probe or a held wave lives on its pushed branch (`h2-small-list` and
+  probe or a held wave lives on its pushed branch (`archive/h2-small-list` and
   the W1a hold are the precedents). PRs are for changes meant to merge,
   drafts for releases, archival branches for neither.
 - Commit messages state what changed and (for perf) the measured delta,
@@ -424,8 +424,12 @@ numbers: `bench/RESULTS.md`.
     (post-rename re-registration is how it first happened), the
     harness-served clone is pulled after every CLAUDE.md-touching
     merge until the checkouts are consolidated.
-  - Branches are never deleted — merged, archival, and `bench/*`
-    branches all stay.
+  - Branches are deleted only in user-directed cleanups, never
+    unilaterally (the 2026-07-18 bulk cleanup is the precedent).
+    Before a cleanup, anything a standing record references moves to
+    an `archive/*` branch — and the deletions themselves are the
+    user's to run: the App's credentials can create refs but not
+    delete them.
   - A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
   - Never run bare `cargo fmt`.

@@ -370,7 +370,7 @@ M-series microarchitectural insight would qualify).
   the row that showed it. Enough accumulated sightings across
   *different* cases pushes H2 back over the edge for a fresh look;
   the full implementation (gauntlet-green, goldens byte-identical)
-  is archived on branch `h2-small-list` as the starting point.
+  is archived on branch `archive/h2-small-list` as the starting point.
   Sightings so far: none beyond bench_list_churn itself.
 
 ## Known headroom (identified, not yet taken)
