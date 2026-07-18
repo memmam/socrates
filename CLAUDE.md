@@ -530,6 +530,20 @@ numbers: `bench/RESULTS.md`.
     interactive question UI.
   - Long CI waits are handled by scheduled self check-ins, never
     polling loops.
+  - **A signal is a prompt to check, not a substitute for checking.**
+    A task-notification, webhook event, or elapsed check-in interval
+    means "go verify the actual state now" — not "the state is
+    whatever the signal implies." Recorded instance (2026-07-18): a
+    combined-status API call returned zero checks on a repo that
+    reports exclusively through the newer Checks API, and that empty
+    result was read as "still pending" rather than as a wrong-tool
+    warning sign — two PRs sat fully green while a scheduled check-in
+    was awaited instead of a direct look. The fix is procedural, not a
+    one-off: when a check comes back ambiguous, empty, or merely
+    "not yet," the next move is a *different, more direct* query
+    against the actual repo/CI state (the Checks API here, but the
+    general shape — go to the source of truth, don't wait on the
+    signal layer to resolve itself) — not another wait cycle.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,
