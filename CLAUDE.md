@@ -369,11 +369,35 @@ numbers: `bench/RESULTS.md`.
 - Merge on green, by hand: feature PRs are real (non-draft) — drafts are
   reserved for *releases* — and `main` carries a required status check,
   "Test (stable)", so a red PR cannot merge. Merges are performed
-  manually after reading the decisive CI log, not by arming auto-merge;
-  a change that touches the interpreter or `bench/` is additionally
-  gated on a clean four-arch Bench A/B matrix verdict. Feature work
-  happens on a dedicated branch off `main`.
-- Commit messages state what changed and (for perf) the measured delta.
+  manually after reading the decisive CI log, never on a green
+  conclusion alone — and which log is decisive is tiered by what the
+  change risks: a perf-bearing change reads the four matrix tables and
+  the Test log, an interpreter change reads the Test log's suite counts
+  and port batteries, a prose-only change reads the Test log tail. Not
+  by arming auto-merge. A change that touches the interpreter or the
+  bench *sources or harness* (`bench/*.soc`, `ab.py`, `run.sh`,
+  `bench.yml`) is additionally gated on a clean four-arch Bench A/B
+  matrix verdict — `RESULTS.md` prose is exempt (it changes no binary;
+  its matrix run would be an A/A that tests nothing). The verdict
+  attaches to the tree that built the judged binaries: follow-up
+  commits that touch no compiled source (docs, prose) ride the
+  existing verdict without a re-run. Feature work happens on a
+  dedicated branch off `main`.
+- Non-landing work is pushed for durability without a PR: a dropped
+  probe or a held wave lives on its pushed branch (`h2-small-list` and
+  the W1a hold are the precedents). PRs are for changes meant to merge,
+  drafts for releases, archival branches for neither.
+- Commit messages state what changed and (for perf) the measured delta,
+  and end with the two attribution trailers (`Co-Authored-By` and the
+  `Claude-Session` link) — the accepted channel for session
+  attribution, and the *only* one; the footer rule below exists because
+  "trailers accepted" was once remembered as "footers accepted" —
+  record decisions with their scope.
+- The spec-suite count is stated in exactly five places — `README.md`
+  (×2), this file (×2), and `.github/RELEASE_NOTES.md` — and a count
+  change updates all five in the same PR (the release draft that
+  shipped saying 311 while the suite stood at 313 is why this list
+  exists).
 - **GitHub-facing bodies carry no hand-written footer — none, ever.**
   The tooling appends its own attribution footer to PR bodies by
   default; hand-appending another (or any variant of one) stacks

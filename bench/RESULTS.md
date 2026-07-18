@@ -45,6 +45,19 @@ each delta table to the run summary. The acceptance rule is CLAUDE.md's
 universality principle: flat-or-better everywhere, or the idiom keeps
 its primitive.
 
+The `bench/<name>` namespace carries three distinct artifact kinds, and
+a branch's kind should be obvious from its commits: **judgment
+candidates** (the change itself, pushed to fire its acceptance matrix),
+**resample commits** (empty-delta commits pushed to the same branch for
+extra samples — the bot's workflow_dispatch and re-run API calls return
+403, so "push again" is the sampling mechanism), and **never-merge
+probes** (a deliberate variant diff — one fusion disabled, say — judged
+against a non-main base to isolate a mechanism; say "never merges" in
+the commit message and never open a PR for one). A `bench/BASE` file,
+when present on the branch, names the base ref the workflow checks out
+instead of main — that is how a probe measures against its parent
+change rather than against main.
+
 ## The efficiency pass (v0.7)
 
 A measured audit of every interpreter hot path, integrated in three merged
@@ -152,7 +165,16 @@ Compare-binaries step proved the two independent builds bit-identical)
 measures flat, and large deltas reproduce within ±1% across runs — yet
 small (≲6%) layout-dependent deltas flip sign between jobs on the same
 binary pair. Judge macOS marked rows by majority across ≥3 runs, never
-one sample.
+one sample. Case law from the superinstruction wave: a mark that holds
+direction at consistent magnitude across all three samples is convicted
+even on macOS (for_range +4.5/+4.5/+3.9 — beyond anything the
+modulation ever sustained; distinguish it from the modulation
+signature, the H1-era map_ops +6.2/+5.5 → −8.3 flip). And a probe A/B
+may conclude on two samples when its decision does not hinge on
+convicting any contested row — the no-GLC probe's verdict rested on the
+for_range recovery being sub-floor twice plus reproducible costs on the
+fusion's own rows, so a third sample could not have changed the
+outcome.
 
 Two instrument facts worth keeping: release builds are deterministic
 (bit-identical across checkouts) only when the checkout paths have
