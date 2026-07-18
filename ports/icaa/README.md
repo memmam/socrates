@@ -31,6 +31,9 @@ FABLE_PATH=ports ./target/release/fable ports/icaa/main.fable in.ppm /dev/null q
 # generate the deterministic test-scene suite
 FABLE_PATH=ports ./target/release/fable ports/icaa/scenes.fable outdir/
 
+# generate the adversarial perturbation corpus (fixed-seed SplitMix64)
+FABLE_PATH=ports ./target/release/fable ports/icaa/adversarial.fable advdir/
+
 # golden tests (this exact path — the CLI mains exit when run bare)
 FABLE_PATH=ports ./target/release/fable test ports/icaa/spec.fable
 ```
@@ -45,25 +48,37 @@ sampling with half-texel centers, three.js r178 sRGB constants, Rec. 601
 luma, f64 everywhere, source expression order preserved — no algebraic
 simplification).
 
-Current state, re-verified by CI on every push:
+Enforced by CI on every push (the `Test` job's ICAA steps — each
+comparison is `reference/compare.mjs`'s `max_diff=0` gate over every
+8-bit RGB component):
 
-- **18/18 pixel-exact**: 9 scenes × 2 presets, `max_diff=0` over every
-  8-bit RGB component (`reference/compare.mjs`), plus 30 debug-view
-  comparisons. An adversarial review round added 100+ more comparisons
-  (noise fields, 0.02-slope edges, thin lines, rings, 1×1/8×1 images) —
-  all exact.
-- **Fast preset: bit-identical f64** — every probe intermediate matches the
-  JS reference to the last bit. Quality preset matches everywhere except a
-  ≤3e-16 relative residue in the final color, confined to the sRGB
-  `pow` path (V8 `Math.pow` vs Rust `powf` are both allowed to be a few
-  ulps off; neither has ever flipped an output byte).
+- **Scene battery — 18/18 pixel-exact**: the 9 deterministic scenes
+  (`scenes.fable`) × 2 presets.
+- **Debug views — 90/90 pixel-exact**: all five debug views (confidence,
+  coverage, distance, orientation, rms) on every scene at both presets
+  (9 × 2 × 5).
+- **Adversarial battery — 94/94 pixel-exact**: `adversarial.fable` draws
+  47 perturbed scenes from a fixed-seed hand-rolled SplitMix64 stream
+  (never `math.seed`, so the corpus is stable across releases) — edges
+  down to slope 0.02, thin lines, rings, discs, noise fields, gratings,
+  ramps, bars, and degenerate 1×1/8×1-class images — each rendered by
+  both implementations at both presets (47 × 2).
 - **Identity off-edge by construction**: flat fields, sub-threshold ramps,
-  and checkerboards pass through byte-identical (pinned in `spec.fable`).
-- The review round also caught a real contract violation — the layer's
-  `norm()` used the reciprocal-sqrt form instead of divide-by-length,
-  a 1-ulp difference that cascaded through the whole quality fit until
-  fixed — which is exactly the class of bug the two-translation pattern
-  exists to catch.
+  and checkerboards pass through byte-identical (pinned in `spec.fable`,
+  the "ICAA port golden tests" step).
+
+History, from the port's development (measured then, not re-run by CI):
+the fast preset was bit-identical f64 at every probe intermediate; the
+quality preset matched everywhere except a ≤3e-16 relative residue in
+the final color, confined to the sRGB `pow` path (V8 `Math.pow` vs Rust
+`powf` are both allowed to be a few ulps off; neither ever flipped an
+output byte). The adversarial battery above reconstructs a one-time
+adversarial review round as a permanent, deterministic corpus; that
+original round also caught a real contract violation — the layer's
+`norm()` used the reciprocal-sqrt form instead of divide-by-length,
+a 1-ulp difference that cascaded through the whole quality fit until
+fixed — which is exactly the class of bug the two-translation pattern
+exists to catch.
 
 ## Files
 
@@ -72,6 +87,7 @@ Current state, re-verified by CI on every push:
 | `icaa.fable` | the algorithm, 1:1 with upstream `ICAANode.js` |
 | `main.fable` | CLI (`in.ppm out.ppm quality|fast [debug N] [probe X Y]`) |
 | `scenes.fable` | deterministic hard-aliased test scenes |
+| `adversarial.fable` | fixed-seed adversarial perturbation corpus (47 scenes) |
 | `spec.fable` | golden tests (checksums + identity pins) |
 | `reference/icaa-cpu.mjs` | independent plain-JS CPU reference |
 | `reference/compare.mjs` | pixel-diff harness |

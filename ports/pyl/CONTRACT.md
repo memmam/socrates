@@ -83,21 +83,24 @@ is `{b0, b1, b2, a1, a2}` (a0 normalized to 1). Pinned algorithm:
    transform contributes gain `(4 − s)` to the denominator product —
    full digital gain = `analog_gain · Re(Π(4 − z_analog_zeros) / Π(4 −
    p_analog_poles))`; zeros at s = ∞ map to z = −1.
-5. SOS pairing: pair each complex-conjugate pole pair in the order
-   produced by steps 1–3 (scan the pole list left to right; each unused
-   pole takes its nearest unused conjugate). For odd-order `low`, the
-   leftover real pole forms a first-order section. Zeros: `low` → all
-   digital zeros at z = −1, two per second-order section (the
-   first-order section takes one); `band` → each second-order section
-   takes one z = +1 and one z = −1 (`b ∝ [1, 0, −1]`). Section order
-   and gain placement follow **the freeze file** (which follows scipy's
-   `zpk2sos` output for these designs — note scipy places an odd
-   order's real-pole section first and carries the overall gain in the
-   first emitted section); where an implementation's natural emission
-   order differs, it must permute to match the freeze. The shim
-   implements scipy's `zpk2sos('nearest')` pairing (including
-   `_cplxreal` run-sorting) outright; the Fable side must reproduce the
-   freeze however it gets there.
+5. SOS pairing: scipy's `zpk2sos('nearest')`, which both sides
+   implement outright (the shim ports it statement for statement, as
+   does `ports/pyl/signal.fable` — its header records the steps):
+   `_cplxreal` first (lexicographic (re, |im|) sort with 100·eps
+   tolerance, run-sorting by |im| within equal-real runs, conjugate
+   averaging), then sections filled **worst-pole-first** — the
+   remaining pole nearest the unit circle seeds each section — from the
+   LAST row to the first, with nearest-zero pairing, scipy's two
+   odd-order special cases, and the overall gain folded into the FIRST
+   emitted section's b row. For odd-order `low`, the leftover real pole
+   forms a first-order section. Zeros: `low` → all digital zeros at
+   z = −1, two per second-order section (the first-order section takes
+   one); `band` → each second-order section takes one z = +1 and one
+   z = −1 (`b ∝ [1, 0, −1]`). Section order and gain placement follow
+   **the freeze file** (which follows scipy's `zpk2sos` output for
+   these designs — note scipy places an odd order's real-pole section
+   first and carries the overall gain in the first emitted section);
+   the Fable side must reproduce the freeze however it gets there.
 6. **The per-filter freeze (authoritative):** prose descriptions of SOS
    pairing conventions are error-prone, so the binding artifact is a
    coefficient dump. The shim author implements steps 1–5, then writes
@@ -165,6 +168,10 @@ listening; `wav2paw.py` converts back.
 
 ## Comparison (`ports/claudewave/reference/compare_paw.py`)
 
-`python3 compare_paw.py a.paw b.paw` → prints
-`max_abs_diff=<float> frames=<n> ch=<c>` and exits 0 iff
-`max_abs_diff ≤ 1e-9`. Shapes must match exactly.
+`python3 compare_paw.py truth.paw candidate.paw` → prints
+`max_abs_diff=<float> frames=<n> ch=<c> allowed=<float>` and exits 0 iff
+`max_abs_diff` is within the battery item's row in the script's
+per-item expected-max residual table (item name = `truth.paw`'s
+basename; `0.0` for items measured bit-identical, 2× the measured
+residual for the rest) AND within the global 1e-9 outer bound. An item
+with no table row is a comparison error. Shapes must match exactly.

@@ -16,6 +16,7 @@
 // and c / 255 on read.
 
 import jsl.vec;
+import std.lists;
 
 pub struct Image {
     w: Int,
@@ -24,7 +25,7 @@ pub struct Image {
 }
 
 pub fn new_image(w: Int, h: Int) -> Image {
-    Image { w, h, px: (0..w * h * 4).map(|_| 0.0) }
+    Image { w, h, px: lists.fill(w * h * 4, 0.0) }
 }
 
 impl Image {

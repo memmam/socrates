@@ -201,7 +201,7 @@ for (idx, name) in names.enumerate() {
         panic("{name} consumed {draws} draws (>= stride {item_stride})");
     }
     audio.write_paw(arr, sr, "{outdir}/{name}.paw").unwrap();
-    let line = "{if idx < 10 { "0" } else { "" }}{idx} {name} offset={offset} sr={sr} "
+    let line = "{str(idx).pad_left(2, "0")} {name} offset={offset} sr={sr} "
         + "frames={arr.frames()} ch={arr.ch} draws={draws}";
     manifest.push(line);
     println(line);

@@ -1,8 +1,8 @@
 // claudewave.dsp — Fable port of upstream lib/dsp.py (byte-for-byte copy
 // vendored at ports/claudewave/upstream/dsp.py).
 //
-// DSP helpers: tape warmth, sidechain pump, vinyl crackle, hiss,
-// slowdown. Function-for-function port with upstream expression order
+// DSP helpers: tape warmth, sidechain pump, vinyl crackle, hiss.
+// Function-for-function port with upstream expression order
 // (see ports/pyl/CONTRACT.md). Fable has no default arguments: callers
 // pass the upstream defaults explicitly (documented per function).
 //
