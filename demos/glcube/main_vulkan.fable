@@ -172,9 +172,8 @@ fn run() -> Result[Unit, String] {
     Ok(())
 }
 
-match run() {
-    Ok(_) -> {},
-    Err(msg) -> println("glcube: vulkan unavailable, skipping ({msg})"),
+if let Err(msg) = run() {
+    println("glcube: vulkan unavailable, skipping ({msg})");
 }
 
 // Golden output for './target/release/fable test demos/glcube/main_vulkan.fable'

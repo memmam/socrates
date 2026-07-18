@@ -100,9 +100,7 @@ fn magnitudes(x: List[Float]) -> List[Float] {
 // sort_by-convention comparator over (bin, magnitude) pairs, for
 // std.lists.max_by. Ties keep the first winner — the lower bin.
 fn by_mag(a: (Int, Float), b: (Int, Float)) -> Int {
-    if a.1 < b.1 {
-        -1
-    } else if a.1 > b.1 { 1 } else { 0 }
+    if a.1 < b.1 { -1 } else if a.1 > b.1 { 1 } else { 0 }
 }
 
 fn spectrum_chart(mags: List[Float]) -> String {
@@ -118,17 +116,13 @@ fn spectrum_chart(mags: List[Float]) -> String {
 
 // --- terminal sparkline --------------------------------------------------------
 
-// The sample where a series is lowest: (x, y) at the minimum.
+// The sample where a series is lowest: (x, y) at the minimum. The key is
+// a Float, so this is lists.min_by's comparator form (min_by_key keys are
+// Int); min_by keeps the first winner on ties, exactly like the scan it
+// replaced.
 fn arg_min(s: chart.Series) -> (Float, Float) {
-    let mut bx = s.xs[0];
-    let mut by = s.ys[0];
-    for (x, y) in s.xs.zip(s.ys) {
-        if y < by {
-            bx = x;
-            by = y;
-        }
-    }
-    (bx, by)
+    lists.min_by(s.xs.zip(s.ys), |a, b| if a.1 < b.1 { -1 } else if a.1 > b.1 { 1 } else { 0 })
+        .unwrap()
 }
 
 // --- glue ------------------------------------------------------------------------
@@ -185,12 +179,9 @@ let out_dir = match os.args().first() {
     None -> if fs.is_dir("demos/plot") { "demos/plot" } else { "." },
 };
 
-match run(out_dir, mags) {
-    Ok(_) -> {},
-    Err(e) -> {
-        println("plot: {e}");
-        os.exit(1);
-    },
+if let Err(e) = run(out_dir, mags) {
+    println("plot: {e}");
+    os.exit(1);
 }
 
 // Golden output (checked by `./target/release/fable test demos/plot`):

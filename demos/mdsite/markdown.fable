@@ -28,7 +28,11 @@ fn escape_char(c: String) -> String {
         "&lt;"
     } else if c == ">" {
         "&gt;"
-    } else if c == "\"" { "&quot;" } else { c }
+    } else if c == "\"" {
+        "&quot;"
+    } else {
+        c
+    }
 }
 
 // ------------------------------------------------------------ inline spans
@@ -205,13 +209,10 @@ fn heading_level(line: String) -> Int {
 }
 
 // Append one finished block element to the document. Blocks are never
-// empty strings, so len() == 0 means exactly "no blocks yet" and the
-// "\n" separator lands only between blocks.
+// empty strings, so the builder is empty exactly when no block has
+// landed yet — push_joined puts the "\n" separator only between blocks.
 fn block(out: strings.Builder, html: String) {
-    if out.len() > 0 {
-        out.push("\n");
-    }
-    out.push(html);
+    out.push_joined("\n", html);
 }
 
 // Adjacent source lines belong to one paragraph, joined with spaces.

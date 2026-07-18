@@ -62,7 +62,7 @@ error demo: (car (quote ())) -> error: car of empty list
 | s-expressions | a recursive `enum Sexp { Num, Sym, Form(List[Sexp]) }` |
 | runtime values | `enum Value`, with a `Closure` struct for lambdas |
 | environments | `struct Env { vars: Map[String, Value], parent: Option[Env], specials: set.Set[String] }` — reference semantics make recursive `define` work |
-| special-form dispatch | a `std.set` `Set[String]` of reserved words, built once in `global_env` and shared by reference with every child scope (Fable has no module-level constants); one probe decides special-vs-application, and the same set rejects `(define if 3)` |
+| special-form dispatch | a `std.set` `Set[String]` of reserved words, built once in `global_env` and shared by reference with every child scope (a pointer copy per scope, not a set copy); one probe decides special-vs-application, and the same set rejects `(define if 3)` |
 | printing | `strings.Builder` threaded through the recursive printers (`show` in both `eval` and `reader`) — O(output) instead of re-copying child strings at every nesting level |
 | duplicate names | `Set.insert -> Bool` ("did it change?") catches `(lambda (x x) ...)` and `(let ((a 1) (a 2)) ...)` |
 | error reporting | `Result[Value, String]` + the `?` operator everywhere |

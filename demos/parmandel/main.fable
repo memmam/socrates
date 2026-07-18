@@ -19,11 +19,8 @@ for i in 0..bands {
 }
 
 for w in fleet {
-    while true {
-        match w.recv() {
-            Some(row) -> println(row),
-            None -> break,
-        }
+    while let Some(row) = w.recv() {
+        println(row);
     }
     w.join().unwrap();
 }

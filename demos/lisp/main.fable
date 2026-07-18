@@ -50,12 +50,9 @@ fn show_program(name: String) -> Result[Unit, String] {
 println("mini-lisp, a Lisp interpreter written in Fable");
 
 for name in ["factorial.lisp", "fib.lisp", "map.lisp", "adder.lisp", "loop.lisp", "let.lisp"] {
-    match show_program(name) {
-        Ok(_) -> {},
-        Err(e) -> {
-            println("lisp: {e}");
-            os.exit(1);
-        },
+    if let Err(e) = show_program(name) {
+        println("lisp: {e}");
+        os.exit(1);
     }
 }
 

@@ -150,9 +150,8 @@ impl Sheet {
     // set is a std.set, and `insert` reporting "already there" IS the
     // cycle check — marking and detecting are one operation.
     pub fn value_of(self, a: String) -> Value {
-        match self.cache.get(a) {
-            Some(v) -> return v,
-            None -> {},
+        if let Some(v) = self.cache.get(a) {
+            return v;
         }
         if !self.busy.insert(a) {
             return Value.Bad("#CYCLE!");
@@ -212,7 +211,11 @@ impl Sheet {
                 Value.Num(l - r)
             } else if op == "*" {
                 Value.Num(l * r)
-            } else if r == 0.0 { Value.Bad("#DIV/0!") } else { Value.Num(l / r) },
+            } else if r == 0.0 {
+                Value.Bad("#DIV/0!")
+            } else {
+                Value.Num(l / r)
+            },
         }
     }
 
@@ -364,9 +367,8 @@ impl Sheet {
                     },
                     None -> None,
                 };
-                match line {
-                    Some(text) -> out.push_joined("\n", text),
-                    None -> {},
+                if let Some(text) = line {
+                    out.push_joined("\n", text);
                 }
             }
         }

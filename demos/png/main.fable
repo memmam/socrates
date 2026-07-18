@@ -15,10 +15,7 @@ import zlib;
 import png;
 import image;
 
-let out_dir = match os.args().first() {
-    Some(d) -> d,
-    None -> "demos/png",
-};
+let out_dir = os.args().first().unwrap_or("demos/png");
 let out_path = "{out_dir}/out.png";
 
 // --- render and encode ------------------------------------------------------

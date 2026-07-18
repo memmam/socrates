@@ -14,7 +14,7 @@ println(bits.ushr(-1, 0)); //? expect: -1
 println(bits.ushr(bits.bit(63), 60)); //? expect: 8
 println(bits.ushr(bits.bit(63), 8) == bits.bit(55)); //? expect: true
 
-// ---- popcount, including the bit-63 cases the SWAR split exists for ----
+// ---- popcount, including the bit-63 cases the old SWAR split existed for ----
 println(bits.popcount(0)); //? expect: 0
 println(bits.popcount(1)); //? expect: 1
 println(bits.popcount(0b1011)); //? expect: 3
@@ -125,7 +125,7 @@ fn perft(own: Int, opp: Int, depth: Int) -> Int {
     let mut rest = mvs;
     while rest != 0 {
         let sq = bits.ctz(rest);
-        rest = rest ^ bits.bit(sq);
+        rest ^= bits.bit(sq);
         let (own2, opp2) = board.apply(own, opp, sq);
         total += perft(opp2, own2, depth - 1);
     }

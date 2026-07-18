@@ -32,10 +32,10 @@ pub fn generate(r: rules.Rules, w: Int, h: Int, seed: Int, max_tries: Int) -> Op
     while attempt < max_tries {
         math.seed(seed + attempt);
         attempt += 1;
-        match run(r, w, h) {
-            Some(g) -> return Some(Outcome { grid: g, attempts: attempt }),
-            None -> {}, // contradiction — reroll with the next seed
+        if let Some(g) = run(r, w, h) {
+            return Some(Outcome { grid: g, attempts: attempt });
         }
+        // contradiction — reroll with the next seed
     }
     None
 }
@@ -62,9 +62,10 @@ fn run(r: rules.Rules, w: Int, h: Int) -> Option[List[String]] {
 }
 
 // Index of the undecided cell with the smallest cached entropy, or None
-// when every cell already holds exactly one tile. (This is the hottest
-// loop in the demo, so no enumerate()/min_by here: both allocate per
-// element, and a hand scan with two locals allocates nothing.)
+// when every cell already holds exactly one tile. (Hand scan, not
+// enumerate()/min_by — a STYLE.md R1 hot-path exemption: this is the
+// hottest loop in the demo, both allocate per element, and a hand scan
+// with two locals allocates nothing.)
 fn lowest_entropy(cells: List[Int], ent: List[Float]) -> Option[Int] {
     let mut best = -1;
     let mut best_h = 0.0;
@@ -161,7 +162,7 @@ fn support(cands: Int, r: rules.Rules, d: Int) -> Int {
     let mut m = 0;
     for s in 0..r.tiles.len() {
         if cands >> s & 1 == 1 {
-            m = m | r.allow[s * 4 + d]; // r.mask(s, d), inlined: this loop is hot
+            m |= r.allow[s * 4 + d]; // r.mask(s, d), inlined: this loop is hot
         }
     }
     m
@@ -182,9 +183,5 @@ fn render(cells: List[Int], r: rules.Rules, w: Int, h: Int) -> List[String] {
 
 // The index of the single set bit in a collapsed cell's mask.
 fn tile_of(mask: Int) -> Int {
-    let mut t = 0;
-    while mask >> t & 1 == 0 {
-        t += 1;
-    }
-    t
+    mask.trailing_zeros()
 }

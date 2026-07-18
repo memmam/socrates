@@ -70,13 +70,10 @@ fn build() -> Result[Unit, String] {
         let dest = path.join(out_dir, "{p.slug}.html");
         // Regeneration check: out/ is committed, and a fresh build must
         // reproduce it byte for byte (Bytes `==` is structural).
-        match fs.read_bytes(dest) {
-            Ok(old) -> {
-                if old == html.to_bytes() {
-                    unchanged += 1;
-                }
-            },
-            Err(_) -> {},
+        if let Ok(old) = fs.read_bytes(dest) {
+            if old == html.to_bytes() {
+                unchanged += 1;
+            }
         }
         fs.write(dest, html)?;
         total_bytes += html.byte_len();
@@ -89,12 +86,9 @@ fn build() -> Result[Unit, String] {
     Ok(())
 }
 
-match build() {
-    Ok(_) -> {},
-    Err(e) -> {
-        println("mdsite: error: {e}");
-        os.exit(1);
-    },
+if let Err(e) = build() {
+    println("mdsite: error: {e}");
+    os.exit(1);
 }
 
 // The full build report, so `fable test demos/mdsite` pins the demo:

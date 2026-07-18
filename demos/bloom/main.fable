@@ -16,10 +16,7 @@ import hash;
 import bloom;
 import words;
 
-let out_dir = match os.args().first() {
-    Some(d) -> d,
-    None -> "demos/bloom",
-};
+let out_dir = os.args().first().unwrap_or("demos/bloom");
 
 println("bloom — a Bloom filter over Bytes, measured against std.set");
 println("");
@@ -118,7 +115,7 @@ println("");
 // --- popcount and fill --------------------------------------------------------
 
 let pc = f.popcount();
-println("popcount: {pc} of {m} bits set (SWAR, three shift-mask steps per byte)");
+println("popcount: {pc} of {m} bits set (the count_ones intrinsic, byte by byte)");
 println("fill ratio: {f.fill_ratio().to_fixed(4)} (theory 1 - e^(-kn/m) = {bloom.theoretical_fill(m, k, f.inserted).to_fixed(4)})");
 println("");
 
@@ -197,7 +194,7 @@ println("all {member_list.len()} members still present after the disk round-trip
 //? expect: false positives: 38 of 2000 probes, rate 0.0190
 //? expect: theory: (1 - e^(-kn/m))^k = 0.0196
 //? expect:
-//? expect: popcount: 2121 of 4096 bits set (SWAR, three shift-mask steps per byte)
+//? expect: popcount: 2121 of 4096 bits set (the count_ones intrinsic, byte by byte)
 //? expect: fill ratio: 0.5178 (theory 1 - e^(-kn/m) = 0.5193)
 //? expect:
 //? expect: filter bytes 0..8, one char per bit in index order

@@ -6,6 +6,12 @@ orders, each adversarially verified. Where a rule cites a demo, that
 demo is the reference implementation of the rule. The papercut ledger
 behind these rules lives in `NOTES.md`.
 
+This file is **normative** for `demos/` (and, per R3, for ports'
+internals): the demos conform to it, not the other way around. Rules a
+site may deliberately diverge from carry names (R1-R4, § 9) so the
+divergence comment can cite its rule; `NOTES.md` keeps the ledger of
+every such divergence.
+
 ## 1. Golden discipline
 
 - **Pin everything, and make pins self-checking.** A golden line should
@@ -60,10 +66,12 @@ behind these rules lives in `NOTES.md`.
 
 ## 3. Bytes and binary formats
 
-- **Write with the LE pushers, read with `get()` arithmetic** — the two
+- **Write with the LE pushers, read with the LE readers** — the two
   directions verify each other (`synthwave` encodes with `push_u32le`
-  and decodes its own header with `get(i) | get(i+1) << 8 | ...`).
-  Sign-fold by hand where needed (`if raw >= 32768 { raw - 65536 }`).
+  and decodes its own header back out with `read_u32le`/`read_u16le`;
+  `read_i16le` hands back the sample already sign-folded). The
+  `get()`-shift-or reassembly and the hand sign-fold these replaced
+  live in git history.
 - **The regeneration pattern:** read the committed artifact *before*
   rewriting it, pin `committed == fresh_build` (structural `Bytes ==`
   makes this a one-line golden), then write — the artifact self-heals
@@ -115,9 +123,10 @@ behind these rules lives in `NOTES.md`.
 - **Channels buffer: deal every job up front, then drain.** Full pool
   parallelism, zero synchronization code, and the parent's send loop
   never blocks (`swarm`, `parmandel`).
-- **The worker main loop** is `let msg = match worker.recv() {
-  Some(m) -> m, None -> break };` — diverging match arms compose with
-  recv. Support both an explicit quit message and `None`-means-quit so
+- **The worker main loop** is `while let Some(msg) = worker.recv() {
+  ... }` (v0.8 sugar; it desugars at parse time to exactly the old
+  `let msg = match worker.recv() { Some(m) -> m, None -> break };`
+  form). Support both an explicit quit message and `None`-means-quit so
   workers never hang regardless of how the parent leaves.
 - **Workers never `println`.** All output flows through the channel and
   the parent prints in protocol order. Helper files guard everything
@@ -183,3 +192,33 @@ behind these rules lives in `NOTES.md`.
 - Set-probe dispatch beat chained string compares under stress
   (`lisp`, −15%): fewer transient Options per call. Amortized lookups
   are a safe default even in hot paths.
+
+## 9. Aggregates and std idioms (the named rules)
+
+These rules are numbered because divergence comments cite them by name.
+
+- **R1 — aggregates.** Selection scans go through
+  `lists.min_by`/`max_by`/`min_by_key`/`max_by_key`, never a
+  hand-rolled best-so-far loop — EXCEPT hot paths, early-exit scans,
+  and allocation-sensitive loops, where the hand scan stays (the
+  aggregate takes a closure per element and often needs a materialized
+  pair list; a hand scan with two locals allocates nothing). Every
+  exception carries an in-place comment naming this rule. Reference
+  exemptions: `wfc`'s `lowest_entropy`, `sudoku`'s `best_cell`,
+  `checkers`' `best_move`, `swarm`'s `collatz_champion`.
+- **R2 — extremes.** Running extremes accumulate with the `min`/`max`
+  methods — `worst = worst.max(dr)` — never an `if`-and-assign;
+  `Float.min`/`max` exist since v0.9 precisely for this (`spectra`,
+  `synthwave`).
+- **R3 — std idioms in non-hot code.** Where a std spelling exists, use
+  it: `lists.fill`, `pad_left`, `unwrap_or`, `Range.any`/`all`,
+  `.all()`/`.any()` over the manual loop/match/gate spellings. This
+  applies to ports' INTERNALS too; a port's API *surface* that mirrors
+  its upstream is exempt — there the upstream's names and shapes win
+  (`ports/*/CONTRACT.md`), because upstream fidelity is the port's
+  whole verification story.
+- **R4 — deliberate divergence.** Any exemption from a rule in this
+  file carries a one-line comment at the site naming the rule it
+  diverges from and why, and `NOTES.md` keeps the ledger. An
+  uncommented divergence is a bug even when the divergence itself is
+  right.

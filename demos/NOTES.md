@@ -238,9 +238,43 @@ throughout: `bloom`'s 16-bit-halves `mul32` became
 `a.wrapping_mul(b) & 0xFFFFFFFF` (the exact case the intrinsic was added
 for), `checkers`' masked-shift `lshr` became `x.ushr(k)` (the reversi
 precedent, finally applied), `spreadsheet` and `mdsite` adopted
-`push_joined`, `swarm` adopted the `std.json` constructors that were
+`push_joined` (`mdsite`'s document-level `block()` join, missed in that
+wave, followed in the consistency pass below — the claim is now fully
+true), `swarm` adopted the `std.json` constructors that were
 added *for it* (`json.int`/`jstr`/`obj`), `regex` reads its bitmap words
 in one `read_u64le`, and the four Int-key comparator sites (`reversi`,
 `swarm`, `bloom`, `dungeon`) moved to `max_by_key`. The lesson for
 future feature queues: adoption is part of shipping — a queue item isn't
 done until the demo that motivated it uses it.
+
+### The deliberate-divergence ledger (STYLE.md R4, consistency pass)
+
+STYLE.md § 9 named its rules (R1-R4) so a site that deliberately
+diverges can cite the rule it breaks; this ledger mirrors every
+in-place divergence comment. The consistency pass that introduced R4
+also swept the demos to conformance (compound bitwise assignment,
+`if let`/`while let`, `push_joined`, aggregate/extreme/std idioms —
+byte-identical goldens except two deliberate re-pins of prose inside
+printed lines: `bloom`'s popcount line now names the `count_ones`
+intrinsic, `synthwave`'s decoded-header line now names the native LE
+readers). Standing divergences:
+
+- `bloom/bloom.fable` `bit_string` — diverges from § 6's `push_joined`
+  rule: the body is an alloc-free `push_char` loop and the manual
+  separator gate keeps it allocation-free; `push_joined` would need a
+  String piece per byte.
+- `wfc/wfc.fable` `lowest_entropy` — R1 hot-path exemption: the
+  hottest loop in the demo; `enumerate()`/`min_by` allocate per
+  element, the hand scan with two locals allocates nothing. The same
+  file's `support()` keeps `r.mask(s, d)` inlined (with its `|=`
+  accumulator) for the same hot-loop reason, per its in-place comment.
+- `sudoku/solver.fable` `best_cell` — R1 early-exit exemption: the
+  scan breaks as soon as a 2-candidate cell appears, which no
+  aggregate spelling can express.
+- `checkers/engine.fable` `best_move` — R1 exemption: each candidate's
+  score is a full apply/negamax/undo on the shared board interleaved
+  with the alpha update; an aggregate cannot express the side effects
+  or the pruning.
+- `swarm/crunch_worker.fable` `collatz_champion` — R1 allocation
+  exemption: `max_by_key` would materialize a `(n, steps)` pair list
+  per job inside the worker's hot loop.

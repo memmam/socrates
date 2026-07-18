@@ -9,7 +9,7 @@
 // working X/GLX display (a real one, or Xvfb — e.g. `Xvfb :98 -screen 0
 // 1024x768x24 & DISPLAY=:98 ...`). Without either, `window.create` returns
 // `Err` and this file reports one deterministic line and exits 0 (same
-// tolerant convention as docs/assets/gpu_double.fable) — but its own golden
+// tolerant convention as docs/assets/gl_triangle.fable) — but its own golden
 // test below is pinned to the *rendered* pixels, so — unlike every other
 // demo in this directory — it only passes with `--features gl` and a real
 // GL context (see README.md).
@@ -94,9 +94,8 @@ fn run() -> Result[Unit, String] {
     Ok(())
 }
 
-match run() {
-    Ok(_) -> {},
-    Err(msg) -> println("glcube: gl unavailable, skipping ({msg})"),
+if let Err(msg) = run() {
+    println("glcube: gl unavailable, skipping ({msg})");
 }
 
 // Golden output for './target/release/fable test demos/glcube' — requires

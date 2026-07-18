@@ -17,10 +17,10 @@ import std.strings;
 import bits;
 
 pub let file_a = 0x0101010101010101;
-pub let file_h = file_a << 7; // 0x8080808080808080 has bit 63 set — not writable as a literal
+pub let file_h = 0x8080808080808080; // bit 63 (h8) included — full-width hex is a v0.8 literal
 pub let not_file_a = file_a ^ -1;
 pub let not_file_h = file_h ^ -1;
-pub let all_bits = -1; // 0xffffffffffffffff is likewise out of literal range
+pub let all_bits = -1; // all 64 bits set (0xffffffffffffffff would spell the same value)
 
 // In order: N, S, E, NE, SE, W, NW, SW. (Per-element trailing comments
 // would be clearer, but `fable fmt` evicts comments from inside literals.)
@@ -49,9 +49,9 @@ pub fn legal_moves(own: Int, opp: Int) -> Int {
     for (amt, mask) in dirs {
         let mut run = shift(own, amt, mask) & opp;
         for _ in 0..5 {
-            run = run | shift(run, amt, mask) & opp;
+            run |= shift(run, amt, mask) & opp;
         }
-        acc = acc | shift(run, amt, mask) & empty;
+        acc |= shift(run, amt, mask) & empty;
     }
     acc
 }
@@ -65,10 +65,10 @@ pub fn flips(own: Int, opp: Int, mv: Int) -> Int {
     for (amt, mask) in dirs {
         let mut run = shift(mv, amt, mask) & opp;
         for _ in 0..5 {
-            run = run | shift(run, amt, mask) & opp;
+            run |= shift(run, amt, mask) & opp;
         }
         if shift(run, amt, mask) & own != 0 {
-            all = all | run;
+            all |= run;
         }
     }
     all
@@ -118,7 +118,11 @@ pub fn render(black: Int, white: Int, marks: Int) -> String {
                 "X"
             } else if white & m != 0 {
                 "O"
-            } else if marks & m != 0 { "+" } else { "." };
+            } else if marks & m != 0 {
+                "+"
+            } else {
+                "."
+            };
             out.push(" " + glyph);
         }
         out.push("\n");

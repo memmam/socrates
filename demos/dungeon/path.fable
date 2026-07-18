@@ -26,7 +26,7 @@ fn bitset_test(bits: List[Int], i: Int) -> Bool {
 }
 
 fn bitset_set(bits: List[Int], i: Int) {
-    bits[i / 64] = bits[i / 64] | 1 << i % 64;
+    bits[i / 64] |= 1 << i % 64;
 }
 
 // ---- shortest route ----

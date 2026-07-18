@@ -95,8 +95,9 @@ above 255 (`é` fits in the bitmap; `λ` does not; `[é-λ]` straddles and is
 split). The matcher's hot path is two shifts and a mask —
 `bits.get(c >> 3) >> (c & 7) & 1 == 1` — however many ranges the class was
 written with, and negation stays a flag consulted at match time. The demo
-prints a few bitmaps as four 64-bit words, reassembled from the buffer with
-`|` and `<<` and hex-printed with an arithmetic `>>` masked by `& 15`.
+prints a few bitmaps as four 64-bit words, each read back out of the buffer
+in one `read_u64le` (v0.8, bit 63 included) and hex-printed with `Int.to_hex`
+zero-padded to 16 digits by `pad_left`.
 
 ## Bounded quantifiers
 

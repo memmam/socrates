@@ -9,7 +9,7 @@ the legal digits for a cell are `(row | col | box) ^ 511`, computed fresh
 in O(1) whenever asked.
 
 Naked-singles propagation fills every cell whose mask has exactly one bit
-(`popcount(mask) == 1` — popcount is a shift-and-add loop, five lines),
+(`popcount(mask) == 1` — popcount is a one-line `count_ones` wrapper),
 looping to a fixpoint; when logic alone stalls, a depth-first search
 guesses at the **most-constrained cell** (fewest mask bits first) and
 backtracks on contradiction (`mask == 0`). Guesses peel the mask
@@ -24,7 +24,7 @@ is the proven minimum for a unique solution). Every answer is re-checked
 by an independent verifier — all 27 units and every original given — and
 the run prints search statistics per puzzle.
 
-About 450 lines of Fable in four files:
+About 650 lines of Fable in four files:
 
 | File | What it does |
 |------|--------------|
@@ -92,8 +92,8 @@ pub fn has(mask: Int, d: Int) -> Bool { mask >> d - 1 & 1 == 1 }
 ```
 
 Precedence is Rust's: arithmetic > shifts > `&` > `^` > `|` > comparisons,
-so none of the expressions above need parentheses. Two cautions carried in
+so none of the expressions above need parentheses. One caution carried in
 the code comments: Fable's `>>` is **arithmetic** (sign-extending) — 9-bit
 masks never touch the sign bit so it costs nothing here, but a full-width
-bitboard must re-mask after every right shift; and there is no `|=`/`&=`/
-`^=`, so mask updates are written out as `m = m | bit`.
+bitboard must re-mask after every right shift. Mask updates use v0.8's
+compound bitwise assignment (`self.row_used[r] |= bit`, `^=` to undo).

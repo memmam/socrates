@@ -27,23 +27,24 @@ fn int_field(j: json.Json, key: String) -> Int {
 }
 
 fn job_msg(kind: String, id: Int, lo: Int, hi: Int) -> String {
-    let fields = [("cmd", json.jstr(kind)), ("job", json.int(id)), ("lo", json.int(lo)), ("hi", json.int(hi))];
+    let fields = [
+        ("cmd", json.jstr(kind)),
+        ("job", json.int(id)),
+        ("lo", json.int(lo)),
+        ("hi", json.int(hi)),
+    ];
     json.stringify(json.obj(fields))
 }
 
 let quit_msg = json.stringify(json.obj([("cmd", json.jstr("quit"))]));
 
-// worker.spawn is documented to resolve a relative file against the entry
-// script's directory, but in v0.7 an entry script that imports anything
-// (this one imports three std modules) loses that base and the lookup falls
-// back to the process cwd. Workaround: try the script-relative name first
-// (the documented behavior, so this keeps working when the bug is fixed),
-// then the repo-root-relative path that `fable test demos` actually needs.
+// worker.spawn resolves a relative file against the entry script's
+// directory — including, since the v0.7 in-round fix, when the entry
+// script has imports (tests/spec/workers/spawn_with_import.fable is the
+// regression test; the two-candidate fallback this demo carried while
+// reporting that bug lives in git history).
 fn spawn_cruncher(args: List[String]) -> Worker {
-    match worker.spawn("crunch_worker.fable", args) {
-        Ok(w) -> w,
-        Err(_) -> worker.spawn("demos/swarm/crunch_worker.fable", args).unwrap(),
-    }
+    worker.spawn("crunch_worker.fable", args).unwrap()
 }
 
 // ---- 1. static assignment --------------------------------------------------
@@ -126,12 +127,9 @@ for _ in 0..3 {
 // parent collecting in rotation.
 let mut busy = [false, false, false];
 for (wi, w) in pool2.enumerate() {
-    match queue.pop_front() {
-        Some((id, lo, hi)) -> {
-            w.send(job_msg("primes", id, lo, hi));
-            busy[wi] = true;
-        },
-        None -> {},
+    if let Some((id, lo, hi)) = queue.pop_front() {
+        w.send(job_msg("primes", id, lo, hi));
+        busy[wi] = true;
     }
 }
 
@@ -143,13 +141,10 @@ while done < blocks.len() {
         let reply = json.parse(pool2[turn].recv().unwrap()).unwrap();
         counts.insert(int_field(reply, "job"), int_field(reply, "result"));
         done += 1;
-        match queue.pop_front() {
-            Some((id, lo, hi)) -> {
-                pool2[turn].send(job_msg("primes", id, lo, hi));
-            },
-            None -> {
-                busy[turn] = false;
-            },
+        if let Some((id, lo, hi)) = queue.pop_front() {
+            pool2[turn].send(job_msg("primes", id, lo, hi));
+        } else {
+            busy[turn] = false;
         }
     }
     turn = (turn + 1) % 3;

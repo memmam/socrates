@@ -34,7 +34,7 @@ Unlike every other demo in this directory, `main.fable`'s golden test only
 passes when built with `--features gl` and run under a real X/GLX display
 (a physical one, or Xvfb). Without either, `window.create` returns `Err`
 and the program prints one tolerant line and exits 0 (the same convention
-`docs/assets/gpu_double.fable` uses) — but that line doesn't match the
+`docs/assets/gl_triangle.fable` uses) — but that line doesn't match the
 pinned rendered-pixel output, so the golden check itself only passes with
 a working GL context. `cube.fable` and `spec.fable` need no GL context at
 all (pure geometry and matrix math) and pass on every build.

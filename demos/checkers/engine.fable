@@ -93,7 +93,10 @@ fn negamax(b: board.Board, side: Int, depth: Int, alpha: Int, beta: Int, st: Sta
 
 // Search the root: the chosen move and its score, or None when the side to
 // move has already lost. Ties break toward the earliest move in generation
-// order, which makes self-play fully deterministic.
+// order, which makes self-play fully deterministic. (Hand scan, not
+// lists.max_by_key — a STYLE.md R1 exemption: each candidate's score is a
+// full apply/negamax/undo on the shared board, interleaved with the alpha
+// update, which no aggregate can express.)
 pub fn best_move(b: board.Board, side: Int, depth: Int, st: Stats) -> Option[(board.Move, Int)] {
     let moves = b.moves_for(side);
     if moves.is_empty() {

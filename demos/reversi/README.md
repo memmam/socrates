@@ -15,7 +15,7 @@ game transcript):
 
 | File | What it does |
 |------|--------------|
-| `bits.fable` | the 64-bit toolbox: logical shift right (`ushr`), SWAR popcount, count-trailing-zeros, bitboard iteration — each written around a signed-64 trap documented in its comment |
+| `bits.fable` | the 64-bit toolbox: one-line delegations to the `ushr`/`count_ones`/`trailing_zeros` intrinsics plus bitboard iteration — the documented reference for the signed-64 traps each intrinsic retires |
 | `board.fable` | edge masks, the 8-direction table, shift-and-propagate move generation, flood-and-confirm flips, `apply`, coordinate names, and a `strings.Builder` renderer |
 | `main.fable` | greedy self-play from the standard opening to the full board, with the board printed every 12 plies and every move, score, and pass pinned |
 | `spec.fable` | golden tests: shift/popcount/ctz self-tests, edge-mask and corner probes, opening movegen, flip confirmation, and perft(1..6) = 4 / 12 / 56 / 244 / 1396 / 8200 |
@@ -67,15 +67,18 @@ your opponent the stable edges — and the pinned game shows it: black leads
   file h shifted east must not reappear on file a of the next rank, so
   east-ish directions mask with `not_file_a`, west-ish with `not_file_h`;
   pure north/south cannot wrap. `0x8080808080808080` (file h) has bit 63
-  set and is out of `Int` literal range, so the mask is derived:
-  `file_a << 7`.
+  set — unwritable as a literal until v0.8's full-width hex, so it is now
+  written directly (the derived `file_a << 7` lives in git history).
 - **Signed-64 traps**: Fable's `>>` is arithmetic and overflow panics, so
   a bitboard with h8 occupied breaks three classic idioms — right shifts
-  smear the sign bit (`bits.ushr` masks it off), and both `x & (x - 1)`
-  and `x & -x` panic on the bit-63-only value (bit iteration clears with
-  `x ^ bit(ctz(x))` instead). Even popcount's first SWAR step can carry
-  into the sign bit, so bit 63 is counted separately. Each workaround is
-  a comment in `bits.fable` and a pinned test in `spec.fable`.
+  smear the sign bit (the `ushr` intrinsic zero-fills), and both
+  `x & (x - 1)` and `x & -x` panic on the bit-63-only value (bit
+  iteration clears with `x ^ bit(ctz(x))` instead). The hand-rolled SWAR
+  popcount this demo once carried even had to count bit 63 separately —
+  its first halving step could carry into the sign bit; that version
+  lives in git history, and counting is now the `count_ones` intrinsic.
+  Each trap is a comment in `bits.fable` and a pinned test in
+  `spec.fable`.
 - **Determinism**: `bits.squares` yields moves in ascending square order
-  and `std.lists.max_by` keeps the first winner on ties, so "greedy
+  and `std.lists.max_by_key` keeps the first winner on ties, so "greedy
   max-flips, lowest square wins" needs no explicit tie-break code at all.

@@ -36,7 +36,7 @@ pub fn popcount(x: Int) -> Int {
 // Index of the lowest set bit (0..=63); ctz(0) is defined as 64.
 // Iterating a bitboard low-to-high:
 //
-//   while bb != 0 { let sq = ctz(bb); bb = bb ^ bit(sq); ... }
+//   while bb != 0 { let sq = ctz(bb); bb ^= bit(sq); ... }
 //
 // — ascending square order, which reversi uses as its deterministic
 // tie-break everywhere.
@@ -50,7 +50,7 @@ pub fn squares(bb: Int) -> List[Int] {
     let mut rest = bb;
     while rest != 0 {
         let sq = ctz(rest);
-        rest = rest ^ bit(sq);
+        rest ^= bit(sq);
         out.push(sq);
     }
     out

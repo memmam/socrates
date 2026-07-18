@@ -1,8 +1,9 @@
 // spec — component tests for the bloom demo: published FNV-1a vectors,
-// the overflow-safe 32-bit multiply, the mixer's avalanche, SWAR
-// popcount, bit set/get on the Bytes buffer, double-hash geometry, the
-// serialization format down to its exact bytes (and its failure paths),
-// and a bloom-vs-set drill small enough to eyeball.
+// the overflow-safe 32-bit multiply (`wrapping_mul` + mask), the mixer's
+// avalanche, the `count_ones`-backed popcounts, bit set/get on the Bytes
+// buffer, double-hash geometry, the serialization format down to its
+// exact bytes (and its failure paths), and a bloom-vs-set drill small
+// enough to eyeball.
 //
 //   ./target/release/fable test demos/bloom
 
@@ -49,7 +50,7 @@ println(
     "avalanche at 12345678: mean {mean} of 32 output bits flip per input bit, worst case {worst}",
 );
 
-// -- SWAR popcount ----------------------------------------------------------------
+// -- popcount (the count_ones intrinsic) --------------------------------------------
 
 let pc = [0, 1, 2, 3, 15, 170, 204, 255].map(|b| hash.popcount_byte(b));
 println("popcount_byte of [0, 1, 2, 3, 15, 170, 204, 255]: {pc} (want [0, 1, 1, 2, 4, 4, 4, 8])");

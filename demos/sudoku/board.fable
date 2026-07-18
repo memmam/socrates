@@ -104,9 +104,9 @@ impl Board {
     pub fn place(self, r: Int, c: Int, d: Int) {
         let bit = digit_bit(d);
         self.cells[r * 9 + c] = d;
-        self.row_used[r] = self.row_used[r] | bit;
-        self.col_used[c] = self.col_used[c] | bit;
-        self.box_used[box_of(r, c)] = self.box_used[box_of(r, c)] | bit;
+        self.row_used[r] |= bit;
+        self.col_used[c] |= bit;
+        self.box_used[box_of(r, c)] |= bit;
     }
 
     // Remove the digit at (r, c). Its bit is set in all three masks by
@@ -114,9 +114,9 @@ impl Board {
     pub fn unplace(self, r: Int, c: Int) {
         let bit = digit_bit(self.cells[r * 9 + c]);
         self.cells[r * 9 + c] = 0;
-        self.row_used[r] = self.row_used[r] ^ bit;
-        self.col_used[c] = self.col_used[c] ^ bit;
-        self.box_used[box_of(r, c)] = self.box_used[box_of(r, c)] ^ bit;
+        self.row_used[r] ^= bit;
+        self.col_used[c] ^= bit;
+        self.box_used[box_of(r, c)] ^= bit;
     }
 
     pub fn clue_count(self) -> Int {
@@ -196,7 +196,7 @@ fn unit_ok(b: Board, cells: List[(Int, Int)]) -> Bool {
         if seen & bit != 0 {
             return false;
         }
-        seen = seen | bit;
+        seen |= bit;
     }
     seen == full_mask
 }
