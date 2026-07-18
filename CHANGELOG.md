@@ -138,13 +138,32 @@ actually enforces — and, landing with them, the rename:
 
 - **`List.sum()` native + `lists.sum` as its wrapper**: the audit's
   keep-or-drop probe — only a native pass over the backing storage
-  beats the std index loop, and it did: bench_lists **−57%** in both
-  local samples (controls flat; the four-arch matrix is the gate).
+  beats the std index loop, and it did: bench_lists **−55..−59% on all
+  four matrix architectures** (x86_64/aarch64 Linux, x86_64 Windows,
+  aarch64 macOS; controls flat; −57% in both local samples).
   Constrained to `List[Int]` at check time via the house E0423
   mechanism (a new pinned spec test brings the suite to 312); overflow
   panics exactly as `+` does. Per the popcount precedent the native is
   the primitive and `lists.sum` is a one-line wrapper; `min`/`max`
   variants deliberately deferred pending their own measurements.
+- **Four VM superinstructions**, chosen from a dynamic pair profile of
+  2.5 billion dispatches: `get_local_const`, `get_local2`,
+  `get_global_const`, and `get_local_test_variant` — the hottest
+  fall-through operand-fetch pairs (9.5–17.7% of all dispatches on the
+  workloads that gate them). A per-function fusion pass runs after
+  jump patching, never fuses a pair whose second op is a jump target,
+  and remaps every offset (a new pinned spec test exercises jumps
+  landing exactly mid-pair, bringing the suite to 313). The
+  measured-rejected compare-and-branch fusion stays excluded: no fused
+  op contains control flow — the branch is always its own op.
+  Four-arch verdict: broad sweeps on every architecture (aarch64-linux,
+  under its `monolithic_dispatch` binding, the broadest: arith −9.1%,
+  bitwise −10.2%; Windows float_loop −10.9/−11.8%; macOS enum_match
+  −7.9/−10.2%), with one honest residual — aarch64-macos for_range
+  ~+4%, reproduced 3×, where probing showed the per-target remedy
+  doesn't exist: the implicated fusion is load-bearing for four other
+  macOS rows (`bench/RESULTS.md` has the full receipt). The book's
+  disassembly listings were regenerated to show the fused ops.
 - **Renamed — the language formerly called Fable is now Socrates**
   (binary and Cargo package `socrates`, source extension `.soc`, env vars
   `SOCRATES_*`, Mach-O payload section `__DATA,__socrateszoo`). Why:

@@ -78,17 +78,16 @@ println(y);
 fn <script> (proto 0, arity 0, 0 upvalues, max locals 2)
      0  const       0 ; 3
      1  set_global  0 ; x
-     2  get_global  0 ; x
-     3  const       1 ; 4
-     4  mul
-     5  const       2 ; 1
-     6  add
-     7  set_global  1 ; y
-     8  get_global  1 ; y
-     9  call_native println argc=1
-    10  pop
-    11  unit
-    12  return
+     2  get_global_const 0 1 ; x 4
+     3  mul
+     4  const       2 ; 1
+     5  add
+     6  set_global  1 ; y
+     7  get_global  1 ; y
+     8  call_native println argc=1
+     9  pop
+    10  unit
+    11  return
 ```
 
 Things to notice:
@@ -97,8 +96,12 @@ Things to notice:
   (function prototype) named `<script>`; running a program means calling it.
 - **It's a stack machine.** No registers: `const 0` pushes the constant `3`,
   `set_global 0` pops it into global slot 0 (annotated `; x` by the
-  disassembler). `x * 4 + 1` becomes `get_global, const, mul, const, add` —
+  disassembler). `x * 4 + 1` becomes `get_global_const, mul, const, add` —
   operands pushed, operators pop them and push the result.
+- **Hot pairs fuse.** `get_global_const 0 1` is a *superinstruction*: the
+  compiler rewrites the hottest adjacent op pairs (here `get_global` +
+  `const`) into single fused ops, saving one dispatch per pair. A pair is
+  never fused when a jump lands on its second op.
 - **Builtins are direct calls.** `call_native println argc=1` needs no name
   lookup at runtime; the checker resolved it at compile time. Its `()`
   result is `pop`ped because the statement discards it.
@@ -183,34 +186,32 @@ and `<script>` omitted):
 fn describe (proto 0, arity 1, 0 upvalues, max locals 5)
      0  get_local   0
      1  unit
-     2  get_local   1
-     3  test_variant 0
-     4  jmp_false   -> 15
-     5  dup
-     6  get_variant_field 0
-     7  set_local   2
-     8  pop
-     9  const       0 ; "got "
-    10  get_local   2
-    11  to_string
-    12  concat 2
-    13  end_block 1
-    14  jump        -> 28
-    15  pop_n 1
-    16  pop_scope 1
-    17  jump        -> 18
-    18  get_local   1
-    19  test_variant 1
-    20  jmp_false   -> 24
-    21  pop
-    22  const       1 ; "nothing"
-    23  jump        -> 28
-    24  pop_n 1
-    25  jump        -> 26
-    26  match_fail
-    27  unit
-    28  end_block 1
-    29  return
+     2  get_local_test_variant 1 0
+     3  jmp_false   -> 14
+     4  dup
+     5  get_variant_field 0
+     6  set_local   2
+     7  pop
+     8  const       0 ; "got "
+     9  get_local   2
+    10  to_string
+    11  concat 2
+    12  end_block 1
+    13  jump        -> 26
+    14  pop_n 1
+    15  pop_scope 1
+    16  jump        -> 17
+    17  get_local_test_variant 1 1
+    18  jmp_false   -> 22
+    19  pop
+    20  const       1 ; "nothing"
+    21  jump        -> 26
+    22  pop_n 1
+    23  jump        -> 24
+    24  match_fail
+    25  unit
+    26  end_block 1
+    27  return
 ```
 
 Reading it as the compiler thinks about it:
@@ -218,15 +219,16 @@ Reading it as the compiler thinks about it:
 - Instruction 0 copies the scrutinee into its own stack slot; instruction 1
   pre-pushes a `unit` placeholder slot for the binding `n`, before any
   testing happens.
-- Each arm **tests a copy**: `get_local 1` pushes the scrutinee again,
-  `test_variant 0` asks "is this variant 0 (`Some`)?", and `jmp_false` bails
+- Each arm **tests a copy**: `get_local_test_variant 1 0` (a fused
+  `get_local` + `test_variant` superinstruction) pushes the scrutinee again
+  and asks "is this variant 0 (`Some`)?", and `jmp_false` bails
   to the arm's **failure stub** if not. On success, `dup`/`get_variant_field`
   peel the value apart and `set_local 2` stores the payload in its slot.
-- The failure stub (instructions 15–17) knows *exactly* how many leftover
+- The failure stub (instructions 14–16) knows *exactly* how many leftover
   temporaries the failed tests left behind (`pop_n 1`) and discards the
   binding slots (`pop_scope 1`) before falling through to the next arm. A
   guard is one more failure edge — a stub with zero temporaries to pop.
-- `match_fail` at instruction 26 aborts if execution falls off the last arm.
+- `match_fail` at instruction 24 aborts if execution falls off the last arm.
   The exhaustiveness checker proved it unreachable — it exists so that a
   compiler bug would fail loudly instead of corrupting the stack.
 

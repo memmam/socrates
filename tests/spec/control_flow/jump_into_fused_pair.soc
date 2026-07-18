@@ -1,0 +1,63 @@
+// Superinstruction fusion (H3) never fuses across a jump target: when a
+// branch lands on the SECOND op of a would-be-fused adjacent pair, the pair
+// must stay un-fused so the target remains an instruction start. Each case
+// below places a join or back-edge exactly between two fusible ops and pins
+// the observable result on both paths (a miscompiled fusion would skip the
+// second op on the jumped path: wrong value, stack corruption, or a panic).
+
+// if-else join lands between `get_local b` (last op of the else arm) and
+// `get_local v` (first op after the join) — a would-be get_local2 pair.
+fn pick(c: Bool, a: Int, b: Int) -> Int {
+    let v = if c { a } else { b };
+    v + a
+}
+println(pick(true, 10, 20));   //? expect: 20
+println(pick(false, 10, 20));  //? expect: 30
+
+// join lands between `get_local y` (else arm) and `const 2` (join) — a
+// would-be get_local_const pair.
+fn scale(c: Bool, x: Int, y: Int) -> Int {
+    (if c { x } else { y }) * 2
+}
+println(scale(true, 3, 5));    //? expect: 6
+println(scale(false, 3, 5));   //? expect: 10
+
+// A while back-edge lands on the FIRST op of a fused pair (`get_local i` +
+// `get_local n`, the loop condition): that fusion is legal, and the
+// remapped back-edge must land on the fused op's start every iteration.
+fn count(n: Int) -> Int {
+    let mut i = 0;
+    let mut steps = 0;
+    while i < n {
+        i += 1;
+        steps += 1;
+    }
+    steps
+}
+println(count(5));             //? expect: 5
+
+// Fused-op exercisers: local+const and global+const in hot loop positions,
+// and local+test_variant via match dispatch over every variant shape.
+enum Shape {
+    Circle(Int),
+    Square(Int),
+    Dot,
+}
+fn area_ish(s: Shape) -> Int {
+    match s {
+        Shape.Circle(r) -> 3 * r * r,
+        Shape.Square(w) -> w * w,
+        Shape.Dot -> 0,
+    }
+}
+println(area_ish(Shape.Circle(2)));  //? expect: 12
+println(area_ish(Shape.Square(3)));  //? expect: 9
+println(area_ish(Shape.Dot));        //? expect: 0
+
+let mut total = 0;
+let mut k = 0;
+while k < 4 {
+    total = total + 10;
+    k = k + 1;
+}
+println(total);                //? expect: 40

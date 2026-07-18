@@ -61,6 +61,14 @@ fn describe(op: &Op, at: usize, program: &CompiledProgram) -> String {
         ),
         Op::GetLocal(s) => format!("get_local   {s}"),
         Op::SetLocal(s) => format!("set_local   {s}"),
+        Op::GetLocal2(a, b) => format!("get_local2  {a} {b}"),
+        Op::GetLocalConst(s, i) => format!("get_local_const {s} {i} ; {}", cname(*i)),
+        Op::GetGlobalConst(g, i) => format!(
+            "get_global_const {g} {i} ; {} {}",
+            program.global_names.get(*g as usize).map(|s| s.as_str()).unwrap_or("?"),
+            cname(*i)
+        ),
+        Op::GetLocalTestVariant(s, v) => format!("get_local_test_variant {s} {v}"),
         Op::GetGlobal(g) => format!(
             "get_global  {g} ; {}",
             program.global_names.get(*g as usize).map(|s| s.as_str()).unwrap_or("?")

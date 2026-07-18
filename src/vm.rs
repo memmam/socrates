@@ -591,6 +591,43 @@ impl Vm {
                 }
 
                 Op::GetLocal(s) => self.stack.push(self.stack[base + s as usize]),
+                // Superinstructions (H3): each arm is the exact sequential
+                // composition of its two constituent ops (see bytecode.rs);
+                // compact + frequent, so they stay inline like their parts.
+                Op::GetLocal2(a, b) => {
+                    self.stack.push(self.stack[base + a as usize]);
+                    self.stack.push(self.stack[base + b as usize]);
+                }
+                Op::GetLocalConst(s, c) => {
+                    self.stack.push(self.stack[base + s as usize]);
+                    self.stack.push(self.interned[c as usize]);
+                }
+                Op::GetGlobalConst(g, c) => {
+                    let v = self.globals[g as usize];
+                    if matches!(v, Value::Undefined) {
+                        return Err(self.err_uninit_global(g, ip));
+                    }
+                    self.stack.push(v);
+                    self.stack.push(self.interned[c as usize]);
+                }
+                Op::GetLocalTestVariant(s, i) => {
+                    let t = self.stack[base + s as usize];
+                    let Value::Obj(h) = t else {
+                        return Err(
+                            self.err_at(ip, "internal: bad enum value (VM bug)")
+                        );
+                    };
+                    let b = match self.heap.get(h) {
+                        Obj::Variant { variant, .. } => *variant == i as u32,
+                        _ => {
+                            return Err(
+                                self.err_at(ip, "internal: bad enum value (VM bug)")
+                            )
+                        }
+                    };
+                    self.stack.push(t);
+                    self.stack.push(Value::Bool(b));
+                }
                 Op::SetLocal(s) => {
                     let v = self.pop();
                     self.stack[base + s as usize] = v;

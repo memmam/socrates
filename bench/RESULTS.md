@@ -251,6 +251,68 @@ The converted rows' uniform improvements are the fused range loop's
 cheaper bookkeeping, not an interpreter change -- that is precisely the
 workload re-specification this table exists to bridge.
 
+## W3: the List.sum() native
+
+`List.sum()` became a native (one pass over the backing storage,
+checked_add, `List[Int]`-constrained at check time); `lists.sum` is its
+one-line wrapper per the popcount precedent. bench_lists on the
+four-arch matrix (run 29628798164): x86_64-linux −58.8%, aarch64-linux
+−56.6%, x86_64-windows −55.2%, aarch64-macos −58.8% (local samples
+−56.9/−57.5 — CI reproduced them everywhere). No adverse mark on any
+arch. x86_64-linux's favorable-only spread on dispatch rows that run
+(enum_match −7.3% etc.) was the rodata lottery rolling the good
+direction and is not credited to the change.
+
+## H3: superinstructions — and the macOS for_range residual
+
+Four fused ops chosen from a dynamic pair profile over ~2.5B dispatches
+(`get_local_const`, `get_local2`, `get_global_const`,
+`get_local_test_variant`; fusion after jump patching, never across a
+jump target; the measured-rejected compare-and-branch shape stays
+excluded — no fused op contains control flow). Gate-row deltas vs main
+on the four-arch matrix (samples 1/2, run 29632669449 + empty-commit
+resamples):
+
+| arch           | float_loop | enum_match | method_dispatch | arith_loop | bitwise |
+|----------------|-----------:|-----------:|----------------:|-----------:|--------:|
+| x86_64-linux   | −4.0       | −4.8       | −2.9            | −0.4       | −3.8    |
+| aarch64-linux  | −7.2       | −4.5       | −4.0            | −9.1       | −10.2   |
+| x86_64-windows | −10.9/−11.8| −8.6/−9.1  | −6.2/−7.8       | −10.8/−9.7 | −9.7/−11.5 |
+| aarch64-macos  | −5.6/−4.8  | −7.9/−10.2 | −3.6/−3.7       | −5.8/−7.9  | −6.0/−5.4 |
+
+aarch64-linux runs the fused arms under the `monolithic_dispatch`
+binding and posted the broadest sweep of the four. Windows sample-1
+bench_display +4.4% and macOS string_interp +3.7% both failed to
+reproduce (noise per the multi-sample protocol).
+
+**The residual: aarch64-macos for_range +4.5/+4.5/+3.9 — adverse three
+samples running, direction 3/3.** Real by the same standard that judged
+H1's aarch64-linux enum_match cost real. The per-target-binding remedy
+was then pursued to the end of the evidence and does not exist here:
+
+- A probe branch (`bench/h3-probe-no-glc`, base = full H3 via
+  `bench/BASE`) removed only the `get_local_const` fusion — the one
+  fused op in for_range's profile. Two samples: for_range recovered
+  only −2.3/−2.1% (sub-floor twice — the fusion is at most half the
+  cost), while the removal *reproducibly regressed* the macOS rows that
+  fusion carries: bench_call_return +6.4/+6.7%, bitwise_masks
+  +5.3/+5.1%, bench_lists +3.1/+3.0%, checkers +3.0/+3.2%. The fusion
+  the signal pointed at is load-bearing; gating it off trades one +4%
+  row for four.
+- Disabling fusion entirely on macOS is worse by arithmetic: it
+  forfeits the −4..−10% sweep on a dozen rows to flatten one.
+- Chasing the unexplained ~2% into arm placement is the dice-chasing
+  the H1b negative result prohibits.
+
+Conclusion, per the universality principle's own remedy clause: each
+target is bound to its measured-fastest form, and for aarch64-macos the
+measured-fastest form **is** full H3 — both finer-grained alternatives
+measured worse. The for_range +4% is recorded here as the residual of
+macOS's own fastest configuration, with the probe evidence above as the
+receipt that the binding remedy was tried, not skipped. Do not re-open
+without new evidence (a new fusion set, a toolchain change, or an
+M-series microarchitectural insight would qualify).
+
 ## Negative results (measured, rejected — do not re-attempt without new evidence)
 
 - GC `next_gc` pacing `(live*2).max(4096)` is already the local optimum in
@@ -266,12 +328,27 @@ workload re-specification this table exists to bridge.
   new map_ops +4.4% there) and broke x86_64-linux (enum_match −3.1% →
   +4.6%, bench_display +6.7%). Arm order on top of H1 is a pure dice
   roll; H1's source order stands.
+- An inline-small-list `Obj::List` representation (`ListInline { len,
+  slots: [Value; 3] }` as a second flattened variant — N=3 the largest
+  capacity keeping `Obj` at its existing 64 bytes, capacity-based spill
+  to the heap `Vec`). The mechanism works: bench_list_churn improved
+  −7.3%/−7.8% across two interleaved samples. The *target* did not:
+  checkers moved −0.2%/−0.1% — its 13.0M movegen allocations are real
+  (measured: 96.9% of lists die at len ≤ 2) but tcache-cheap, so
+  allocation *count* was never the cost — and bench_display regressed
+  reproducibly (+8.2%/+4.5%, container display paying the
+  representation branch). Dropped per the pre-registered gate.
+  Re-attempt only if a genuinely churn-bound hot workload becomes a
+  target; the full implementation (gauntlet-green, goldens
+  byte-identical) is archived on branch `h2-small-list`.
 
 ## Known headroom (identified, not yet taken)
 
-- checkers' 13.5M movegen `List` allocations are its biggest single cost
-  pool; an inline-small-list `Obj::List` representation is the real fix.
-- Superinstructions for the `GetLocal`/`Const`/`JumpIfFalse` hot triple
-  (45% of dispatched ops) — unblocked now that the H1 dispatch
-  restructure landed (the lottery that made such changes unjudgeable is
-  gone; judge on the four-arch matrix).
+Both items the v0.8 pass identified are now consumed: the
+movegen-allocation item was measured and rejected (the inline-small-list
+entry above — the pool is real but allocator-cheap), and the
+superinstruction item was executed as the four fused operand-fetch ops
+(a dynamic *pair* profile replaced the original static "45% hot triple"
+estimate; judged, like every dispatch change, on the four-arch matrix).
+Nothing further is currently identified — new items come from fresh
+profiling, not from this list's history.

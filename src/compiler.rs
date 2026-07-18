@@ -96,6 +96,7 @@ impl ProgramBuilder {
         proto.max_locals = ctx.max_depth;
         proto.source = source_idx;
         proto.name = "<script>".into();
+        fuse_superinstructions(&mut proto);
         c.protos[entry as usize] = proto;
 
         let defs = checker
@@ -137,6 +138,91 @@ impl ProgramBuilder {
 /// One-shot compilation of a whole program.
 pub fn compile(program: &Program, checker: &Checker) -> CompiledProgram {
     ProgramBuilder::new().compile_chunk(program, checker, 0)
+}
+
+/// Superinstruction fusion (H3): rewrite the hottest fall-through-adjacent
+/// op pairs into single fused ops (see the fused group in `bytecode.rs`).
+///
+/// Runs once per proto, at finalization — *after* every jump is patched, so
+/// all offsets are final and every jump target is knowable. The correctness
+/// rule: a pair is fused only when no jump lands on its **second** op (a
+/// branch landing mid-pair would land inside a fused instruction — a
+/// miscompile; landing on the *first* op is fine, the fused op starts
+/// there). Fusing shortens the code vector, so every jump offset is then
+/// remapped through the old→new index map; targets always map to
+/// instruction starts precisely because fusion never crosses one.
+fn fuse_superinstructions(proto: &mut FnProto) {
+    let n = proto.code.len();
+    if n < 2 {
+        return;
+    }
+    // 1. Mark every jump target (absolute instruction index).
+    let mut is_target = vec![false; n + 1];
+    for (i, op) in proto.code.iter().enumerate() {
+        let off = match op {
+            Op::Jump(o)
+            | Op::JumpIfFalse(o)
+            | Op::JumpIfFalsePeek(o)
+            | Op::JumpIfTruePeek(o)
+            | Op::ForNext(o)
+            | Op::ForNextRange { off: o, .. } => *o,
+            _ => continue,
+        };
+        is_target[(i as i64 + 1 + off as i64) as usize] = true;
+    }
+    // 2. Rewrite left-to-right, fusing where the second op is not a target.
+    let mut new_code: Vec<Op> = Vec::with_capacity(n);
+    let mut new_spans = Vec::with_capacity(n);
+    let mut old_of_new = Vec::with_capacity(n);
+    let mut map = vec![usize::MAX; n + 1];
+    let mut i = 0;
+    while i < n {
+        map[i] = new_code.len();
+        let fused = if i + 1 < n && !is_target[i + 1] {
+            match (proto.code[i], proto.code[i + 1]) {
+                (Op::GetLocal(a), Op::GetLocal(b)) => Some(Op::GetLocal2(a, b)),
+                (Op::GetLocal(s), Op::Const(c)) => Some(Op::GetLocalConst(s, c)),
+                (Op::GetGlobal(g), Op::Const(c)) => Some(Op::GetGlobalConst(g, c)),
+                (Op::GetLocal(s), Op::TestVariant(v)) => {
+                    Some(Op::GetLocalTestVariant(s, v))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let step = match fused {
+            Some(op) => {
+                new_code.push(op);
+                2
+            }
+            None => {
+                new_code.push(proto.code[i]);
+                1
+            }
+        };
+        new_spans.push(proto.spans[i]);
+        old_of_new.push(i);
+        i += step;
+    }
+    map[n] = new_code.len();
+    // 3. Remap every jump offset (relative to the *next* instruction).
+    for (j, op) in new_code.iter_mut().enumerate() {
+        let o = match op {
+            Op::Jump(o)
+            | Op::JumpIfFalse(o)
+            | Op::JumpIfFalsePeek(o)
+            | Op::JumpIfTruePeek(o)
+            | Op::ForNext(o)
+            | Op::ForNextRange { off: o, .. } => o,
+            _ => continue,
+        };
+        let old_target = (old_of_new[j] as i64 + 1 + *o as i64) as usize;
+        debug_assert_ne!(map[old_target], usize::MAX, "jump into fused pair");
+        *o = (map[old_target] as i64 - (j as i64 + 1)) as i32;
+    }
+    proto.code = new_code;
+    proto.spans = new_spans;
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -406,6 +492,7 @@ impl<'a> Compiler<'a> {
         let ctx = self.ctxs.pop().unwrap();
         let mut proto = ctx.proto;
         proto.max_locals = ctx.max_depth;
+        fuse_superinstructions(&mut proto);
         self.protos[proto_idx as usize] = proto;
     }
 
@@ -431,6 +518,7 @@ impl<'a> Compiler<'a> {
         let ctx = self.ctxs.pop().unwrap();
         let mut proto = ctx.proto;
         proto.max_locals = ctx.max_depth;
+        fuse_superinstructions(&mut proto);
         self.protos[proto_idx as usize] = proto;
 
         self.emit(Op::Closure(proto_idx), e.span);
@@ -1604,5 +1692,9 @@ fn stack_effect(op: &Op) -> i32 {
         ForPrep => 1,
         // ForNext's push is accounted manually at the call site.
         ForNext(_) | ForNextRange { .. } => 0,
+        // Superinstructions exist only after `fuse_superinstructions` (the
+        // depth tracker never sees them); effects are the pairs' sums.
+        GetLocal2(..) | GetLocalConst(..) | GetGlobalConst(..)
+        | GetLocalTestVariant(..) => 2,
     }
 }
