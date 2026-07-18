@@ -183,7 +183,7 @@ pub(super) fn ensure_app_init() {
 /// from the wrong thread is a clean, catchable `Err` instead of a process
 /// abort — this isn't just a test-environment quirk (`cargo test` runs
 /// every test body on its own spawned thread, never the real main thread,
-/// which is how this was first found), a real Fable program calling
+/// which is how this was first found), a real Socrates program calling
 /// `window.create`/`window.create_metal` from inside a `worker` isolate
 /// would hit the identical crash.
 pub(super) fn is_main_thread() -> bool {

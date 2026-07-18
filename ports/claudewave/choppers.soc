@@ -1,0 +1,44 @@
+// claudewave.choppers — Socrates port of upstream lib/choppers.py
+// (byte-for-byte copy vendored at ports/claudewave/upstream/choppers.py).
+//
+// Chop & screw helpers — extract a hook phrase from a vocal stem, then
+// place hypnotic echoing loops at other moments in the track.
+// Deterministic (no randomness). Socrates has no default arguments:
+// callers pass the upstream defaults explicitly.
+
+import pyl.nd;
+
+// Extract a chunk from the slowed vocals with brief in/out fades.
+// Defaults: fade_in_s=0.1, fade_out_s=0.4. Returns a stereo chunk.
+pub fn extract_hook(vocals_slowed: nd.Nd, start_s: Float, end_s: Float, sr: Int,
+                    fade_in_s: Float, fade_out_s: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let s = (start_s * srf).to_int();
+    let e = (end_s * srf).to_int();
+    let chunk = vocals_slowed.slice(s, e);
+    let fi = (fade_in_s * srf).to_int();
+    let fo = (fade_out_s * srf).to_int();
+    let env = nd.ones(chunk.frames());
+    if fi > 0 { env.set_range(0, nd.linspace(0.0, 1.0, fi)); }
+    if fo > 0 { env.set_range(chunk.frames() - fo, nd.linspace(1.0, 0.0, fo)); }
+    chunk.mul_env(env)
+}
+
+// Paste the hook_chunk at each drop point with staggered echoing copies.
+// drop_points: list of (start_s, n_copies, stagger_s). Defaults:
+// base_gain=0.75, decay_per_copy=0.7. Returns a stereo buffer.
+pub fn place_hook_loops(total_n: Int, sr: Int, hook_chunk: nd.Nd,
+                        drop_points: List[(Float, Int, Float)],
+                        base_gain: Float, decay_per_copy: Float) -> nd.Nd {
+    let out = nd.zeros2(total_n);
+    for (start_t, n_copies, stagger) in drop_points {
+        for i in 0..n_copies {
+            let t = start_t + i.to_float() * stagger;
+            let gain = base_gain * math.pow(decay_per_copy, i.to_float());
+            let si = (t * sr.to_float()).to_int();
+            if si >= total_n { break; }
+            out.add_range(si, hook_chunk, gain);
+        }
+    }
+    out
+}

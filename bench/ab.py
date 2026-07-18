@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Interleaved A/B benchmark between two Fable checkouts.
+"""Interleaved A/B benchmark between two Socrates checkouts.
 
 Usage: bench/ab.py BASE_DIR HEAD_DIR [--micro-n N] [--macro-n N]
                    [--targets name,name,...] [--threshold PCT]
 
-Each side is a full checkout with its own `target/release/fable[.exe]`
+Each side is a full checkout with its own `target/release/socrates[.exe]`
 already built; every target runs against *its own* tree, so the two sides
 stay fair even when bench/demo/test sources differ between the refs
 (a binary is never asked to run the other ref's programs).
@@ -19,12 +19,12 @@ Checksum enforcement — exactly what is checked:
     failure naming the target and side (a bench that prints different
     checksums across reps did not do the same work each rep);
   * cross-side equality: when a target's sources are byte-identical
-    between the two trees (the single .fable file for micros, the whole
+    between the two trees (the single .soc file for micros, the whole
     demo directory for macros), base stdout must equal head stdout —
     a wrong-answer "optimization" fails the run instead of winning it;
   * when the sources differ between the trees, only per-side stability
     applies (the two refs may legitimately print different checksums).
-stdout is captured and compared as raw bytes (Fable prints \\n on every
+stdout is captured and compared as raw bytes (Socrates prints \\n on every
 platform), so the checks are immune to Windows text-encoding surprises;
 decoding happens only in diagnostics, UTF-8 with replacement.
 
@@ -44,14 +44,26 @@ import sys
 import time
 
 MICRO_DIR = "bench"
+
+# Cross-epoch bridge — PERMANENT, do not remove. In 2026-07 the language
+# was renamed (Fable -> Socrates; binary `fable` -> `socrates`; source
+# extension `.fable` -> `.soc`). Every A/B side runs against its own tree,
+# so the rename commit itself — and any later ref — must be comparable
+# against a pre-rename base: the binary name and every source path are
+# resolved PER SIDE, trying the current spelling first and the pre-rename
+# one second. Removing this fallback would make every pre-rename ref
+# permanently un-benchable.
+BINARY_NAMES = ("socrates", "fable")
+SOURCE_EXTS = (".soc", ".fable")
+
 MACROS = [
-    ("lisp", ["demos/lisp/main.fable"]),
-    ("checkers", ["demos/checkers/main.fable"]),
-    ("wfc", ["demos/wfc/main.fable"]),
-    ("sudoku", ["demos/sudoku/main.fable"]),
-    ("reversi", ["demos/reversi/main.fable"]),
-    ("spectra", ["demos/spectra/main.fable"]),
-    ("png", ["demos/png/main.fable"]),
+    ("lisp", ["demos/lisp/main.soc"]),
+    ("checkers", ["demos/checkers/main.soc"]),
+    ("wfc", ["demos/wfc/main.soc"]),
+    ("sudoku", ["demos/sudoku/main.soc"]),
+    ("reversi", ["demos/reversi/main.soc"]),
+    ("spectra", ["demos/spectra/main.soc"]),
+    ("png", ["demos/png/main.soc"]),
 ]
 # The spec suite is deliberately not a target: its sources move with each
 # ref, so cross-ref wall times compare different suites, not the binary.
@@ -61,27 +73,55 @@ def binary(root):
     # Absolute, because the subprocess runs with cwd=root: POSIX exec
     # resolves a relative program path in the *child* cwd (root/root/...),
     # while Windows resolves it in the parent's — absolute is the only
-    # spelling that means the same binary on both.
-    exe = os.path.join(os.path.abspath(root), "target", "release", "fable")
-    if os.name == "nt" or not os.path.exists(exe):
-        win = exe + ".exe"
-        if os.path.exists(win):
-            return win
-    return exe
+    # spelling that means the same binary on both. Tries each cross-epoch
+    # binary name (BINARY_NAMES), each with its .exe variant, per side.
+    cands = []
+    for name in BINARY_NAMES:
+        exe = os.path.join(os.path.abspath(root), "target", "release", name)
+        cands += [exe + ".exe", exe] if os.name == "nt" else [exe, exe + ".exe"]
+    for c in cands:
+        if os.path.exists(c):
+            return c
+    return cands[0]
+
+
+def resolve(root, rel):
+    """Resolve one canonical source path in a tree, trying the current
+    extension first and its cross-epoch twin second (SOURCE_EXTS).
+    Returns the tree-relative path that exists, or None."""
+    if os.path.exists(os.path.join(root, rel)):
+        return rel
+    stem, ext = os.path.splitext(rel)
+    if ext in SOURCE_EXTS:
+        for alt in SOURCE_EXTS:
+            twin = stem + alt
+            if os.path.exists(os.path.join(root, twin)):
+                return twin
+    return None
+
+
+def resolve_args(root, args):
+    """Per-side resolution of a target's whole arg list; None if any file
+    is missing from this tree under every cross-epoch spelling."""
+    out = [resolve(root, a) for a in args]
+    return None if any(a is None for a in out) else out
 
 
 def targets_for(base, head, filter_names):
     # Union of both trees' bench/ dirs, so an added or removed bench is
-    # reported instead of silently following one side's listing.
+    # reported instead of silently following one side's listing. Either
+    # cross-epoch extension enumerates; the canonical arg path uses the
+    # current one and resolve() maps it per side.
     names = set()
     for root in (base, head):
         micro = os.path.join(root, MICRO_DIR)
         if os.path.isdir(micro):
             for f in os.listdir(micro):
-                if f.endswith(".fable"):
-                    names.add(f[: -len(".fable")])
+                for ext in SOURCE_EXTS:
+                    if f.endswith(ext):
+                        names.add(f[: -len(ext)])
     out = [
-        (name, [os.path.join(MICRO_DIR, name + ".fable")], "micro")
+        (name, [os.path.join(MICRO_DIR, name + SOURCE_EXTS[0])], "micro")
         for name in sorted(names)
     ]
     for name, args in MACROS:
@@ -92,44 +132,51 @@ def targets_for(base, head, filter_names):
     return out
 
 
-def present(root, args):
-    return all(os.path.exists(os.path.join(root, a)) for a in args)
-
-
 def file_bytes(path):
     with open(path, "rb") as f:
         return f.read()
 
 
-def sources_identical(base, head, args, kind):
+def norm_rel(rel):
+    """Extension-normalized relative path for cross-epoch set comparison
+    (a renamed-but-byte-identical source is still the same source)."""
+    stem, ext = os.path.splitext(rel)
+    return stem + SOURCE_EXTS[0] if ext in SOURCE_EXTS else rel
+
+
+def sources_identical(base, head, bargs, hargs, kind):
     """True iff the target's sources are byte-identical between the trees.
 
     Micro scope is the single bench file; macro scope is the entry file's
     whole demo directory (a demo is a multi-file program plus data files —
-    the entry alone does not determine its output).
+    the entry alone does not determine its output). Paths are the per-side
+    resolved ones; file identity is judged on extension-normalized names
+    plus raw bytes, so the cross-epoch rename alone doesn't (and content
+    drift does) break the cross-side checksum comparison.
     """
     if kind == "macro":
-        for d in {os.path.dirname(a) for a in args}:
-            bd, hd = os.path.join(base, d), os.path.join(head, d)
-            brels, hrels = (
+        for bdir, hdir in {
+            (os.path.dirname(b), os.path.dirname(h))
+            for b, h in zip(bargs, hargs)
+        }:
+            bd, hd = os.path.join(base, bdir), os.path.join(head, hdir)
+            bmap, hmap = (
                 {
-                    os.path.relpath(os.path.join(dp, f), root)
+                    norm_rel(os.path.relpath(os.path.join(dp, f), root)): os.path.join(dp, f)
                     for dp, _, fs in os.walk(root)
                     for f in fs
                 }
                 for root in (bd, hd)
             )
-            if brels != hrels:
+            if set(bmap) != set(hmap):
                 return False
-            for rel in brels:
-                if file_bytes(os.path.join(bd, rel)) != file_bytes(
-                    os.path.join(hd, rel)
-                ):
+            for key in bmap:
+                if file_bytes(bmap[key]) != file_bytes(hmap[key]):
                     return False
         return True
     return all(
-        file_bytes(os.path.join(base, a)) == file_bytes(os.path.join(head, a))
-        for a in args
+        file_bytes(os.path.join(base, b)) == file_bytes(os.path.join(head, h))
+        for b, h in zip(bargs, hargs)
     )
 
 
@@ -199,7 +246,9 @@ def main():
         n = opts.micro_n if kind == "micro" else opts.macro_n
         if n <= 0:
             continue
-        in_base, in_head = present(opts.base, args), present(opts.head, args)
+        bargs = resolve_args(opts.base, args)
+        hargs = resolve_args(opts.head, args)
+        in_base, in_head = bargs is not None, hargs is not None
         # Presence is checked against the source files, never inferred
         # from a run failure: a failed run is a real failure and must
         # fail the job.
@@ -216,19 +265,19 @@ def main():
                     f"{name}: added in head — timed head-only, no delta",
                     file=sys.stderr,
                 )
-                h, houts = timed_side(opts.head, args, n)
+                h, houts = timed_side(opts.head, hargs, n)
                 check_stable(name, "head", houts)
                 rows.append((name, None, h, None, "added in head (no delta)"))
                 continue
             # One unmeasured warm-up per side, then strict interleaving.
-            bouts = [run_once(opts.base, args)[1]]
-            houts = [run_once(opts.head, args)[1]]
+            bouts = [run_once(opts.base, bargs)[1]]
+            houts = [run_once(opts.head, hargs)[1]]
             bs, hs = [], []
             for _ in range(n):
-                t, out = run_once(opts.base, args)
+                t, out = run_once(opts.base, bargs)
                 bs.append(t)
                 bouts.append(out)
-                t, out = run_once(opts.head, args)
+                t, out = run_once(opts.head, hargs)
                 hs.append(t)
                 houts.append(out)
         except subprocess.CalledProcessError:
@@ -236,7 +285,7 @@ def main():
             sys.exit(1)
         check_stable(name, "base", bouts)
         check_stable(name, "head", houts)
-        if sources_identical(opts.base, opts.head, args, kind):
+        if sources_identical(opts.base, opts.head, bargs, hargs, kind):
             if bouts[0] != houts[0]:
                 sys.exit(
                     f"{name}: checksum mismatch — sources are byte-identical "

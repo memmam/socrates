@@ -27,14 +27,14 @@
 </style>
 </head>
 <body>
-<header><span class="brand">mdsite</span><nav><a href="index.html">Home</a> <a class="here" href="about.html">About</a> <a href="hello-fable.html">Hello, Fable</a></nav></header>
+<header><span class="brand">mdsite</span><nav><a href="index.html">Home</a> <a class="here" href="about.html">About</a> <a href="hello-socrates.html">Hello, Socrates</a></nav></header>
 <main>
 <h1>About</h1>
-<p>mdsite is a demo program for <strong>Fable</strong>, a statically-typed, garbage-collected scripting language. The generator is a few hundred lines of Fable, split into three modules:</p>
+<p>mdsite is a demo program for <strong>Socrates</strong>, a statically-typed, garbage-collected scripting language. The generator is a few hundred lines of Socrates, split into three modules:</p>
 <ul>
-  <li><code>markdown.fable</code> — a line-based Markdown-to-HTML converter</li>
-  <li><code>site.fable</code> — the page model, the HTML template, and the nav builder</li>
-  <li><code>main.fable</code> — the driver: reads <code>content/</code>, writes <code>out/</code>, prints a report</li>
+  <li><code>markdown.soc</code> — a line-based Markdown-to-HTML converter</li>
+  <li><code>site.soc</code> — the page model, the HTML template, and the nav builder</li>
+  <li><code>main.soc</code> — the driver: reads <code>content/</code>, writes <code>out/</code>, prints a report</li>
 </ul>
 <h2>Supported Markdown</h2>
 <ul>
@@ -43,11 +43,11 @@
   <li><strong>bold</strong>, <em>italic</em>, and <code>inline code</code></li>
   <li><a href="index.html">links</a>, like this one back home</li>
   <li>unordered lists (you are reading one)</li>
-  <li>fenced code blocks — see the <a href="hello-fable.html">hello post</a></li>
+  <li>fenced code blocks — see the <a href="hello-socrates.html">hello post</a></li>
 </ul>
 <h2>Escaping</h2>
 <p>HTML metacharacters are escaped everywhere, so text like 2 &lt; 3, AT&amp;T, and &lt;em&gt;this fake tag&lt;/em&gt; arrive as harmless literal characters — in paragraphs, in <code>code spans like x &lt; y</code>, and inside code blocks.</p>
 </main>
-<footer>built by mdsite — a static site generator written in Fable</footer>
+<footer>built by mdsite — a static site generator written in Socrates</footer>
 </body>
 </html>

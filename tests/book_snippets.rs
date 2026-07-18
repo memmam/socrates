@@ -1,20 +1,20 @@
-//! The book is a test suite: every ```fable block in book/*.md is executed.
+//! The book is a test suite: every ```soc block in book/*.md is executed.
 //!
 //! Fence tags (invisible in rendered markdown) classify blocks:
-//!   ```fable          — must compile and run without panicking
-//!   ```fable errors   — must FAIL to compile (deliberate-error demos)
-//!   ```fable panics   — must panic at runtime (deliberate-panic demos)
-//!   ```fable skip     — not executed (fragments of larger programs)
+//!   ```soc          — must compile and run without panicking
+//!   ```soc errors   — must FAIL to compile (deliberate-error demos)
+//!   ```soc panics   — must panic at runtime (deliberate-panic demos)
+//!   ```soc skip     — not executed (fragments of larger programs)
 //!
-//! A block whose first line is `// <name>.fable` is written under that name
+//! A block whose first line is `// <name>.soc` is written under that name
 //! into the chapter's directory, so later blocks in the chapter can import
-//! it. Blocks containing `//? ` directives run under full `fable test`
+//! it. Blocks containing `//? ` directives run under full `socrates test`
 //! semantics. All blocks run from the chapter's own temp directory.
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
-use fable::RunOutcome;
+use socrates::RunOutcome;
 
 struct Block {
     tag: String,
@@ -28,7 +28,7 @@ fn extract_blocks(text: &str) -> Vec<Block> {
     let mut index = 0;
     while let Some(line) = lines.next() {
         let trimmed = line.trim_start();
-        if let Some(info) = trimmed.strip_prefix("```fable") {
+        if let Some(info) = trimmed.strip_prefix("```soc") {
             let tag = info.trim().to_string();
             let mut body = String::new();
             for inner in lines.by_ref() {
@@ -48,7 +48,7 @@ fn extract_blocks(text: &str) -> Vec<Block> {
 fn support_file_name(body: &str) -> Option<String> {
     let first = body.lines().next()?.trim();
     let name = first.strip_prefix("// ")?;
-    if name.ends_with(".fable") && !name.contains(' ') {
+    if name.ends_with(".soc") && !name.contains(' ') {
         Some(name.to_string())
     } else {
         None
@@ -83,14 +83,14 @@ fn every_book_snippet_executes() {
             }
             total += 1;
             let file_name = support_file_name(&block.body)
-                .unwrap_or_else(|| format!("snippet_{:02}.fable", block.index));
+                .unwrap_or_else(|| format!("snippet_{:02}.soc", block.index));
             let path = dir.join(&file_name);
             std::fs::write(&path, &block.body).expect("write snippet");
             let label = format!("{stem} block {} ({file_name})", block.index);
 
             // Directive-bearing blocks run under full golden-test semantics.
             if block.body.contains("//? ") {
-                if let Err(why) = fable::testing::check_one(&path) {
+                if let Err(why) = socrates::testing::check_one(&path) {
                     failures.push((label, why));
                 }
                 continue;
@@ -149,5 +149,5 @@ fn run_in_dir(path: &std::path::Path, dir: &std::path::Path) -> RunOutcome {
     // no cwd games needed; fs.* calls in snippets use relative paths rarely
     // and tolerantly (they match on Err).
     let _ = dir;
-    fable::run_capture_path(path)
+    socrates::run_capture_path(path)
 }

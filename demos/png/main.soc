@@ -1,0 +1,112 @@
+// png — a PNG encoder from scratch: CRC-32, Adler-32, and a zlib stream
+// of stored deflate blocks, over Bytes with the v0.7 bitwise operators.
+//
+// Renders a 48x32 integer-math plasma, emits a complete PNG, writes
+// demos/png/out.png, and then plays its own adversary: the committed file
+// must match the fresh build byte-for-byte, and a re-parse of the file on
+// disk must re-verify every CRC, the zlib block structure, the Adler-32,
+// and the pixel bytes themselves.
+//
+//   ./target/release/socrates demos/png/main.soc [out_dir]
+
+import bits;
+import crc;
+import zlib;
+import png;
+import image;
+
+let out_dir = os.args().first().unwrap_or("demos/png");
+let out_path = "{out_dir}/out.png";
+
+// --- render and encode ------------------------------------------------------
+
+let w = 48;
+let h = 32;
+let pixels = image.plasma(w, h);
+let file = png.encode(w, h, pixels);
+
+println("png — a from-scratch PNG encoder (CRC-32 + Adler-32 + stored-block zlib)");
+println("");
+println("image: {w}x{h} RGB, integer-math plasma, {pixels.len()} pixel bytes");
+println("");
+for row in image.preview(pixels, w, h, 2) {
+    println("  {row}");
+}
+println("");
+
+// --- the file, chunk by chunk -------------------------------------------------
+
+let parsed = png.parse(file).unwrap();
+for c in parsed.chunks {
+    let pad = " ".repeat(6 - c.length.to_string().len());
+    println(
+        "chunk {c.name}  length={c.length}{pad}crc={bits.to_hex(c.crc, 8)}  verifies={c.crc_ok}",
+    );
+}
+println("total file size: {file.len()} bytes");
+println("");
+
+// --- write, re-read, re-verify -------------------------------------------------
+
+// The committed artifact must equal a fresh build (read before rewriting!).
+let committed = fs.read_bytes(out_path).unwrap();
+println("committed out.png identical to fresh build: {committed == file}");
+
+fs.write_bytes(out_path, file).unwrap();
+let reread = fs.read_bytes(out_path).unwrap();
+println("wrote {out_path} ({reread.len()} bytes), read-back identical: {reread == file}");
+println("");
+
+// Re-parse the bytes that came back from disk and re-verify every claim.
+let check = png.parse(reread).unwrap();
+println("re-parse: {check.width}x{check.height}, bit depth {check.bit_depth}, color type {check.color_type} (truecolor RGB)");
+println("re-parse: {check.chunks.len()} chunks, all CRCs verify: {check.chunks.all(|c| c.crc_ok)}");
+println("re-parse: IDAT holds {check.idat_blocks} stored blocks, {check.raw_len} scanline bytes, adler verifies: {check.adler_ok}");
+println("re-parse: pixels identical to source raster: {check.pixels == pixels}");
+println("");
+
+// --- known answers from outside this program --------------------------------------
+
+// The IEND chunk's CRC is the CRC-32 of its type alone — a published constant.
+let iend = crc.crc32("IEND".to_bytes());
+println("vector: crc32(IEND)        = {bits.to_hex(iend, 8)} (want ae426082)");
+let wiki = crc.adler32("Wikipedia".to_bytes());
+println("vector: adler32(Wikipedia) = {bits.to_hex(wiki, 8)} (want 11e60398)");
+
+// Pinned output for `socrates test demos/png`:
+//? expect: png — a from-scratch PNG encoder (CRC-32 + Adler-32 + stored-block zlib)
+//? expect:
+//? expect: image: 48x32 RGB, integer-math plasma, 4608 pixel bytes
+//? expect:
+//? expect:   *#+-=+=--*#*====+*######*++++*##*++====+**##*+=-
+//? expect:   =-*##*=-+##**##*=-------====---=+*+=--+#########
+//? expect:   =***=-=+*####*********#######*=-=***+=-#*=--+#*=
+//? expect:   ---=+****##*=----=*########***###*+===+#*--+=-+#
+//? expect:   *########+-+*#*=-*#+===++*######**+++++++--=++-+
+//? expect:   ##*##**#+-+**=-*#*==++*##****###*##*=---====---+
+//? expect:   ###+=-+#+---=*#+======++##*+=+*#*==+#*+=+#######
+//? expect:   ##+---=**==*#+------=+*+=-=*#*+*#=---+####+=-===
+//? expect:   *##=--=#*++#*=--==--+*+-+++##+=+#*---+####+--=++
+//? expect:   --*#*+*#=--+#*+++**+===+*#+--==-+#+=+##**#*+*###
+//? expect:   =--+#*##+---+#*++*##**=--=*##*=-*#**##*+*####+==
+//? expect:   --=*#+=+*#+==*#*=--=*#*=--=---*#****###****#*===
+//? expect:   ####+-----+#####*=----=+#######**++=------*#++*#
+//? expect:   --------==--=+*###****###**+**##+-=+##*+-+#*+*#+
+//? expect:   --==--=++*++++++***####*++=+*#*=-+*#*+-+#+==+##*
+//? expect:   #+-==-=**=----=*##****#######*+=---=*#*=----=+++
+//? expect:
+//? expect: chunk IHDR  length=13    crc=dbb66c4b  verifies=true
+//? expect: chunk IDAT  length=4661  crc=89a2196d  verifies=true
+//? expect: chunk IEND  length=0     crc=ae426082  verifies=true
+//? expect: total file size: 4718 bytes
+//? expect:
+//? expect: committed out.png identical to fresh build: true
+//? expect: wrote demos/png/out.png (4718 bytes), read-back identical: true
+//? expect:
+//? expect: re-parse: 48x32, bit depth 8, color type 2 (truecolor RGB)
+//? expect: re-parse: 3 chunks, all CRCs verify: true
+//? expect: re-parse: IDAT holds 3 stored blocks, 4640 scanline bytes, adler verifies: true
+//? expect: re-parse: pixels identical to source raster: true
+//? expect:
+//? expect: vector: crc32(IEND)        = ae426082 (want ae426082)
+//? expect: vector: adler32(Wikipedia) = 11e60398 (want 11e60398)

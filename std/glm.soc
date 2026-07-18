@@ -1,0 +1,343 @@
+// std.glm — vector/matrix/quaternion math for real-time graphics (v0.8),
+// named and shaped after GLM (OpenGL Mathematics) so C++/GLM fluency
+// transfers directly: `glm.vec3(x, y, z)`, `glm.perspective(fovy, aspect,
+// near, far)`, `glm.look_at(eye, center, up)`, `.normalize()`, `.cross()`.
+//
+// Conventions: right-handed, column-major (a `Mat4`'s `c0..c3` are its
+// column vectors — `c3.xyz` is the translation of an affine matrix),
+// OpenGL NDC z in [-1, 1] (matching `perspective`/`ortho` below).
+//
+// Socrates's operator methods (SPEC § 5.1) give a type exactly one `mul`, so
+// `v * k` is reserved for **scalar** multiply here (matching the worked
+// example in the spec and `book/04-data.md`'s `V2`) — not componentwise
+// vec*vec, which `ports/jsl/vec.soc` uses instead for its own reason
+// (matching GLSL/TSL's `a.mul(b)` shader semantics). Reach for the field
+// accessors (`vec3(a.x * b.x, a.y * b.y, a.z * b.z)`) if componentwise is
+// what a port actually needs.
+
+pub struct Vec2 { x: Float, y: Float }
+pub struct Vec3 { x: Float, y: Float, z: Float }
+pub struct Vec4 { x: Float, y: Float, z: Float, w: Float }
+pub struct Mat4 { c0: Vec4, c1: Vec4, c2: Vec4, c3: Vec4 }
+pub struct Quat { x: Float, y: Float, z: Float, w: Float }
+
+pub fn vec2(x: Float, y: Float) -> Vec2 { Vec2 { x, y } }
+pub fn vec3(x: Float, y: Float, z: Float) -> Vec3 { Vec3 { x, y, z } }
+pub fn vec4(x: Float, y: Float, z: Float, w: Float) -> Vec4 { Vec4 { x, y, z, w } }
+pub fn quat(x: Float, y: Float, z: Float, w: Float) -> Quat { Quat { x, y, z, w } }
+
+impl Vec2 {
+    pub fn add(self, o: Vec2) -> Vec2 { vec2(self.x + o.x, self.y + o.y) }
+    pub fn sub(self, o: Vec2) -> Vec2 { vec2(self.x - o.x, self.y - o.y) }
+    pub fn mul(self, k: Float) -> Vec2 { vec2(self.x * k, self.y * k) }
+    pub fn div(self, k: Float) -> Vec2 { vec2(self.x / k, self.y / k) }
+    pub fn neg(self) -> Vec2 { vec2(-self.x, -self.y) }
+
+    pub fn dot(self, o: Vec2) -> Float { self.x * o.x + self.y * o.y }
+    pub fn length_sq(self) -> Float { self.dot(self) }
+    pub fn length(self) -> Float { self.length_sq().sqrt() }
+
+    // Divides by length (not `* (1.0 / length)`) — the reciprocal form
+    // differs by up to 1 ulp on full-magnitude components, and that
+    // discrepancy compounds across a transform chain (see
+    // `ports/jsl/vec.soc`'s `norm`, where this was pinned down first).
+    pub fn normalize(self) -> Vec2 {
+        let len = self.length();
+        vec2(self.x / len, self.y / len)
+    }
+
+    pub fn lerp(self, o: Vec2, t: Float) -> Vec2 { self.add(o.sub(self).mul(t)) }
+}
+
+impl Vec3 {
+    pub fn add(self, o: Vec3) -> Vec3 { vec3(self.x + o.x, self.y + o.y, self.z + o.z) }
+    pub fn sub(self, o: Vec3) -> Vec3 { vec3(self.x - o.x, self.y - o.y, self.z - o.z) }
+    pub fn mul(self, k: Float) -> Vec3 { vec3(self.x * k, self.y * k, self.z * k) }
+    pub fn div(self, k: Float) -> Vec3 { vec3(self.x / k, self.y / k, self.z / k) }
+    pub fn neg(self) -> Vec3 { vec3(-self.x, -self.y, -self.z) }
+
+    pub fn dot(self, o: Vec3) -> Float { self.x * o.x + self.y * o.y + self.z * o.z }
+    pub fn cross(self, o: Vec3) -> Vec3 {
+        vec3(
+            self.y * o.z - self.z * o.y,
+            self.z * o.x - self.x * o.z,
+            self.x * o.y - self.y * o.x,
+        )
+    }
+    pub fn length_sq(self) -> Float { self.dot(self) }
+    pub fn length(self) -> Float { self.length_sq().sqrt() }
+
+    pub fn normalize(self) -> Vec3 {
+        let len = self.length();
+        vec3(self.x / len, self.y / len, self.z / len)
+    }
+
+    pub fn lerp(self, o: Vec3, t: Float) -> Vec3 { self.add(o.sub(self).mul(t)) }
+
+    // vec4(v, w) — extend with a fourth component (a point when w = 1.0, a
+    // direction when w = 0.0, matching the affine-transform convention
+    // `Mat4.mul_vec4` relies on).
+    pub fn to4(self, w: Float) -> Vec4 { vec4(self.x, self.y, self.z, w) }
+}
+
+impl Vec4 {
+    pub fn add(self, o: Vec4) -> Vec4 {
+        vec4(self.x + o.x, self.y + o.y, self.z + o.z, self.w + o.w)
+    }
+    pub fn sub(self, o: Vec4) -> Vec4 {
+        vec4(self.x - o.x, self.y - o.y, self.z - o.z, self.w - o.w)
+    }
+    pub fn mul(self, k: Float) -> Vec4 { vec4(self.x * k, self.y * k, self.z * k, self.w * k) }
+    pub fn div(self, k: Float) -> Vec4 { vec4(self.x / k, self.y / k, self.z / k, self.w / k) }
+    pub fn neg(self) -> Vec4 { vec4(-self.x, -self.y, -self.z, -self.w) }
+
+    pub fn dot(self, o: Vec4) -> Float {
+        self.x * o.x + self.y * o.y + self.z * o.z + self.w * o.w
+    }
+    pub fn length_sq(self) -> Float { self.dot(self) }
+    pub fn length(self) -> Float { self.length_sq().sqrt() }
+
+    // The point/direction part, dropping w (e.g. after a Mat4 transform).
+    pub fn xyz(self) -> Vec3 { vec3(self.x, self.y, self.z) }
+}
+
+pub fn mat4_identity() -> Mat4 {
+    Mat4 {
+        c0: vec4(1.0, 0.0, 0.0, 0.0),
+        c1: vec4(0.0, 1.0, 0.0, 0.0),
+        c2: vec4(0.0, 0.0, 1.0, 0.0),
+        c3: vec4(0.0, 0.0, 0.0, 1.0),
+    }
+}
+
+pub fn translation(t: Vec3) -> Mat4 {
+    Mat4 {
+        c0: vec4(1.0, 0.0, 0.0, 0.0),
+        c1: vec4(0.0, 1.0, 0.0, 0.0),
+        c2: vec4(0.0, 0.0, 1.0, 0.0),
+        c3: vec4(t.x, t.y, t.z, 1.0),
+    }
+}
+
+pub fn scaling(s: Vec3) -> Mat4 {
+    Mat4 {
+        c0: vec4(s.x, 0.0, 0.0, 0.0),
+        c1: vec4(0.0, s.y, 0.0, 0.0),
+        c2: vec4(0.0, 0.0, s.z, 0.0),
+        c3: vec4(0.0, 0.0, 0.0, 1.0),
+    }
+}
+
+pub fn rotation_x(angle: Float) -> Mat4 {
+    let c = math.cos(angle);
+    let s = math.sin(angle);
+    Mat4 {
+        c0: vec4(1.0, 0.0, 0.0, 0.0),
+        c1: vec4(0.0, c, s, 0.0),
+        c2: vec4(0.0, -s, c, 0.0),
+        c3: vec4(0.0, 0.0, 0.0, 1.0),
+    }
+}
+
+pub fn rotation_y(angle: Float) -> Mat4 {
+    let c = math.cos(angle);
+    let s = math.sin(angle);
+    Mat4 {
+        c0: vec4(c, 0.0, -s, 0.0),
+        c1: vec4(0.0, 1.0, 0.0, 0.0),
+        c2: vec4(s, 0.0, c, 0.0),
+        c3: vec4(0.0, 0.0, 0.0, 1.0),
+    }
+}
+
+pub fn rotation_z(angle: Float) -> Mat4 {
+    let c = math.cos(angle);
+    let s = math.sin(angle);
+    Mat4 {
+        c0: vec4(c, s, 0.0, 0.0),
+        c1: vec4(-s, c, 0.0, 0.0),
+        c2: vec4(0.0, 0.0, 1.0, 0.0),
+        c3: vec4(0.0, 0.0, 0.0, 1.0),
+    }
+}
+
+// A right-handed rotation of `angle` radians about `axis` (Rodrigues'
+// formula). `axis` is normalized internally, so any nonzero vector works.
+pub fn rotation_axis(axis: Vec3, angle: Float) -> Mat4 {
+    let a = axis.normalize();
+    let c = math.cos(angle);
+    let s = math.sin(angle);
+    let t = 1.0 - c;
+    Mat4 {
+        c0: vec4(t * a.x * a.x + c, t * a.x * a.y + s * a.z, t * a.x * a.z - s * a.y, 0.0),
+        c1: vec4(t * a.x * a.y - s * a.z, t * a.y * a.y + c, t * a.y * a.z + s * a.x, 0.0),
+        c2: vec4(t * a.x * a.z + s * a.y, t * a.y * a.z - s * a.x, t * a.z * a.z + c, 0.0),
+        c3: vec4(0.0, 0.0, 0.0, 1.0),
+    }
+}
+
+// A right-handed perspective projection with OpenGL NDC z in [-1, 1]
+// (`glm::perspective`'s default, pre-`GLM_FORCE_DEPTH_ZERO_TO_ONE`).
+// `fovy` is the vertical field of view in radians.
+pub fn perspective(fovy: Float, aspect: Float, near: Float, far: Float) -> Mat4 {
+    let f = 1.0 / math.tan(fovy / 2.0);
+    Mat4 {
+        c0: vec4(f / aspect, 0.0, 0.0, 0.0),
+        c1: vec4(0.0, f, 0.0, 0.0),
+        c2: vec4(0.0, 0.0, (far + near) / (near - far), -1.0),
+        c3: vec4(0.0, 0.0, (2.0 * far * near) / (near - far), 0.0),
+    }
+}
+
+pub fn ortho(left: Float, right: Float, bottom: Float, top: Float, near: Float, far: Float) -> Mat4 {
+    Mat4 {
+        c0: vec4(2.0 / (right - left), 0.0, 0.0, 0.0),
+        c1: vec4(0.0, 2.0 / (top - bottom), 0.0, 0.0),
+        c2: vec4(0.0, 0.0, -2.0 / (far - near), 0.0),
+        c3: vec4(
+            -(right + left) / (right - left),
+            -(top + bottom) / (top - bottom),
+            -(far + near) / (far - near),
+            1.0,
+        ),
+    }
+}
+
+// A right-handed view matrix looking from `eye` toward `center`, `up`
+// giving the roll (`glm::lookAtRH`).
+pub fn look_at(eye: Vec3, center: Vec3, up: Vec3) -> Mat4 {
+    let f = center.sub(eye).normalize();
+    let s = f.cross(up).normalize();
+    let u = s.cross(f);
+    Mat4 {
+        c0: vec4(s.x, u.x, -f.x, 0.0),
+        c1: vec4(s.y, u.y, -f.y, 0.0),
+        c2: vec4(s.z, u.z, -f.z, 0.0),
+        c3: vec4(-s.dot(eye), -u.dot(eye), f.dot(eye), 1.0),
+    }
+}
+
+impl Mat4 {
+    // Matrix composition (`view.mul(model)` applies `model` first, then
+    // `view` — the usual convention for the `*` chain a demo writes as
+    // `view * model`).
+    pub fn mul(self, o: Mat4) -> Mat4 {
+        Mat4 {
+            c0: self.mul_vec4(o.c0),
+            c1: self.mul_vec4(o.c1),
+            c2: self.mul_vec4(o.c2),
+            c3: self.mul_vec4(o.c3),
+        }
+    }
+
+    // Matrix-vector transform. Named rather than operator-dispatched:
+    // `mul`'s one operator slot went to matrix composition above, since
+    // chaining transforms (`proj * view * model`) is the far more common
+    // operation building up to this final apply.
+    pub fn mul_vec4(self, v: Vec4) -> Vec4 {
+        self.c0.mul(v.x).add(self.c1.mul(v.y)).add(self.c2.mul(v.z)).add(self.c3.mul(v.w))
+    }
+
+    pub fn transpose(self) -> Mat4 {
+        Mat4 {
+            c0: vec4(self.c0.x, self.c1.x, self.c2.x, self.c3.x),
+            c1: vec4(self.c0.y, self.c1.y, self.c2.y, self.c3.y),
+            c2: vec4(self.c0.z, self.c1.z, self.c2.z, self.c3.z),
+            c3: vec4(self.c0.w, self.c1.w, self.c2.w, self.c3.w),
+        }
+    }
+}
+
+impl Quat {
+    pub fn mul(self, o: Quat) -> Quat {
+        quat(
+            self.w * o.x + self.x * o.w + self.y * o.z - self.z * o.y,
+            self.w * o.y - self.x * o.z + self.y * o.w + self.z * o.x,
+            self.w * o.z + self.x * o.y - self.y * o.x + self.z * o.w,
+            self.w * o.w - self.x * o.x - self.y * o.y - self.z * o.z,
+        )
+    }
+
+    pub fn conjugate(self) -> Quat { quat(-self.x, -self.y, -self.z, self.w) }
+
+    pub fn length_sq(self) -> Float {
+        self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w
+    }
+    pub fn length(self) -> Float { self.length_sq().sqrt() }
+
+    pub fn normalize(self) -> Quat {
+        let len = self.length();
+        quat(self.x / len, self.y / len, self.z / len, self.w / len)
+    }
+
+    pub fn to_mat4(self) -> Mat4 {
+        let xx = self.x * self.x;
+        let yy = self.y * self.y;
+        let zz = self.z * self.z;
+        let xy = self.x * self.y;
+        let xz = self.x * self.z;
+        let yz = self.y * self.z;
+        let wx = self.w * self.x;
+        let wy = self.w * self.y;
+        let wz = self.w * self.z;
+        Mat4 {
+            c0: vec4(1.0 - 2.0 * (yy + zz), 2.0 * (xy + wz), 2.0 * (xz - wy), 0.0),
+            c1: vec4(2.0 * (xy - wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz + wx), 0.0),
+            c2: vec4(2.0 * (xz + wy), 2.0 * (yz - wx), 1.0 - 2.0 * (xx + yy), 0.0),
+            c3: vec4(0.0, 0.0, 0.0, 1.0),
+        }
+    }
+
+    // Spherical linear interpolation. Uses `atan2(sqrt(1 - dot^2), dot)`
+    // rather than `acos(dot)` for the half-angle between the two
+    // quaternions — `math` (SPEC § 7) has no `acos`, and this is exactly
+    // as accurate since both quaternions are unit length.
+    pub fn slerp(self, o: Quat, t: Float) -> Quat {
+        let mut ox = o.x;
+        let mut oy = o.y;
+        let mut oz = o.z;
+        let mut ow = o.w;
+        let mut dot = self.x * ox + self.y * oy + self.z * oz + self.w * ow;
+        // Take the shorter path around the hypersphere.
+        if dot < 0.0 {
+            ox = -ox;
+            oy = -oy;
+            oz = -oz;
+            ow = -ow;
+            dot = -dot;
+        }
+        if dot > 0.9995 {
+            // Nearly identical — sin(theta_0) is too small to divide by;
+            // linear interpolation and a renormalize are indistinguishable.
+            let result = quat(
+                self.x + (ox - self.x) * t,
+                self.y + (oy - self.y) * t,
+                self.z + (oz - self.z) * t,
+                self.w + (ow - self.w) * t,
+            );
+            result.normalize()
+        } else {
+            let theta_0 = math.atan2((1.0 - dot * dot).sqrt(), dot);
+            let theta = theta_0 * t;
+            let sin_theta_0 = math.sin(theta_0);
+            let s1 = math.sin(theta) / sin_theta_0;
+            let s0 = math.cos(theta) - dot * s1;
+            quat(
+                self.x * s0 + ox * s1,
+                self.y * s0 + oy * s1,
+                self.z * s0 + oz * s1,
+                self.w * s0 + ow * s1,
+            )
+        }
+    }
+}
+
+pub fn quat_identity() -> Quat { quat(0.0, 0.0, 0.0, 1.0) }
+
+// A rotation of `angle` radians about `axis` (normalized internally).
+pub fn from_axis_angle(axis: Vec3, angle: Float) -> Quat {
+    let a = axis.normalize();
+    let half = angle / 2.0;
+    let s = math.sin(half);
+    quat(a.x * s, a.y * s, a.z * s, math.cos(half))
+}

@@ -1,0 +1,168 @@
+// check_freeze — regenerate every design in the authoritative butter
+// coefficient freeze and compare (CONTRACT.md §Filters, step 6). Run:
+//
+//   SOCRATES_PATH=ports ./target/release/socrates ports/pyl/check_freeze.soc
+//
+// (This is a checker *program*, not a golden test — it prints a
+// PASS/FAIL report, so run the golden tests as
+// `socrates test ports/pyl/spec.soc`, not `socrates test ports/pyl`.)
+//
+// Reads ports/claudewave/reference/sos_freeze.txt (one line per section:
+// `<design-id> b0 b1 b2 1 a1 a2`, design-id `butter,<order>,<btype>,
+// <wn>[,<wn2>]` with exact round-trip Wn), regenerates each design with
+// pyl.signal.butter, and compares every coefficient. A coefficient fails
+// if
+//
+//   |socrates - frozen| > 1e-12 * max(|socrates|, |frozen|)  and  > 1e-15
+//
+// (the same absolute floor the CI checker check_sos_vs_scipy.py uses to
+// forgive structural zeros; in practice structural zeros are bit-equal).
+// Prints per-design PASS/FAIL plus the worst relative diff, and exits
+// nonzero on any failure.
+
+import pyl.signal;
+
+let rel_tol = 1e-12;
+let abs_floor = 1e-15;
+
+// ---- locate the freeze (cwd-relative; repo root is the documented cwd) ----
+
+fn freeze_path() -> String {
+    let candidates = [
+        "ports/claudewave/reference/sos_freeze.txt",
+        "claudewave/reference/sos_freeze.txt",
+        "../claudewave/reference/sos_freeze.txt",
+        "../../ports/claudewave/reference/sos_freeze.txt",
+    ];
+    for p in candidates {
+        if fs.exists(p) { return p; }
+    }
+    println("check_freeze: cannot find sos_freeze.txt (run from the repo root)");
+    os.exit(2)
+}
+
+// ---- parse the freeze into (ordered ids, id -> rows) ----------------------
+
+fn parse_row(line: String, lineno: Int) -> (String, List[Float]) {
+    let toks = [];
+    for t in line.replace("\t", " ").split(" ") {
+        if t.len() > 0 { toks.push(t); }
+    }
+    if toks.len() != 7 {
+        println("check_freeze: line {lineno}: expected 7 fields, got {toks.len()}");
+        os.exit(2);
+    }
+    let row = [];
+    let mut i = 1;
+    while i < 7 {
+        match toks[i].parse_float() {
+            Some(v) -> { row.push(v); }
+            None -> {
+                println("check_freeze: line {lineno}: bad float `{toks[i]}`");
+                os.exit(2);
+            }
+        }
+        i += 1;
+    }
+    (toks[0], row)
+}
+
+// design-id `butter,<order>,<btype>,<wn>[,<wn2>]` -> regenerated sections
+fn regen(id: String) -> List[signal.Sos] {
+    let parts = id.split(",");
+    if parts.len() < 4 || parts.len() > 5 || parts[0] != "butter" {
+        println("check_freeze: unrecognized design id `{id}`");
+        os.exit(2);
+    }
+    let order = match parts[1].parse_int() {
+        Some(v) -> v,
+        None -> {
+            println("check_freeze: bad order in `{id}`");
+            os.exit(2)
+        }
+    };
+    let wn_low = match parts[3].parse_float() {
+        Some(v) -> v,
+        None -> {
+            println("check_freeze: bad Wn in `{id}`");
+            os.exit(2)
+        }
+    };
+    let mut wn_high = 0.0;
+    if parts.len() == 5 {
+        wn_high = match parts[4].parse_float() {
+            Some(v) -> v,
+            None -> {
+                println("check_freeze: bad Wn2 in `{id}`");
+                os.exit(2)
+            }
+        };
+    }
+    signal.butter(order, wn_low, wn_high, parts[2])
+}
+
+let path = freeze_path();
+let text = fs.read(path).unwrap();
+
+let ids = [];                   // design ids in first-appearance order
+let mut rows_by_id = {:};       // id -> List[List[Float]]
+for (i, line) in text.split("\n").enumerate() {
+    let t = line.trim();
+    if t.len() == 0 || t.starts_with("#") { continue; }
+    let (id, row) = parse_row(t, i + 1);
+    if !rows_by_id.contains_key(id) {
+        ids.push(id);
+        rows_by_id[id] = [];
+    }
+    rows_by_id[id].push(row);
+}
+
+let mut n_fail = 0;
+let mut worst_rel = 0.0;
+let mut worst_where = "n/a";
+for id in ids {
+    let frozen = rows_by_id[id];
+    let sos = regen(id);
+    let mut ok = true;
+    let mut why = "";
+    if sos.len() != frozen.len() {
+        ok = false;
+        why = "section count {sos.len()} != frozen {frozen.len()}";
+    } else {
+        let mut design_worst = 0.0;
+        for (si, s) in sos.enumerate() {
+            let mine = [s.b0, s.b1, s.b2, 1.0, s.a1, s.a2];
+            for (ci, a) in mine.enumerate() {
+                let e = frozen[si][ci];
+                let diff = (a - e).abs();
+                let scale = a.abs().max(e.abs());
+                let rel = if scale > 0.0 { diff / scale } else { 0.0 };
+                if rel > design_worst { design_worst = rel; }
+                if rel > worst_rel {
+                    worst_rel = rel;
+                    worst_where = "{id} section {si} coeff {ci}";
+                }
+                if diff > rel_tol * scale && diff > abs_floor && ok {
+                    ok = false;
+                    why = "section {si} coeff {ci}: socrates {a} vs frozen {e} (rel {rel})";
+                }
+            }
+        }
+        if ok { why = "worst rel {design_worst}"; }
+    }
+    if ok {
+        println("PASS {id} ({frozen.len()} sections, {why})");
+    } else {
+        println("FAIL {id}: {why}");
+        n_fail += 1;
+    }
+}
+
+println("---");
+println("{ids.len()} designs checked, {n_fail} failed; worst relative diff {worst_rel} ({worst_where})");
+if n_fail > 0 { os.exit(1); }
+if ids.len() != 33 {
+    println("check_freeze: expected 33 designs in the freeze, found {ids.len()}");
+    os.exit(1);
+}
+println("all 33 designs match freeze");

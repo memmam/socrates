@@ -1,19 +1,19 @@
 # Programs Across Files
 
-A program grows past one file eventually. Fable's answer is modules: `import`
-names another file, `pub` controls what that file exposes, and `FABLE_PATH`
+A program grows past one file eventually. Socrates's answer is modules: `import`
+names another file, `pub` controls what that file exposes, and `SOCRATES_PATH`
 gives your reusable modules a home. There is no package manager and no build
-manifest — a Fable program is still just files, related by their imports.
+manifest — a Socrates program is still just files, related by their imports.
 
 ## `import`: one file naming another
 
-`import a;` loads `a.fable` from the directory of the importing file and
+`import a;` loads `a.soc` from the directory of the importing file and
 binds it under the name `a`. Everything the module exposes is reached through
 that name. Here is a two-file program — a geometry module and a `main` that
 uses it:
 
-```fable
-// geo.fable
+```soc
+// geo.soc
 pub struct Point { x: Float, y: Float }
 
 impl Point {
@@ -29,8 +29,8 @@ pub fn origin() -> Point {
 }
 ```
 
-```fable
-// main.fable — run this one
+```soc
+// main.soc — run this one
 import geo;
 
 let p: geo.Point = geo.Point { x: 3.0, y: 4.0 };
@@ -48,7 +48,7 @@ things need no qualification at all — methods, which travel with their type
 (so `p.dist(..)` works on a `geo.Point` anywhere), and variant patterns in a
 `match` whose scrutinee type is already known, exactly like `Some`/`None`.
 
-Nested paths and aliases round it out: `import a.b;` loads `a/b.fable` and
+Nested paths and aliases round it out: `import a.b;` loads `a/b.soc` and
 binds it as `b`, and `import a.b as m;` lets you pick the name.
 
 ## `pub`: modules with boundaries
@@ -56,8 +56,8 @@ binds it as `b`, and `import a.b as m;` lets you pick the name.
 Module items are **private by default**. `pub` exports a function, type,
 top-level `let`, or individual method:
 
-```fable
-// counter.fable
+```soc
+// counter.soc
 pub struct Counter { n: Int }
 
 pub fn new() -> Counter {
@@ -78,7 +78,7 @@ fn step() -> Int {      // private: an internal helper, invisible to importers
 
 An importer can call the public surface:
 
-```fable
+```soc
 import counter;
 
 let c = counter.new();
@@ -94,7 +94,7 @@ println(c.bump());
 Reaching for the private helper is a compile error that names the item and
 tells you where to add `pub`:
 
-```fable errors
+```soc errors
 import counter;
 println(counter.step());
 ```
@@ -121,14 +121,14 @@ The loading rules are deliberately simple:
 - A circular import is a compile error with the cycle spelled out.
 - Errors and panics point into the right file — stack traces span modules.
 
-## `FABLE_PATH`: a home for your toolbox
+## `SOCRATES_PATH`: a home for your toolbox
 
 Imports resolve relative to the importing file first, then against each
-directory in the colon-separated `FABLE_PATH` environment variable:
+directory in the colon-separated `SOCRATES_PATH` environment variable:
 
 ```sh
-export FABLE_PATH="$HOME/fable-lib"
-fable run anywhere/script.fable    # `import textutil;` finds ~/fable-lib/textutil.fable
+export SOCRATES_PATH="$HOME/socrates-lib"
+socrates run anywhere/script.soc    # `import textutil;` finds ~/socrates-lib/textutil.soc
 ```
 
 A sibling file always wins over the search path, and the missing-module error

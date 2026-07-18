@@ -8,7 +8,7 @@ branch (the bot account's API calls to workflow_dispatch and re-run
 return 403, so extra samples are obtained by pushing empty commits to
 the bench branch). `bench/run.sh [N]` is a single-binary sequential
 profiling convenience — where does one binary spend its time? — not the
-gate. Micro-benchmarks (`bench/*.fable`) isolate one cost centre each,
+gate. Micro-benchmarks (`bench/*.soc`) isolate one cost centre each,
 stated in each file's `// Bench:` measurand header; macros are the heavy
 demo mains. The spec suite appears only in run.sh's single-tree rows,
 never as an A/B target (its sources move with each ref — see below).
@@ -202,7 +202,7 @@ re-specified outright: bench_join_heavy previously duplicated
 string_build (a builder fill plus repeated `build()`; it performed no
 joins) and is now a real join-path bench
 (`strings.Builder.push_joined` + `List.join` row assembly), and
-`bench/for_range.fable` is new — the fused ForNextRange range-literal
+`bench/for_range.soc` is new — the fused ForNextRange range-literal
 loop, the modern counted-loop dispatch floor, arith_loop's counterpart.
 
 The conversions are stdout-identical against the pre-conversion files

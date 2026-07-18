@@ -8,7 +8,7 @@
 // A build script rather than `.cargo/config.toml` `rustflags` deliberately:
 // config-file rustflags are *replaced* by a `RUSTFLAGS` environment variable,
 // and this repo's own CI sets one on macOS (`-Clink-arg=-Wl,-sectcreate,...`
-// for section-embedded `fable build` binaries — see ci.yml's
+// for section-embedded `socrates build` binaries — see ci.yml's
 // macos-singlefile job and release.yml's demo zoo), which would silently
 // drop the stack flag from exactly those binaries. `cargo:rustc-link-arg-*`
 // composes with RUSTFLAGS instead, so both link args always apply.

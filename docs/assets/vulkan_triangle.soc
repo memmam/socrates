@@ -1,0 +1,128 @@
+// The gfx.* draw-call surface on the native Vulkan backend (SPEC § 7.4's
+// Vulkan notes): open a Vulkan window, compile a hand-assembled SPIR-V
+// vertex+fragment pair via gfx.compile_program_spirv, upload a 3-vertex
+// triangle, draw one frame, and read the center pixel back — the SPIR-V
+// twin of gl_triangle.soc (GLSL) and metal_triangle.soc (MSL).
+//
+//   cargo run --release --features vulkan -- docs/assets/vulkan_triangle.soc
+//
+// Prints `ok: vulkan triangle drawn, center=[255, 128, 64, 255]` when a
+// display + Vulkan device are available (Mesa's lavapipe counts — this
+// runs under Xvfb on plain CI/dev machines), `err: <reason>` otherwise —
+// and exits 0 either way, EXCEPT that when the draw does run, the center
+// pixel is hard-asserted (a wrong color panics, exit 70): on any
+// Vulkan-capable machine with an X server this is a real correctness
+// gate. Not wired into the golden test suite: the ok/err line is build-
+// and environment-dependent.
+//
+// The two modules below are SPIR-V 1.0, assembled word by word (the
+// generator script lives in the commit's test plan) — in GLSL terms:
+//   // vertex
+//   layout(location = 0) in vec3 pos;
+//   void main() { gl_Position = vec4(pos, 1.0); }
+//   // fragment
+//   layout(set = 0, binding = 1) uniform U { vec3 tint; };
+//   layout(location = 0) out vec4 frag;
+//   void main() { frag = vec4(tint, 1.0); }
+// Entry points are named `main` in both; the fragment uniform block sits
+// at set 0 binding 1 with its member named `tint`, which is exactly what
+// gfx.set_uniform_vec3(program, "tint", ...) resolves through the
+// backend's SPIR-V reflection.
+
+let vs_words = [
+    0x07230203, 0x00010000, 0x00000000, 0x00000017, 0x00000000, 0x00020011,
+    0x00000001, 0x0003000E, 0x00000000, 0x00000001, 0x0007000F, 0x00000000,
+    0x00000001, 0x6E69616D, 0x00000000, 0x00000002, 0x00000003, 0x00040047,
+    0x00000002, 0x0000001E, 0x00000000, 0x00030047, 0x0000000A, 0x00000002,
+    0x00050048, 0x0000000A, 0x00000000, 0x0000000B, 0x00000000, 0x00020013,
+    0x00000004, 0x00030021, 0x00000005, 0x00000004, 0x00030016, 0x00000006,
+    0x00000020, 0x00040017, 0x00000007, 0x00000006, 0x00000003, 0x00040017,
+    0x00000008, 0x00000006, 0x00000004, 0x00040020, 0x00000009, 0x00000001,
+    0x00000007, 0x0004003B, 0x00000009, 0x00000002, 0x00000001, 0x0003001E,
+    0x0000000A, 0x00000008, 0x00040020, 0x0000000B, 0x00000003, 0x0000000A,
+    0x0004003B, 0x0000000B, 0x00000003, 0x00000003, 0x00040015, 0x0000000C,
+    0x00000020, 0x00000001, 0x0004002B, 0x0000000C, 0x0000000D, 0x00000000,
+    0x0004002B, 0x00000006, 0x0000000E, 0x3F800000, 0x00040020, 0x0000000F,
+    0x00000003, 0x00000008, 0x00050036, 0x00000004, 0x00000001, 0x00000000,
+    0x00000005, 0x000200F8, 0x00000010, 0x0004003D, 0x00000007, 0x00000011,
+    0x00000002, 0x00050051, 0x00000006, 0x00000012, 0x00000011, 0x00000000,
+    0x00050051, 0x00000006, 0x00000013, 0x00000011, 0x00000001, 0x00050051,
+    0x00000006, 0x00000014, 0x00000011, 0x00000002, 0x00070050, 0x00000008,
+    0x00000015, 0x00000012, 0x00000013, 0x00000014, 0x0000000E, 0x00050041,
+    0x0000000F, 0x00000016, 0x00000003, 0x0000000D, 0x0003003E, 0x00000016,
+    0x00000015, 0x000100FD, 0x00010038,
+];
+let fs_words = [
+    0x07230203, 0x00010000, 0x00000000, 0x00000017, 0x00000000, 0x00020011,
+    0x00000001, 0x0003000E, 0x00000000, 0x00000001, 0x0006000F, 0x00000004,
+    0x00000001, 0x6E69616D, 0x00000000, 0x00000002, 0x00030010, 0x00000001,
+    0x00000007, 0x00050006, 0x00000009, 0x00000000, 0x746E6974, 0x00000000,
+    0x00040047, 0x00000002, 0x0000001E, 0x00000000, 0x00030047, 0x00000009,
+    0x00000002, 0x00050048, 0x00000009, 0x00000000, 0x00000023, 0x00000000,
+    0x00040047, 0x00000003, 0x00000022, 0x00000000, 0x00040047, 0x00000003,
+    0x00000021, 0x00000001, 0x00020013, 0x00000004, 0x00030021, 0x00000005,
+    0x00000004, 0x00030016, 0x00000006, 0x00000020, 0x00040017, 0x00000007,
+    0x00000006, 0x00000003, 0x00040017, 0x00000008, 0x00000006, 0x00000004,
+    0x0003001E, 0x00000009, 0x00000007, 0x00040020, 0x0000000A, 0x00000002,
+    0x00000009, 0x0004003B, 0x0000000A, 0x00000003, 0x00000002, 0x00040020,
+    0x0000000B, 0x00000003, 0x00000008, 0x0004003B, 0x0000000B, 0x00000002,
+    0x00000003, 0x00040015, 0x0000000C, 0x00000020, 0x00000001, 0x0004002B,
+    0x0000000C, 0x0000000D, 0x00000000, 0x0004002B, 0x00000006, 0x0000000E,
+    0x3F800000, 0x00040020, 0x0000000F, 0x00000002, 0x00000007, 0x00050036,
+    0x00000004, 0x00000001, 0x00000000, 0x00000005, 0x000200F8, 0x00000010,
+    0x00050041, 0x0000000F, 0x00000011, 0x00000003, 0x0000000D, 0x0004003D,
+    0x00000007, 0x00000012, 0x00000011, 0x00050051, 0x00000006, 0x00000013,
+    0x00000012, 0x00000000, 0x00050051, 0x00000006, 0x00000014, 0x00000012,
+    0x00000001, 0x00050051, 0x00000006, 0x00000015, 0x00000012, 0x00000002,
+    0x00070050, 0x00000008, 0x00000016, 0x00000013, 0x00000014, 0x00000015,
+    0x0000000E, 0x0003003E, 0x00000002, 0x00000016, 0x000100FD, 0x00010038,
+];
+
+fn blob(words: List[Int]) -> Bytes {
+    let b = bytes(0);
+    for w in words {
+        b.push_u32le(w);
+    }
+    b
+}
+
+fn run() -> Result[Unit, String] {
+    let win = window.create_vulkan("vulkan_triangle", 320, 240)?;
+    win.make_current();
+
+    let program = gfx.compile_program_spirv(blob(vs_words), blob(fs_words))?;
+
+    // The same triangle gl_triangle.soc draws: three (x, y, z) vertices
+    // as little-endian f32 bytes, covering the window center.
+    let verts = bytes(0);
+    for c in [0.0, 0.6, 0.0, -0.6, -0.6, 0.0, 0.6, -0.6, 0.0] {
+        verts.push_f32le(c);
+    }
+
+    let vao = gfx.create_vertex_array();
+    gfx.bind_vertex_array(vao);
+    let vbo = gfx.create_buffer();
+    gfx.bind_buffer("vertex", vbo);
+    gfx.upload_buffer("vertex", verts, false);
+    gfx.set_vertex_attrib(0, 3, 12, 0);
+
+    gfx.use_program(program);
+    gfx.set_uniform_vec3(program, "tint", 1.0, 0.5, 0.25);
+
+    gfx.clear(0.0, 0.0, 0.0, 1.0);
+    gfx.draw_arrays(0, 3);
+
+    // Read the center pixel from the offscreen target and hard-assert the
+    // tint (the same [255, 128, 64, 255] the Metal triangle pins).
+    let px = gfx.read_pixels(160, 120, 1, 1);
+    win.swap_buffers();
+    win.close();
+    assert_eq(px.to_list(), [255, 128, 64, 255]);
+    println("ok: vulkan triangle drawn, center={px.to_list()}");
+    Ok(())
+}
+
+match run() {
+    Ok(_) -> {},
+    Err(msg) -> println("err: {msg}"),
+}

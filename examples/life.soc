@@ -1,0 +1,59 @@
+// Conway's Game of Life: a glider and a blinker, 20 generations.
+//
+//   socrates run examples/life.soc
+
+let width = 24;
+let height = 12;
+
+fn empty_grid() -> List[List[Bool]] {
+    (0..height).map(|_r| (0..width).map(|_c| false))
+}
+
+fn neighbors(grid: List[List[Bool]], r: Int, c: Int) -> Int {
+    let mut count = 0;
+    for dr in -1..=1 {
+        for dc in -1..=1 {
+            if dr != 0 || dc != 0 {
+                let nr = (r + dr + height) % height;
+                let nc = (c + dc + width) % width;
+                if grid[nr][nc] { count += 1; }
+            }
+        }
+    }
+    count
+}
+
+fn step(grid: List[List[Bool]]) -> List[List[Bool]] {
+    (0..height).map(|r| (0..width).map(|c| {
+        let n = neighbors(grid, r, c);
+        if grid[r][c] { n == 2 || n == 3 } else { n == 3 }
+    }))
+}
+
+fn show(grid: List[List[Bool]], gen: Int) {
+    println("generation {gen}:");
+    for row in grid {
+        println(row.map(|alive| if alive { "██" } else { "· " }).join(""));
+    }
+    println("");
+}
+
+let mut grid = empty_grid();
+
+// A glider...
+for cell in [(0, 1), (1, 2), (2, 0), (2, 1), (2, 2)] {
+    let (r, c) = cell;
+    grid[r][c] = true;
+}
+// ...and a blinker.
+for cell in [(5, 14), (5, 15), (5, 16)] {
+    let (r, c) = cell;
+    grid[r][c] = true;
+}
+
+let mut gen = 0;
+while gen <= 20 {
+    if gen % 5 == 0 { show(grid, gen); }
+    grid = step(grid);
+    gen += 1;
+}

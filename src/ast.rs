@@ -108,7 +108,7 @@ pub enum StmtKind {
     Struct(StructDecl),
     Enum(EnumDecl),
     Impl(ImplDecl),
-    /// `import a.b;` / `import a.b as c;` — loads `a/b.fable` relative to the
+    /// `import a.b;` / `import a.b as c;` — loads `a/b.soc` relative to the
     /// importing file. The module is referenced by its alias (default: the
     /// last path segment).
     Import {

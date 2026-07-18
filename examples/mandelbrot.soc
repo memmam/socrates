@@ -1,0 +1,42 @@
+// The Mandelbrot set, rendered as ASCII art.
+//
+//   socrates run examples/mandelbrot.soc
+
+let width = 78;
+let height = 30;
+let max_iter = 64;
+
+// The escape-time iteration count for c = (cr, ci).
+fn mandel(cr: Float, ci: Float, max_iter: Int) -> Int {
+    let mut zr = 0.0;
+    let mut zi = 0.0;
+    let mut i = 0;
+    while i < max_iter && zr * zr + zi * zi <= 4.0 {
+        let tmp = zr * zr - zi * zi + cr;
+        zi = 2.0 * zr * zi + ci;
+        zr = tmp;
+        i += 1;
+    }
+    i
+}
+
+let palette = " .:-=+*#%@";
+
+fn shade(iters: Int, max_iter: Int) -> String {
+    if iters == max_iter {
+        "@"
+    } else {
+        let idx = iters * (palette.len() - 1) / max_iter;
+        palette.char_at(idx).unwrap_or(" ")
+    }
+}
+
+for row in 0..height {
+    let ci = (row.to_float() / height.to_float()) * 2.4 - 1.2;
+    let mut line = "";
+    for col in 0..width {
+        let cr = (col.to_float() / width.to_float()) * 3.0 - 2.2;
+        line += shade(mandel(cr, ci, max_iter), max_iter);
+    }
+    println(line);
+}

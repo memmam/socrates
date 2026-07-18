@@ -1,0 +1,57 @@
+// bits — 64-bit bitboard primitives: logical shift right, popcount, and
+// count-trailing-zeros, now one-line delegations to the v0.7 Int
+// intrinsics (`ushr`, `count_ones`, `trailing_zeros`). The hand-rolled
+// versions this file used to demonstrate — SWAR popcount, binary-search
+// ctz, the mask-built ushr — moved to git history; this file is now the
+// documented reference for the intrinsics themselves.
+//
+// The traps the intrinsics retire are still worth knowing, because any
+// NEW bit twiddling faces them. Socrates's Int is 64-bit signed, `>>` is
+// ARITHMETIC, and arithmetic overflow panics. A full-board bitboard
+// uses bit 63 (h8), so three classic bit tricks are traps here:
+//
+//   x >> n        smears the sign bit when bit 63 is set — use
+//                 `x.ushr(n)` for the zero-filling shift;
+//   x & (x - 1)   clear-lowest-bit panics when x == 1 << 63 (MIN - 1
+//                 overflows) — clear with `x ^ (1 << ctz(x))` instead;
+//   x & -x        isolate-lowest-bit panics the same way (-MIN
+//                 overflows) — same xor workaround.
+
+// Logical (zero-filling) shift right: the top n bits of the result are
+// zero no matter the sign of x. n must be in 0..=63 (shift rule).
+pub fn ushr(x: Int, n: Int) -> Int {
+    x.ushr(n)
+}
+
+// The bitboard with only square sq set (sq in 0..=63; a1 = 0, h8 = 63).
+pub fn bit(sq: Int) -> Int {
+    1 << sq
+}
+
+// Number of set bits.
+pub fn popcount(x: Int) -> Int {
+    x.count_ones()
+}
+
+// Index of the lowest set bit (0..=63); ctz(0) is defined as 64.
+// Iterating a bitboard low-to-high:
+//
+//   while bb != 0 { let sq = ctz(bb); bb ^= bit(sq); ... }
+//
+// — ascending square order, which reversi uses as its deterministic
+// tie-break everywhere.
+pub fn ctz(x: Int) -> Int {
+    x.trailing_zeros()
+}
+
+// All squares of a bitboard, ascending.
+pub fn squares(bb: Int) -> List[Int] {
+    let out: List[Int] = [];
+    let mut rest = bb;
+    while rest != 0 {
+        let sq = ctz(rest);
+        rest ^= bit(sq);
+        out.push(sq);
+    }
+    out
+}

@@ -18,19 +18,19 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
         let p = e.path();
         if p.is_dir() {
             collect(&p, out);
-        } else if p.extension().is_some_and(|x| x == "fable") {
+        } else if p.extension().is_some_and(|x| x == "soc") {
             out.push(p);
         }
     }
 }
 
 fn outcome_fingerprint(name: &str, text: &str) -> String {
-    match fable::run_capture(name, text) {
-        fable::RunOutcome::Ok { stdout, .. } => format!("ok:{stdout}"),
-        fable::RunOutcome::Panic { stdout, error } => {
+    match socrates::run_capture(name, text) {
+        socrates::RunOutcome::Ok { stdout, .. } => format!("ok:{stdout}"),
+        socrates::RunOutcome::Panic { stdout, error } => {
             format!("panic:{}:{stdout}", error.msg)
         }
-        fable::RunOutcome::CompileError(diags) => {
+        socrates::RunOutcome::CompileError(diags) => {
             let codes: Vec<&str> =
                 diags.iter().filter(|d| d.is_error()).map(|d| d.code).collect();
             format!("err:{}", codes.join(","))
@@ -52,8 +52,8 @@ fn formatter_is_idempotent_and_behavior_preserving() {
         let name = f.display().to_string();
 
         // Skip files that (intentionally) fail to parse — fmt refuses them.
-        let Ok(once) = fable::fmt::format_source(&name, &text) else { continue };
-        match fable::fmt::format_source(&name, &once) {
+        let Ok(once) = socrates::fmt::format_source(&name, &text) else { continue };
+        match socrates::fmt::format_source(&name, &once) {
             Ok(twice) => {
                 if once != twice {
                     failures.push(format!("{name}: not idempotent"));
@@ -69,7 +69,7 @@ fn formatter_is_idempotent_and_behavior_preserving() {
         // Behavior preservation. Examples that read stdin or are slow in
         // debug builds are exempted from execution (still checked above).
         let base = f.file_name().unwrap().to_string_lossy().to_string();
-        if matches!(base.as_str(), "adventure.fable" | "raytracer.fable" | "bench.fable") {
+        if matches!(base.as_str(), "adventure.soc" | "raytracer.soc" | "bench.soc") {
             continue;
         }
         let before = outcome_fingerprint(&name, &text);
@@ -94,7 +94,7 @@ fn formatter_is_idempotent_and_behavior_preserving() {
 
 #[track_caller]
 fn fmt_at(width: usize, src: &str) -> String {
-    fable::fmt::format_source_width("golden.fable", src, width).expect("golden input must parse")
+    socrates::fmt::format_source_width("golden.soc", src, width).expect("golden input must parse")
 }
 
 /// Format `src` at `width`, assert the exact golden output, idempotency, and
@@ -538,20 +538,20 @@ fn width_single_long_token_may_overflow() {
 }
 
 // ---------------------------------------------------------------------------
-// CLI: `fable fmt` over multiple files
+// CLI: `socrates fmt` over multiple files
 // ---------------------------------------------------------------------------
 
 #[test]
 fn fmt_cli_formats_every_file_argument() {
-    let dir = std::env::temp_dir().join(format!("fable-fmt-cli-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("socrates-fmt-cli-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let a = dir.join("a.fable");
-    let b = dir.join("b.fable");
+    let a = dir.join("a.soc");
+    let b = dir.join("b.soc");
 
     // Every file named on the command line is rewritten, flags anywhere.
     std::fs::write(&a, "let  x=1;\nprintln(str(x));\n").unwrap();
     std::fs::write(&b, "let  y  =  2;\nprintln(str(y));\n").unwrap();
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_socrates"))
         .args(["fmt", "-w"])
         .args([&a, &b])
         .output()
@@ -561,7 +561,7 @@ fn fmt_cli_formats_every_file_argument() {
     assert_eq!(std::fs::read_to_string(&b).unwrap(), "let y = 2;\nprintln(str(y));\n");
 
     // Without -w, both files print to stdout, in argument order.
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_socrates"))
         .arg("fmt")
         .args([&a, &b])
         .output()
@@ -574,10 +574,10 @@ fn fmt_cli_formats_every_file_argument() {
 
     // A file that fails to parse yields a nonzero exit, but the other files
     // are still formatted.
-    let bad = dir.join("bad.fable");
+    let bad = dir.join("bad.soc");
     std::fs::write(&bad, "let = ;\n").unwrap();
     std::fs::write(&a, "let  x=1;\n").unwrap();
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_socrates"))
         .arg("fmt")
         .arg(&bad)
         .arg("-w")

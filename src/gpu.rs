@@ -11,7 +11,7 @@
 //! is alone on macOS). wgpu, once the interpreter's only
 //! dependency, is **gone**: the native coverage condition (Metal + Vulkan +
 //! one of OpenCL/DirectX) was met and the roadmap retired it — every build
-//! of Fable, not just the default, is now zero-dependency. Without a
+//! of Socrates, not just the default, is now zero-dependency. Without a
 //! backend every entry point degrades gracefully: [`available`] is `false`,
 //! [`adapter_info`] and [`run`] report that gpu support is not compiled in.
 //!

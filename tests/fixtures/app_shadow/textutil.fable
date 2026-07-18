@@ -1,4 +1,0 @@
-// The sibling module that must win over shared_lib/textutil.fable.
-pub fn origin() -> String {
-    "local textutil"
-}

@@ -1,0 +1,89 @@
+// A gravitational n-body simulation across two files — showing off Socrates
+// v0.2: modules (`import vec;`), impl-block methods, and tail-call
+// optimization (the leapfrog driver is tail-recursive: 40,000 steps, one
+// stack frame).
+//
+//   socrates run examples/orbit/main.soc
+
+import vec;
+
+struct Body {
+    name: String,
+    pos: vec.V3,
+    vel: vec.V3,
+    mass: Float,
+}
+
+let g = 1.0; // gravitational constant, sim units
+
+fn accel(on: Body, bodies: List[Body]) -> vec.V3 {
+    let mut a = vec.zero();
+    for other in bodies {
+        let r = other.pos.sub(on.pos);
+        let d2 = r.dot(r);
+        if d2 > 0.000001 {
+            let d = d2.sqrt();
+            a = a.add(r.scale(g * other.mass / (d2 * d)));
+        }
+    }
+    a
+}
+
+// One leapfrog (kick-drift-kick) step: symplectic, so energy stays bounded.
+fn step(bodies: List[Body], dt: Float) {
+    let kicks = bodies.map(|b| accel(b, bodies).scale(dt * 0.5));
+    for pair in bodies.enumerate() {
+        let (i, b) = pair;
+        b.vel = b.vel.add(kicks[i]);
+        b.pos = b.pos.add(b.vel.scale(dt));
+    }
+    for b in bodies {
+        b.vel = b.vel.add(accel(b, bodies).scale(dt * 0.5));
+    }
+}
+
+fn energy(bodies: List[Body]) -> Float {
+    let mut e = 0.0;
+    for pair in bodies.enumerate() {
+        let (i, b) = pair;
+        e += 0.5 * b.mass * b.vel.dot(b.vel);
+        for j in 0..i {
+            let other = bodies[j];
+            e -= g * b.mass * other.mass / b.pos.sub(other.pos).len();
+        }
+    }
+    e
+}
+
+// Tail-recursive driver: with v0.2 tail calls this runs in constant stack
+// space no matter how many steps we ask for.
+fn run(bodies: List[Body], steps: Int, dt: Float) {
+    if steps == 0 {
+        return;
+    }
+    step(bodies, dt);
+    run(bodies, steps - 1, dt)
+}
+
+fn milli(x: Float) -> Float {
+    (x * 1000.0).round() / 1000.0
+}
+
+let system = [
+    Body { name: "star", pos: vec.zero(), vel: vec.of(0.0, -0.03, 0.0), mass: 100.0 },
+    Body { name: "planet", pos: vec.of(10.0, 0.0, 0.0), vel: vec.of(0.0, 3.0, 0.0), mass: 1.0 },
+    Body { name: "comet", pos: vec.of(-25.0, 0.0, 2.0), vel: vec.of(0.0, -1.2, 0.1), mass: 0.001 },
+];
+
+let e0 = energy(system);
+println("initial energy: {milli(e0)}");
+
+run(system, 40000, 0.002);
+
+let e1 = energy(system);
+println("final energy:   {milli(e1)}");
+println("drift:          {milli((e1 - e0).abs() / e0.abs() * 100.0)}%");
+for b in system {
+    let r = b.pos.len();
+    println("{b.name}: r = {milli(r)}");
+}

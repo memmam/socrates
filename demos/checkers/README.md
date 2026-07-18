@@ -1,4 +1,4 @@
-# checkers — an alpha-beta engine playing itself, in Fable
+# checkers — an alpha-beta engine playing itself, in Socrates
 
 English draughts (8x8 checkers) with the full rule set — forced captures,
 mandatory multi-jump chains, crowning, kings — driven by a negamax search
@@ -8,23 +8,23 @@ deterministically: fixed depth, first-best tie-breaking, no randomness, so
 every run produces the identical game (which the golden tests pin, node
 counts and all).
 
-About 500 lines of Fable in five files:
+About 500 lines of Socrates in five files:
 
 | File | What it does |
 |------|--------------|
-| `board.fable` | piece codes, board rendering (a `strings.Builder`, not `+=`), the move generator (forced captures, multi-jumps, crowning), and `apply`/`undo_move` so the search mutates one shared board instead of copying it |
-| `engine.fable` | positional evaluation, negamax + alpha-beta with a capture extension, and `Stats` (whose `add` method overloads `+` for tallying) |
-| `zobrist.fable` | 64-bit Zobrist position hashing built on the v0.7 bitwise operators — an xorshift64 key table written in Fable itself (pure `^`/`<<`/`ushr`), one key per (square, piece) plus a side-to-move key |
-| `main.fable` | the self-play loop: draw detection (threefold repetition via Zobrist hashes in two `std.set`s, 50 quiet plies), periodic board printing, final result and node statistics |
-| `spec.fable` | golden tests for the rules, the search, and the hashing |
+| `board.soc` | piece codes, board rendering (a `strings.Builder`, not `+=`), the move generator (forced captures, multi-jumps, crowning), and `apply`/`undo_move` so the search mutates one shared board instead of copying it |
+| `engine.soc` | positional evaluation, negamax + alpha-beta with a capture extension, and `Stats` (whose `add` method overloads `+` for tallying) |
+| `zobrist.soc` | 64-bit Zobrist position hashing built on the v0.7 bitwise operators — an xorshift64 key table written in Socrates itself (pure `^`/`<<`/`ushr`), one key per (square, piece) plus a side-to-move key |
+| `main.soc` | the self-play loop: draw detection (threefold repetition via Zobrist hashes in two `std.set`s, 50 quiet plies), periodic board printing, final result and node statistics |
+| `spec.soc` | golden tests for the rules, the search, and the hashing |
 
 ## Run it
 
 From the repository root:
 
 ```sh
-./target/release/fable demos/checkers/main.fable   # play the game (~15 s)
-./target/release/fable test demos/checkers         # golden tests (all five files)
+./target/release/socrates demos/checkers/main.soc   # play the game (~15 s)
+./target/release/socrates test demos/checkers         # golden tests (all five files)
 ```
 
 ## Sample output
@@ -81,13 +81,13 @@ self-play checkers.
   reports whether the set changed, so two sets count to three:
   a hash rejected by the first set is a revisit, one rejected by both is
   the third occurrence and the game is drawn. The key table comes from a
-  xorshift64 generator written in Fable (`^`, `<<`, and the logical-shift
-  `ushr` intrinsic — Fable's `>>` is arithmetic and would smear the sign
+  xorshift64 generator written in Socrates (`^`, `<<`, and the logical-shift
+  `ushr` intrinsic — Socrates's `>>` is arithmetic and would smear the sign
   bit), which keeps the table, and thus the pinned transcript, stable
   across releases — unlike `math.seed` streams.
 - **Determinism:** move generation order is fixed (board scan order), and
   the root keeps the *first* best-scoring move, so the whole game — every
-  move, every node count — is reproducible. `main.fable` carries
+  move, every node count — is reproducible. `main.soc` carries
   `//? expect:` directives pinning the full game transcript.
 - **Not done on purpose:** full bitboard move generation. It would change
   generation order — and with it the pinned 106-ply game — for no gain a

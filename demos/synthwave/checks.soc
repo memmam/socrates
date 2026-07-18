@@ -1,0 +1,100 @@
+// checks.soc — unit-style golden tests for the synth and wav modules.
+//
+//   ./target/release/socrates test demos/synthwave
+
+import synth;
+import wav;
+import std.lists;
+
+// --- oscillators: exact values at exact phases -------------------------------
+
+let phases = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875];
+println(str(phases.map(synth.osc_square)));
+//? expect: [1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0]
+println(str(phases.map(synth.osc_triangle)));
+//? expect: [-1.0, -0.5, 0.0, 0.5, 1.0, 0.5, 0.0, -0.5]
+
+// --- envelope: attack peak, decay midpoint, sustain, release ------------------
+
+let e = synth.Adsr { attack: 30, decay: 120, sustain: 0.75, release: 120 };
+for i in [0, 15, 30, 90, 150, 500, 880] {
+    println("env({i}) = {synth.envelope(i, 940, e)}");
+}
+//? expect: env(0) = 0.0
+//? expect: env(15) = 0.5
+//? expect: env(30) = 1.0
+//? expect: env(90) = 0.875
+//? expect: env(150) = 0.75
+//? expect: env(500) = 0.75
+//? expect: env(880) = 0.375
+
+// --- the noise LFSR ------------------------------------------------------------
+
+// first 16 output bits from seed 1
+let r = synth.lfsr(1);
+println((0..16).map(|_| if r.step() > 0.0 { "1" } else { "0" }).join(""));
+//? expect: 1000000001000010
+
+// x^9 + x^5 + 1 is primitive: every seed sits on one period-511 cycle
+// (seed 0 is remapped to 1, so the register can never lock up at zero).
+println("{synth.lfsr(1).period()} {synth.lfsr(300).period()} {synth.lfsr(0).period()}");
+//? expect: 511 511 511
+
+// --- PCM quantization: rounding half away from zero, clamped -------------------
+
+println(str(synth.quantize([0.0, 0.5, -0.5, 1.0, -1.0, 2.0, -2.0])));
+//? expect: [0, 16384, -16384, 32767, -32767, 32767, -32767]
+
+// --- WAV: encode with the LE pushers, decode with the LE readers ------------------
+
+let b = wav.encode([0, 32767, -32768, -1], 8000);
+println("{str(b)} len={b.len()}");
+//? expect: <bytes 52> len=52
+
+println("{wav.tag_at(b, 0)} {wav.u32_at(b, 4)} {wav.tag_at(b, 8)}");
+//? expect: RIFF 44 WAVE
+println("{wav.tag_at(b, 12)} {wav.u32_at(b, 16)} codec={wav.u16_at(b, 20)} ch={wav.u16_at(b, 22)}");
+//? expect: fmt  16 codec=1 ch=1
+println("{wav.u32_at(b, 24)} {wav.u32_at(b, 28)} {wav.u16_at(b, 32)} {wav.u16_at(b, 34)}");
+//? expect: 8000 16000 2 16
+println("{wav.tag_at(b, 36)} {wav.u32_at(b, 40)}");
+//? expect: data 8
+
+// the sample bytes, raw and read back signed by read_i16le
+println(str(b.slice(44, 52).to_list()));
+//? expect: [0, 0, 255, 127, 0, 128, 255, 255]
+println(str([wav.i16_at(b, 44), wav.i16_at(b, 46), wav.i16_at(b, 48), wav.i16_at(b, 50)]));
+//? expect: [0, 32767, -32768, -1]
+
+// Bytes equality is structural: rebuilt == built until a byte flips
+let c = wav.encode([0, 32767, -32768, -1], 8000);
+println(str(b == c));
+//? expect: true
+c.set(51, 0);
+println(str(b == c));
+//? expect: false
+
+// --- a miniature fft self-check ---------------------------------------------------
+
+// 1000 Hz square sampled 16x at 8000 Hz: exactly 2 cycles, so the
+// fundamental must land on bin 2 of the 9-bin rfft.
+let tone = synth.pure_tone(synth.osc_square, 1000, 16);
+println(str(tone.slice(0, 8)));
+//? expect: [1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0]
+let (re, im) = fft.rfft(tone);
+println(str(re.len()));
+//? expect: 9
+fn by_mag(a: (Int, Float), b: (Int, Float)) -> Int {
+    if a.1 < b.1 {
+        return -1;
+    }
+    if a.1 > b.1 {
+        return 1;
+    }
+    0
+}
+
+let m2 = re.zip(im).map(|p| p.0 * p.0 + p.1 * p.1);
+let best = lists.max_by(m2.enumerate().slice(1, m2.len()), by_mag).unwrap();
+println(str(best.0));
+//? expect: 2

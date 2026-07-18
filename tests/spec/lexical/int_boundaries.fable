@@ -1,9 +1,0 @@
-// SPEC 1.3 / 2.1: Int is 64-bit signed. The largest writable literal is
-// 9223372036854775807 (i64::MAX); Int min is only reachable via arithmetic
-// because -9223372036854775808 is unary minus applied to an out-of-range
-// literal (see int_min_negation.fable).
-println(9223372036854775807);           //? expect: 9223372036854775807
-println(0x7FFF_FFFF_FFFF_FFFF);         //? expect: 9223372036854775807
-println(-9223372036854775807);          //? expect: -9223372036854775807
-println(-9223372036854775807 - 1);      //? expect: -9223372036854775808
-println(9_223_372_036_854_775_807);     //? expect: 9223372036854775807

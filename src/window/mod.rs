@@ -83,7 +83,7 @@ use macos::Inner as PlatformInner;
 /// (`x11/gl.rs`/`win32.rs`/`macos/gl.rs`), instead of leaking out to
 /// `natives.rs`.
 /// Always compiled (unlike `WindowHandle`'s GL-calling methods below) since
-/// it carries no platform state — just a tag `natives.rs` maps a Fable
+/// it carries no platform state — just a tag `natives.rs` maps a Socrates
 /// `"vertex"`/`"index"` string onto.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GfxBufferKind {
@@ -135,7 +135,7 @@ pub fn create(title: &str, w: i32, h: i32) -> Result<WindowHandle, String> {
 /// Create a Metal-backed window (macOS/Apple Silicon only) — additive
 /// alongside [`create`]'s OpenGL/CGL path, never a replacement (see
 /// `CLAUDE.md`'s standing Metal exception). A sibling function rather than a
-/// `backend` parameter on `create`: Fable has neither default parameters nor
+/// `backend` parameter on `create`: Socrates has neither default parameters nor
 /// overloading, so a mandatory extra argument would break every existing
 /// `window.create(title, w, h)` call site for no ergonomic gain. Always an
 /// `Err` without the `metal` feature or off Apple Silicon macOS.
@@ -157,7 +157,7 @@ pub fn create_metal(title: &str, w: i32, h: i32) -> Result<WindowHandle, String>
 /// Create a Vulkan-backed window (Linux/X11 and Windows) — additive
 /// alongside [`create`]'s OpenGL/GLX path, never a replacement, exactly the
 /// shape [`create_metal`] established on macOS (and a sibling function
-/// rather than a `backend` parameter on `create` for the same reason: Fable
+/// rather than a `backend` parameter on `create` for the same reason: Socrates
 /// has neither default parameters nor overloading). Rides the same `vulkan`
 /// cargo feature as the `gpu.run_spirv` compute backend. Always an `Err`
 /// without the `vulkan` feature or off Linux/Windows; with it, both
@@ -231,7 +231,7 @@ impl WindowHandle {
         self.inner.as_ref().map_or(0, |i| i.height())
     }
 
-    /// `"opengl"`, `"metal"`, or `"vulkan"` — the one place a Fable program
+    /// `"opengl"`, `"metal"`, or `"vulkan"` — the one place a Socrates program
     /// needs to branch when writing a single codebase that targets multiple
     /// backends, since shader *source text* (GLSL vs. MSL vs. SPIR-V) is
     /// inherently backend-specific; everything else about the `gfx` call
@@ -257,7 +257,7 @@ impl WindowHandle {
     // context. Each of these forwards to the matching `Inner` method (same
     // name on every platform backend, mirroring `poll`/`clear`/etc. above);
     // `natives.rs` never touches raw GL enum values or FFI types, only these
-    // Fable-shaped wrappers. See `docs/SPEC.md` § 7.4 for the full contract.
+    // Socrates-shaped wrappers. See `docs/SPEC.md` § 7.4 for the full contract.
     // -----------------------------------------------------------------
 
     /// Makes this window's GL context current on this thread. Idempotent,
@@ -641,7 +641,7 @@ mod tests {
             eprintln!("skipping: metal feature is actually compiled in on this target");
             return;
         }
-        let err = create_metal("fable window test", 320, 240).unwrap_err();
+        let err = create_metal("socrates window test", 320, 240).unwrap_err();
         assert!(err.contains("Metal windowing support not compiled in"));
         assert!(err.contains("--features metal"));
     }
@@ -656,7 +656,7 @@ mod tests {
             eprintln!("skipping: vulkan windowing is actually compiled in on this target");
             return;
         }
-        let err = create_vulkan("fable window test", 320, 240).unwrap_err();
+        let err = create_vulkan("socrates window test", 320, 240).unwrap_err();
         assert!(err.contains("Vulkan windowing support not compiled in"));
         assert!(err.contains("--features vulkan"));
     }

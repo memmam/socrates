@@ -1,0 +1,54 @@
+// The Bytes type (v0.7): packed byte buffers for binary I/O and wire
+// formats. Constructors, accessors, little-endian pushers, slicing,
+// UTF-8 bridging, and structural equality.
+
+let b = bytes(3);
+println(b.len());                          //? expect: 3
+println(b.get(0));                         //? expect: 0
+b.set(1, 200);
+println(b.get(1));                         //? expect: 200
+b.push(255);
+println(b.len());                          //? expect: 4
+println("{b}");                            //? expect: <bytes 4>
+
+// bytes_of / to_list round-trip.
+let c = bytes_of([10, 20, 30]);
+println(c.to_list());                      //? expect: [10, 20, 30]
+
+// Little-endian pushers cover wire formats without bitwise operators.
+let w = bytes(0);
+w.push_u16le(258);        // 0x0102 -> 02 01
+w.push_i16le(-2);         // 0xFFFE -> FE FF
+w.push_u32le(16909060);   // 0x01020304 -> 04 03 02 01
+println(w.to_list());                      //? expect: [2, 1, 254, 255, 4, 3, 2, 1]
+
+// slice clamps like List.slice; concat returns a new buffer.
+println(c.slice(1, 99).to_list());         //? expect: [20, 30]
+println(c.slice(2, 1).len());              //? expect: 0
+println(c.concat(bytes_of([40])).to_list());   //? expect: [10, 20, 30, 40]
+println(c.to_list());                      //? expect: [10, 20, 30]
+
+// String <-> Bytes via UTF-8, including invalid sequences.
+println("héllo".to_bytes().len());         //? expect: 6
+println("hi".to_bytes().utf8());           //? expect: Ok("hi")
+println(bytes_of([255, 254]).utf8().is_err());   //? expect: true
+
+// Structural equality; reference semantics on mutation.
+let d = bytes_of([1, 2]);
+let e = bytes_of([1, 2]);
+println(d == e);                           //? expect: true
+let alias = d;
+alias.push(3);
+println(d.len());                          //? expect: 3
+println(d == e);                           //? expect: false
+
+// Bytes as map keys (content-hashed).
+let m = {bytes_of([1]): "one"};
+println(m[bytes_of([1])]);                 //? expect: one
+
+// Binary file round-trip.
+let path = "target/socrates_spec_bytes_rt.bin";
+fs.write_bytes(path, w).unwrap();
+let back = fs.read_bytes(path).unwrap();
+println(back == w);                        //? expect: true
+fs.remove(path).unwrap();

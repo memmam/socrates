@@ -3,14 +3,14 @@
 This chapter is about modeling data: structs for "this *and* that", enums for
 "this *or* that", and `match` for taking data apart again — with the compiler
 checking that you handled every case. Every snippet is a complete program you
-can save and run with `fable run file.fable`.
+can save and run with `socrates run file.soc`.
 
 ## Structs
 
 A `struct` declares a nominal record type. Construct one with a literal that
 names every field, read fields with `.`, and assign to them with `=`:
 
-```fable
+```soc
 struct Point { x: Float, y: Float }
 
 let p = Point { x: 1.0, y: 2.0 };
@@ -41,7 +41,7 @@ struct literal`; unknown fields are likewise compile errors.
 Assigning a struct to another binding does not copy it. Both names refer to
 the same object, and mutation through one is visible through the other:
 
-```fable
+```soc
 struct Counter { n: Int }
 
 let a = Counter { n: 0 };
@@ -68,7 +68,7 @@ the right choice when you want named fields or shared, mutable state.
 Structs take type parameters in square brackets, and the arguments are
 inferred from the literal — there is no turbofish:
 
-```fable
+```soc
 struct Pair[A, B] { first: A, second: B }
 
 let p = Pair { first: 1, second: "one" };     // Pair[Int, String] inferred
@@ -84,7 +84,7 @@ Pair { first: 1, second: "one" }
 
 (Strings nested inside a printed container are quoted.) Operations on your
 types can be free functions — a handful of types followed by the functions
-that work on them is a fine shape for a Fable program — or methods in an
+that work on them is a fine shape for a Socrates program — or methods in an
 `impl` block (see below). There are still no traits.
 
 ## Enums
@@ -93,7 +93,7 @@ An `enum` is a choice among *variants*, each optionally carrying a payload.
 Variants are written `EnumName.Variant`; nullary variants take no
 parentheses. The natural way to consume an enum is `match`:
 
-```fable
+```soc
 enum Shape {
     Circle(Float),
     Rect(Float, Float),
@@ -129,14 +129,14 @@ Constructing a variant requires the enum name (`Circle(1.0)` alone is
 
 ## Option and Result are ordinary enums
 
-Fable has no null. The prelude defines two enums you will use constantly:
+Socrates has no null. The prelude defines two enums you will use constantly:
 `enum Option[T] { Some(T), None }` and `enum Result[T, E] { Ok(T), Err(E) }`.
 Only two things about them are special: the `?` operator (chapter 6)
 propagates their failure cases, and — a courtesy — their variants may be
 used *unqualified*, both when constructing and in patterns. `Some(5)` and `Option.Some(5)` are
 the same value.
 
-```fable
+```soc
 fn safe_div(a: Int, b: Int) -> Result[Int, String] {
     if b == 0 { Err("cannot divide {a} by zero") } else { Ok(a / b) }
 }
@@ -167,7 +167,7 @@ Patterns are where `match` earns its keep. Literals match themselves,
 or-patterns (`|`) try alternatives, guards (`if`) add arbitrary conditions,
 and a lowercase name *binds* whatever reaches it:
 
-```fable
+```soc
 fn describe(n: Int) -> String {
     match n {
         0 -> "zero",
@@ -198,7 +198,7 @@ all alternatives must bind the same names with the same types.
 Tuples destructure positionally, and patterns nest — here literals sit
 inside tuple patterns:
 
-```fable
+```soc
 fn locate(point: (Int, Int)) -> String {
     match point {
         (0, 0) -> "at the origin",
@@ -226,7 +226,7 @@ nested pattern, bare `field` is shorthand for `field: field`, and `..`
 ignores the fields you don't name (omitting fields *without* `..` is an
 error):
 
-```fable
+```soc
 struct Pixel { x: Int, y: Int, brightness: Float }
 
 fn classify(p: Pixel) -> String {
@@ -254,7 +254,7 @@ Testing a single pattern doesn't need a whole `match`. `if let PATTERN =
 EXPR { ... }` runs its block only when `EXPR` matches, with `else` for
 everything else:
 
-```fable
+```soc
 fn describe(o: Option[Int]) -> String {
     if let Some(n) = o {
         "got {n}"
@@ -276,7 +276,7 @@ nothing
 pattern stops matching — no `is_empty()` check, no hand-rolled `while true
 { match ... { _ -> break } }`:
 
-```fable
+```soc
 import std.deque;
 
 let q = deque.from_list([1, 2, 3]);
@@ -300,10 +300,10 @@ arm must be `Unit`, exactly like a plain `if` with no `else`.
 ## Exhaustiveness: the compiler keeps score
 
 A `match` must cover every possible value of its scrutinee. If it doesn't,
-that's a compile error — and Fable reports a concrete value you missed, not
+that's a compile error — and Socrates reports a concrete value you missed, not
 just "add more arms":
 
-```fable errors
+```soc errors
 enum Shape { Circle(Float), Rect(Float, Float), Empty }
 
 fn area(s: Shape) -> Float {
@@ -315,7 +315,7 @@ fn area(s: Shape) -> Float {
 
 ```text
 error[E0501]: non-exhaustive match: the value `Shape.Rect(_, _)` is not covered
-  --> demo.fable:4:11
+  --> demo.soc:4:11
    |
 4 |     match s {
    |           ^ `Shape.Rect(_, _)` is not covered
@@ -327,7 +327,7 @@ This is the payoff of enums: add a variant to `Shape` next month and every
 gap. The checker is deliberately conservative about guards — a guard might
 be `false`, so a guarded arm never counts toward coverage:
 
-```fable errors
+```soc errors
 fn sign(n: Int) -> String {
     match n {
         0 -> "zero",
@@ -338,7 +338,7 @@ fn sign(n: Int) -> String {
 
 ```text
 error[E0501]: non-exhaustive match: the value `-1` is not covered
-  --> demo.fable:2:11
+  --> demo.soc:2:11
    |
 2 |     match n {
    |           ^ `-1` is not covered
@@ -353,7 +353,7 @@ always need a binding or `_` arm. `Bool` is the exception: `true` and
 The opposite mistake — an arm that earlier arms already cover — is a
 warning, not an error. The program still compiles and runs:
 
-```fable
+```soc
 enum Coin { Heads, Tails }
 
 fn name(c: Coin) -> String {
@@ -369,14 +369,14 @@ println(name(Coin.Heads));
 
 ```text
 warning[W0101]: unreachable match arm
-  --> demo.fable:7:9
+  --> demo.soc:7:9
    |
 7 |         _ -> "impossible",
    |         ^ this pattern is covered by earlier arms
 heads
 ```
 
-This is also why a reflexive catch-all arm is an anti-pattern in Fable: that
+This is also why a reflexive catch-all arm is an anti-pattern in Socrates: that
 `_` is dead weight today, and tomorrow it will silently absorb the
 `Coin.Edge` variant you add, instead of triggering an exhaustiveness error.
 
@@ -386,7 +386,7 @@ Patterns are not confined to `match`. A `let` can destructure, as long as
 the pattern is *irrefutable* — guaranteed to match. Tuple and struct
 patterns qualify:
 
-```fable
+```soc
 struct Point { x: Float, y: Float }
 
 let pair = (3, "three");
@@ -405,7 +405,7 @@ println(x + y);
 
 A variant pattern can fail, so it is rejected in `let` at compile time:
 
-```fable errors
+```soc errors
 let opt = Some(5);
 let Some(n) = opt;
 println(n);
@@ -413,7 +413,7 @@ println(n);
 
 ```text
 error[E0503]: refutable pattern in a `let` binding
-  --> demo.fable:2:5
+  --> demo.soc:2:5
    |
 2 | let Some(n) = opt;
    |     ^^^^^^^ this variant pattern can fail
@@ -428,7 +428,7 @@ that exits never produces a value, so the checker exempts it from the "all
 arms have the same type" rule. That makes `match` a tidy way to peel off the
 failure case and continue with the success value:
 
-```fable
+```soc
 fn summarize(xs: List[Int]) -> String {
     let first = match xs.first() {
         None -> return "empty list",
@@ -448,10 +448,10 @@ empty list
 ```
 
 Here `first` is an `Int` — the `None` arm never yields a value because it
-exits `summarize` entirely. This idiom is the workhorse of Fable error
+exits `summarize` entirely. This idiom is the workhorse of Socrates error
 handling when the failure case needs its own logic; when it would just be
 `return`, the `?` operator (chapter 6) says the same thing in one character.
-`examples/json.fable` uses both. (Assignment stays statement-only: an arm
+`examples/json.soc` uses both. (Assignment stays statement-only: an arm
 that assigns still needs a block body, `Some(v) -> { x = v; }`, and the
 error message says so.)
 
@@ -462,7 +462,7 @@ for trees and lists. Here is a binary search tree — `insert` returns a new
 tree sharing untouched subtrees with the old one, and `to_list` reads the
 values back in sorted order:
 
-```fable
+```soc
 enum Tree {
     Leaf,
     Node(Tree, Int, Tree),
@@ -511,7 +511,7 @@ them from an `impl` block. The first parameter of a method is a bare `self`
 (no annotation — it always has the impl type); everything else is an
 ordinary typed parameter:
 
-```fable
+```soc
 struct Point { x: Float, y: Float }
 
 impl Point {
@@ -539,7 +539,7 @@ compiles to the same call as `len(p)` would. They are hoisted like
 functions, so order within a file does not matter, and they pair naturally
 with `match` on enums:
 
-```fable
+```soc
 enum Shape { Circle(Float), Rect(Float, Float), Empty }
 
 impl Shape {
@@ -562,7 +562,7 @@ println(Shape.Rect(3.0, 4.0).area());
 Generic types re-bind their type parameters in the `impl` header, and a
 method may add its own after the type's:
 
-```fable
+```soc
 struct Pair[A, B] { first: A, second: B }
 
 impl Pair[A, B] {
@@ -589,7 +589,7 @@ The well-known method names `add`, `sub`, `mul`, `div`, `rem`, and `neg`
 overload the operators themselves. Define `add` on a type and `a + b`
 dispatches to `a.add(b)`:
 
-```fable
+```soc
 struct V2 { x: Float, y: Float }
 
 impl V2 {

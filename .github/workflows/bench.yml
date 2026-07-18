@@ -94,8 +94,22 @@ jobs:
       - name: Compare binaries
         shell: bash
         run: |
-          b=base/target/release/fable; h=head/target/release/fable
-          [ -f "$b" ] || { b=$b.exe; h=$h.exe; }
+          # Cross-epoch bridge (permanent, mirrors bench/ab.py's): a
+          # pre-rename ref builds `fable`, a post-rename ref builds
+          # `socrates` — resolve each side's binary independently so the
+          # 2026-07 rename commit itself (and any later ref vs. any
+          # earlier one) can be A/B'd.
+          find_bin() {
+            for n in socrates fable; do
+              for x in "" .exe; do
+                if [ -f "$1/target/release/$n$x" ]; then
+                  echo "$1/target/release/$n$x"; return 0
+                fi
+              done
+            done
+            echo "no release binary under $1/target/release" >&2; return 1
+          }
+          b=$(find_bin base); h=$(find_bin head)
           if cmp -s "$b" "$h"; then verdict="BIT-IDENTICAL"; else verdict="DIFFER"; fi
           echo "binaries: $verdict"
           echo "**binaries: $verdict**" >> "$GITHUB_STEP_SUMMARY"

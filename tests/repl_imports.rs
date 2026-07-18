@@ -8,7 +8,7 @@ use std::process::{Command, Stdio};
 fn repl_imports_std_and_files() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/spec/module_system");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_fable"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_socrates"))
         .arg("repl")
         .current_dir(&dir)
         .stdin(Stdio::piped())

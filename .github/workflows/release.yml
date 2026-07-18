@@ -12,8 +12,8 @@ name: Release
 #
 # The `build` matrix cross-compiles the interpreter for five desktop
 # targets and, on each, staples every demo into a self-contained binary
-# (the "demo zoo") with `fable build`. Stapling is host-independent byte
-# work — a host `fable` reads the target launcher from a file — so the
+# (the "demo zoo") with `socrates build`. Stapling is host-independent byte
+# work — a host `socrates` reads the target launcher from a file — so the
 # whole zoo for a target is assembled on that target's runner without
 # ever executing the cross-built binary. The x86_64-linux job also runs
 # the full validation suite; if it fails, its artifacts are never
@@ -66,7 +66,7 @@ jobs:
             ext: ""
             # macOS can't append (a payload past __LINKEDIT fails codesign),
             # so each demo binary is built by linking the payload in as a
-            # `__DATA,__fablezoo` section. Signs ad-hoc by default; upgrades
+            # `__DATA,__socrateszoo` section. Signs ad-hoc by default; upgrades
             # to Developer ID + notarization when the signing secrets exist.
             macos_section: true
     env:
@@ -99,7 +99,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ${{ matrix.apt }}
 
       - name: Build host stapler
-        # A host-runnable `fable` to run `fable build` on this runner. On a
+        # A host-runnable `socrates` to run `socrates build` on this runner. On a
         # native-arch target this is redundant with the launcher, but keeping
         # the step uniform across native and cross targets is worth the few
         # extra seconds.
@@ -115,12 +115,12 @@ jobs:
         run: |
           cargo test
           cargo clippy --all-targets -- -D warnings
-          ./target/release/fable test tests/spec > /dev/null
+          ./target/release/socrates test tests/spec > /dev/null
           # glcube's three mains need a live GL/Metal/Vulkan window (ci.yml's
           # windowing jobs run them); everything else runs here, including
-          # glcube's own GL-free cube.fable/spec.fable.
+          # glcube's own GL-free cube.soc/spec.soc.
           shopt -s extglob
-          ./target/release/fable test demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable > /dev/null
+          ./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc > /dev/null
 
       - name: Assemble the demo zoo
         shell: bash
@@ -128,28 +128,28 @@ jobs:
           mkdir -p zoo
           if [ "${{ matrix.macos_section }}" = "true" ]; then
             # macOS: build each demo binary by linking its payload in as a
-            # `__DATA,__fablezoo` section (appending can't be code-signed).
+            # `__DATA,__socrateszoo` section (appending can't be code-signed).
             # The linker ad-hoc signs by default; re-sign + verify explicitly.
-            host="target/release/fable"
+            host="target/release/socrates"
             mkdir -p payloads
             for d in demos/*/; do
               name="$(basename "$d")"
-              [ -f "${d}main.fable" ] || continue
+              [ -f "${d}main.soc" ] || continue
               "$host" build "demos/$name" --payload-only -o "$PWD/payloads/$name.bin"
-              RUSTFLAGS="-Clink-arg=-Wl,-sectcreate,__DATA,__fablezoo,$PWD/payloads/$name.bin" \
+              RUSTFLAGS="-Clink-arg=-Wl,-sectcreate,__DATA,__socrateszoo,$PWD/payloads/$name.bin" \
                 cargo build --release --target ${{ matrix.target }}
-              cp "target/${{ matrix.target }}/release/fable" "zoo/${name}"
+              cp "target/${{ matrix.target }}/release/socrates" "zoo/${name}"
               codesign --force --sign - "zoo/${name}"
               codesign --verify --strict "zoo/${name}"
             done
           else
-            # The host stapler is the runner's native `fable`; we only ever
+            # The host stapler is the runner's native `socrates`; we only ever
             # cross within an OS, so the host extension equals matrix.ext.
-            host="target/release/fable${{ matrix.ext }}"
-            launcher="target/${{ matrix.target }}/release/fable${{ matrix.ext }}"
+            host="target/release/socrates${{ matrix.ext }}"
+            launcher="target/${{ matrix.target }}/release/socrates${{ matrix.ext }}"
             for d in demos/*/; do
               name="$(basename "$d")"
-              [ -f "${d}main.fable" ] || continue
+              [ -f "${d}main.soc" ] || continue
               "$host" build "demos/$name" --launcher "$launcher" -o "zoo/${name}${{ matrix.ext }}"
             done
           fi
@@ -176,7 +176,7 @@ jobs:
           MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
         run: |
           set -euo pipefail
-          kc="$RUNNER_TEMP/fable-signing.keychain-db"
+          kc="$RUNNER_TEMP/socrates-signing.keychain-db"
           kcpw="$(uuidgen)"
           security create-keychain -p "$kcpw" "$kc"
           security set-keychain-settings -lut 21600 "$kc"
@@ -210,11 +210,11 @@ jobs:
         run: |
           mkdir -p dist stage
           # The plain interpreter.
-          cp "target/${{ matrix.target }}/release/fable${{ matrix.ext }}" stage/
+          cp "target/${{ matrix.target }}/release/socrates${{ matrix.ext }}" stage/
           cp LICENSE NOTICE README.md stage/
-          tar -C stage -czf "dist/fable-${TAG}-${{ matrix.label }}.tar.gz" .
+          tar -C stage -czf "dist/socrates-${TAG}-${{ matrix.label }}.tar.gz" .
           # The demo zoo.
-          tar -C zoo -czf "dist/fable-demozoo-${TAG}-${{ matrix.label }}.tar.gz" .
+          tar -C zoo -czf "dist/socrates-demozoo-${TAG}-${{ matrix.label }}.tar.gz" .
 
       - name: Upload artifacts
         # v6 is the first upload-artifact major that ships on the Node 24
@@ -264,7 +264,7 @@ jobs:
         run: |
           # The x86_64-linux job carries validation; if it failed, its
           # artifacts are absent and we must not draft a release.
-          if [ ! -f "artifacts/release-x86_64-linux/fable-${TAG}-x86_64-linux.tar.gz" ]; then
+          if [ ! -f "artifacts/release-x86_64-linux/socrates-${TAG}-x86_64-linux.tar.gz" ]; then
             echo "x86_64-linux artifacts missing (validation failed?); refusing to draft" >&2
             exit 1
           fi
@@ -286,7 +286,7 @@ jobs:
               --draft \
               --prerelease \
               --target "$GITHUB_SHA" \
-              --title "Fable $TAG" \
+              --title "Socrates $TAG" \
               --notes-file .github/RELEASE_NOTES.md \
               "${assets[@]}"
           fi

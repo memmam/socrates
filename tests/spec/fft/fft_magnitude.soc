@@ -1,0 +1,25 @@
+// std.fft.magnitude: the re.zip(im).map(|p| sqrt(p.0^2+p.1^2)) line every
+// rfft consumer wrote by hand, in std since the minification pass (the
+// module also wraps rfft, so `fft.` spellings survive the import).
+// Pythagorean triples give exact f64 results, avoiding raw-libm pinning
+// (STYLE.md § 2).
+
+import std.fft;
+
+println(fft.magnitude([3.0, 5.0, 8.0], [4.0, 12.0, 15.0]));
+//? expect: [5.0, 13.0, 17.0]
+
+println(fft.magnitude([0.0], [0.0]));
+//? expect: [0.0]
+
+// Real-only signal: magnitude is the absolute value.
+println(fft.magnitude([-7.0, 2.0], [0.0, 0.0]));
+//? expect: [7.0, 2.0]
+
+// A real rfft consumer: bin 2 carries all the energy of this alternation
+// (matches fft_basics.soc's `hr[2] == 4.0`, `hi[2] == 0.0`).
+let sig = [1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0];
+let (hr, hi) = fft.rfft(sig);
+let mags = fft.magnitude(hr, hi);
+println(mags.len());               //? expect: 5
+println(mags[2]);                  //? expect: 4.0

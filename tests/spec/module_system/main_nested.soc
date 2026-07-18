@@ -1,0 +1,19 @@
+// SPEC §5.2 (v0.2): dotted import paths map to subdirectories (`import
+// lib.vec;` → `lib/vec.soc`), the default alias is the last segment, and
+// `as` renames. Modules may import their own dependencies; a shared module
+// loads once.
+import lib.vec;
+import lib.pair as pp;
+
+let v = vec.make(3, 4);
+println(v.x);                    //? expect: 3
+println(v.swap().x);             //? expect: 4
+
+// vec's own import of `pair` and our alias `pp` name the same module, so its
+// types are interchangeable.
+let q: pp.Pair = vec.to_pair(v);
+println(pp.sum(q));              //? expect: 7
+
+// Generic module types instantiate like local ones.
+let names: vec.V2[String] = vec.V2 { x: "a", y: "b" };
+println(names.swap().x);         //? expect: b

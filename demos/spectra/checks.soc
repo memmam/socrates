@@ -1,0 +1,112 @@
+// checks.soc — unit-style goldens for the dsp module, plus a naive
+// O(n^2) DFT cross-check of the fft engine itself on a Bluestein length.
+//
+//   ./target/release/socrates test demos/spectra
+
+import dsp;
+import std.lists;
+
+// --- gcd and ratio reduction ----------------------------------------------------
+
+println(str([dsp.gcd(240, 300), dsp.gcd(300, 360), dsp.gcd(0, 7), dsp.gcd(90, 270)]));
+//? expect: [60, 60, 7, 90]
+println(str(dsp.reduce_ratio([240, 300, 360])));
+//? expect: [4, 5, 6]
+println(str(dsp.reduce_ratio([200, 240, 300])));
+//? expect: [10, 12, 15]
+println(str(dsp.reduce_ratio([180, 270])));
+//? expect: [2, 3]
+println(str(dsp.reduce_ratio([17])));
+//? expect: [1]
+
+// --- synth: a unit sine puts its whole magnitude (n/2) on its own bin --------------
+
+let tone = dsp.synth([(3, 1.0)], 16);
+let pw = dsp.power_spectrum(tone);
+println(str(pw.len()));
+//? expect: 9
+let dom = lists.max_by(pw.enumerate(), dsp.by_power).unwrap();
+println("bin {dom.0} mag {dom.1.sqrt().to_fixed(6)}");
+//? expect: bin 3 mag 8.000000
+// every other bin is numerically zero
+let leak = lists.max_float(pw.enumerate().filter(|p| p.0 != 3).map(|p| p.1)).unwrap();
+println(str(leak < 1e-18));
+//? expect: true
+
+// --- top_k: strongest first, ties to the lower bin, never repicks -------------------
+
+println(str(dsp.top_k([0.0, 5.0, 1.0, 5.0, 3.0], 3)));
+//? expect: [(1, 5.0), (3, 5.0), (4, 3.0)]
+println(str(dsp.top_k([2.0, 9.0], 2)));
+//? expect: [(1, 9.0), (0, 2.0)]
+
+// --- by_power is a lawful sort_by comparator ----------------------------------------
+
+println(
+    str([
+        dsp.by_power((0, 1.0), (1, 2.0)),
+        dsp.by_power((0, 2.0), (1, 1.0)),
+        dsp.by_power((0, 1.0), (1, 1.0)),
+    ]),
+);
+//? expect: [-1, 1, 0]
+
+// --- fft.fft vs a hand-rolled O(n^2) DFT at n = 12 (Bluestein path) -----------------
+
+// X[k] = sum_t x[t] * e^{-2*pi*i*k*t/n}, the same convention the spec
+// promises. Any disagreement above 1e-9 fails the pin.
+fn naive_dft(x: List[Float]) -> (List[Float], List[Float]) {
+    let n = x.len();
+    let w = 2.0 * math.pi / n.to_float();
+    let re = [];
+    let im = [];
+    for k in 0..n {
+        let mut sr = 0.0;
+        let mut si = 0.0;
+        for (t, v) in x.enumerate() {
+            let ph = w * (k * t % n).to_float();
+            sr += v * math.cos(ph);
+            si -= v * math.sin(ph);
+        }
+        re.push(sr);
+        im.push(si);
+    }
+    (re, im)
+}
+
+let sig = dsp.synth([(2, 1.0), (3, 0.5)], 12);
+let (nr, ni) = naive_dft(sig);
+let (fr, fi) = fft.fft(sig, lists.fill(12, 0.0));
+let mut worst = 0.0;
+for k in 0..12 {
+    worst = worst.max((nr[k] - fr[k]).abs());
+    worst = worst.max((ni[k] - fi[k]).abs());
+}
+println("naive dft == fft.fft at n=12 within 1e-9 -> {worst < 1e-9}");
+//? expect: naive dft == fft.fft at n=12 within 1e-9 -> true
+
+// --- exact tiny transforms (pure +/- arithmetic, safe to pin via to_fixed) ----------
+
+// n = 2: X = [a + b, a - b], no twiddle factors involved
+let (r2, i2) = fft.fft([5.0, 3.0], [0.0, 0.0]);
+println("{r2.map(|v| v.to_fixed(1)).join(" ")} / {i2.map(|v| v.to_fixed(1)).join(" ")}");
+//? expect: 8.0 2.0 / 0.0 0.0
+// the impulse: flat unit spectrum at any length, here n = 5 (Bluestein)
+let (r5, i5) = fft.fft([1.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0]);
+println("{r5.map(|v| v.to_fixed(6)).join(" ")}");
+//? expect: 1.000000 1.000000 1.000000 1.000000 1.000000
+println(str(lists.max_float(i5.map(|v| v.abs())).unwrap() < 1e-12));
+//? expect: true
+
+// --- the spectrogram on a hand-built power spectrum ---------------------------------
+
+// 24 bins -> 3 columns of 8; power 16.0 -> mag 4.0 in column 0, power 4.0
+// -> mag 2.0 in column 1, silence in column 2.
+let toy = lists.fill(24, 0.0);
+toy[4] = 16.0;
+toy[15] = 4.0;
+println(dsp.spectrogram(toy, 2));
+//? expect:    4.0 |#  |
+//? expect:    2.0 |## |
+//? expect:        +---+
+//? expect:         0

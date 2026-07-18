@@ -1,6 +1,6 @@
-# dungeon — a procedural roguelike dungeon generator in Fable
+# dungeon — a procedural roguelike dungeon generator in Socrates
 
-A classic roguelike map pipeline in about 300 lines of Fable: scatter random
+A classic roguelike map pipeline in about 300 lines of Socrates: scatter random
 non-overlapping rooms on a grid, chain them together with L-shaped corridors,
 drop the player `@` in the first room and the treasure `$` in the room
 farthest away, then let breadth-first search find the shortest route and draw
@@ -22,8 +22,8 @@ untouched, so the surviving goldens are the proof it is behavior-preserving.
 From the repository root:
 
 ```sh
-./target/release/fable demos/dungeon/main.fable   # generate two dungeons
-./target/release/fable test demos/dungeon         # golden tests (main + spec)
+./target/release/socrates demos/dungeon/main.soc   # generate two dungeons
+./target/release/socrates test demos/dungeon         # golden tests (main + spec)
 ```
 
 ## Sample output
@@ -51,18 +51,18 @@ seed 7: 11 rooms, 34 steps from @ to $, all 318 tiles reachable
 
 | File | Role |
 |------|------|
-| `dungeon.fable` | tiles, `Room` geometry (centers, padded intersection), the room-and-corridor generator, bitmask-dilation ASCII rendering |
-| `path.fable` | breadth-first search: `std.deque` frontier, bit-packed visited flags, flat-encoded parent links, route reconstruction; `reachable` flood fill over a `std.set` |
-| `main.fable` | seeds the PRNG, generates, floods, routes, marks the map, prints stats — and pins the full output with `//? expect:` directives |
-| `spec.fable` | component golden tests: geometry, BFS on hand-drawn maps, a bitset word-boundary crossing, flood coverage, generator invariants |
+| `dungeon.soc` | tiles, `Room` geometry (centers, padded intersection), the room-and-corridor generator, bitmask-dilation ASCII rendering |
+| `path.soc` | breadth-first search: `std.deque` frontier, bit-packed visited flags, flat-encoded parent links, route reconstruction; `reachable` flood fill over a `std.set` |
+| `main.soc` | seeds the PRNG, generates, floods, routes, marks the map, prints stats — and pins the full output with `//? expect:` directives |
+| `spec.soc` | component golden tests: geometry, BFS on hand-drawn maps, a bitset word-boundary crossing, flood coverage, generator invariants |
 
 - **Rooms**: up to 80 candidate rooms are rolled per dungeon; a candidate is
   kept only if a one-cell-padded intersection test says it touches nothing
   already placed, so every room keeps a wall around itself.
 - **Corridors**: each kept room is tunnelled to the previously placed one
   (horizontal-then-vertical or the reverse, by coin flip), which connects the
-  whole dungeon by construction — `spec.fable` asserts every carved tile is
-  reachable from the start, and `main.fable` prints the count.
+  whole dungeon by construction — `spec.soc` asserts every carved tile is
+  reachable from the start, and `main.soc` prints the count.
 - **BFS**: the grid is flood-filled outward from `@` with a `std.deque`
   frontier; visited cells are one bit each in a flat `List[Int]` (`>>` is
   arithmetic, so the test masks with `& 1` after the shift — a spec test
@@ -80,7 +80,7 @@ seed 7: 11 rooms, 34 steps from @ to $, all 318 tiles reachable
 
 ## Quirks found along the way
 
-Fable v0.5's `math.seed(n)` ORed the seed with 1, so seeds `2k` and `2k + 1`
+Socrates v0.5's `math.seed(n)` ORed the seed with 1, so seeds `2k` and `2k + 1`
 produced the same random stream (42 and 43 generated identical dungeons).
 Fixed in v0.6: the seeder now scrambles the seed with SplitMix64, so adjacent
 seeds give unrelated streams — and the spec's "different seed, different

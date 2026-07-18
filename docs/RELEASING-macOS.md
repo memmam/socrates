@@ -1,7 +1,7 @@
 # Notarizing the macOS demo zoo
 
 The release already ships **single-file macOS binaries** (the payload is linked
-in as a `__DATA,__fablezoo` Mach-O section — see `docs/ARCHITECTURE.md`). By
+in as a `__DATA,__socrateszoo` Mach-O section — see `docs/ARCHITECTURE.md`). By
 default they are **ad-hoc signed**: they run locally, but a *downloaded* copy
 trips Gatekeeper and needs it cleared once —
 `xattr -d com.apple.quarantine ./<demo>`.

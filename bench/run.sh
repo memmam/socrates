@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # bench/run.sh — single-binary sequential profiling convenience.
 #
-# Times each micro bench (bench/*.fable) and each macro target (heavy
-# demo mains + the spec suite) N times against ./target/release/fable and
+# Times each micro bench (bench/*.soc) and each macro target (heavy
+# demo mains + the spec suite) N times against ./target/release/socrates and
 # reports the MINIMUM wall time (least-noise estimator).
 # Usage: bench/run.sh [N]. The binary must already be built:
 # cargo build --release
@@ -17,7 +17,7 @@
 # A failing target fails the script (exit 1).
 set -u
 N="${1:-3}"
-BIN=./target/release/fable
+BIN=./target/release/socrates
 command -v python3 >/dev/null || { echo "needs python3"; exit 1; }
 STATUS=0
 
@@ -39,18 +39,18 @@ PY
 }
 
 echo "== micro (best of $N)"
-for f in bench/*.fable; do
-    run_target "$(basename "$f" .fable)" "$BIN" "$f"
+for f in bench/*.soc; do
+    run_target "$(basename "$f" .soc)" "$BIN" "$f"
 done
 
 echo "== macro (best of $N)"
-run_target lisp        "$BIN" demos/lisp/main.fable
-run_target checkers    "$BIN" demos/checkers/main.fable
-run_target wfc         "$BIN" demos/wfc/main.fable
-run_target sudoku      "$BIN" demos/sudoku/main.fable
-run_target reversi     "$BIN" demos/reversi/main.fable
-run_target spectra     "$BIN" demos/spectra/main.fable
-run_target png         "$BIN" demos/png/main.fable
+run_target lisp        "$BIN" demos/lisp/main.soc
+run_target checkers    "$BIN" demos/checkers/main.soc
+run_target wfc         "$BIN" demos/wfc/main.soc
+run_target sudoku      "$BIN" demos/sudoku/main.soc
+run_target reversi     "$BIN" demos/reversi/main.soc
+run_target spectra     "$BIN" demos/spectra/main.soc
+run_target png         "$BIN" demos/png/main.soc
 # spec_suite is valid ONLY single-tree: its sources move with each ref,
 # so a cross-binary comparison would time different suites, not the
 # binary. It has a row here because run.sh is single-tree by

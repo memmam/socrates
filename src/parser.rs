@@ -1317,7 +1317,7 @@ impl<'a> Parser<'a> {
                     }
                     let end = self.expect(&TokenKind::RParen, "`)`")?.span;
                     if items.len() == 1 {
-                        // `(x,)` — not a tuple in Fable.
+                        // `(x,)` — not a tuple in Socrates.
                         self.diags.push(
                             Diagnostic::error("E0205", "tuples need at least two elements")
                                 .with_label(tok_span.to(end), ""),

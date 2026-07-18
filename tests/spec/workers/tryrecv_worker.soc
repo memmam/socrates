@@ -1,0 +1,13 @@
+// Helper for worker_self_try_recv.soc: polls with worker.try_recv()
+// (never blocks) until a message arrives or the parent hangs up.
+
+if worker.is_worker() {
+    let mut done = false;
+    while !done {
+        match worker.try_recv() {
+            Some(Some(msg)) -> { worker.send("got:{msg}"); }
+            Some(None) -> { done = true; }
+            None -> {} // not ready yet — a real worker would do other work here
+        }
+    }
+}

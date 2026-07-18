@@ -71,7 +71,7 @@ pub enum Native {
     BytesToList,
     BytesUtf8,
     StrToBytes,
-    // math namespace (v0.9: sqrt/floor/ceil/round/abs/abs_int/min/max/
+    // math namespace (v0.8 minification pass: sqrt/floor/ceil/round/abs/abs_int/min/max/
     // min_float/max_float dropped — verbatim dups of Int/Float methods;
     // the method spellings are the primitives)
     MathSin,
@@ -136,7 +136,7 @@ pub enum Native {
     /// `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so
     /// the blob rides the buffer type instead of masquerading as text. A
     /// sibling rather than an overload for the same reason as
-    /// `window.create_metal` (Fable has neither default parameters nor
+    /// `window.create_metal` (Socrates has neither default parameters nor
     /// overloading). Ingested natively by the vulkan backend
     /// (GLCompute/Logical/GLSL450 profile) and the opencl backend
     /// (Kernel/Physical64 profile — the two blobs are not
@@ -945,7 +945,7 @@ impl Native {
             CharFromCode => (vec![Int], TStr, 0),
 
             // Bytes (v0.7). Setters panic on out-of-range values, like list
-            // indexing; the LE pushers exist because Fable has no bitwise
+            // indexing; the LE pushers exist because Socrates has no bitwise
             // operators and wire formats shouldn't need them.
             BytesNew => (vec![Int], Type::Bytes, 0),
             BytesOf => (vec![list(Int)], Type::Bytes, 0),

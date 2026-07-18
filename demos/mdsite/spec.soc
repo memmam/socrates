@@ -1,0 +1,58 @@
+// spec — golden tests for the Markdown converter, one feature per line.
+//
+//   ./target/release/socrates test demos/mdsite
+
+import markdown as md;
+
+// ---- paragraphs ----
+println(md.to_html("plain text")); //? expect: <p>plain text</p>
+println(md.to_html("line one\nline two")); //? expect: <p>line one line two</p>
+println(md.to_html("first\n\nsecond"));
+//? expect: <p>first</p>
+//? expect: <p>second</p>
+
+// ---- headings ----
+println(md.to_html("# Top")); //? expect: <h1>Top</h1>
+println(md.to_html("### Deep *one*")); //? expect: <h3>Deep <em>one</em></h3>
+println(md.to_html("####### not a heading")); //? expect: <p>####### not a heading</p>
+println(md.first_heading("intro\n\n# The Title\nmore").unwrap_or("?")); //? expect: The Title
+
+// ---- inline markup ----
+println(md.to_html("**bold** and *italic*")); //? expect: <p><strong>bold</strong> and <em>italic</em></p>
+println(md.to_html("**bold *inner* tail**")); //? expect: <p><strong>bold <em>inner</em> tail</strong></p>
+println(md.to_html("a `x < y` span")); //? expect: <p>a <code>x &lt; y</code> span</p>
+println(md.to_html("code keeps `**markers**`")); //? expect: <p>code keeps <code>**markers**</code></p>
+println(md.to_html("see [the docs](a/b.html)")); //? expect: <p>see <a href="a/b.html">the docs</a></p>
+println(md.to_html("[**bold** link](x.html)")); //? expect: <p><a href="x.html"><strong>bold</strong> link</a></p>
+
+// ---- unmatched delimiters stay literal ----
+println(md.to_html("unclosed **bold")); //? expect: <p>unclosed **bold</p>
+println(md.to_html("2 * 3 * 7 = 42")); //? expect: <p>2 <em> 3 </em> 7 = 42</p>
+println(md.to_html("just [brackets] here")); //? expect: <p>just [brackets] here</p>
+
+// ---- escaping ----
+println(md.to_html("AT&T <em> \"q\"")); //? expect: <p>AT&amp;T &lt;em&gt; &quot;q&quot;</p>
+println(md.escape("<a & b>")); //? expect: &lt;a &amp; b&gt;
+
+// ---- lists ----
+println(md.to_html("- one\n- **two**\ntail"));
+//? expect: <ul>
+//? expect:   <li>one</li>
+//? expect:   <li><strong>two</strong></li>
+//? expect: </ul>
+//? expect: <p>tail</p>
+
+// ---- fenced code blocks ----
+println(md.to_html("```soc\nlet x = 1 < 2;\n```"));
+//? expect: <pre><code class="language-soc">let x = 1 &lt; 2;</code></pre>
+println(md.to_html("```\n- not a list\n# not a heading\n```"));
+//? expect: <pre><code>- not a list
+//? expect: # not a heading</code></pre>
+println(md.to_html("```\nunterminated")); //? expect: <pre><code>unterminated</code></pre>
+
+// ---- accumulator edges (pinned across the v0.7 Builder refactor) ----
+println("[{md.to_html("")}]"); //? expect: []
+println(md.to_html("**bo\nld**")); //? expect: <p><strong>bo ld</strong></p>
+println(md.to_html("```\n\nx\n```"));
+//? expect: <pre><code>
+//? expect: x</code></pre>

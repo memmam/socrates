@@ -1,4 +1,4 @@
-//! The interactive REPL (`fable repl`).
+//! The interactive REPL (`socrates repl`).
 //!
 //! Each submitted chunk is checked and compiled *incrementally*: the checker,
 //! program builder, and VM persist, so definitions accumulate and closures
@@ -23,7 +23,7 @@ use crate::vm::Vm;
 
 pub fn run_repl() -> i32 {
     let color = std::io::stdout().is_terminal();
-    println!("Fable {} — type a program, or :help", env!("CARGO_PKG_VERSION"));
+    println!("Socrates {} — type a program, or :help", env!("CARGO_PKG_VERSION"));
 
     let mut checker = Checker::new();
     let mut builder = ProgramBuilder::new();
@@ -40,7 +40,7 @@ pub fn run_repl() -> i32 {
     let stdin = std::io::stdin();
     let mut pending = String::new();
     loop {
-        let prompt = if pending.is_empty() { "fable> " } else { "  ...> " };
+        let prompt = if pending.is_empty() { "socrates> " } else { "  ...> " };
         print!("{prompt}");
         let _ = std::io::stdout().flush();
 
@@ -59,7 +59,7 @@ pub fn run_repl() -> i32 {
                 ":q" | ":quit" | ":exit" => return 0,
                 ":help" => {
                     println!(
-                        "Enter Fable code (multi-line input continues while delimiters are open).\n\
+                        "Enter Socrates code (multi-line input continues while delimiters are open).\n\
                          Imports work: `import std.json;` or files relative to the working directory.\n\
                          Commands: :help  :type <expr>  :q"
                     );

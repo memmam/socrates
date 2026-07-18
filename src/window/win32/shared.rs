@@ -241,7 +241,7 @@ impl Win32WindowState {
         h: i32,
     ) -> Result<Win32WindowState, String> {
         let h_instance = GetModuleHandleW(ptr::null());
-        let class_name = to_wide("FableWindowClass");
+        let class_name = to_wide("SocratesWindowClass");
         let cursor = LoadCursorW(ptr::null_mut(), IDC_ARROW);
 
         let wc = WndClassExW {

@@ -1,0 +1,104 @@
+// checks.soc — golden tests for the plotting math, driven through the
+// modules' public API.
+//
+//   ./target/release/socrates test demos/plot
+
+import svg;
+import chart;
+import std.lists;
+
+// --- coordinate formatting: 2 decimals, no trailing ".0" --------------------
+
+println(svg.num(40.0)); //? expect: 40
+println(svg.num(3.14159)); //? expect: 3.14
+println(svg.num(-0.25)); //? expect: -0.25
+println(svg.num(2.0 / 3.0)); //? expect: 0.67
+
+// --- nice ticks: 1/2/5 steps, clean multiples covering the range -------------
+
+println(str(chart.ticks(0.0, 10.0, 6)));
+//? expect: [0.0, 2.0, 4.0, 6.0, 8.0, 10.0]
+println(str(chart.ticks(-1.05, 1.15, 5)));
+//? expect: [-1.0, -0.5, 0.0, 0.5, 1.0]
+println(str(chart.ticks(0.0, 137.0, 5)));
+//? expect: [0.0, 50.0, 100.0]
+println(str(chart.ticks(0.0, 5000.0, 5))); // raw step exactly a power of ten
+//? expect: [0.0, 1000.0, 2000.0, 3000.0, 4000.0, 5000.0]
+
+// --- the data -> pixel frame (sy flips, because SVG y grows downward) --------
+
+let fr = chart.Frame {
+    x_min: 0.0,
+    x_max: 10.0,
+    y_min: -1.0,
+    y_max: 1.0,
+    px: 40.0,
+    py: 20.0,
+    pw: 500.0,
+    ph: 200.0,
+};
+println("{fr.sx(0.0)} {fr.sx(2.5)} {fr.sx(10.0)}"); //? expect: 40.0 165.0 540.0
+println("{fr.sy(1.0)} {fr.sy(0.0)} {fr.sy(-1.0)}"); //? expect: 20.0 120.0 220.0
+
+// --- sampling a closure -------------------------------------------------------
+
+let sq = chart.sample("square", "", |x| x * x, 0.0, 2.0, 3);
+println("{sq.xs} {sq.ys}"); //? expect: [0.0, 1.0, 2.0] [0.0, 1.0, 4.0]
+
+// --- sparklines: eight levels, scaled to the series' own extent ---------------
+
+println(chart.sparkline([0.0, 1.0, 2.0, 3.0])); //? expect: ▁▃▆█
+println(chart.sparkline([3.0, 2.0, 1.0, 0.0])); //? expect: █▆▃▁
+println(chart.sparkline([5.0, 5.0, 5.0])); //? expect: ▁▁▁
+
+// --- a whole chart renders ----------------------------------------------------
+
+let c = chart.chart("smoke test", 320, 200);
+c.add(chart.sample("line", "#2a78d6", |x| x, 0.0, 1.0, 8));
+let out = c.render();
+println(out.starts_with("<svg xmlns")); //? expect: true
+println(out.contains("<polyline")); //? expect: true
+println(out.contains("smoke test")); //? expect: true
+
+// --- the Builder-backed Doc (v0.7) ---------------------------------------------
+
+// An empty Doc keeps the historical shape: head, one blank body line, close.
+let empty = svg.doc(8, 8).render();
+println(
+    empty
+        == "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\" viewBox=\"0 0 8 8\">\n\n</svg>\n",
+);
+//? expect: true
+
+// render() is non-consuming (Builder.build() leaves the pieces in place),
+// and the Doc stays appendable afterwards.
+let d = svg.doc(16, 16);
+d.rect(0.0, 0.0, 16.0, 16.0, "#fff");
+println(d.render() == d.render()); //? expect: true
+d.circle(8.0, 8.0, 4.0, "#000");
+println(d.render().contains("<circle")); //? expect: true
+
+// --- the stem chart (v0.7 spectrum panel) ----------------------------------------
+
+// Twelve bins, peak 5.0 at bin 7, a quiet 0.2 at bin 5 (4% of peak — below
+// the 5% annotation threshold), and 1.0 at bin 3. The x tick labels land on
+// even bins only (step 2), so ">7<" and ">3<" can only come from stem
+// annotations, and ">5<" must not appear at all.
+let vals = lists.fill(12, 0.0);
+vals[7] = 5.0;
+vals[5] = 0.2;
+vals[3] = 1.0;
+let sp = chart.stems("stem smoke", "cap", "#8a63d2", vals, 320, 200);
+println(sp.starts_with("<svg xmlns")); //? expect: true
+println(sp.contains("stem smoke")); //? expect: true
+println(sp.contains(">7</text>")); //? expect: true
+println(sp.contains(">3</text>")); //? expect: true
+println(sp.contains(">5</text>")); //? expect: false
+
+// --- rfft ground truth (v0.7) -----------------------------------------------------
+
+// The rfft of a unit impulse is flat — every bin 1 + 0i. Only exact
+// zero-arithmetic is involved, so an equality check is safe (compared as a
+// Bool, not pinned as raw floats).
+let (re, im) = fft.rfft([1.0, 0.0, 0.0, 0.0]);
+println(re == [1.0, 1.0, 1.0] && im == [0.0, 0.0, 0.0]); //? expect: true

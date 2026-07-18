@@ -159,10 +159,10 @@ pub fn spawn(
 
     let thread = std::thread::Builder::new()
         // Same headroom the CLI gives the main interpreter thread: deep
-        // Fable recursion needs Rust stack behind it (reserved, not
+        // Socrates recursion needs Rust stack behind it (reserved, not
         // committed, so idle workers cost almost nothing).
         .stack_size(512 * 1024 * 1024)
-        .name(format!("fable-worker:{file}"))
+        .name(format!("socrates-worker:{file}"))
         .spawn(move || worker_main(path, args, child_tx, child_rx, status_tx, sink))
         .map_err(|e| format!("could not spawn worker thread: {e}"))?;
 

@@ -28,10 +28,10 @@ length 600) the demo pins:
   (`sum x² == sum |X|²/n` via `fft.fft`), the `ifft(fft(x))` round trip,
   and `rfft == the first n/2+1 bins of fft`
 
-`checks.fable` additionally cross-validates `fft.fft` against a naive
+`checks.soc` additionally cross-validates `fft.fft` against a naive
 O(n²) DFT at `n = 12` (the Bluestein path), pins exact tiny transforms,
 and unit-tests gcd/ratio/top-k/spectrogram on hand-built data.
-`guardrails.fable` pins the fft argument contracts (mismatched lengths,
+`guardrails.soc` pins the fft argument contracts (mismatched lengths,
 empty input) — one via `try()`, one as a real `//? panic:`.
 
 ## Run it
@@ -39,18 +39,18 @@ empty input) — one via `try()`, one as a real `//? panic:`.
 From the repo root:
 
 ```
-./target/release/fable demos/spectra/main.fable   # the full analysis
-./target/release/fable test demos/spectra         # golden tests
+./target/release/socrates demos/spectra/main.soc   # the full analysis
+./target/release/socrates test demos/spectra         # golden tests
 ```
 
 ## Files
 
 | File               | What it is                                                            |
 |--------------------|-----------------------------------------------------------------------|
-| `dsp.fable`        | synthesis (exact integer phase reduction), power spectrum, `by_power` comparator, `top_k`, gcd/ratio reduction, the Builder-assembled spectrogram |
-| `main.fable`       | the five chord analyses, chord-quality and note-name tables, the three 1e-9 engine checks per chord |
-| `checks.fable`     | unit goldens: gcd/ratios, exact single-tone spectrum, top-k tie-breaks, naive-DFT cross-check, tiny exact transforms, a 3-column toy spectrogram |
-| `guardrails.fable` | pinned panics for the fft argument contracts                          |
+| `dsp.soc`        | synthesis (exact integer phase reduction), power spectrum, `by_power` comparator, `top_k`, gcd/ratio reduction, the Builder-assembled spectrogram |
+| `main.soc`       | the five chord analyses, chord-quality and note-name tables, the three 1e-9 engine checks per chord |
+| `checks.soc`     | unit goldens: gcd/ratios, exact single-tone spectrum, top-k tie-breaks, naive-DFT cross-check, tiny exact transforms, a 3-column toy spectrogram |
+| `guardrails.soc` | pinned panics for the fft argument contracts                          |
 
 ## Determinism notes
 

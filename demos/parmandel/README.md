@@ -17,7 +17,7 @@ interleave, and that is a property of the **protocol**, not luck:
 3. All parameters ride in as spawn args (`os.args()` inside the
    worker), so each isolate is a pure function of its arguments.
 
-`row_worker.fable` doubles as its own golden test: guarded by
+`row_worker.soc` doubles as its own golden test: guarded by
 `worker.is_worker()`, a standalone run does nothing and prints nothing.
 
 ## Run it
@@ -25,16 +25,16 @@ interleave, and that is a property of the **protocol**, not luck:
 From the repo root:
 
 ```
-./target/release/fable demos/parmandel/main.fable   # render
-./target/release/fable test demos/parmandel         # golden tests
+./target/release/socrates demos/parmandel/main.soc   # render
+./target/release/socrates test demos/parmandel         # golden tests
 ```
 
 ## Files
 
 | File               | What it is                                                     |
 |--------------------|----------------------------------------------------------------|
-| `main.fable`       | spawns the fleet, drains rows band by band, joins each worker  |
-| `row_worker.fable` | the isolate: escape-time iteration, palette lookup, one row per `send` |
+| `main.soc`       | spawns the fleet, drains rows band by band, joins each worker  |
+| `row_worker.soc` | the isolate: escape-time iteration, palette lookup, one row per `send` |
 
 ## v0.7 features on display
 

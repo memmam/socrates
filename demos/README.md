@@ -1,4 +1,4 @@
-# The Fable demos
+# The Socrates demos
 
 Seventeen programs, each a self-contained showcase of the language doing real
 work. Every demo is deterministic, pins its complete output with golden
@@ -6,14 +6,14 @@ work. Every demo is deterministic, pins its complete output with golden
 
 ```sh
 cargo build --release
-./target/release/fable demos/lisp/main.fable      # run one
-./target/release/fable test demos                 # golden-test all seventeen
-FABLE_GC_STRESS=1 ./target/release/fable test demos
+./target/release/socrates demos/lisp/main.soc      # run one
+./target/release/socrates test demos                 # golden-test all seventeen
+SOCRATES_GC_STRESS=1 ./target/release/socrates test demos
 ```
 
 | Demo | What it does | Worth seeing |
 |------|--------------|--------------|
-| [`lisp/`](lisp/) | A mini-Lisp: reader, evaluator, and six sample programs (factorial, fib, a Lisp-level `map`, closures, a 100k-iteration loop, parallel `let`). | Fable's TCO reaches *through* the interpreter — the tail-recursive Lisp loop runs in constant stack. `try()` turns VM panics into Lisp error values; a `std.set` of reserved words drives special-form dispatch and `strings.Builder` threads through the recursive printer. |
+| [`lisp/`](lisp/) | A mini-Lisp: reader, evaluator, and six sample programs (factorial, fib, a Lisp-level `map`, closures, a 100k-iteration loop, parallel `let`). | Socrates's TCO reaches *through* the interpreter — the tail-recursive Lisp loop runs in constant stack. `try()` turns VM panics into Lisp error values; a `std.set` of reserved words drives special-form dispatch and `strings.Builder` threads through the recursive printer. |
 | [`spreadsheet/`](spreadsheet/) | Formulas with a Pratt parser, dependency-driven evaluation, memoization, and spreadsheet-faithful error values; min/max/avg torture-tested on empty, words-only, and error-poisoned ranges. | Cycle detection is a single `std.set` insert — `insert()` returning `false` *is* the `#CYCLE!` (which still *heals* when the cycle is edited away). Empty ranges split by identity: `sum`/`count` give 0, `avg`/`min`/`max` give `#VALUE!` via `std.lists` Options. |
 | [`regex/`](regex/) | A backtracking regex engine: literals, classes, anchors, `* + ? \|` and v0.7 `{m,n}`, groups, escapes. 87 self-checking tests + grep mode underlining every match on a line. | Character classes compile to 256-bit bitmaps in a `Bytes` buffer — membership is `bits.get(c >> 3) >> (c & 7) & 1 == 1` — and `{m,n}` desugars to seq/opt/star so the CPS matcher stayed untouched. |
 | [`dungeon/`](dungeon/) | A seeded roguelike dungeon generator: rooms, L-corridors, BFS shortest path drawn onto the ASCII map, plus a flood-fill certificate that every carved tile is reachable. | Modernized for v0.7 with the old pins as proof: `std.deque` frontier, bit-packed visited flags (a spec test crosses bit 63 and a word boundary on purpose), shift-OR 3x3 dilation in the renderer — and the maps came out byte-identical. |
@@ -29,29 +29,29 @@ FABLE_GC_STRESS=1 ./target/release/fable test demos
 | [`bloom/`](bloom/) | A Bloom filter over `Bytes`: FNV-1a and a xorshift* mixer, hand-built from the v0.7 bitwise operators, double-hash a 500-word generated corpus into 512 bytes — then a `std.set` oracle grades every answer. | Zero false negatives and an exact pinned false-positive count (38/2000) landing on the textbook `(1-e^(-kn/m))^k`; a 32x32 multiply in 16-bit halves because Int overflow panics; the committed `filter.bin` regenerates byte-identically. |
 | [`spectra/`](spectra/) | A chord analyzer on `fft.rfft`: just-intonation chords synthesized onto exact integer bins, then re-identified from the spectrum alone — ASCII bar spectrograms, `max_by` + a set-marked top-k, and gcd-reduced ratios naming major/minor/fifth. | One-second windows make bin k exactly k Hz, so ~115 lines of spectral analysis pin exactly; Parseval, the `ifft(fft(x))` round trip, and a naive-DFT cross-check all hold at 1e-9 — Bluestein path included (n = 600 and 12). |
 | [`swarm/`](swarm/) | A worker-pool job scheduler: three isolates crunch Collatz and prime-count jobs from a `std.deque` queue over a `std.json` protocol — static assignment, dynamic feed-on-return balancing, and panic isolation. | A fragile worker's panic comes back as `Err` from `join` and its job JSON re-runs on a fresh isolate; the dynamic section pins only schedule-independent facts, so a smarter scheduler could drop in without re-pinning a line. |
-| [`reversi/`](reversi/) | Othello on two Int bitboards: shift-and-propagate move generation in 8 masked directions, flood-and-confirm flips, SWAR popcount, and a complete greedy self-play game pinned move for move. | Every classic bit trick had to be re-derived for signed-64-with-panicking-overflow — `bits.fable` documents each trap (`>>` is arithmetic; `x & -x` panics on bit 63). The move generator is proven by pinned perft(1..6) = 4/12/56/244/1396/8200. |
+| [`reversi/`](reversi/) | Othello on two Int bitboards: shift-and-propagate move generation in 8 masked directions, flood-and-confirm flips, SWAR popcount, and a complete greedy self-play game pinned move for move. | Every classic bit trick had to be re-derived for signed-64-with-panicking-overflow — `bits.soc` documents each trap (`>>` is arithmetic; `x & -x` panics on bit 63). The move generator is proven by pinned perft(1..6) = 4/12/56/244/1396/8200. |
 
 ## The demo zoo — download and run
 
 Every demo also ships as a **self-contained binary** in each release: no
-`fable`, no source tree, no runtime — one file you run. They are built with
-`fable build`, which staples a program (its modules, its data files, and the
-worker `.fable` files it spawns) onto a copy of the interpreter; on launch the
+`socrates`, no source tree, no runtime — one file you run. They are built with
+`socrates build`, which staples a program (its modules, its data files, and the
+worker `.soc` files it spawns) onto a copy of the interpreter; on launch the
 binary unpacks itself into a scratch directory and runs, so its output is
-byte-for-byte what `fable demos/<name>/main.fable` prints.
+byte-for-byte what `socrates demos/<name>/main.soc` prints.
 
 ```sh
-fable build demos/lisp -o lisp     # build one yourself
+socrates build demos/lisp -o lisp     # build one yourself
 ./lisp                             # run it anywhere
 ```
 
 The release carries the whole zoo cross-compiled for five desktop targets —
 `x86_64` and `aarch64` Linux, `x86_64` and `aarch64` Windows, and Apple
-Silicon macOS — as `fable-demozoo-<version>-<target>.tar.gz`. Extract with
+Silicon macOS — as `socrates-demozoo-<version>-<target>.tar.gz`. Extract with
 `tar -xf` (built in on Windows 10+ as well) and run any animal in the zoo. On
 Linux and Windows the payload is appended to the interpreter; on macOS — where
 appending past the Mach-O `__LINKEDIT` would break code signing — it is linked
-in as a `__DATA,__fablezoo` section instead. The macOS binaries are ad-hoc
+in as a `__DATA,__socrateszoo` section instead. The macOS binaries are ad-hoc
 signed, so a downloaded copy needs `xattr -d com.apple.quarantine ./<demo>`
 once until a notarized build lands.
 

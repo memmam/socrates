@@ -1,4 +1,4 @@
-# Fable internals
+# Socrates internals
 
 This document walks the pipeline from source text to executed bytecode and
 explains the load-bearing design decisions. File references are to `src/`.
@@ -166,9 +166,9 @@ ever produce them).
 where every live object is rooted — before operands are popped, with natives'
 arguments still on the stack, or with intermediates registered in
 `temp_roots`. Roots: value stack, globals, frames' closures, open upvalues,
-interned constants, cached function closures, temp roots. `FABLE_GC_STRESS=1`
+interned constants, cached function closures, temp roots. `SOCRATES_GC_STRESS=1`
 turns every checkpoint into a collection, which is how the rooting discipline
-is tested; `FABLE_GC_LOG=1` traces collections.
+is tested; `SOCRATES_GC_LOG=1` traces collections.
 
 Higher-order natives (`map`, `fold`, `sort_by`, …) re-enter the interpreter
 via `call_value`, which runs the dispatch loop until the frame stack returns
@@ -257,7 +257,7 @@ plain `CallFn`. No new ops, no VM changes. Compound assignment and `==` are
 deliberately excluded.
 
 **Module search path.** The loader takes an ordered dir list (file-relative
-first, then `FABLE_PATH` entries); canonical-path dedup already made
+first, then `SOCRATES_PATH` entries); canonical-path dedup already made
 same-file-through-different-bases safe.
 
 **fs/os.** The `math` namespace machinery generalized to a
@@ -268,11 +268,11 @@ rooting discipline (`alloc_rooted_list`/`temp_roots`) and return
 
 ## v0.4 additions
 
-**fable test** is the spec harness moved into the library (`testing.rs`);
+**socrates test** is the spec harness moved into the library (`testing.rs`);
 the CLI command and the Rust test suite call the same functions.
 
-**The std library** is Fable source embedded with `include_str!`
-(`stdlib.rs`, `std/*.fable`). The loader intercepts the reserved `std.`
+**The std library** is Socrates source embedded with `include_str!`
+(`stdlib.rs`, `std/*.soc`). The loader intercepts the reserved `std.`
 prefix before any filesystem resolution, keys the modules by pseudo-paths
 in the same dedup/cycle maps, and forbids std modules from importing
 anything non-std. From the checker's perspective a std module is just a
@@ -301,7 +301,7 @@ also cheapened by an early-out in `close_upvalues` and a clone-free
 
 **REPL imports**: a `ModuleSession` persists the loader's dedup and key
 state across chunks; each chunk's imports load against the working
-directory / `FABLE_PATH` / `std.`, the new units check and run before the
+directory / `SOCRATES_PATH` / `std.`, the new units check and run before the
 chunk, and both the checker and the session roll back together on failure.
 
 **Completion** reads the receiver chain from the *current* buffer text and
@@ -312,7 +312,7 @@ const table serving lookup and enumeration.
 **The executable book** (tests/book_snippets.rs): fence tags classify the
 deliberate-failure demos (`errors`/`panics`), support-file blocks are
 written into a per-chapter directory for real multi-file imports, and
-directive-bearing blocks run under `fable test` semantics.
+directive-bearing blocks run under `socrates test` semantics.
 
 ## v0.6 additions
 
@@ -357,7 +357,7 @@ were bitten by prose *about* directives becoming directives.
 New builtins (`trim_start`/`trim_end`/`code_at`/`index_of_from`,
 `char`, `to_fixed`, `math.rand_int`/`log10`/`fmod`) follow the existing
 pattern: one enum variant, one `sig()` scheme, one `METHOD_TABLE` row (the
-LSP completes them for free), one `natives.rs` arm. `FABLE_MAX_DEPTH` is
+LSP completes them for free), one `natives.rs` arm. `SOCRATES_MAX_DEPTH` is
 read once at VM construction into a `max_frames` field.
 
 ## v0.7 additions
@@ -389,13 +389,13 @@ worker's panic is caught at its thread boundary and returned as an `Err` from
 `join`. Worker `println` output is routed through a shared sink so the
 golden-test harness can capture it.
 
-**bundle.rs** packs a program into a self-contained binary for `fable build`.
+**bundle.rs** packs a program into a self-contained binary for `socrates build`.
 It serializes every file under the program's directory into a
 dependency-free little-endian archive and `staple`s it onto interpreter bytes
 as `payload ‖ u64(len) ‖ MAGIC`; the launcher entry in `main.rs`
 (`run_bundle`) calls `read_self`, which seeks to the executable's last 16
 bytes and, only if the magic matches, reads back the payload — so an ordinary
-`fable` pays one 16-byte read and nothing else. A present bundle is extracted
+`socrates` pays one 16-byte read and nothing else. A present bundle is extracted
 into a per-process scratch directory that becomes the working directory, then
 the normal file-path runner takes over: because files are packed under the
 path *as given* to `build`, imports, `fs.*`, and `worker.spawn` all resolve
@@ -405,7 +405,7 @@ concatenation and target-independent, `--launcher` lets one host assemble
 binaries for every cross-compiled target (the release "demo zoo"). macOS is
 the exception to the append: a Mach-O with data past `__LINKEDIT` fails code
 signing (and Apple Silicon won't run unsigned), so there the payload is linked
-in as a `__DATA,__fablezoo` section (`fable build --payload-only` emits the
+in as a `__DATA,__socrateszoo` section (`socrates build --payload-only` emits the
 raw archive; the release links it with `ld -sectcreate`). `read_self` handles
 both — tail magic first, then a portable Mach-O parse for the section, then a
 backward scan tolerating a trailing code signature.
@@ -424,7 +424,7 @@ v0.7 it was the project's only dependency boundary — wgpu (+ pollster)
 behind a `gpu` cargo feature; that path (and with it the last Cargo
 dependency and the WGSL dialect) was **deleted in v0.8** once the native
 coverage condition was met (see the native-backend entries below), so
-every build of Fable is now zero-dependency (CI asserts `cargo tree` is
+every build of Socrates is now zero-dependency (CI asserts `cargo tree` is
 one line for the default and for every feature set). The module is always
 compiled — only the backends are `#[cfg]`-gated — so
 `builtins.rs`/`natives.rs` register the natives unconditionally and
@@ -496,15 +496,15 @@ representable; the reads (`read_u64le`/`be`) reinterpret the 8 bytes as
 `wrapping_add`/`sub`/`mul` are direct `i64::wrapping_*` calls — deliberately
 64-bit only (Rust's own naming), since a 32-bit wrap is one mask away
 (`a.wrapping_mul(b) & 0xFFFFFFFF`) rather than a second intrinsic.
-`fft.magnitude` (a native when v0.8 shipped; v0.9 moved it to
-`std/fft.fable`, pure Fable over the `fft` primitives) and `Range.any`/`all`
+`fft.magnitude` (a native early in v0.8's development; the same release's minification pass moved it to
+`std/fft.soc`, pure Socrates over the `fft` primitives) and `Range.any`/`all`
 (the latter short-circuiting, mirroring
 `ListAny`/`ListAll`) and `worker.try_recv` (a `TryRecvError`-to-nested-`Option`
 translation on the same `mpsc::Receiver` both `WorkerHandle::recv` and
 `WorkerCtx::rx` already wrap) are the same pattern again.
 
 **`std.lazy`, `std.json` construction, `Builder`/`lists` ergonomics** are
-pure Fable — no Rust changes beyond `stdlib.rs`'s embedded-module table
+pure Socrates — no Rust changes beyond `stdlib.rs`'s embedded-module table
 gaining `std.lazy`. `Lazy[T]` holds `value: Option[T]` and `thunk: fn() ->
 T`; calling a function stored in a field requires binding it to a local
 first (`let f = self.thunk; f()`), since `self.thunk()` parses as a method
@@ -514,7 +514,7 @@ call attempt and fails to resolve — the same pattern `std.iter`'s
 prelude's `str()` for every unqualified call inside that same file (it did,
 breaking `num_str`'s internal `str(f.to_int())` call, until renamed).
 
-**`fable test --bless`** (`testing.rs`): `check_one` is now a thin wrapper
+**`socrates test --bless`** (`testing.rs`): `check_one` is now a thin wrapper
 over `check_or_bless(path, bless: bool)`. On a stdout-only mismatch, when
 `bless` is set and the actual/expected line counts already agree, it
 re-scans the file with the same `directive_start` line scanner
@@ -541,7 +541,7 @@ new subsystem:
   `worker_rc` clone it out for callers that need to release the borrow
   before blocking or recursing); `gfx_current_window` just holds one more
   clone of that `Rc`, so a window stays alive as "current" even if the
-  Fable-level binding that created it goes out of scope.
+  Socrates-level binding that created it goes out of scope.
 - **`WindowHandle` gained one `gl_*` method per `gfx.*` member** (not one
   per raw GL entry point): `gfx.compile_program` is a single
   `WindowHandle::gl_compile_program` that internally drives
@@ -620,7 +620,7 @@ dialect escape hatch, the compute analog of `win.backend_name()`.
 
 **Native Vulkan compute (`src/vk.rs`).** The second native compute
 backend, and the first SPIR-V consumer: `gpu.run_spirv` takes the binary
-as `Bytes` (a sibling entry point — Fable has no overloading — and an
+as `Bytes` (a sibling entry point — Socrates has no overloading — and an
 honest one: base64 in `gpu.run`'s String would launder the format). The
 loader is `dlopen`ed (`libvulkan.so.1` / `vulkan-1.dll`, the `x11/gl.rs`
 strategy) and every entry point resolved through
@@ -637,7 +637,7 @@ mapped for their lifetime (freeing mapped memory implicitly unmaps);
 output is explicitly zeroed to match the other backends. Uniquely, this
 backend is fully exercised on plain CI hardware: Mesa's lavapipe software
 device runs the hard-asserted doubling battery
-(`docs/assets/vulkan_compute.fable`, its SPIR-V hand-assembled word by
+(`docs/assets/vulkan_compute.soc`, its SPIR-V hand-assembled word by
 word) on every ubuntu runner — and in the dev container itself.
 
 **Native OpenCL compute (`src/cl.rs`).** The third native compute
@@ -666,7 +666,7 @@ runner still resolves. The native precedence order is metal > vulkan >
 opencl; when `vulkan` and `opencl` are both compiled in, `cl.rs`
 is not even built (the `lib.rs` gate carries `not(feature = "vulkan")`),
 keeping the dispatch maze honest at compile time. The battery is
-`docs/assets/opencl_compute.fable` — the doubling kernel hand-assembled
+`docs/assets/opencl_compute.soc` — the doubling kernel hand-assembled
 in the OpenCL profile (`GlobalInvocationId` as the `Input` builtin
 variable, `OpPtrAccessChain` with `Aligned` loads/stores), hard-asserting
 the same bytes as its Vulkan twin.
@@ -690,7 +690,7 @@ a numeric fallback. **The verification story is honestly weaker than the
 other three**: no software CUDA implementation exists, so no CI runner
 (and not the dev container) can execute a dispatch — CI pins the
 compilation, clippy, precedence lattice, zero-dep tree, and the exact
-graceful no-driver error of `docs/assets/cuda_compute.fable`; the
+graceful no-driver error of `docs/assets/cuda_compute.soc`; the
 battery's hard assert becomes a real gate the first time NVIDIA hardware
 runs it. The precedence when several Linux/Windows backends are compiled
 in is vulkan > d3d12 > cuda > opencl, pinned by unit tests in the pair
@@ -757,12 +757,12 @@ creation, the event-pump `poll()` loop, key/mouse state), which `gl.rs`'s
 `Inner` now holds by composition instead of inlining.
 
 `window.create_metal(title, w, h)` is a new **sibling** function to
-`create`, not a `backend` parameter on it — Fable has neither default
+`create`, not a `backend` parameter on it — Socrates has neither default
 parameters nor overloading, so a mandatory extra argument would break
 every existing `window.create(title, w, h)` call site for no ergonomic
 gain. `Window.backend_name() -> String` (`"opengl"`/`"metal"`) is the one
 deliberate escape hatch this design needs: shader *source text* is
-inherently backend-specific (GLSL vs. MSL), so a Fable program targeting
+inherently backend-specific (GLSL vs. MSL), so a Socrates program targeting
 both backends branches on this one string and nothing else — every other
 `gfx`/`Window` member keeps the exact same call shape regardless of which
 backend is live. `gfx_window_msg`'s feature-off check widened from
@@ -918,7 +918,7 @@ recipe). Textures are optimal-tiled sampled images uploaded through a
 staging buffer (RGB expanded to RGBA CPU-side — 3-channel formats have
 no guaranteed Vulkan support), sampled through one fixed
 linear/clamp-to-edge sampler at set 0 binding `2 + unit`. Verified by
-`docs/assets/vulkan_triangle.fable`: hand-assembled SPIR-V modules
+`docs/assets/vulkan_triangle.soc`: hand-assembled SPIR-V modules
 (generator script in the commit's test plan) drawn and read back to an
 exact hard-asserted center pixel under Xvfb + lavapipe, locally and in
 CI.
@@ -949,7 +949,7 @@ panics to forwards, completing the parity story: `window.create_vulkan`
 plus the full `gfx.*` surface behave identically on Linux and Windows
 because they are the same code.)
 
-## v0.9 additions
+## The minification and consistency passes (v0.8)
 
 **The four-arch Bench A/B instrument** (`bench/ab.py` +
 `.github/workflows/bench.yml`). `ab.py BASE_DIR HEAD_DIR` times two
@@ -978,7 +978,7 @@ back on aarch64-linux, the one target where the monolith measured
 faster.
 
 **Surface minification.** `fft.magnitude` moved from a native to
-`std/fft.fable` (pure Fable over the `fft` primitives; `import
+`std/fft.soc` (pure Socrates over the `fft` primitives; `import
 std.fft;` keeps the `fft.magnitude(...)` spelling working). The `math`
 namespace dropped ten natives that were verbatim duplicates of
 `Int`/`Float` methods (`sqrt`/`floor`/`ceil`/`round`/`abs`/`abs_int`/
@@ -993,7 +993,7 @@ of running four always-allocating `String.replace` passes — four
 allocations down to zero per string and per object key, byte-identical
 output; bench_json −4.5..−7.5% across the four-arch matrix.
 
-**The bench re-specification epoch.** Every `bench/*.fable` now opens
+**The bench re-specification epoch.** Every `bench/*.soc` now opens
 with a `// Bench:` measurand header stating exactly what the row
 measures; counted `while` scaffolding loops became `for i in 0..N`
 range loops, except where the loop bookkeeping *is* the measurand
@@ -1001,7 +1001,7 @@ range loops, except where the loop bookkeeping *is* the measurand
 loop, bitwise_masks' hand-rolled popcount workload — each header says
 so). bench_join_heavy was re-specified to actually bench joins
 (`strings.Builder.push_joined` + `List.join`), and a new
-`bench/for_range.fable` prices the fused ForNextRange range-literal
+`bench/for_range.soc` prices the fused ForNextRange range-literal
 loop — the modern counted-loop dispatch floor. The conversions are
 stdout-identical under one binary, but wall times legitimately moved
 (a range loop dispatches different ops than a while loop), so
@@ -1029,7 +1029,7 @@ because the oracle's own numpy/libm output drifts by a few ulps across
 environments) — an item can no longer silently degrade under the old
 blanket 1e-9 gate. icaa CI compares all 90 debug views and runs a
 permanent deterministic adversarial battery
-(`ports/icaa/adversarial.fable`: 47 SplitMix64-drawn perturbation
+(`ports/icaa/adversarial.soc`: 47 SplitMix64-drawn perturbation
 scenes — sub-threshold edges, thin lines, rings, noise fields,
 degenerate 1×1/8×1 resolutions — rendered by both implementations at
 both presets, 94 pixel-exact comparisons). 184 new cross-checks, all
@@ -1040,7 +1040,7 @@ max_diff=0 on first run.
 - Unit tests per module (lexer shapes, parser precedence, checker
   diagnostics by error code, usefulness-algorithm cases).
 - The **golden spec suite** (`tests/spec_runner.rs`): every
-  `tests/spec/**/*.fable` runs in-process with captured output and asserts
+  `tests/spec/**/*.soc` runs in-process with captured output and asserts
   its `//? expect:` / `//? error:` / `//? panic:` directives. Tests are plain
-  Fable programs — the suite doubles as a corpus of executable documentation.
+  Socrates programs — the suite doubles as a corpus of executable documentation.
 - The GC stress mode exercises collector correctness on the same corpus.

@@ -2567,7 +2567,7 @@ impl Checker {
                     .with_secondary(rhs.span, format!("this is `{rs}`"));
                     if (ls == "Int" && rs == "Float") || (ls == "Float" && rs == "Int") {
                         d = d.with_note(
-                            "Fable has no implicit numeric conversion; use `.to_float()` or `.to_int()`",
+                            "Socrates has no implicit numeric conversion; use `.to_float()` or `.to_int()`",
                         );
                     }
                     self.diags.push(d);
@@ -2714,7 +2714,7 @@ impl Checker {
                         format!("cannot {what} values of generic type `{name}`"),
                     )
                     .with_label(span, "ordering needs `Int`, `Float`, or `String`")
-                    .with_note("Fable generics have no constraints; use a concrete type here"),
+                    .with_note("Socrates generics have no constraints; use a concrete type here"),
                 );
             }
             other => {
@@ -3671,7 +3671,7 @@ impl Checker {
         }
         if (e == "Int" && f == "Float") || (e == "Float" && f == "Int") {
             d = d.with_note(
-                "Fable has no implicit numeric conversion; use `.to_float()` or `.to_int()`",
+                "Socrates has no implicit numeric conversion; use `.to_float()` or `.to_int()`",
             );
         }
         self.diags.push(d);
@@ -3684,7 +3684,7 @@ impl Checker {
                 format!("the type of this {what} must be known at this point"),
             )
             .with_label(span, "add a type annotation")
-            .with_note("Fable infers left to right; an annotation upstream fixes this"),
+            .with_note("Socrates infers left to right; an annotation upstream fixes this"),
         );
     }
 
@@ -3707,7 +3707,7 @@ impl Checker {
                             format!("cannot infer the type of this {}", origin.what),
                         )
                         .with_label(origin.span, "add a type annotation")
-                        .with_note("Fable's inference is local; annotate this or its context"),
+                        .with_note("Socrates's inference is local; annotate this or its context"),
                     );
                 }
             }

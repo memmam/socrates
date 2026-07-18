@@ -1,0 +1,124 @@
+// wfc — a tiny wave-function-collapse texture generator.
+//
+//   ./target/release/socrates demos/wfc/main.soc
+//
+// From one small hand-drawn sample (an island: sea ~, coast #, land .,
+// trees T) the demo learns which tiles may sit next to which, then
+// synthesises larger textures that obey the same local rules: repeatedly
+// collapse the lowest-entropy cell to a weighted-random tile and propagate
+// the constraints; a contradiction restarts with the next seed.
+
+import samples;
+import rules;
+import wfc;
+
+fn banner(title: String) {
+    println("");
+    println(title);
+    println("-".repeat(title.len()));
+}
+
+fn show(r: rules.Rules, w: Int, h: Int, seed: Int) {
+    match wfc.generate(r, w, h, seed, 50) {
+        Some(out) -> {
+            banner("generated {w}x{h} (seed {seed}, attempt {out.attempts})");
+            // trim_end: the pipes tile set contains a blank tile, and rows of
+            // trailing spaces are noise in a terminal.
+            for row in out.grid {
+                println(row.trim_end());
+            }
+        },
+        None -> println("wfc: no texture after 50 seeds"),
+    }
+}
+
+// Print a sample, what was learned from it, and one synthesised texture.
+fn demo(name: String, sample: List[String], w: Int, h: Int, seed: Int) {
+    banner("{name} sample {sample[0].len()}x{sample.len()}");
+    for row in sample {
+        println(row.trim_end());
+    }
+    let r = rules.learn(sample);
+    banner("learned {r.tiles.len()} tiles (weight = frequency in sample)");
+    for line in r.describe() {
+        println(line);
+    }
+    show(r, w, h, seed);
+}
+
+demo("island", samples.island, 30, 12, 7);
+demo("pipes", samples.pipes, 48, 16, 2026);
+
+// The full expected output, so `socrates test demos/wfc` pins this demo:
+//? expect:
+//? expect: island sample 12x10
+//? expect: -------------------
+//? expect: ~~~~~~~~~~~~
+//? expect: ~~~~####~~~~
+//? expect: ~~###..###~~
+//? expect: ~~#......#~~
+//? expect: ~~#..TT..#~~
+//? expect: ~~#..TT..#~~
+//? expect: ~~#......#~~
+//? expect: ~~###..###~~
+//? expect: ~~~~####~~~~
+//? expect: ~~~~~~~~~~~~
+//? expect:
+//? expect: learned 4 tiles (weight = frequency in sample)
+//? expect: ----------------------------------------------
+//? expect: '~' weight 64  up[~#  ] right[~#  ] down[~#  ] left[~#  ]
+//? expect: '#' weight 28  up[~#. ] right[~#. ] down[~#. ] left[~#. ]
+//? expect: '.' weight 24  up[#.T ] right[#.T ] down[#.T ] left[#.T ]
+//? expect: 'T' weight  4  up[.T  ] right[.T  ] down[.T  ] left[.T  ]
+//? expect:
+//? expect: generated 30x12 (seed 7, attempt 1)
+//? expect: -----------------------------------
+//? expect: ...#.#..#~~~~~###~##~#~#~#~~~~
+//? expect: ##......#~~#~~~#~~#~~#~~~#~##~
+//? expect: ...T.###~~#~~~~~~~~#~#~~~~~~#~
+//? expect: ##..T.####~~~#~~~~~~#~~~~#~~~~
+//? expect: #..#.#~#.#~~~#~~##~~~~~~~#~#~~
+//? expect: #...T.##.#~~~~#~~##~~~#~##~~~~
+//? expect: ..##..#...#~#~~~~~~~#~~#~~~~~~
+//? expect: #.####..#.##.#~~~~~~~#~~#~~~~#
+//? expect: #...#..#......##~~#~~~~#~~~~~~
+//? expect: ##.#.T.#.T.#.T.#~~~~##~~~~~#~#
+//? expect: #~###..#..#.T.#~~~~~~~~~~~~~~#
+//? expect: #~~#..#~##.#.#~#~~~#~~###~~~~~
+//? expect:
+//? expect: pipes sample 6x8
+//? expect: ----------------
+//? expect:  |  |
+//? expect:  |  |
+//? expect: -+--+-
+//? expect:  |  |
+//? expect:  |  |
+//? expect: -+--+-
+//? expect:  |  |
+//? expect:  |  |
+//? expect:
+//? expect: learned 4 tiles (weight = frequency in sample)
+//? expect: ----------------------------------------------
+//? expect: ' ' weight 24  up[ -  ] right[ |  ] down[ -  ] left[ |  ]
+//? expect: '|' weight 12  up[|+  ] right[    ] down[|+  ] left[    ]
+//? expect: '-' weight  8  up[    ] right[-+  ] down[    ] left[-+  ]
+//? expect: '+' weight  4  up[|   ] right[-   ] down[|   ] left[-   ]
+//? expect:
+//? expect: generated 48x16 (seed 2026, attempt 1)
+//? expect: --------------------------------------
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect: --+----------+------+-+--+-+---+--+--+-+-+----+-
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |
+//? expect:   |          |      | |  | |   |  |  | | |    |

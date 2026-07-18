@@ -1,0 +1,59 @@
+// A helper module for the module-system tests. Exports are `pub` (v0.3); Run standalone (as the spec
+// harness does for every .soc file) it defines everything silently.
+pub struct Point {
+    x: Float,
+    y: Float,
+}
+
+impl Point {
+    pub fn dist(self, other: Point) -> Float {
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+pub enum Shape {
+    Circle(Float),
+    Rect(Float, Float),
+    Empty,
+}
+
+pub fn area(s: Shape) -> Float {
+    match s {
+        Shape.Circle(r) -> math.pi * r * r,
+        Shape.Rect(w, h) -> w * h,
+        Shape.Empty -> 0.0,
+    }
+}
+
+pub fn origin() -> Point {
+    Point { x: 0.0, y: 0.0 }
+}
+
+pub fn parse_coord(s: String) -> Option[Float] {
+    // Reuses this module's own names freely.
+    s.parse_float()
+}
+
+pub let unit_square = Shape.Rect(1.0, 1.0);
+pub let mut bumps = 0;
+
+pub fn bump() -> Int {
+    bumps += 1;
+    bumps
+}
+
+// v0.7: value members exercised by module_member_methods.soc — method
+// calls on module-qualified lets used to misresolve as enum paths.
+pub let answer = 42;
+pub let xs: List[Int] = [1, 2, 3];
+
+impl Shape {
+    pub fn is_square(self) -> Bool {
+        match self {
+            Shape.Rect(w, h) -> w == h,
+            _ -> false,
+        }
+    }
+}

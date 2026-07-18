@@ -236,7 +236,7 @@ struct GlFns {
     enable: FnEnable,
     disable: FnDisable,
     // Resolved but not yet called anywhere: no `gfx.*` member currently
-    // surfaces raw GL error state to Fable. Reserved for a fuller `gfx` API,
+    // surfaces raw GL error state to Socrates. Reserved for a fuller `gfx` API,
     // matching `x11/gl.rs`'s identical note.
     #[allow(dead_code)]
     get_error: FnGetError,

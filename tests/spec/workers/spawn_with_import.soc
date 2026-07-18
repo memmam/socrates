@@ -1,0 +1,11 @@
+// worker.spawn resolves the file relative to the ENTRY SCRIPT's directory
+// even when the entry script has imports (v0.7 demo-round fix: the base
+// was taken from sources[0], which with any import is the first LOADED
+// module, not the entry script).
+
+import std.json;
+
+let w = worker.spawn("echo_worker.soc", ["rel"]).unwrap();
+println(w.send(json.stringify(json.Json.JStr("ping"))));   //? expect: true
+println(w.recv().unwrap());        //? expect: rel: "ping"
+println(w.join());                 //? expect: Ok(())

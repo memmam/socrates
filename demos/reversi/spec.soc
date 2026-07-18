@@ -1,0 +1,155 @@
+// spec — golden tests for the bit toolbox, the edge masks, move
+// generation, flips, and perft from the standard opening.
+//
+//   ./target/release/socrates test demos/reversi
+
+import bits;
+import board;
+
+// ---- the arithmetic-shift hazard, pinned so nobody "simplifies" ushr away ----
+println(-1 >> 1 == -1); //? expect: true
+println(bits.ushr(-1, 1) == 0x7fffffffffffffff); //? expect: true
+println(bits.ushr(-1, 63)); //? expect: 1
+println(bits.ushr(-1, 0)); //? expect: -1
+println(bits.ushr(bits.bit(63), 60)); //? expect: 8
+println(bits.ushr(bits.bit(63), 8) == bits.bit(55)); //? expect: true
+
+// ---- popcount, including the bit-63 cases the old SWAR split existed for ----
+println(bits.popcount(0)); //? expect: 0
+println(bits.popcount(1)); //? expect: 1
+println(bits.popcount(0b1011)); //? expect: 3
+println(bits.popcount(0x7fffffffffffffff)); //? expect: 63
+println(bits.popcount(-1)); //? expect: 64
+println(bits.popcount(bits.bit(63))); //? expect: 1
+println(bits.popcount(bits.bit(63) | 1)); //? expect: 2
+
+// ---- ctz and bitboard iteration order ----
+println(bits.ctz(1)); //? expect: 0
+println(bits.ctz(0b101000)); //? expect: 3
+println(bits.ctz(bits.bit(63))); //? expect: 63
+println(bits.ctz(0)); //? expect: 64
+println(str(bits.squares(0b100101))); //? expect: [0, 2, 5]
+
+// ---- edge masks: 8 bits per file, disjoint, complementary ----
+println(bits.popcount(board.file_a)); //? expect: 8
+println(bits.popcount(board.file_h)); //? expect: 8
+println(board.file_a & board.file_h); //? expect: 0
+println(board.file_a | board.not_file_a); //? expect: -1
+println(board.file_h | board.not_file_h); //? expect: -1
+
+// Shifting the FULL board east must drop file h entirely (8 discs fall
+// off) and land nothing on file a — wraparound is dead.
+let east_all = board.shift(board.all_bits, 1, board.not_file_a);
+println(bits.popcount(east_all)); //? expect: 56
+println(east_all & board.file_a); //? expect: 0
+let west_all = board.shift(board.all_bits, -1, board.not_file_h);
+println(bits.popcount(west_all)); //? expect: 56
+println(west_all & board.file_h); //? expect: 0
+
+// ---- corner probes: every direction from h8 (bit 63) and a1 (bit 0) ----
+// h8 going N/E/NE falls off or would wrap; S must reach h7 (this is the
+// shift that smears without ushr), SW reaches g7, SE would wrap to a8.
+let h8 = bits.bit(board.square("h8"));
+println(board.shift(h8, 8, board.all_bits)); //? expect: 0
+println(board.shift(h8, 1, board.not_file_a)); //? expect: 0
+println(board.shift(h8, 9, board.not_file_a)); //? expect: 0
+println(board.shift(h8, -8, board.all_bits) == bits.bit(55)); //? expect: true
+println(board.shift(h8, -9, board.not_file_h) == bits.bit(54)); //? expect: true
+println(board.shift(h8, -7, board.not_file_a)); //? expect: 0
+let a1 = bits.bit(board.square("a1"));
+println(board.shift(a1, -1, board.not_file_h)); //? expect: 0
+println(board.shift(a1, -8, board.all_bits)); //? expect: 0
+println(board.shift(a1, -9, board.not_file_h)); //? expect: 0
+println(board.shift(a1, 7, board.not_file_h)); //? expect: 0
+println(board.shift(a1, 8, board.all_bits) == bits.bit(8)); //? expect: true
+println(board.shift(a1, 9, board.not_file_a) == bits.bit(9)); //? expect: true
+
+// ---- square naming round-trips ----
+println(board.square("a1")); //? expect: 0
+println(board.square("h8")); //? expect: 63
+println(board.square_name(19)); //? expect: d3
+println(board.square_name(board.square("c4"))); //? expect: c4
+
+// ---- the opening position ----
+let (b0, w0) = board.initial();
+println(bits.popcount(b0)); //? expect: 2
+println(bits.popcount(w0)); //? expect: 2
+println(b0 & w0); //? expect: 0
+println(board.names(b0)); //? expect: e4 d5
+println(board.names(w0)); //? expect: d4 e5
+
+// Black to move has the four classic replies; white (by symmetry) too.
+let m0 = board.legal_moves(b0, w0);
+println(bits.popcount(m0)); //? expect: 4
+println(board.names(m0)); //? expect: d3 c4 f5 e6
+println(bits.popcount(board.legal_moves(w0, b0))); //? expect: 4
+
+// ---- flips: flood + confirm ----
+// Black d3 flips exactly d4.
+let f = board.flips(b0, w0, bits.bit(board.square("d3")));
+println(board.names(f)); //? expect: d4
+let (b1, w1) = board.apply(b0, w0, board.square("d3"));
+println(bits.popcount(b1)); //? expect: 4
+println(bits.popcount(w1)); //? expect: 1
+println(board.names(b1)); //? expect: d3 d4 e4 d5
+println(board.names(w1)); //? expect: e5
+
+// A maximal straight run: six white discs b1..g1 between black a1 and a
+// black disc played on h1 all flip (the flood's 5 propagation steps plus
+// the seed step cover the longest run an 8-wide board allows).
+let own_row = bits.bit(board.square("a1"));
+let opp_row = 0b01111110; // b1..g1
+println(board.names(opp_row)); //? expect: b1 c1 d1 e1 f1 g1
+let f_row = board.flips(own_row, opp_row, bits.bit(board.square("h1")));
+println(bits.popcount(f_row)); //? expect: 6
+// Same run with NO capping disc: the confirm step rejects it — nothing
+// flips even though the flood reaches the board edge.
+println(board.flips(0, opp_row, bits.bit(board.square("h1")))); //? expect: 0
+
+// ---- perft from the opening: leaf count at fixed depth ----
+// Known Othello values 4 / 12 / 56 / 244 / 1396 / 8200. A player with no
+// move passes (no depth consumed); if neither side can move the position
+// is terminal and counts as one leaf (no pass occurs at these depths).
+fn perft(own: Int, opp: Int, depth: Int) -> Int {
+    if depth == 0 {
+        return 1;
+    }
+    let mvs = board.legal_moves(own, opp);
+    if mvs == 0 {
+        if board.legal_moves(opp, own) == 0 {
+            return 1;
+        }
+        return perft(opp, own, depth);
+    }
+    let mut total = 0;
+    let mut rest = mvs;
+    while rest != 0 {
+        let sq = bits.ctz(rest);
+        rest ^= bits.bit(sq);
+        let (own2, opp2) = board.apply(own, opp, sq);
+        total += perft(opp2, own2, depth - 1);
+    }
+    total
+}
+
+for d in 1..7 {
+    println("perft({d}) = {perft(b0, w0, d)}");
+}
+//? expect: perft(1) = 4
+//? expect: perft(2) = 12
+//? expect: perft(3) = 56
+//? expect: perft(4) = 244
+//? expect: perft(5) = 1396
+//? expect: perft(6) = 8200
+
+// ---- passing ----
+// black a1+c1 vs white b1: black has no move anywhere, white can only
+// play d1 (bracketing c1). perft must pass black through without
+// consuming depth, and a position where NEITHER side can move is one
+// terminal leaf regardless of remaining depth.
+let stuck_black = bits.bit(board.square("a1")) | bits.bit(board.square("c1"));
+let lone_white = bits.bit(board.square("b1"));
+println(board.legal_moves(stuck_black, lone_white)); //? expect: 0
+println(board.names(board.legal_moves(lone_white, stuck_black))); //? expect: d1
+println(perft(stuck_black, lone_white, 1)); //? expect: 1
+println(perft(bits.bit(0), bits.bit(63), 3)); //? expect: 1

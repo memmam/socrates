@@ -1,17 +1,17 @@
 [package]
-name = "fable"
+name = "socrates"
 version = "0.8.0"
 edition = "2021"
-description = "The Fable programming language: statically typed, garbage collected, implemented from scratch with zero dependencies"
+description = "The Socrates programming language: statically typed, garbage collected, implemented from scratch with zero dependencies"
 license = "Apache-2.0"
-repository = "https://github.com/memmam/fable"
+repository = "https://github.com/memmam/socrates"
 
 [[bin]]
-name = "fable"
+name = "socrates"
 path = "src/main.rs"
 
 [lib]
-name = "fable"
+name = "socrates"
 path = "src/lib.rs"
 
 [profile.release]

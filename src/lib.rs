@@ -1,4 +1,4 @@
-//! The Fable programming language.
+//! The Socrates programming language.
 //!
 //! Pipeline: [`lexer`] → [`parser`] → [`check`] (types + exhaustiveness) →
 //! [`compiler`] (bytecode) → [`vm`] (execution with a mark-sweep GC).
@@ -133,8 +133,8 @@ fn run_capture_here(name: &str, text: &str) -> RunOutcome {
 /// programs need it; see `src/main.rs`'s `main`) — **except** when this is
 /// already the macOS main thread of a windowing-capable build, where the
 /// program runs inline instead. AppKit hard-requires `NSWindow` creation on
-/// the process's real main thread, so `fable test`'s windowed goldens
-/// (demos/glcube's `main_metal.fable`, found failing on real macos-14
+/// the process's real main thread, so `socrates test`'s windowed goldens
+/// (demos/glcube's `main_metal.soc`, found failing on real macos-14
 /// hardware exactly this way) only render if the test body stays on it; the
 /// main thread's own 512 MiB stack comes from `build.rs`'s linker flag, so
 /// nothing is lost by not spawning. The conditional matters in the other
@@ -160,7 +160,7 @@ pub fn run_capture_path(path: &std::path::Path) -> RunOutcome {
 }
 
 /// `run_capture_path` with an explicit module search path (for tests; the
-/// default reads `FABLE_PATH`). Same conditional main-thread inlining as
+/// default reads `SOCRATES_PATH`). Same conditional main-thread inlining as
 /// `run_capture_path` — see its doc comment.
 pub fn run_capture_path_with(
     path: &std::path::Path,

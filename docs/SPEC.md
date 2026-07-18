@@ -1,11 +1,11 @@
-# The Fable Language Specification
+# The Socrates Language Specification
 
-**Version 0.8** — This document is the normative reference for the Fable
+**Version 0.8** — This document is the normative reference for the Socrates
 programming language. Inline `(vN)` tags mark the release where a feature
 landed. The implementation (`src/`), the golden test suite (`tests/spec/`),
 and the book (`book/`) must all agree with this document.
 
-Fable is a statically-typed, expression-oriented, garbage-collected programming
+Socrates is a statically-typed, expression-oriented, garbage-collected programming
 language with algebraic data types, pattern matching with exhaustiveness checking,
 first-class functions with closures, and generics. Programs are single files executed
 top-to-bottom as scripts; functions and types are hoisted so mutual recursion works.
@@ -16,7 +16,7 @@ top-to-bottom as scripts; functions and types are hoisted so mutual recursion wo
 
 ### 1.1 Comments
 
-```fable
+```soc
 // line comment
 /* block comment /* which nests */ still comment */
 ```
@@ -103,7 +103,7 @@ There are **no implicit numeric conversions**. `1 + 2.0` is a type error; write
 
 ### 2.3 Structs
 
-```fable
+```soc
 struct Point { x: Float, y: Float }
 struct Pair[A, B] { first: A, second: B }
 
@@ -120,11 +120,11 @@ order. `Point { x: 1.0 }` (missing field) and unknown fields are compile errors.
 **Field shorthand** (v0.6, documenting long-standing behavior): a field whose
 value is a variable of the same name may be written once — `Point { x, y }`
 means `Point { x: x, y: y }`, and shorthand and explicit fields mix freely
-(`Point { x, y: 2.0 }`). `fable fmt` canonicalizes `x: x` to the shorthand.
+(`Point { x, y: 2.0 }`). `socrates fmt` canonicalizes `x: x` to the shorthand.
 
 ### 2.4 Enums (algebraic data types)
 
-```fable
+```soc
 enum Shape {
     Circle(Float),
     Rect(Float, Float),
@@ -143,7 +143,7 @@ Enum values are immutable. Nullary variants are written *without* parentheses:
 
 Functions and types take explicit type parameters in square brackets:
 
-```fable
+```soc
 fn identity[T](x: T) -> T { x }
 fn map[T, U](xs: List[T], f: fn(T) -> U) -> List[U] { ... }
 ```
@@ -171,7 +171,7 @@ instantiations).
 
 ## 3. Expressions
 
-Fable is expression-oriented. Blocks are expressions; the last expression in a block
+Socrates is expression-oriented. Blocks are expressions; the last expression in a block
 (without a trailing `;`) is the block's value. A statement-terminated block has type
 `Unit`.
 
@@ -225,7 +225,7 @@ IEEE-754 (`nan != nan`).
 
 ### 3.3 Control flow expressions
 
-```fable
+```soc
 let grade = if score >= 90 { "A" } else if score >= 80 { "B" } else { "C" }
 ```
 
@@ -267,7 +267,7 @@ let grade = if score >= 90 { "A" } else if score >= 80 { "B" } else { "C" }
 
 ### 3.4 Lambdas
 
-```fable
+```soc
 let double = |x: Int| x * 2
 let add = |a, b| a + b           // OK if the context determines the types
 nums.map(|n| n * n)
@@ -307,7 +307,7 @@ returning it from the enclosing function (or lambda):
 Errors: `?` outside a function (E0328), an incompatible enclosing return type
 (E0329), a non-`Option`/`Result` operand (E0330).
 
-```fable
+```soc
 fn parse_sum(a: String, b: String) -> Option[Int] {
     Some(a.parse_int()? + b.parse_int()?)
 }
@@ -317,7 +317,7 @@ fn parse_sum(a: String, b: String) -> Option[Int] {
 
 ## 4. Pattern matching
 
-```fable
+```soc
 match shape {
     Shape.Circle(r) if r > 100.0 -> "huge circle",
     Shape.Circle(r) -> "circle of radius {r}",
@@ -369,7 +369,7 @@ is a compile error). `for` loop heads accept the same irrefutable patterns
 
 A program is a sequence of items and statements executed top-to-bottom:
 
-```fable
+```soc
 struct/enum declarations     // hoisted, order-independent
 fn declarations              // hoisted (mutual recursion OK)
 let / let mut bindings       // execute in order
@@ -396,7 +396,7 @@ expression statements        // execute in order
 Each method's first parameter is a bare `self` (no type annotation — it has
 the impl type); calls use dot syntax on a value of the type.
 
-```fable
+```soc
 struct Point { x: Float, y: Float }
 
 impl Point {
@@ -432,12 +432,12 @@ println(p.scaled(2.0).len());   // 10.0
 ### 5.2 Modules and imports
 
 A program may span multiple files. `import a.b;` (top level only) loads
-`a/b.fable` **relative to the importing file** and binds it under the alias
+`a/b.soc` **relative to the importing file** and binds it under the alias
 `b` — the last path segment — or a chosen name with `import a.b as m;`.
 
-```fable
-import geo;                       // loads geo.fable
-import util.strings as s;         // loads util/strings.fable
+```soc
+import geo;                       // loads geo.soc
+import util.strings as s;         // loads util/strings.soc
 
 let p = geo.Point { x: 1.0, y: 2.0 };   // qualified struct literal
 let d: geo.Point = geo.origin();        // qualified type
@@ -468,14 +468,14 @@ match shape {
 - `pub` module bindings are readable from outside (`geo.counter`) but
   assignable only inside their own module (E0308).
 - Import paths resolve relative to the importing file first, then against
-  each directory in the colon-separated `FABLE_PATH` environment variable
+  each directory in the colon-separated `SOCRATES_PATH` environment variable
   (v0.3) — the home for utility modules shared across projects. The E0337
   error lists every location tried.
 - The `std.` prefix is **reserved** (v0.4): `import std.json;` resolves to a
   module embedded in the interpreter binary, never to a file. Embedded
   modules may import only other `std` modules. See § 7.1 for the catalog.
 - The REPL imports like a file (v0.5): paths resolve against the working
-  directory, then `FABLE_PATH`, then `std.`; loaded modules and aliases
+  directory, then `SOCRATES_PATH`, then `std.`; loaded modules and aliases
   persist across inputs, and re-importing never reloads. Only one-shot
   string evaluation cannot import (E0334).
 
@@ -497,8 +497,8 @@ match shape {
   mutual, or through function values) therefore runs in constant stack space
   and never hits the frame cap; non-tail recursion still overflows.
 - The runtime uses a tracing mark-and-sweep garbage collector. Setting the environment
-  variable `FABLE_GC_STRESS=1` forces a collection before every allocation (testing);
-  `FABLE_GC_LOG=1` logs collections to stderr.
+  variable `SOCRATES_GC_STRESS=1` forces a collection before every allocation (testing);
+  `SOCRATES_GC_LOG=1` logs collections to stderr.
 
 ---
 
@@ -548,7 +548,7 @@ operator stays Int-only), `math.random() -> Float`
 the **inclusive** range; panics if `lo > hi`), `math.seed(Int) -> Unit`.
 Rounding, `sqrt`, `abs`, and `min`/`max` are Int/Float **methods**
 (`x.sqrt()`, `x.abs()`, `a.min(b)`, `x.floor()`, ... — § 8.5): the
-former `math.` spellings were verbatim duplicates and were dropped in v0.9
+former `math.` spellings were verbatim duplicates and were dropped in v0.8's minification pass
 (the method spellings are the primitives).
 
 `math.seed` scrambles the seed through SplitMix64 before installing it
@@ -570,7 +570,7 @@ The derived helper `magnitude(re, im)` — `sqrt(re[i]^2 + im[i]^2)` per
 bin — lives in `std.fft` (§ 7.1), which also wraps `rfft`/`ifft` so an
 importing file keeps the same spellings. (It was a native in v0.8,
 computing `hypot` — which differs from `sqrt(re^2 + im^2)` in the
-last ulp, a deviation from this definition; the move to Fable fixed it.)
+last ulp, a deviation from this definition; the move to Socrates fixed it.)
 
 Any length `n >= 1` is supported in O(n log n): powers of two run an
 iterative radix-2 Cooley–Tukey; every other length goes through
@@ -579,7 +579,7 @@ sign `e^{-2πikt/n}`, inverse carries the `1/n`); CI cross-checks against
 numpy at 1e-9 relative. Zero-length input and mismatched re/im lengths
 panic.
 
-The `worker` namespace (v0.7) runs Fable programs as **isolates**: each
+The `worker` namespace (v0.7) runs Socrates programs as **isolates**: each
 worker is a whole separate VM — its own heap, globals, and GC — on its
 own OS thread, so workers run in true parallel. Nothing is shared;
 the only things that cross the boundary are `String` messages
@@ -602,7 +602,7 @@ its own thread; the parent sees it as `Err` from `join()` (§ 8.4c for
 the `Worker` handle methods). Workers may spawn workers. The process
 exits when the main script ends — detached workers are not waited for;
 `join` what you need. Worker `println` output goes to the same stdout as
-the parent (interleaving across threads is unordered; under `fable
+the parent (interleaving across threads is unordered; under `socrates
 test`, worker output is captured with the parent's).
 
 One more free function joined the prelude in v0.6:
@@ -618,9 +618,9 @@ Two more joined in v0.7:
 | `bytes(n)` | `fn(Int) -> Bytes` | zero-filled byte buffer (§ 8.4b) |
 | `bytes_of(xs)` | `fn(List[Int]) -> Bytes` | from byte values 0..255 |
 
-### 7.1 The standard library (v0.4; expanded in v0.7-v0.9)
+### 7.1 The standard library (v0.4; expanded in v0.7-v0.8)
 
-Eleven modules written in Fable ship inside the interpreter, imported like any
+Eleven modules written in Socrates ship inside the interpreter, imported like any
 module (`import std.json;`, aliased with `as`). Everything below is `pub`;
 these modules follow the same visibility rules as user code.
 
@@ -630,13 +630,13 @@ these modules follow the same visibility rules as user code.
 | `std.flags` | `flag(args, name) -> Bool`, `value(args, name) -> Option[String]` (only `--name=value` carries a value), `value_or(args, name, fallback)`, `positionals(args)`; a literal `--` ends flag parsing |
 | `std.path` | `join`, `base_name`, `dir_name`, `ext`, `strip_ext` — purely textual, slash-separated |
 | `std.strings` | `lines` (trailing-newline aware), `words`, `join_lines`, `ellipsize`, `strip_prefix`, `strip_suffix`; a `Builder` for string accumulation (v0.7): `builder()` makes one, methods `push(s)`, `push_char(code)`, `len()` (characters so far, O(1)), `is_empty()` (v0.8), `build()` (one join; non-consuming), `push_joined(sep, s)` (v0.8: pushes `sep` first unless this is the builder's first piece — the separator-before-each-line idiom without a manual `if len() > 0` at every call site), `clear()` — `+=` in a loop is O(n²), a Builder is O(n) |
-| `std.iter` | lazy sequences: `of(list)`, `count_from(n)`, `from_fn(f)` build an `Iter[T]`; adapters `map`, `filter`, `take`, `chain`, `zip`; consumers `collect`, `fold`, `each`, `count`. Implemented entirely in Fable (an `Iter[T]` is a struct holding a `next` closure). |
+| `std.iter` | lazy sequences: `of(list)`, `count_from(n)`, `from_fn(f)` build an `Iter[T]`; adapters `map`, `filter`, `take`, `chain`, `zip`; consumers `collect`, `fold`, `each`, `count`. Implemented entirely in Socrates (an `Iter[T]` is a struct holding a `next` closure). |
 | `std.lists` | free-function list helpers (v0.7; builtins cannot gain methods): `fill(n, v)` (`n` aliases of one value), `sum` / `sum_float`, `min` / `max` / `min_float` / `max_float` (`Option`; `None` for `[]`), `min_by(xs, cmp)` / `max_by(xs, cmp)` under the `sort_by` comparator convention (negative/zero/positive), `min_by_key(xs, key)` / `max_by_key(xs, key)` (v0.8: an `Int`-valued key extractor instead of a comparator) — ties keep the **first** winner |
 | `std.set` | `Set[T]` (v0.7), backed by `Map[T, Unit]`: structural membership, insertion-order iteration. `new()`, `from_list(xs)` (first occurrence wins); methods `insert(v) -> Bool` / `remove(v) -> Bool` (did anything change), `contains`, `len`, `is_empty`, `to_list`, and `union` / `intersect` / `difference` — each returns a **new** set ordered by the left operand's insertion order, then the right's |
 | `std.deque` | `Deque[T]` (v0.7), a double-ended queue with amortized O(1) ends (two-stack representation; a pop on an empty side reverses the other side across). `new()`, `from_list(xs)` (copies); methods `push_front` / `push_back`, `pop_front` / `pop_back` / `front` / `back` (all `Option[T]`), `len`, `is_empty`, `to_list` (front to back) |
 | `std.lazy` | `Lazy[T]` (v0.8): deferred, memoized computation. `of(thunk: fn() -> T) -> Lazy[T]` wraps a zero-argument thunk that doesn't run until needed; methods `get() -> T` (computes and caches on the first call, free on every later call — on any reference, since structs are references) and `is_forced() -> Bool`. For a module-level table that's expensive to build and not always needed — a plain top-level `let` already builds once at import (eagerly); `Lazy` defers that to first use. |
-| `std.glm` | Vector/matrix/quaternion math (v0.8), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Fable, no native code. |
-| `std.fft` | FFT helpers (v0.9; moved from the native namespace in the minification pass): `magnitude(re, im)` (`sqrt(re[i]^2 + im[i]^2)` per bin, exactly as written — the panic on length mismatch matches the old native's message byte for byte), plus one-line `rfft`/`ifft` wrappers so an importing file keeps the `fft.` spellings (an imported module shadows the builtin namespace). `fft.fft` (complex pairs) is deliberately not re-exported — a module fn named `fft` would shadow the namespace in this module's own bodies; files that need it use the native namespace and skip this import. |
+| `std.glm` | Vector/matrix/quaternion math (v0.8), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Socrates, no native code. |
+| `std.fft` | FFT helpers (v0.8; moved from the native namespace in the minification pass): `magnitude(re, im)` (`sqrt(re[i]^2 + im[i]^2)` per bin, exactly as written — the panic on length mismatch matches the old native's message byte for byte), plus one-line `rfft`/`ifft` wrappers so an importing file keeps the `fft.` spellings (an imported module shadows the builtin namespace). `fft.fft` (complex pairs) is deliberately not re-exported — a module fn named `fft` would shadow the namespace in this module's own bodies; files that need it use the native namespace and skip this import. |
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
@@ -662,7 +662,7 @@ Windows path, then the vendor GPU path, then OpenCL, which commonly
 resolves to a CPU implementation). The original **wgpu** path (WGSL
 shaders behind a `gpu` cargo feature — v0.7's one quarantined
 dependency) was **removed in v0.8** when this native coverage landed,
-per `CLAUDE.md`'s roadmap: every build of Fable is now zero-dependency
+per `CLAUDE.md`'s roadmap: every build of Socrates is now zero-dependency
 (CI asserts `cargo tree` is a single line for the default and for every
 feature set). The namespace itself always exists — programs using it
 typecheck and run in every build; without a backend the members degrade
@@ -673,7 +673,7 @@ gracefully as described below.
 | `gpu.available()` | `fn() -> Bool` | is a GPU adapter usable? Always `false` without a backend |
 | `gpu.adapter_info()` | `fn() -> String` | `"<name> (<backend>)"`, `"no adapter"`, or `"gpu support not compiled in"`. Never empty |
 | `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch of source-text `src` — MSL on the metal backend, PTX on the cuda backend, HLSL on the d3d12 backend (the ABIs below). The binary backends (vulkan, opencl) `Err` redirecting to `gpu.run_spirv`. Without a backend: `Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, --features d3d12 on Windows, or --features vulkan, cuda, or opencl on Linux/Windows)")` |
-| `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` | `fn(Bytes, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | (v0.8) `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so the blob rides the buffer type (a sibling, not an overload: Fable has neither default parameters nor overloading). Ingested natively by the vulkan and opencl backends — each in its own SPIR-V *profile* (the two ABI paragraphs below; the blobs are not interchangeable); other backends `Err` naming the entry point they want |
+| `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` | `fn(Bytes, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | (v0.8) `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so the blob rides the buffer type (a sibling, not an overload: Socrates has neither default parameters nor overloading). Ingested natively by the vulkan and opencl backends — each in its own SPIR-V *profile* (the two ABI paragraphs below; the blobs are not interchangeable); other backends `Err` naming the entry point they want |
 | `gpu.backend()` | `fn() -> String` | (v0.8) `"metal"`, `"vulkan"`, `"d3d12"`, `"cuda"`, `"opencl"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (vulkan > d3d12 > cuda > opencl). The `gpu` analog of `win.backend_name()`: branch on it to pick the kernel dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
 
 Every failure is an `Err` value, never a panic: bad arguments, no adapter,
@@ -706,7 +706,7 @@ dispatch is `(wx, wy, wz)` threadgroups of **one thread each**, so
 larger threadgroups are an API-side parameter in Metal rather than a
 shader-side declaration, and would be a new explicit argument if ever
 needed, not a silent change. The worked example is
-`docs/assets/metal_compute.fable` (an MSL doubling kernel, which
+`docs/assets/metal_compute.soc` (an MSL doubling kernel, which
 hard-asserts its output bytes whenever a device exists — compute needs no
 window server, so it is a real correctness gate on any Metal-capable
 machine).
@@ -719,7 +719,7 @@ nothing; every GLSL toolchain emits `main`) with two `BufferBlock`
 storage buffers at descriptor set 0, bindings 0/1, and its own
 `LocalSize` execution mode — the dispatch is `(wx, wy, wz)` workgroups of
 whatever size the module declares. The worked example is
-`docs/assets/vulkan_compute.fable` — a hand-assembled doubling kernel,
+`docs/assets/vulkan_compute.soc` — a hand-assembled doubling kernel,
 hard-asserted whenever a compute device exists; Mesa's lavapipe software
 device makes that unconditional on CI, the first `gpu` backend fully
 exercised without GPU hardware.
@@ -747,8 +747,8 @@ exactly the index space a Vulkan module with `LocalSize 1 1 1` dispatches
 profiles. At run time the backend needs an OpenCL 2.1+ runtime whose
 device advertises SPIR-V ingestion (`CL_DEVICE_IL_VERSION`); errors name
 what is missing, and shader build failures carry the runtime's build log.
-The worked example is `docs/assets/opencl_compute.fable` — the
-OpenCL-profile twin of `vulkan_compute.fable`, hard-asserting the same
+The worked example is `docs/assets/opencl_compute.soc` — the
+OpenCL-profile twin of `vulkan_compute.soc`, hard-asserting the same
 doubled bytes (a CPU implementation like pocl counts; no GPU hardware
 needed).
 
@@ -761,7 +761,7 @@ two `.param .u64` pointer parameters (input, then output; convert with
 `(wx, wy, wz)` **grid of single-thread blocks**, so `%ctaid` spans the
 index space — the same shape as the Metal dispatch. `gpu.run_spirv` on
 this backend `Err`s redirecting to `gpu.run`: the driver API has no
-SPIR-V ingestion. The worked example is `docs/assets/cuda_compute.fable`
+SPIR-V ingestion. The worked example is `docs/assets/cuda_compute.soc`
 (a hand-written PTX doubling kernel, `.version 6.0`/`.target sm_50` for
 broad JIT compatibility). Honesty about verification: no software CUDA
 implementation exists, so unlike the other three backends this one is
@@ -782,7 +782,7 @@ index space, the same shape as the Metal and CUDA dispatches.
 ingests DXBC/DXIL, not SPIR-V). Uniquely on Windows, availability is
 unconditional: WARP, the OS's software D3D12 adapter, provides a device
 on any Windows 10+ machine, GPU or none — which is why the worked
-example, `docs/assets/d3d12_compute.fable`, is hard-asserted end to end
+example, `docs/assets/d3d12_compute.soc`, is hard-asserted end to end
 on plain CI runners, like the Vulkan (lavapipe) and OpenCL (Intel CPU
 runtime) batteries.
 
@@ -831,7 +831,7 @@ the safer default). Event handling is callback-driven (`WNDPROC` +
 `GWLP_USERDATA`) rather than poll-based like Xlib, but this is purely an
 internal implementation detail — `poll()`, `key_down()`, `mouse_pos()`,
 `width()`/`height()`, and `should_close()` behave identically to the Linux
-backend from Fable's point of view. `key_down` names on Windows are a small
+backend from Socrates's point of view. `key_down` names on Windows are a small
 hand-written table (ASCII letters/digits plus common named keys like
 `"space"`/`"escape"`/`"left"`) rather than X11 keysym names, but the common
 single-character and named-key spellings used in practice (`"w"`, `"a"`,
@@ -877,12 +877,12 @@ binary under `--features gl,metal`, quarantined behind their own `metal`
 cargo feature with the same zero-Cargo-dependency shape `gl` already has,
 and a program picks per-window which one it wants by calling `create` or
 `create_metal`. A sibling entry point rather than a `backend` parameter on
-`create`: Fable has neither default parameters nor overloading, so a
+`create`: Socrates has neither default parameters nor overloading, so a
 mandatory extra argument would break every existing `window.create(title,
 w, h)` call site for no ergonomic gain.
 
 `Window.backend_name()` (§ 8.4d) reports which backend a given window is
-running — the one place a Fable program needs to branch when targeting
+running — the one place a Socrates program needs to branch when targeting
 both, since shader *source text* is inherently backend-specific (GLSL vs.
 Metal Shading Language); every other `gfx`/`Window` member has the same
 call shape and behavior regardless of backend.
@@ -924,7 +924,7 @@ Metal shader conventions:
   struct-member order — is what reliably links them across separately
   compiled functions. (And assign every varying in the vertex function:
   MSL does not error on an uninitialized output member — it rasterizes as
-  undefined data. See `demos/glcube/main_metal.fable` for the worked
+  undefined data. See `demos/glcube/main_metal.soc` for the worked
   example.)
 - Each stage's uniforms live in one struct argument at `[[buffer(0)]]`;
   `gfx.set_uniform_*` resolves the member by *name* via pipeline
@@ -939,8 +939,8 @@ Metal shader conventions:
   `[0, +w]`, so an MSL vertex shader using such a matrix remaps once at
   the end — `out.position.z = (out.position.z + out.position.w) * 0.5;`
   — or half the depth range is clipped away. See
-  `demos/glcube/main_metal.fable`, whose golden pins are byte-identical
-  to the OpenGL `main.fable`'s (the cross-backend pixel-parity proof,
+  `demos/glcube/main_metal.soc`, whose golden pins are byte-identical
+  to the OpenGL `main.soc`'s (the cross-backend pixel-parity proof,
   asserted in CI on real Apple Silicon hardware).
 
 ### window namespace, Vulkan backend (v0.8, Linux + Windows, additive)
@@ -1011,11 +1011,11 @@ conventions:
   documents (§ 7.3 above).
 
 Verified with real rasterized pixels on CI, twice over:
-`docs/assets/vulkan_triangle.fable` draws a hand-assembled SPIR-V
+`docs/assets/vulkan_triangle.soc` draws a hand-assembled SPIR-V
 triangle and hard-asserts the exact center pixel through
-`gfx.read_pixels`, and `demos/glcube/main_vulkan.fable` renders the
+`gfx.read_pixels`, and `demos/glcube/main_vulkan.soc` renders the
 spinning-cube demo with golden pins **byte-identical** to the OpenGL
-`main.fable`'s and the Metal `main_metal.fable`'s — the same Fable
+`main.soc`'s and the Metal `main_metal.soc`'s — the same Socrates
 program rendering the same pixels on three graphics APIs — both under
 Xvfb + lavapipe (no GPU needed).
 
@@ -1050,7 +1050,7 @@ program is validly linked and bound, the same no-`Result`-plumbing shape
 | Member | Type | Notes |
 |---|---|---|
 | `gfx.compile_program(vertex_src, fragment_src)` | `fn(String, String) -> Result[Int, String]` | compiles + links a GLSL vertex/fragment pair; `Err` carries the driver's shader/link info log, sized via `GL_INFO_LOG_LENGTH` (never a guessed fixed buffer) — and any shader/program object already created is deleted before returning. On the Vulkan backend: a clean `Err` redirecting to `compile_program_spirv` |
-| `gfx.compile_program_spirv(vertex, fragment)` | `fn(Bytes, Bytes) -> Result[Int, String]` | (v0.8) the Vulkan backend's shader input: two SPIR-V binaries (vertex, fragment — see the Linux Vulkan backend note in § 7.3 for the module conventions). A sibling of `compile_program`, not an overload (Fable has neither): SPIR-V is a binary format, so it rides `Bytes`, exactly like `gpu.run_spirv`. On source-text backends (GL, Metal): a clean `Err` redirecting to `compile_program` |
+| `gfx.compile_program_spirv(vertex, fragment)` | `fn(Bytes, Bytes) -> Result[Int, String]` | (v0.8) the Vulkan backend's shader input: two SPIR-V binaries (vertex, fragment — see the Linux Vulkan backend note in § 7.3 for the module conventions). A sibling of `compile_program`, not an overload (Socrates has neither): SPIR-V is a binary format, so it rides `Bytes`, exactly like `gpu.run_spirv`. On source-text backends (GL, Metal): a clean `Err` redirecting to `compile_program` |
 | `gfx.use_program(p)` | `fn(Int) -> Unit` | `glUseProgram` |
 | `gfx.delete_program(p)` | `fn(Int) -> Unit` | `glDeleteProgram` |
 | `gfx.create_buffer()` | `fn() -> Int` | `glGenBuffers(1, ...)` |
@@ -1310,7 +1310,7 @@ covers a 32-bit wrap too: mask after wrapping (`a.wrapping_mul(b) &
 
 `Float`: `to_int() -> Int` (truncates toward zero; panics on NaN or out of Int
 range), `to_string() -> String`, `abs()`, `floor()`, `ceil()`, `round()`,
-`sqrt()`, `min(Float) -> Float` / `max(Float) -> Float` (v0.9: IEEE-754
+`sqrt()`, `min(Float) -> Float` / `max(Float) -> Float` (v0.8: IEEE-754
 min/max — a NaN argument yields the other operand, as in Rust's
 `f64::min`/`max`), `is_nan() -> Bool`, `to_fixed(Int) -> String` (v0.6: exactly n
 decimal places, half-away-from-zero as in Rust's `{:.n}`; n clamps to
@@ -1404,13 +1404,13 @@ A struct-literal field is `IDENT ":" expr` or the shorthand `IDENT` — § 2.3.)
 
 ## 10. Tooling behavior
 
-- `fable run file.fable [args...]` (or `fable file.fable [args...]`) —
+- `socrates run file.soc [args...]` (or `socrates file.soc [args...]`) —
   compile and run; everything after the script path reaches the program as
-  `os.args()`. Imports resolve file-relative, then via `FABLE_PATH`
+  `os.args()`. Imports resolve file-relative, then via `SOCRATES_PATH`
   (colon-separated directories).
-- `fable check file.fable` — compile only; print diagnostics.
-- `fable dis file.fable` — print disassembled bytecode.
-- `fable fmt file.fable [more.fable ...]` — print the canonically
+- `socrates check file.soc` — compile only; print diagnostics.
+- `socrates dis file.soc` — print disassembled bytecode.
+- `socrates fmt file.soc [more.soc ...]` — print the canonically
   formatted source of every named file (`--write` to modify in place;
   flags may appear anywhere among the files). A file that fails to parse
   is reported, the remaining files still format, and the exit code is
@@ -1426,7 +1426,7 @@ A struct-literal field is `IDENT ":" expr` or the shorthand `IDENT` — § 2.3.)
   element and trailing comments stay on its line — so a comment doubles
   as an escape hatch for meaning-bearing multi-line layout (e.g. a
   hand-drawn 2-D grid). Formatting is idempotent.
-- `fable test [paths...]` (v0.4) — run golden tests: every `.fable` file
+- `socrates test [paths...]` (v0.4) — run golden tests: every `.soc` file
   found is a test, checked against `//? expect:` / `//? error:` /
   `//? panic:` directives in its comments (a file with no directives must
   merely run silently). Exit 0 when all pass, 1 otherwise. The
@@ -1446,39 +1446,39 @@ A struct-literal field is `IDENT ":" expr` or the shorthand `IDENT` — § 2.3.)
   never rewritten either way). Automates the manual "run, pipe through
   `sed`, append, re-run" workflow (demos/STYLE.md § 1) for the common case
   of a value changing without the print statements around it changing.
-- `fable lsp` (v0.4) — a language server over stdio: diagnostics on
-  open/change (identical to `fable check`, imports included), hover with
+- `socrates lsp` (v0.4) — a language server over stdio: diagnostics on
+  open/change (identical to `socrates check`, imports included), hover with
   checked types, go-to-definition across module files, and completion
   (v0.5) for methods, fields, module members, namespaces, and top-level
   names — answered from the last good analysis, so it works mid-edit.
-- `fable build <dir|file.fable> [-o OUT] [--launcher PATH]` (v0.7) — pack a
+- `socrates build <dir|file.soc> [-o OUT] [--launcher PATH]` (v0.7) — pack a
   program into one self-contained executable. Every file under the program's
   directory is stapled onto a copy of the interpreter — appended after its
-  image as `payload ‖ u64(payload_len) ‖ "FABLZOO1"`, a dependency-free
+  image as `payload ‖ u64(payload_len) ‖ "SOCRZOO1"`, a dependency-free
   little-endian archive — and the program is type-checked first, so a build
   never ships a binary that fails to compile. On startup such a binary reads
   its own 16-byte trailer, and if the magic is present unpacks the payload
   into a per-process scratch directory, makes it the working directory, and
-  runs the entry (`main.fable`); an ordinary `fable` has no trailer and is
+  runs the entry (`main.soc`); an ordinary `socrates` has no trailer and is
   unaffected. Files are packed under the path *as given*, so a stapled binary
-  behaves exactly like `fable <that path>` run from the build directory —
+  behaves exactly like `socrates <that path>` run from the build directory —
   imports, `fs.*`, `worker.spawn`, and output are all identical. `--launcher`
   supplies interpreter bytes cross-compiled for another target (stapling is
   host-independent, so one machine can assemble binaries for every target);
   `-o` sets the output path (default: the program directory's name).
   `--payload-only` writes just the archive (no launcher) — the macOS build
-  links it in as a `__DATA,__fablezoo` Mach-O section instead of appending,
+  links it in as a `__DATA,__socrateszoo` Mach-O section instead of appending,
   since a Mach-O with data past `__LINKEDIT` cannot be code-signed.
-- `fable repl` — interactive REPL; expressions print their value (in `str` form,
+- `socrates repl` — interactive REPL; expressions print their value (in `str` form,
   except `String` values print quoted) unless the value is `()`. Imports
   work (v0.5) and persist across inputs.
-- `fable tokens file.fable` / `fable ast file.fable` — debugging dumps.
+- `socrates tokens file.soc` / `socrates ast file.soc` — debugging dumps.
 
 Diagnostics use the format:
 
 ```
 error[E0301]: type mismatch
-  --> examples/foo.fable:3:9
+  --> examples/foo.soc:3:9
    |
  3 |     let x: Int = "hi";
    |            ---   ^^^^ expected `Int`, found `String`
@@ -1496,7 +1496,7 @@ misbehavior): 255 parameters per function/lambda, 255 fields per enum variant,
 interpolation, 60,000 local variables per function, 65,000 global bindings,
 2,000 levels of syntactic nesting (E0207), 20,000 nested operations per
 expression (E0324). At runtime: 4,096 call frames ("stack overflow" panic) —
-the cap is configurable via the `FABLE_MAX_DEPTH` environment variable
+the cap is configurable via the `SOCRATES_MAX_DEPTH` environment variable
 (v0.6; floor 64; malformed values warn and keep the default), for recursive
 tree-walking workloads whose depth is data-dependent. One honest caveat:
 recursion that passes *through native callbacks* (`map`/`sort_by`
@@ -1509,5 +1509,5 @@ and equality on values whose *map* nesting exceeds 64 levels panics.
 One behavioral caveat: map keys are hashed at insertion. **Mutating a list,
 map, or struct after using it as a key strands the entry** — it still counts
 toward `len()` and appears in `keys()`, but no lookup can reach it. Don't
-mutate values used as keys (most languages ban mutable keys outright; Fable
+mutate values used as keys (most languages ban mutable keys outright; Socrates
 trusts you instead).

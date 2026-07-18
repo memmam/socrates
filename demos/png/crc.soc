@@ -1,0 +1,54 @@
+// crc — the two checksums a PNG needs, from scratch.
+//
+// CRC-32 (ISO 3309 / ITU-T V.42, the one PNG and zip use): reflected,
+// polynomial 0xEDB88320, table-driven. The 256-entry table is built the
+// classic way — eight conditional shift-and-xor steps per byte value.
+// Adler-32 (RFC 1950): two mod-65521 running sums, s2 in the high half.
+//
+// Both fit comfortably in Socrates's 64-bit Int as long as every value stays
+// inside 0..2^32-1; `>>` being arithmetic never bites because nothing here
+// ever sets bit 63.
+
+fn make_table() -> List[Int] {
+    let table = [];
+    for n in 0..256 {
+        let mut c = n;
+        for _ in 0..8 {
+            // Reflected update: low bit out, polynomial in from the top.
+            if c & 1 == 1 {
+                c = 0xEDB88320 ^ c >> 1;
+            } else {
+                c >>= 1;
+            }
+        }
+        table.push(c);
+    }
+    table
+}
+
+let table = make_table();
+
+// Spot-check access for the spec without handing out the mutable list.
+pub fn table_entry(i: Int) -> Int {
+    table[i]
+}
+
+// CRC-32 of a whole buffer.
+pub fn crc32(data: Bytes) -> Int {
+    let mut c = 0xFFFFFFFF;
+    for i in 0..data.len() {
+        c = table[(c ^ data.get(i)) & 255] ^ c >> 8;
+    }
+    c ^ 0xFFFFFFFF
+}
+
+// Adler-32 of a whole buffer: s2 << 16 | s1.
+pub fn adler32(data: Bytes) -> Int {
+    let mut s1 = 1;
+    let mut s2 = 0;
+    for i in 0..data.len() {
+        s1 = (s1 + data.get(i)) % 65521;
+        s2 = (s2 + s1) % 65521;
+    }
+    s2 << 16 | s1
+}

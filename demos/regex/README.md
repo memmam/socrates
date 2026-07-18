@@ -1,6 +1,6 @@
-# regex — a backtracking regular-expression engine in Fable
+# regex — a backtracking regular-expression engine in Socrates
 
-A small but complete regex engine, written to show Fable off: enums model the
+A small but complete regex engine, written to show Socrates off: enums model the
 pattern AST, a recursive-descent parser turns pattern text into that AST (all
 error plumbing through `Result` and `?`), and the matcher is classic
 recursive backtracking in continuation-passing style — every choice point is
@@ -30,12 +30,12 @@ character: `/a{b/` matches `"a{b"`.
 
 ## Files
 
-- `syntax.fable` — the `Ast` enum, the pattern parser (`compile`), the
+- `syntax.soc` — the `Ast` enum, the pattern parser (`compile`), the
   bitmap class compiler (`make_class`), the `{m,n}` desugarer (`repeat`),
   and an s-expression printer (`show`)
-- `engine.fable` — the CPS backtracking matcher (`find`, `find_all`,
+- `engine.soc` — the CPS backtracking matcher (`find`, `find_all`,
   `matches`)
-- `main.fable` — self-checking test table, compile-error checks, bitmap
+- `main.soc` — self-checking test table, compile-error checks, bitmap
   dumps, and a tiny grep with match underlining
 - `sample.txt` — a fake server log for the grep demo
 
@@ -45,14 +45,14 @@ From the repository root:
 
 ```sh
 # the full demo: AST dumps, 87 self-checking tests, bitmap dumps, grep examples
-./target/release/fable demos/regex/main.fable
+./target/release/socrates demos/regex/main.soc
 
 # grep mode: filter a file (default: the bundled sample.txt) by a pattern
-./target/release/fable demos/regex/main.fable 'ERROR|WARN'
-./target/release/fable demos/regex/main.fable '\d{2,}ms$' demos/regex/sample.txt
+./target/release/socrates demos/regex/main.soc 'ERROR|WARN'
+./target/release/socrates demos/regex/main.soc '\d{2,}ms$' demos/regex/sample.txt
 
 # golden tests (the demo's whole output is pinned by //? expect: directives)
-./target/release/fable test demos/regex
+./target/release/socrates test demos/regex
 ```
 
 ## Sample output
@@ -110,12 +110,12 @@ unbounded count would be an AST bomb) and `{2,1}` is a compile error.
 
 ## Limits
 
-Backtracking recurses once per matched character, and Fable caps the call
+Backtracking recurses once per matched character, and Socrates caps the call
 stack at 4096 frames — so a repetition run of roughly 1500+ characters on one
 line overflows. Grep mode wraps each line's match in `try()`, so such lines
 are reported as `(skipped: stack overflow)` instead of crashing the program.
 Since v0.6 you can also raise the cap for longer lines by setting the
-`FABLE_MAX_DEPTH` environment variable (e.g. `FABLE_MAX_DEPTH=100000`).
+`SOCRATES_MAX_DEPTH` environment variable (e.g. `SOCRATES_MAX_DEPTH=100000`).
 Exponential patterns behave as expected for a backtracker: `(x+x+)+y` against
 20 x's takes seconds; against 10 (as in the test table) it is instant.
 

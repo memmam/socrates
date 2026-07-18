@@ -1,0 +1,200 @@
+// formula.soc — lexer and Pratt parser for spreadsheet formulas.
+//
+// Grammar (what you may write after the leading '='):
+//
+//   expr    = term  { ("+" | "-") term }
+//   term    = factor { ("*" | "/") factor }
+//   factor  = number | REF | REF ":" REF | ident "(" args ")"
+//           | "-" factor | "(" expr ")"
+//
+// The parser is a classic Pratt loop: `expr_bp` folds in binary operators
+// whose binding power is at least `min_bp`, recursing with `bp + 1` for
+// left associativity.
+
+pub enum Expr {
+    Num(Float),
+    Ref(String), // B2
+    Rng(String, String), // B2:B9  (only meaningful inside a call)
+    Call(String, List[Expr]), // sum(B2:B9, 5)
+    Bin(String, Expr, Expr), // op is "+", "-", "*" or "/"
+    Neg(Expr),
+}
+
+enum Tok {
+    Num(Float),
+    Ref(String), // letters-then-digits, normalized to upper case
+    Ident(String), // a function name, normalized to lower case
+    Sym(String), // + - * / ( ) , :
+}
+
+fn is_digit(c: String) -> Bool {
+    c >= "0" && c <= "9"
+}
+
+fn is_alpha(c: String) -> Bool {
+    c >= "a" && c <= "z" || c >= "A" && c <= "Z"
+}
+
+fn lex(src: String) -> Result[List[Tok], String] {
+    let cs = src.chars();
+    let toks: List[Tok] = [];
+    let mut i = 0;
+    while i < cs.len() {
+        let c = cs[i];
+        if c == " " || c == "\t" {
+            i += 1;
+        } else if is_digit(c) {
+            // A number: digits with at most one decimal point.
+            let mut text = "";
+            while i < cs.len() && (is_digit(cs[i]) || cs[i] == ".") {
+                text = text + cs[i];
+                i += 1;
+            }
+            match text.parse_float() {
+                Some(v) -> toks.push(Tok.Num(v)),
+                None -> return Err("bad number '{text}'"),
+            }
+        } else if is_alpha(c) {
+            // A word: `sum` is a function name, `b2` is a cell reference,
+            // and `b2x` is nonsense.
+            let mut letters = "";
+            while i < cs.len() && is_alpha(cs[i]) {
+                letters = letters + cs[i];
+                i += 1;
+            }
+            let mut digits = "";
+            while i < cs.len() && is_digit(cs[i]) {
+                digits = digits + cs[i];
+                i += 1;
+            }
+            if digits == "" {
+                toks.push(Tok.Ident(letters.to_lower()));
+            } else if i < cs.len() && is_alpha(cs[i]) {
+                return Err("bad name '{letters}{digits}{cs[i]}...'");
+            } else {
+                toks.push(Tok.Ref(letters.to_upper() + digits));
+            }
+        } else if "+-*/():,".contains(c) {
+            toks.push(Tok.Sym(c));
+            i += 1;
+        } else {
+            return Err("stray character '{c}'");
+        }
+    }
+    Ok(toks)
+}
+
+// Binding power of a (binary) operator symbol; 0 means "not an operator",
+// which conveniently stops the Pratt loop at `)`, `,`, `:` and end of input.
+fn power(op: String) -> Int {
+    match op {
+        "+" | "-" -> 10,
+        "*" | "/" -> 20,
+        _ -> 0,
+    }
+}
+
+struct Parser {
+    toks: List[Tok],
+    pos: Int,
+}
+
+impl Parser {
+    // The symbol under the cursor, or "" when it is not a symbol.
+    fn peek_sym(self) -> String {
+        match self.toks.get(self.pos) {
+            Some(Tok.Sym(s)) -> s,
+            _ -> "",
+        }
+    }
+
+    fn eat(self, sym: String) -> Bool {
+        if self.peek_sym() == sym {
+            self.pos += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn expr_bp(self, min_bp: Int) -> Result[Expr, String] {
+        let mut lhs = self.prefix()?;
+        let mut bp = power(self.peek_sym());
+        while bp >= min_bp && bp > 0 {
+            let op = self.peek_sym();
+            self.pos += 1;
+            let rhs = self.expr_bp(bp + 1)?;
+            lhs = Expr.Bin(op, lhs, rhs);
+            bp = power(self.peek_sym());
+        }
+        Ok(lhs)
+    }
+
+    fn prefix(self) -> Result[Expr, String] {
+        match self.toks.get(self.pos) {
+            None -> Err("formula ended unexpectedly"),
+            Some(t) -> {
+                self.pos += 1;
+                match t {
+                    Tok.Num(v) -> Ok(Expr.Num(v)),
+                    Tok.Ref(a) -> self.ref_or_range(a),
+                    Tok.Ident(name) -> self.call(name),
+                    Tok.Sym(s) -> if s == "-" {
+                        // Unary minus binds tighter than * and /.
+                        Ok(Expr.Neg(self.expr_bp(30)?))
+                    } else if s == "(" {
+                        let inner = self.expr_bp(1)?;
+                        if self.eat(")") { Ok(inner) } else { Err("expected ')'") }
+                    } else {
+                        Err("unexpected '{s}'")
+                    },
+                }
+            },
+        }
+    }
+
+    // After a cell reference, a ':' turns it into a rectangular range.
+    fn ref_or_range(self, from: String) -> Result[Expr, String] {
+        if !self.eat(":") {
+            return Ok(Expr.Ref(from));
+        }
+        match self.toks.get(self.pos) {
+            Some(Tok.Ref(to)) -> {
+                self.pos += 1;
+                Ok(Expr.Rng(from, to))
+            },
+            _ -> Err("expected a cell after ':'"),
+        }
+    }
+
+    // `name` has been consumed; parse `(arg, arg, ...)`.
+    fn call(self, name: String) -> Result[Expr, String] {
+        if !self.eat("(") {
+            return Err("expected '(' after '{name}'");
+        }
+        let args: List[Expr] = [];
+        if self.eat(")") {
+            return Ok(Expr.Call(name, args));
+        }
+        args.push(self.expr_bp(1)?);
+        while self.eat(",") {
+            args.push(self.expr_bp(1)?);
+        }
+        if self.eat(")") {
+            Ok(Expr.Call(name, args))
+        } else {
+            Err("expected ')' or ',' in '{name}(...)'")
+        }
+    }
+}
+
+// Parse one formula body (the text after '='). Fails with a human-readable
+// message on malformed input; the sheet shows those cells as #PARSE!.
+pub fn parse(src: String) -> Result[Expr, String] {
+    let p = Parser { toks: lex(src)?, pos: 0 };
+    let e = p.expr_bp(1)?;
+    if p.pos < p.toks.len() {
+        return Err("unexpected trailing input");
+    }
+    Ok(e)
+}

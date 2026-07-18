@@ -254,7 +254,7 @@ struct GlFns {
     disable: FnDisable,
     // Resolved (and part of the contracted GL 3.3-core table) but not yet
     // called anywhere: no `gfx.*` member currently surfaces raw GL error
-    // state to Fable. Reserved for a fuller `gfx` API.
+    // state to Socrates. Reserved for a fuller `gfx` API.
     #[allow(dead_code)]
     get_error: FnGetError,
     read_pixels: FnReadPixels,
@@ -1023,7 +1023,7 @@ mod tests {
             eprintln!("skipping: $DISPLAY not set");
             return;
         }
-        let inner = match Inner::create("fable window test", 320, 240) {
+        let inner = match Inner::create("socrates window test", 320, 240) {
             Ok(inner) => inner,
             Err(e) => {
                 eprintln!("skipping: {e}");

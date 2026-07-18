@@ -1,5 +1,5 @@
-//! The golden-test runner: any `.fable` file with expectation directives in
-//! its comments is a test. Shared by the `fable test` CLI command and the
+//! The golden-test runner: any `.soc` file with expectation directives in
+//! its comments is a test. Shared by the `socrates test` CLI command and the
 //! interpreter's own spec suite.
 //!
 //! Directives (each on its own line, anywhere in the file):
@@ -34,7 +34,7 @@ pub struct Directives {
 }
 
 /// Per-line lexical mode for the directive scanner. Strings (and their
-/// interpolation holes) cannot span lines in Fable, so only the block-comment
+/// interpolation holes) cannot span lines in Socrates, so only the block-comment
 /// depth carries across lines.
 enum ScanMode {
     /// Inside a string literal.
@@ -46,7 +46,7 @@ enum ScanMode {
 
 /// Where the line's directive comment starts, if any.
 ///
-/// Tracks just enough of Fable's lexical structure to be truthful: string
+/// Tracks just enough of Socrates's lexical structure to be truthful: string
 /// literals (with `\` escapes), strings nested inside `{ .. }` interpolation
 /// holes (to arbitrary depth), and nested `/* */` block comments — whose
 /// depth persists across lines via `block_depth`. A directive is a **line**
@@ -134,16 +134,16 @@ pub fn parse_directives(text: &str) -> Directives {
     d
 }
 
-/// Recursively collect `.fable` files under `dir` (sorted for determinism).
-pub fn collect_fable_files(dir: &Path, out: &mut Vec<PathBuf>) {
+/// Recursively collect `.soc` files under `dir` (sorted for determinism).
+pub fn collect_socrates_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     let mut entries: Vec<_> = entries.flatten().collect();
     entries.sort_by_key(|e| e.path());
     for e in entries {
         let p = e.path();
         if p.is_dir() {
-            collect_fable_files(&p, out);
-        } else if p.extension().is_some_and(|x| x == "fable") {
+            collect_socrates_files(&p, out);
+        } else if p.extension().is_some_and(|x| x == "soc") {
             out.push(p);
         }
     }
@@ -174,7 +174,7 @@ pub enum CheckOutcome {
 pub fn check_or_bless(path: &Path, bless: bool) -> Result<CheckOutcome, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("read failed: {e}"))?;
     let d = parse_directives(&text);
-    // Path-based so `import` resolves sibling files and FABLE_PATH.
+    // Path-based so `import` resolves sibling files and SOCRATES_PATH.
     let outcome = crate::run_capture_path(path);
 
     let stdout = match outcome {
@@ -320,7 +320,7 @@ pub struct TestReport {
     pub blessed: Vec<(PathBuf, usize)>,
 }
 
-/// Run every `.fable` file under the given paths (files are taken as-is,
+/// Run every `.soc` file under the given paths (files are taken as-is,
 /// directories are walked) and report failures.
 pub fn run_test_paths(paths: &[PathBuf]) -> TestReport {
     run_test_paths_bless(paths, false)
@@ -331,7 +331,7 @@ pub fn run_test_paths_bless(paths: &[PathBuf], bless: bool) -> TestReport {
     let mut files = Vec::new();
     for p in paths {
         if p.is_dir() {
-            collect_fable_files(p, &mut files);
+            collect_socrates_files(p, &mut files);
         } else {
             files.push(p.clone());
         }

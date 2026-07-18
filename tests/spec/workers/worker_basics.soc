@@ -1,0 +1,35 @@
+// Workers (v0.7): OS-thread isolates joined by string channels.
+// spawn resolves the file relative to this script, like an import.
+
+let w = worker.spawn("echo_worker.soc", ["up"]).unwrap();
+println("{w}");                    //? expect: <worker>
+
+// send returns true while the worker is listening.
+println(w.send("one"));            //? expect: true
+println(w.send("two"));            //? expect: true
+
+// recv blocks until the worker replies; messages arrive in order.
+println(w.recv());                 //? expect: Some("up: one")
+println(w.recv().unwrap());        //? expect: up: two
+
+// join hangs up our send side (the worker's recv sees None and it exits),
+// waits for it to finish, and reports the outcome.
+println(w.join());                 //? expect: Ok(())
+
+// After join: sends are refused, the queue is drained, join is cached.
+println(w.send("three"));          //? expect: false
+println(w.recv());                 //? expect: None
+println(w.join());                 //? expect: Ok(())
+
+// Workers run in parallel, each with its own heap and GC. Summing
+// 1..=100000 split across two isolates: results come back as strings.
+let a = worker.spawn("sum_worker.soc", ["1", "50000"]).unwrap();
+let b = worker.spawn("sum_worker.soc", ["50001", "100000"]).unwrap();
+let total = a.recv().unwrap().parse_int().unwrap()
+    + b.recv().unwrap().parse_int().unwrap();
+println(total);                    //? expect: 5000050000
+println(a.join());                 //? expect: Ok(())
+println(b.join());                 //? expect: Ok(())
+
+// is_worker distinguishes the two sides; this script is not a worker.
+println(worker.is_worker());       //? expect: false

@@ -1,21 +1,21 @@
-# mdsite — a static site generator written in Fable
+# mdsite — a static site generator written in Socrates
 
 A small, complete static site generator: it reads Markdown pages from
 `content/`, converts them to HTML with a hand-written line-based
 converter, wraps each page in a shared template whose navigation bar is
 generated from the page list, writes the finished site to `out/`, and
-prints a build report. About 500 lines of Fable across four files.
+prints a build report. About 500 lines of Socrates across four files.
 
 ## Run it
 
 From the repository root:
 
 ```sh
-./target/release/fable demos/mdsite/main.fable   # build the site into out/
-./target/release/fable test demos/mdsite         # golden tests (report + converter)
+./target/release/socrates demos/mdsite/main.soc   # build the site into out/
+./target/release/socrates test demos/mdsite         # golden tests (report + converter)
 ```
 
-(`main.fable` also works with `demos/mdsite/` as the working directory.)
+(`main.soc` also works with `demos/mdsite/` as the working directory.)
 Open `demos/mdsite/out/index.html` in a browser to see the result; the
 generated pages are committed as sample output.
 
@@ -26,11 +26,11 @@ mdsite: building 3 pages  content/ -> out/
 
   source           title               words  bytes
   ------           -----               -----  -----
-  index.md         Welcome to mdsite     140   2602
-  about.md         About                 139   2762
-  hello-fable.md   Hello, Fable          178   2978
+  index.md         Welcome to mdsite     140   2618
+  about.md         About                 139   2774
+  hello-socrates.md Hello, Socrates       178   2990
 
-  wrote 3 pages, 8342 bytes of HTML
+  wrote 3 pages, 8382 bytes of HTML
   3/3 pages byte-identical to the committed out/
 ```
 
@@ -47,7 +47,7 @@ And an excerpt of the HTML it produces (`out/about.html`):
 <main>
 <h1>About</h1>
 <ul>
-  <li><code>markdown.fable</code> — a line-based Markdown-to-HTML converter</li>
+  <li><code>markdown.soc</code> — a line-based Markdown-to-HTML converter</li>
   ...
 </ul>
 <p>... text like 2 &lt; 3, AT&amp;T, and &lt;em&gt;this fake tag&lt;/em&gt; ...</p>
@@ -61,16 +61,16 @@ And an excerpt of the HTML it produces (`out/about.html`):
   unmatched delimiters fall back to literal text
 - unordered lists (`- item`)
 - fenced code blocks with an optional language
-  (` ```fable ` → `class="language-fable"`)
+  (` ```soc ` → `class="language-soc"`)
 - HTML metacharacters are escaped everywhere; code spans and code
   blocks are opaque to further markup
 
-## How it maps onto Fable
+## How it maps onto Socrates
 
-| Generator concept | Fable feature |
+| Generator concept | Socrates feature |
 |---|---|
 | filesystem walk & output | `fs.list_dir` / `fs.read` / `fs.write` / `fs.create_dir` |
-| error plumbing | `Result[T, String]` + the `?` operator; one `match` at the bottom of `main.fable` handles every I/O failure |
+| error plumbing | `Result[T, String]` + the `?` operator; one `match` at the bottom of `main.soc` handles every I/O failure |
 | slugs and extensions | `std.path` (`ext`, `strip_ext`, `join`) |
 | line splitting, word counts | `std.strings` (`lines`, `words`) |
 | inline-markup scanning | a char-index cursor over the string itself: `index_of_from` / `slice` (before v0.6 this needed hand-rolled `matches_at`/`find_at` helpers over an exploded char list); missing delimiters propagate via `?` inside `parse_link` |
@@ -81,12 +81,12 @@ And an excerpt of the HTML it produces (`out/about.html`):
 
 Files:
 
-- `markdown.fable` — escaping, the inline-span scanner, the block-level
+- `markdown.soc` — escaping, the inline-span scanner, the block-level
   state machine (`to_html`), and `first_heading` for titles
-- `site.fable` — the `Page` struct, nav builder, HTML shell, and CSS
-- `main.fable` — the driver and build report; its full output is pinned
+- `site.soc` — the `Page` struct, nav builder, HTML shell, and CSS
+- `main.soc` — the driver and build report; its full output is pinned
   by `//? expect:` directives
-- `spec.fable` — 25 golden checks for the converter, including edge
+- `spec.soc` — 25 golden checks for the converter, including edge
   cases (unclosed delimiters, `#######`, unterminated fences, and the
   accumulator edges pinned across the v0.7 Builder refactor: the empty
   document, spans crossing joined paragraph lines, a code block whose

@@ -2,7 +2,7 @@
 
 The demos in this directory were written against **v0.5** by ten authors
 working independently, each with the same brief: build something real, use
-the prebuilt interpreter, pin your output with `fable test` directives, and
+the prebuilt interpreter, pin your output with `socrates test` directives, and
 report every place the language fights you. Each demo was then verified by
 a separate reviewer following only its README. This file is the triage of
 their combined reports — every issue, and what happened to it.
@@ -15,8 +15,8 @@ strongest possible signal. Those walls became **v0.6**.
 | Issue | Reported by | Fix |
 |-------|-------------|-----|
 | `math.seed` collapsed adjacent seeds: state was `seed \| 1`, so seeds 2k and 2k+1 produced **identical** streams (seed-42 and seed-43 dungeons compared equal), and nearby seeds barely diverged. | dungeon (its "different seeds ⇒ different dungeons" golden test failed) | Seeds now pass through a SplitMix64 scramble (`src/vm.rs`). Same seed still reproduces exactly; adjacent seeds are unrelated. Seeded streams are **not** stable across releases — dungeon and wfc re-pinned their goldens. |
-| The `fable test` directive scanner matched `//?` anywhere in a line — including inside string literals and in the prose of ordinary comments — injecting phantom expectations with a baffling "output mismatch". Three authors were bitten by comments *about* directives. | lisp, regex, sudoku | A directive now counts only when `//?` **begins the line's comment**, with enough string-awareness to skip `//` inside quotes (`src/testing.rs`); `tests/spec/lexical/directive_scanner.fable` pins it. |
-| Struct-literal field shorthand `P { x, y }` was implemented (and `fable fmt` even canonicalized *into* it) but absent from the normative spec — five authors independently flagged the mismatch and avoided the feature. | lisp, regex, dungeon, checkers, wfc | Documented in SPEC §2.3 and the grammar. (One report claimed shorthand *failed* to parse inside a function body; that repro was tested and works — misattributed.) |
+| The `socrates test` directive scanner matched `//?` anywhere in a line — including inside string literals and in the prose of ordinary comments — injecting phantom expectations with a baffling "output mismatch". Three authors were bitten by comments *about* directives. | lisp, regex, sudoku | A directive now counts only when `//?` **begins the line's comment**, with enough string-awareness to skip `//` inside quotes (`src/testing.rs`); `tests/spec/lexical/directive_scanner.soc` pins it. |
+| Struct-literal field shorthand `P { x, y }` was implemented (and `socrates fmt` even canonicalized *into* it) but absent from the normative spec — five authors independently flagged the mismatch and avoided the feature. | lisp, regex, dungeon, checkers, wfc | Documented in SPEC §2.3 and the grammar. (One report claimed shorthand *failed* to parse inside a function body; that repro was tested and works — misattributed.) |
 
 ## Ergonomics — added in v0.6
 
@@ -24,7 +24,7 @@ strongest possible signal. Those walls became **v0.6**.
 |-----|-------------|----------------|
 | Tuple destructuring in `for` heads (`enumerate`/`zip`/`entries` all yield pairs; every loop cost a `let (a, b) = pair;` line) | **8 of 10 demos** — the most-reported issue | `for` heads take any irrefutable pattern: `for (i, x) in xs.enumerate()`, nested tuples, `_`. |
 | Bare `return`/`break`/`continue` as match-arm bodies (interpreters early-exit from arms constantly; the block form was pure ceremony and the parse error cascaded) | lisp, regex | Legal as sugar for the one-statement block. Assignment arms stay errors, now with a targeted hint. |
-| `while true { .. }` not recognized as diverging (functions needed a dead `None // unreachable` after the loop — std/iter.fable itself carried the wart) | wfc + its verifier | A trailing escape-free `while true` diverges; `os.exit` also typechecks anywhere, like `panic`. |
+| `while true { .. }` not recognized as diverging (functions needed a dead `None // unreachable` after the loop — std/iter.soc itself carried the wart) | wfc + its verifier | A trailing escape-free `while true` diverges; `os.exit` also typechecks anywhere, like `panic`. |
 | `_` as a discard binder in lambdas and loops | checkers, sudoku, wfc | `(0..81).map(\|_\| 0)` and `for _ in 0..3` both work. |
 | `trim_start` / `trim_end` (four demos hand-rolled an O(n²) rtrim from `slice` to keep goldens clean) | lisp, spreadsheet, dungeon, checkers, wfc | Added, Unicode-whitespace, alongside `trim`. |
 | Fixed-precision float formatting (three demos hand-rolled multiply-round-divide, which misrounds 1.005 and can't pad) | spreadsheet, csvql, plot | `Float.to_fixed(n)` — exactly n places, no `-0.00`. |
@@ -32,7 +32,7 @@ strongest possible signal. Those walls became **v0.6**.
 | Substring search from an offset (hand-written scanners exploded strings into char lists to get a cursor) | mdsite | `s.index_of_from(pat, from)` — char indices, like every string index. |
 | Integer randoms (`lo + (random() * span).to_int()` is easy to get subtly wrong) | dungeon, wfc | `math.rand_int(lo, hi)`, inclusive, panics on an empty range. |
 | `math.log10`, float remainder | plot | `math.log10`, `math.fmod`. `%` stays Int-only by design. |
-| The fixed 4,096-frame call-depth cap (deep spreadsheet dependency chains and long regex inputs hit it legitimately) | spreadsheet, regex | `FABLE_MAX_DEPTH` env var (floor 64). The default stays; `try()` still catches overflow. |
+| The fixed 4,096-frame call-depth cap (deep spreadsheet dependency chains and long regex inputs hit it legitimately) | spreadsheet, regex | `SOCRATES_MAX_DEPTH` env var (floor 64). The default stays; `try()` still catches overflow. |
 
 ## Diagnostics and tooling — sharpened in v0.6
 
@@ -41,12 +41,12 @@ strongest possible signal. Those walls became **v0.6**.
   (csvql).
 - `Some(v) -> i = v` now says assignment can't be an arm body and shows the
   block form (mdsite).
-- `x << 1` now gets "Fable has no bitwise shift operators" from the lexer
+- `x << 1` now gets "Socrates has no bitwise shift operators" from the lexer
   instead of a bare "expected an expression" (sudoku).
-- `fable test` golden comparison ignores trailing whitespace on both sides —
+- `socrates test` golden comparison ignores trailing whitespace on both sides —
   trailing spaces in a directive are invisible in an editor and could never
   be pinned reliably (checkers).
-- `fable test --help` (or any unknown flag) prints usage and exits 64
+- `socrates test --help` (or any unknown flag) prints usage and exits 64
   instead of silently testing the whole working directory (dungeon's
   verifier).
 - Spec gaps closed in `docs/SPEC.md`: `sort`/`sort_by` documented **stable**
@@ -64,7 +64,7 @@ strongest possible signal. Those walls became **v0.6**.
   design decision with interpolation interactions — deferred whole, not
   half-designed.
 - **A line-width-aware formatter.** The single most-reported *tooling*
-  issue: `fable fmt` collapses deliberate multi-line literals (a 57-entry
+  issue: `socrates fmt` collapses deliberate multi-line literals (a 57-entry
   test table became one 1,427-char line), hoists comments out of list
   literals, and half-expands if/else-if chains. This is a genuine
   limitation and staying on the list — but it's a formatter rewrite, not a
@@ -75,7 +75,7 @@ strongest possible signal. Those walls became **v0.6**.
   (`Map[K, Bool]`, a fold, `(0..n).map(|_| v)` — nicer now with `_`, a
   list-plus-cursor queue). Builtin surface grows reluctantly; `std` is the
   natural home for several of these when usage demands.
-- **`fable test` counts directive-less files as passing** (lisp's
+- **`socrates test` counts directive-less files as passing** (lisp's
   verifier). Kept: "a file with no directives must run silently" is
   documented semantics and useful for smoke-running libraries; a mistyped
   directive fails loudly the moment output exists.
@@ -92,7 +92,7 @@ diff itself. Confirmed findings, all fixed in the same release:
   directive silently vanish** — a false *pass* — and wasn't
   block-comment-aware either. The scanner now models strings, holes (to
   arbitrary depth), and nested `/* */` comments across lines, and the edge
-  cases are pinned in `tests/spec/lexical/directive_scanner_edge.fable`.
+  cases are pinned in `tests/spec/lexical/directive_scanner_edge.soc`.
 - Typing `os.exit` like `panic` regressed the REPL: a bare `os.exit(0)`
   produced "cannot infer the type of `__repl_1`" instead of exiting. The
   panic-result Unit-defaulting rule now covers it.
@@ -103,9 +103,9 @@ diff itself. Confirmed findings, all fixed in the same release:
   arm's pattern as its "value" and produced misleading cascades (never a
   silent misparse); it now gets a targeted diagnostic. Compound
   assignments (`+=`) in arm bodies get the same hint plain `=` does.
-- `fable fmt` erased the new arm sugar back to block form; arms remember
-  they were written bare and round-trip. `fable test --` ends flag
-  parsing; malformed `FABLE_MAX_DEPTH` warns instead of silently using
+- `socrates fmt` erased the new arm sugar back to block form; arms remember
+  they were written bare and round-trip. `socrates test --` ends flag
+  parsing; malformed `SOCRATES_MAX_DEPTH` warns instead of silently using
   the default (and the SPEC documents the native-callback caveat of huge
   caps).
 
@@ -113,13 +113,13 @@ diff itself. Confirmed findings, all fixed in the same release:
 
 - lisp: double interpretation runs ~40–50k evals/sec in the release build;
   the 100k-iteration tail-recursive Lisp loop dominates its 2.3s runtime —
-  and runs in constant stack because Fable's TCO reaches through `eval`.
+  and runs in constant stack because Socrates's TCO reaches through `eval`.
 - checkers: ~38k search nodes/sec (507k nodes for the 106-ply game, ~13.5s)
   using the apply/undo pattern over one shared board.
 - wfc: full-rescan WFC over 4,800 cells took 19.5s (~3–6M interpreted
   ops/sec); map lookups with interpolated string keys measured at ~0.36s
   per million — composite string keys are a fine idiom.
-- Everything above survives `FABLE_GC_STRESS=1` byte-identically.
+- Everything above survives `SOCRATES_GC_STRESS=1` byte-identically.
 
 ---
 
@@ -135,9 +135,9 @@ before integration. Distilled best practices: [`STYLE.md`](STYLE.md).
 
 | Issue | Reported by | Fix |
 |-------|-------------|-----|
-| Method call on a module-qualified `pub let` member misresolved as an enum path (`m.answer.to_float()` → E0413 "no enum `answer`"; parens didn't help) | synthwave, checkers | The `alias.Enum.Variant` special case now falls through to ordinary field/method dispatch when the middle segment is a value member; E0413 fires only when it is neither. Regression: `tests/spec/module_system/module_member_methods.fable` |
-| `worker.spawn` resolved relative files against the wrong directory whenever the entry script had any import (base came from `sources[0]` = first *loaded* module) | swarm | `Vm.entry_dir` is now set explicitly by every runner; spawn resolves against the true entry script's directory. Regression: `tests/spec/workers/spawn_with_import.fable` |
-| `fable fmt` silently formatted only its first file argument (exit 0, no diagnostic) | synthwave, reversi, spreadsheet, csvql | `fable fmt [-w] [--width N] <file>...` now formats every argument |
+| Method call on a module-qualified `pub let` member misresolved as an enum path (`m.answer.to_float()` → E0413 "no enum `answer`"; parens didn't help) | synthwave, checkers | The `alias.Enum.Variant` special case now falls through to ordinary field/method dispatch when the middle segment is a value member; E0413 fires only when it is neither. Regression: `tests/spec/module_system/module_member_methods.soc` |
+| `worker.spawn` resolved relative files against the wrong directory whenever the entry script had any import (base came from `sources[0]` = first *loaded* module) | swarm | `Vm.entry_dir` is now set explicitly by every runner; spawn resolves against the true entry script's directory. Regression: `tests/spec/workers/spawn_with_import.soc` |
+| `socrates fmt` silently formatted only its first file argument (exit 0, no diagnostic) | synthwave, reversi, spreadsheet, csvql | `socrates fmt [-w] [--width N] <file>...` now formats every argument |
 | The formatter evicted comments living inside bracketed literals, dumping them orphaned after the statement | reversi, regex, csvql | Interior comments now pin the broken element-per-line layout with each comment kept in place — which is also the official escape hatch for meaning-bearing 2-D layout (wfc's training samples) |
 | Value-position `if/else-if` chains broke despite fitting in 100 columns, and asymmetrically (first branch blockified, rest inline) | synthwave, reversi, csvql | Chains that fit stay on one line; chains that don't break all branches consistently |
 
@@ -157,7 +157,7 @@ These are the v0.8 candidates, roughly in order of observed pain:
 - **Logical right shift** (×3: reversi, sudoku, checkers-docs): `>>` is
   arithmetic; unsigned-bitfield code re-masks after every shift, and the
   obvious mask `(1 << 64 - k) - 1` panics at k = 1. A `>>>` operator or
-  `ushr` intrinsic; `reversi/bits.fable` is the interim reference.
+  `ushr` intrinsic; `reversi/bits.soc` is the interim reference.
 - **Bitwise compound assignment** (×3: reversi, sudoku, wfc): `|=` `&=`
   `^=` `<<=` `>>=` to match the arithmetic set.
 - **`while let` / `if let`** (×3: dungeon, mdsite, parmandel): the
@@ -172,7 +172,7 @@ These are the v0.8 candidates, roughly in order of observed pain:
   writes the same `re.zip(im).map(|p| ...)` power/magnitude line.
 - Singles worth noting: worker `try_recv`/select (swarm — the dynamic
   scheduler workaround is documented in its README), `lists` key-based
-  `max_by_key` (spectra), `fable test --bless` re-pinning mode (bloom),
+  `max_by_key` (spectra), `socrates test --bless` re-pinning mode (bloom),
   module-level constants / lazy statics (lisp), a counting-map helper
   (checkers), `Range.all/any` (sudoku), 32-bit wrapping multiply for
   hash finalizers (bloom), ergonomic `std.json` construction (swarm).
@@ -216,7 +216,7 @@ Genuinely resolved in v0.8:
 | fft magnitude helper | `fft.magnitude(re, im) -> List[Float]` |
 | worker `try_recv` | Non-blocking `recv`, `Option[Option[String]]` (not-ready / hung-up / message) — covers the polling need directly; no separate `select` |
 | `lists` key-based `max_by_key`/`min_by_key` | Int-valued key extractor, alongside the existing comparator-based `max_by`/`min_by` |
-| `fable test --bless` | Rewrites mismatched `//? expect:` lines in place when the actual/expected line count already agrees; a count change (a print statement added or removed) still fails normally — deciding which new line pairs with which directive needs a human |
+| `socrates test --bless` | Rewrites mismatched `//? expect:` lines in place when the actual/expected line count already agrees; a count change (a print statement added or removed) still fails normally — deciding which new line pairs with which directive needs a human |
 | module-level lazy statics | `std.lazy`: `Lazy[T]`, `of(thunk)`, `.get()` (computes once, caches), `.is_forced()`. (Eager module-level `let` already built once at import, per STYLE.md § 6 — this adds the deferred half.) |
 | `Range.all`/`any` | Short-circuiting, matching `List`'s; previously reachable only via `.to_list().any(..)` |
 | 32-bit wrapping multiply | General `wrapping_add`/`wrapping_sub`/`wrapping_mul` (64-bit) — a 32-bit wrap is `a.wrapping_mul(b) & 0xFFFFFFFF`; one primitive, not a second 32-bit-specific intrinsic |
@@ -229,7 +229,7 @@ Genuinely resolved in v0.8:
   across the codebase to justify a named primitive. `std` grows reluctantly
   (v0.6/v0.7's own rule) — revisit if more than one demo asks.
 
-### The v0.8 adoption gap, closed (v0.9 minification pass, W1c)
+### The feature-queue adoption gap, closed (v0.8 minification pass, W1c)
 
 The v0.8 queue's features shipped, but several of the demos that asked
 for them never switched over — the hand-rolled versions stayed behind.
@@ -259,22 +259,22 @@ printed lines: `bloom`'s popcount line now names the `count_ones`
 intrinsic, `synthwave`'s decoded-header line now names the native LE
 readers). Standing divergences:
 
-- `bloom/bloom.fable` `bit_string` — diverges from § 6's `push_joined`
+- `bloom/bloom.soc` `bit_string` — diverges from § 6's `push_joined`
   rule: the body is an alloc-free `push_char` loop and the manual
   separator gate keeps it allocation-free; `push_joined` would need a
   String piece per byte.
-- `wfc/wfc.fable` `lowest_entropy` — R1 hot-path exemption: the
+- `wfc/wfc.soc` `lowest_entropy` — R1 hot-path exemption: the
   hottest loop in the demo; `enumerate()`/`min_by` allocate per
   element, the hand scan with two locals allocates nothing. The same
   file's `support()` keeps `r.mask(s, d)` inlined (with its `|=`
   accumulator) for the same hot-loop reason, per its in-place comment.
-- `sudoku/solver.fable` `best_cell` — R1 early-exit exemption: the
+- `sudoku/solver.soc` `best_cell` — R1 early-exit exemption: the
   scan breaks as soon as a 2-candidate cell appears, which no
   aggregate spelling can express.
-- `checkers/engine.fable` `best_move` — R1 exemption: each candidate's
+- `checkers/engine.soc` `best_move` — R1 exemption: each candidate's
   score is a full apply/negamax/undo on the shared board interleaved
   with the alpha update; an aggregate cannot express the side effects
   or the pruning.
-- `swarm/crunch_worker.fable` `collatz_champion` — R1 allocation
+- `swarm/crunch_worker.soc` `collatz_champion` — R1 allocation
   exemption: `max_by_key` would materialize a `(n, steps)` pair list
   per job inside the worker's hot loop.

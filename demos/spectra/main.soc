@@ -1,0 +1,230 @@
+// spectra — a chord analyzer built on fft.rfft.
+//
+// Chords are synthesized as sums of sinusoids in 5-limit just intonation
+// on C4 = 240 Hz, sampled for exactly one second (n samples at a nominal
+// n Hz), so every chord tone lands on an exact integer rfft bin — no
+// spectral leakage, no window function needed. The analyzer then works
+// backwards from the spectrum alone: an ASCII bar spectrogram, the
+// dominant bin via std.lists.max_by, a hand-rolled top-k over bin powers,
+// and chord naming by gcd-reduced integer frequency ratios (just
+// intonation makes 4:5:6 / 10:12:15 / 2:3 exact).
+//
+//   ./target/release/socrates demos/spectra/main.soc   # from the repo root
+//   ./target/release/socrates test demos/spectra         # golden tests
+//
+// Determinism: pinned lines are derived integers (bins, ratios, bar
+// heights) and to_fixed values; every check against libm noise is a
+// Bool at a 1e-9 tolerance. Raw sin/sqrt output is never printed.
+
+import dsp;
+import std.lists;
+
+// The just scale on C4 = 240 Hz. Only tones the demo actually plays.
+let note_names = {
+    180: "G3",
+    200: "A3",
+    225: "B3",
+    240: "C4",
+    270: "D4",
+    300: "E4",
+    320: "F4",
+    360: "G4",
+    400: "A4",
+    450: "B4",
+    480: "C5",
+};
+
+// Chord shapes as gcd-reduced frequency ratios (just intonation).
+let qualities = {"4:5:6": "major", "10:12:15": "minor", "2:3": "fifth"};
+
+// Analyze one synthesized chord and return the verdict line.
+fn analyze(id: Int, title: String, partials: List[(Int, Float)], n: Int) -> String {
+    println("== chord {id}: {title} (n = {n}) ==");
+    let plist = partials.map(|p| "{p.0} Hz x{p.1.to_fixed(2)}").join("  ");
+    println("partials: {plist}");
+
+    let x = dsp.synth(partials, n);
+    let power = dsp.power_spectrum(x);
+    power[0] = 0.0; // the analyzer ignores DC
+    println(dsp.spectrogram(power, 8));
+
+    // Strongest bin: std.lists.max_by under the sort_by comparator convention.
+    let dom = lists.max_by(power.enumerate(), dsp.by_power).unwrap();
+    println(
+        "dominant (std.lists.max_by): bin {dom.0} = {dom.0} Hz, mag {dom.1.sqrt().to_fixed(3)}",
+    );
+
+    // How many real partials? Exact-bin synthesis leaves the noise floor
+    // ~13 orders of magnitude down, so "mag >= 1% of peak" separates cleanly.
+    let mut count = 0;
+    for p in power {
+        if p >= dom.1 * 0.0001 {
+            count += 1;
+        }
+    }
+    let peaks = dsp.top_k(power, count);
+    let ptxt = peaks.map(|p| "{p.0} ({p.1.sqrt().to_fixed(3)})").join("  ");
+    println("top-{count} bins by power: {ptxt}");
+
+    // Sort the peak bins ascending and divide out the tuning.
+    let bins = peaks.map(|p| p.0).sort();
+    let g = bins.fold(0, dsp.gcd);
+    let ratio = dsp.reduce_ratio(bins).map(str).join(":");
+    let btxt = bins.map(str).join(":");
+    println("ratio {btxt} / gcd {g} = {ratio}");
+    let root = note_names.get(bins[0]).unwrap_or("?");
+    let verdict = match qualities.get(ratio) {
+        Some(q) -> "{root} {q}",
+        None -> "unrecognized ({ratio})",
+    };
+    println("chord: {verdict}");
+
+    // Parseval: sum x[t]^2 == (1/n) * sum |X[k]|^2 over the full fft.
+    let (fr, fi) = fft.fft(x, lists.fill(n, 0.0));
+    let e_time = x.fold(0.0, |a, v| a + v * v);
+    let e_freq = fr.zip(fi).fold(0.0, |a, p| a + p.0 * p.0 + p.1 * p.1) / n.to_float();
+    let parseval_ok = (e_time - e_freq).abs() / e_time < 1e-9;
+
+    // Round trip: ifft(fft(x)) must reproduce x (and a ~zero imaginary part).
+    let (br, bi) = fft.ifft(fr, fi);
+    let mut worst = 0.0;
+    for t in 0..n {
+        worst = worst.max((br[t] - x[t]).abs());
+        worst = worst.max(bi[t].abs());
+    }
+    let roundtrip_ok = worst < 1e-9;
+
+    // rfft must be exactly the first n/2 + 1 bins of the full fft.
+    let (rr, ri) = fft.rfft(x);
+    let mut rdiff = 0.0;
+    for i in 0..rr.len() {
+        rdiff = rdiff.max((rr[i] - fr[i]).abs());
+        rdiff = rdiff.max((ri[i] - fi[i]).abs());
+    }
+    let half_ok = rdiff < 1e-9;
+
+    let e = e_time.to_fixed(3);
+    println("energy {e} | parseval@1e-9 {parseval_ok} | ifft(fft) roundtrip@1e-9 {roundtrip_ok} | rfft==fft {half_ok}");
+    println("");
+    verdict
+}
+
+println("spectra — a chord analyzer on fft.rfft");
+println("window: one second (n samples at n Hz), so bin k is exactly k Hz — zero leakage");
+println("tuning: 5-limit just intonation on C4 = 240 Hz; every chord tone is an integer bin");
+println("");
+
+let verdicts = [];
+verdicts.push(
+    analyze(1, "major triad, root position", [(240, 1.0), (300, 0.75), (360, 0.5)], 1024),
+);
+verdicts.push(
+    analyze(2, "minor triad, root position", [(200, 1.0), (240, 0.75), (300, 0.5)], 1024),
+);
+verdicts.push(analyze(3, "bare power chord", [(180, 1.0), (270, 0.7)], 1024));
+verdicts.push(
+    analyze(4, "a shape the table cannot name", [(240, 1.0), (300, 0.75), (375, 0.5)], 1024),
+);
+verdicts.push(
+    analyze(5, "major triad on a Bluestein length", [(180, 1.0), (225, 0.75), (270, 0.5)], 600),
+);
+
+let recap = verdicts.join(" | ");
+println("verdicts: {recap}");
+
+// Golden output (checked by `./target/release/socrates test demos/spectra`):
+//? expect: spectra — a chord analyzer on fft.rfft
+//? expect: window: one second (n samples at n Hz), so bin k is exactly k Hz — zero leakage
+//? expect: tuning: 5-limit just intonation on C4 = 240 Hz; every chord tone is an integer bin
+//? expect:
+//? expect: == chord 1: major triad, root position (n = 1024) ==
+//? expect: partials: 240 Hz x1.00  300 Hz x0.75  360 Hz x0.50
+//? expect:  512.0 |                              #                                  |
+//? expect:  448.0 |                              #                                  |
+//? expect:  384.0 |                              #      #                           |
+//? expect:  320.0 |                              #      #                           |
+//? expect:  256.0 |                              #      #       #                   |
+//? expect:  192.0 |                              #      #       #                   |
+//? expect:  128.0 |                              #      #       #                   |
+//? expect:   64.0 |                              #      #       #                   |
+//? expect:        +-----------------------------------------------------------------+
+//? expect:         0               128             256             384             512
+//? expect: dominant (std.lists.max_by): bin 240 = 240 Hz, mag 512.000
+//? expect: top-3 bins by power: 240 (512.000)  300 (384.000)  360 (256.000)
+//? expect: ratio 240:300:360 / gcd 60 = 4:5:6
+//? expect: chord: C4 major
+//? expect: energy 928.000 | parseval@1e-9 true | ifft(fft) roundtrip@1e-9 true | rfft==fft true
+//? expect:
+//? expect: == chord 2: minor triad, root position (n = 1024) ==
+//? expect: partials: 200 Hz x1.00  240 Hz x0.75  300 Hz x0.50
+//? expect:  512.0 |                         #                                       |
+//? expect:  448.0 |                         #                                       |
+//? expect:  384.0 |                         #    #                                  |
+//? expect:  320.0 |                         #    #                                  |
+//? expect:  256.0 |                         #    #      #                           |
+//? expect:  192.0 |                         #    #      #                           |
+//? expect:  128.0 |                         #    #      #                           |
+//? expect:   64.0 |                         #    #      #                           |
+//? expect:        +-----------------------------------------------------------------+
+//? expect:         0               128             256             384             512
+//? expect: dominant (std.lists.max_by): bin 200 = 200 Hz, mag 512.000
+//? expect: top-3 bins by power: 200 (512.000)  240 (384.000)  300 (256.000)
+//? expect: ratio 200:240:300 / gcd 20 = 10:12:15
+//? expect: chord: A3 minor
+//? expect: energy 928.000 | parseval@1e-9 true | ifft(fft) roundtrip@1e-9 true | rfft==fft true
+//? expect:
+//? expect: == chord 3: bare power chord (n = 1024) ==
+//? expect: partials: 180 Hz x1.00  270 Hz x0.70
+//? expect:  512.0 |                      #                                          |
+//? expect:  448.0 |                      #                                          |
+//? expect:  384.0 |                      #          #                               |
+//? expect:  320.0 |                      #          #                               |
+//? expect:  256.0 |                      #          #                               |
+//? expect:  192.0 |                      #          #                               |
+//? expect:  128.0 |                      #          #                               |
+//? expect:   64.0 |                      #          #                               |
+//? expect:        +-----------------------------------------------------------------+
+//? expect:         0               128             256             384             512
+//? expect: dominant (std.lists.max_by): bin 180 = 180 Hz, mag 512.000
+//? expect: top-2 bins by power: 180 (512.000)  270 (358.400)
+//? expect: ratio 180:270 / gcd 90 = 2:3
+//? expect: chord: G3 fifth
+//? expect: energy 762.880 | parseval@1e-9 true | ifft(fft) roundtrip@1e-9 true | rfft==fft true
+//? expect:
+//? expect: == chord 4: a shape the table cannot name (n = 1024) ==
+//? expect: partials: 240 Hz x1.00  300 Hz x0.75  375 Hz x0.50
+//? expect:  512.0 |                              #                                  |
+//? expect:  448.0 |                              #                                  |
+//? expect:  384.0 |                              #      #                           |
+//? expect:  320.0 |                              #      #                           |
+//? expect:  256.0 |                              #      #        #                  |
+//? expect:  192.0 |                              #      #        #                  |
+//? expect:  128.0 |                              #      #        #                  |
+//? expect:   64.0 |                              #      #        #                  |
+//? expect:        +-----------------------------------------------------------------+
+//? expect:         0               128             256             384             512
+//? expect: dominant (std.lists.max_by): bin 240 = 240 Hz, mag 512.000
+//? expect: top-3 bins by power: 240 (512.000)  300 (384.000)  375 (256.000)
+//? expect: ratio 240:300:375 / gcd 15 = 16:20:25
+//? expect: chord: unrecognized (16:20:25)
+//? expect: energy 928.000 | parseval@1e-9 true | ifft(fft) roundtrip@1e-9 true | rfft==fft true
+//? expect:
+//? expect: == chord 5: major triad on a Bluestein length (n = 600) ==
+//? expect: partials: 180 Hz x1.00  225 Hz x0.75  270 Hz x0.50
+//? expect:  300.0 |                      #               |
+//? expect:  262.5 |                      #               |
+//? expect:  225.0 |                      #     #         |
+//? expect:  187.5 |                      #     #         |
+//? expect:  150.0 |                      #     #    #    |
+//? expect:  112.5 |                      #     #    #    |
+//? expect:   75.0 |                      #     #    #    |
+//? expect:   37.5 |                      #     #    #    |
+//? expect:        +--------------------------------------+
+//? expect:         0               128             256
+//? expect: dominant (std.lists.max_by): bin 180 = 180 Hz, mag 300.000
+//? expect: top-3 bins by power: 180 (300.000)  225 (225.000)  270 (150.000)
+//? expect: ratio 180:225:270 / gcd 45 = 4:5:6
+//? expect: chord: G3 major
+//? expect: energy 543.750 | parseval@1e-9 true | ifft(fft) roundtrip@1e-9 true | rfft==fft true
+//? expect:
+//? expect: verdicts: C4 major | A3 minor | G3 fifth | unrecognized (16:20:25) | G3 major

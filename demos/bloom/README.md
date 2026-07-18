@@ -9,21 +9,21 @@ oracle), and the textbook estimate `(1 - e^(-kn/m))^k` alongside the
 observed rate.
 
 ```sh
-./target/release/fable demos/bloom/main.fable   # regenerate + verify filter.bin
-./target/release/fable test demos/bloom         # golden-run everything
+./target/release/socrates demos/bloom/main.soc   # regenerate + verify filter.bin
+./target/release/socrates test demos/bloom         # golden-run everything
 ```
 
 ## The layering
 
 | File | What it holds |
 |------|---------------|
-| `hash.fable` | FNV-1a 32 (xor, multiply, mask), `mul32` (32x32 multiply mod 2^32 that cannot trip the overflow panic), the xorshift* mixer, popcount over the `count_ones` intrinsic, hex formatting |
-| `words.fable` | the corpus generator: a C-standard LCG written out in plain integer arithmetic — no `math.random`, so the corpus is identical in every release forever |
-| `bloom.fable` | the filter: bit i at byte `i >> 3` under mask `1 << (i & 7)`, double-hashed probes `h1 + i*h2` with the stride forced odd, popcount/fill, a 14-byte serialization format, and the theoretical estimates |
-| `main.fable` | corpus in, contract out: false negatives (0), exact false positives vs the `std.set` oracle, theory alongside, a geometry sweep, bit-level introspection, and the committed-artifact round-trip |
-| `spec.fable` | component tests: published FNV-1a vectors, `mul32` wrap identities, avalanche counts, popcount vectors, bit set/get, serialization down to its exact bytes plus its failure paths |
-| `guardrails.fable` | pins the panic: `bloom.new(4095, 4)` is refused because the index mask `& m - 1` needs a power of two |
-| `filter.bin` | the committed artifact: 14-byte header + 512 filter bytes; `main.fable` reads it *before* rewriting it and pins byte-identity with the fresh build |
+| `hash.soc` | FNV-1a 32 (xor, multiply, mask), `mul32` (32x32 multiply mod 2^32 that cannot trip the overflow panic), the xorshift* mixer, popcount over the `count_ones` intrinsic, hex formatting |
+| `words.soc` | the corpus generator: a C-standard LCG written out in plain integer arithmetic — no `math.random`, so the corpus is identical in every release forever |
+| `bloom.soc` | the filter: bit i at byte `i >> 3` under mask `1 << (i & 7)`, double-hashed probes `h1 + i*h2` with the stride forced odd, popcount/fill, a 14-byte serialization format, and the theoretical estimates |
+| `main.soc` | corpus in, contract out: false negatives (0), exact false positives vs the `std.set` oracle, theory alongside, a geometry sweep, bit-level introspection, and the committed-artifact round-trip |
+| `spec.soc` | component tests: published FNV-1a vectors, `mul32` wrap identities, avalanche counts, popcount vectors, bit set/get, serialization down to its exact bytes plus its failure paths |
+| `guardrails.soc` | pins the panic: `bloom.new(4095, 4)` is refused because the index mask `& m - 1` needs a power of two |
+| `filter.bin` | the committed artifact: 14-byte header + 512 filter bytes; `main.soc` reads it *before* rewriting it and pins byte-identity with the fresh build |
 
 ## Worth seeing
 
@@ -36,7 +36,7 @@ observed rate.
   `"foobar" -> bf9cf968`), `mul32(0xFFFFFFFF, 0xFFFFFFFF) = 1` (an
   algebraic identity), and popcount summing to exactly 1024 over all 256
   bytes.
-- **The overflow panic shapes the code.** Fable's Int panics on overflow,
+- **The overflow panic shapes the code.** Socrates's Int panics on overflow,
   so 32-bit hashing masks with `& 0xFFFFFFFF` after every step and a full
   32x32 multiply wraps in 64 bits and masks (`mul32`, one line over
   `wrapping_mul`). The arithmetic `>>` hazard is pinned on purpose:

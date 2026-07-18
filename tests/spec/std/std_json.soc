@@ -1,0 +1,94 @@
+// SPEC §7.1 (v0.4): std.json — parse, navigate, and serialize.
+import std.json;
+
+let doc = json.parse("\{\"name\": \"socrates\", \"version\": 0.4, \"tags\": [\"vm\", \"gc\"], \"deps\": null, \"stable\": true}");
+
+match doc {
+    Ok(j) -> {
+        println(j.get("name"));                    //? expect: Some(JStr("socrates"))
+        println(j.get("version"));                 //? expect: Some(JNum(0.4))
+        println(j.get("nope"));                    //? expect: None
+        println(j.len());                          //? expect: 5
+        match j.get("tags") {
+            Some(tags) -> {
+                println(tags.at(0));               //? expect: Some(JStr("vm"))
+                println(tags.at(9));               //? expect: None
+                println(tags.len());               //? expect: 2
+            }
+            None -> println("missing"),
+        }
+        match j.get("deps") {
+            Some(d) -> println(d.is_null()),       //? expect: true
+            None -> println("missing"),
+        }
+    }
+    Err(e) -> println("error: {e}"),
+}
+
+// Accessors compose with `?`.
+fn tag_at(j: json.Json, i: Int) -> Option[String] {
+    j.get("tags")?.at(i)?.as_str()
+}
+match doc {
+    Ok(j) -> {
+        println(tag_at(j, 1));                     //? expect: Some("gc")
+        println(tag_at(j, 7));                     //? expect: None
+    }
+    Err(e) -> println("error: {e}"),
+}
+
+// Round trips: compact and pretty.
+match json.parse("[1, \{\"a\": [true, null]}, \"x\"]") {
+    Ok(j) -> {
+        println(json.stringify(j));                //? expect: [1,{"a":[true,null]},"x"]
+        println(json.pretty(j));                   //? expect: [
+    }
+    Err(e) -> println("error: {e}"),
+}
+//? expect:   1,
+//? expect:   {
+//? expect:     "a": [
+//? expect:       true,
+//? expect:       null
+//? expect:     ]
+//? expect:   },
+//? expect:   "x"
+//? expect: ]
+
+// Numbers: integral floats stringify without the point; escapes round-trip.
+match json.parse("\{\"n\": 3, \"s\": \"a\\nb\\\"c\\\"\"}") {
+    Ok(j) -> println(json.stringify(j)),           //? expect: {"n":3,"s":"a\nb\"c\""}
+    Err(e) -> println("error: {e}"),
+}
+
+// Parse errors carry positions.
+match json.parse("\{\"broken\": ") {
+    Ok(_) -> println("parsed?!"),
+    Err(e) -> println("error: {e}"),               //? expect: error: unexpected end of input
+}
+
+// Ergonomic construction (v0.8): json.obj/arr/str/num/int/bool/null build
+// the same tree as the raw Json.J* constructors, just named for what they
+// build. A round trip through stringify proves it.
+let built = json.obj([
+    ("name", json.jstr("socrates")),
+    ("count", json.int(3)),
+    ("ratio", json.num(0.5)),
+    ("tags", json.arr([json.jstr("vm"), json.jstr("gc")])),
+    ("stable", json.bool(true)),
+    ("parent", json.null()),
+]);
+println(json.stringify(built));
+//? expect: {"name":"socrates","count":3,"ratio":0.5,"tags":["vm","gc"],"stable":true,"parent":null}
+
+// json.int is exactly json.num(i.to_float()) for the common integral case.
+println(json.int(3) == json.num(3.0));             //? expect: true
+
+// Parsing the built document back gives the same field values.
+match json.parse(json.stringify(built)) {
+    Ok(j) -> {
+        println(j.get("name"));                     //? expect: Some(JStr("socrates"))
+        println(j.get("count"));                     //? expect: Some(JNum(3.0))
+    }
+    Err(e) -> println("error: {e}"),
+}

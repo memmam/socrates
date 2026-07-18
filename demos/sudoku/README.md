@@ -24,19 +24,19 @@ is the proven minimum for a unique solution). Every answer is re-checked
 by an independent verifier — all 27 units and every original given — and
 the run prints search statistics per puzzle.
 
-About 650 lines of Fable in four files:
+About 650 lines of Socrates in four files:
 
 | File | What it does |
 |------|--------------|
-| `board.fable` | the 9-bit mask kit (`digit_bit`, `has`, `popcount`, `lowest_digit`, `digits_of`), the `Board` struct (81 cells + one used-mask per row/column/box), parsing with validation, Builder-based pretty-printing, and the independent `verify` (each unit folds to a mask that must equal 511) |
-| `solver.fable` | naked-singles propagation, the MRV cell chooser, trail-based backtracking that iterates guesses by peeling mask bits, and `Stats` (assignments / guesses / backtracks) |
-| `main.fable` | the three puzzles, side-by-side puzzle/solution rendering, `?`-based error plumbing, an optional `--time` flag |
-| `spec.fable` | golden tests: mask-kit self-tests (full mask = 511, digit-bit round trips, `&`/`\|`/`^` set algebra, the precedence the code leans on, arithmetic `>>`), parser rejections, an unsolvable puzzle (checking the board is restored after failure), the Inkala solution against its published ground truth, a candidate-elimination check on a real grid, and a corrupted grid that `verify` must catch |
+| `board.soc` | the 9-bit mask kit (`digit_bit`, `has`, `popcount`, `lowest_digit`, `digits_of`), the `Board` struct (81 cells + one used-mask per row/column/box), parsing with validation, Builder-based pretty-printing, and the independent `verify` (each unit folds to a mask that must equal 511) |
+| `solver.soc` | naked-singles propagation, the MRV cell chooser, trail-based backtracking that iterates guesses by peeling mask bits, and `Stats` (assignments / guesses / backtracks) |
+| `main.soc` | the three puzzles, side-by-side puzzle/solution rendering, `?`-based error plumbing, an optional `--time` flag |
+| `spec.soc` | golden tests: mask-kit self-tests (full mask = 511, digit-bit round trips, `&`/`\|`/`^` set algebra, the precedence the code leans on, arithmetic `>>`), parser rejections, an unsolvable puzzle (checking the board is restored after failure), the Inkala solution against its published ground truth, a candidate-elimination check on a real grid, and a corrupted grid that `verify` must catch |
 
 Everything is deterministic — candidates are tried in ascending digit
 order and heuristic ties break toward the first cell — so the full output
 of both runnable files is pinned with `expect` directives for
-`fable test`. The mask representation reproduces the exact same search
+`socrates test`. The mask representation reproduces the exact same search
 as the v0.5 list-of-candidates version (same masks, same order), so the
 pinned solve narratives — down to `assignments=10939 guesses=1850
 backtracks=1837` on the Inkala — are unchanged, while the whole run got
@@ -47,9 +47,9 @@ about 2x faster (no per-cell candidate lists to allocate).
 From the repository root:
 
 ```sh
-./target/release/fable demos/sudoku/main.fable          # solve the three puzzles (~0.3 s)
-./target/release/fable demos/sudoku/main.fable --time   # same, plus wall-clock times
-./target/release/fable test demos/sudoku                # golden tests (all four files)
+./target/release/socrates demos/sudoku/main.soc          # solve the three puzzles (~0.3 s)
+./target/release/socrates demos/sudoku/main.soc --time   # same, plus wall-clock times
+./target/release/socrates test demos/sudoku                # golden tests (all four files)
 ```
 
 ## Sample output
@@ -83,9 +83,9 @@ while the hard one needs 1850 guesses, which is exactly why it is hard.
 ## The mask idioms, if you need them elsewhere
 
 Everything the solver knows about bit fiddling is in the ~40-line kit at
-the top of `board.fable`:
+the top of `board.soc`:
 
-```fable
+```soc
 pub let full_mask = 0b111111111;                   // digits 1..9
 pub fn digit_bit(d: Int) -> Int { 1 << d - 1 }     // `-` binds tighter than `<<`
 pub fn has(mask: Int, d: Int) -> Bool { mask >> d - 1 & 1 == 1 }
@@ -93,7 +93,7 @@ pub fn has(mask: Int, d: Int) -> Bool { mask >> d - 1 & 1 == 1 }
 
 Precedence is Rust's: arithmetic > shifts > `&` > `^` > `|` > comparisons,
 so none of the expressions above need parentheses. One caution carried in
-the code comments: Fable's `>>` is **arithmetic** (sign-extending) — 9-bit
+the code comments: Socrates's `>>` is **arithmetic** (sign-extending) — 9-bit
 masks never touch the sign bit so it costs nothing here, but a full-width
 bitboard must re-mask after every right shift. Mask updates use v0.8's
 compound bitwise assignment (`self.row_used[r] |= bit`, `^=` to undo).

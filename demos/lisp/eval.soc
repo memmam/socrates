@@ -1,0 +1,455 @@
+// eval — the tree-walking evaluator: values, environments, special forms
+// (define / lambda / if / let / quote), and the builtin procedures.
+//
+// Every fallible step returns Result[Value, String], so a bad Lisp program
+// comes back to the caller as an Err value — never a crash.
+
+import reader;
+import std.set;
+import std.strings;
+
+// A runtime value. Fun carries a closure: parameters, the unevaluated
+// body, and the environment the lambda was created in (lexical scope).
+pub enum Value {
+    Num(Int),
+    BoolV(Bool),
+    Sym(String),
+    ListV(List[Value]),
+    Fun(Closure),
+    Builtin(String),
+    Void,
+}
+
+pub struct Closure {
+    params: List[String],
+    body: reader.Sexp,
+    env: Env,
+}
+
+// A scope: bindings plus a parent link. Envs are structs, so closures
+// holding one see later defines in it — that is what makes recursive
+// (define (fact n) ... (fact ...)) work.
+//
+// `specials` is the dialect's reserved-word set: one Set built by
+// global_env rides along in every scope for free (structs are references
+// — each child copies the pointer, not the set), making the special-form
+// check in eval_form a single probe with no global lookup.
+pub struct Env {
+    vars: Map[String, Value],
+    parent: Option[Env],
+    specials: set.Set[String],
+}
+
+impl Env {
+    pub fn lookup(self, name: String) -> Option[Value] {
+        match self.vars.get(name) {
+            Some(v) -> Some(v),
+            None -> match self.parent {
+                Some(p) -> p.lookup(name),
+                None -> None,
+            },
+        }
+    }
+}
+
+// The toplevel environment, preloaded with the builtin procedures and the
+// reserved-word set shared by every child scope.
+pub fn global_env() -> Env {
+    let g = Env {
+        vars: {:},
+        parent: None,
+        specials: set.from_list(["define", "lambda", "if", "let", "quote"]),
+    };
+    let names = [
+        "+",
+        "-",
+        "*",
+        "/",
+        "%",
+        "=",
+        "<",
+        ">",
+        "<=",
+        ">=",
+        "cons",
+        "car",
+        "cdr",
+        "list",
+        "null?",
+        "not",
+    ];
+    for name in names {
+        g.vars[name] = Value.Builtin(name);
+    }
+    g
+}
+
+// Render a value the way a Lisp would print it. One strings.Builder is
+// threaded through the recursion, so printing costs O(total output) — the
+// old "(" + children.join(" ") + ")" re-copied every child at every
+// nesting level.
+pub fn show(v: Value) -> String {
+    let b = strings.builder();
+    write_value(v, b);
+    b.build()
+}
+
+fn write_value(v: Value, b: strings.Builder) {
+    match v {
+        Num(n) -> b.push(str(n)),
+        BoolV(x) -> b.push(if x { "#t" } else { "#f" }),
+        Sym(s) -> b.push(s),
+        ListV(items) -> {
+            b.push("(");
+            for (i, item) in items.enumerate() {
+                if i > 0 {
+                    b.push(" ");
+                }
+                write_value(item, b);
+            }
+            b.push(")");
+        },
+        Fun(c) -> b.push("#<lambda ({c.params.join(" ")})>"),
+        Builtin(name) -> b.push("#<builtin {name}>"),
+        Void -> b.push("#<void>"),
+    }
+}
+
+// ---- the evaluator ----
+
+pub fn eval(e: reader.Sexp, env: Env) -> Result[Value, String] {
+    match e {
+        Num(n) -> Ok(Value.Num(n)),
+        Sym(s) -> eval_symbol(s, env),
+        Form(items) -> eval_form(items, env),
+    }
+}
+
+fn eval_symbol(s: String, env: Env) -> Result[Value, String] {
+    if s == "#t" {
+        return Ok(Value.BoolV(true));
+    }
+    if s == "#f" {
+        return Ok(Value.BoolV(false));
+    }
+    match env.lookup(s) {
+        Some(v) -> Ok(v),
+        None -> Err("unbound symbol '{s}'"),
+    }
+}
+
+fn eval_form(items: List[reader.Sexp], env: Env) -> Result[Value, String] {
+    if items.is_empty() {
+        return Err("cannot evaluate the empty form ()");
+    }
+    // Special forms receive their arguments unevaluated. One set probe
+    // decides special-vs-application, replacing a chain of head compares.
+    if let Sym(s) = items[0] {
+        if env.specials.contains(s) {
+            return eval_special(s, items, env);
+        }
+    }
+    // Anything else is application: evaluate head and args, then apply.
+    let f = eval(items[0], env)?;
+    let args: List[Value] = [];
+    for a in items.slice(1, items.len()) {
+        args.push(eval(a, env)?);
+    }
+    apply(f, args)
+}
+
+// `name` is known to be in env.specials. Every arm ends in a tail call
+// into the form's evaluator, so TCO still reaches through the dispatch.
+fn eval_special(name: String, items: List[reader.Sexp], env: Env) -> Result[Value, String] {
+    match name {
+        "define" -> eval_define(items, env),
+        "lambda" -> eval_lambda(items, env),
+        "if" -> eval_if(items, env),
+        "let" -> eval_let(items, env),
+        _ -> { // quote
+            if items.len() != 2 {
+                return Err("quote expects one argument");
+            }
+            Ok(quoted(items[1]))
+        },
+    }
+}
+
+// (define name expr), or the sugar (define (name a b) body)
+// which is short for (define name (lambda (a b) body)).
+fn eval_define(items: List[reader.Sexp], env: Env) -> Result[Value, String] {
+    if items.len() != 3 {
+        return Err("define expects (define name expr) or (define (name args) body)");
+    }
+    match items[1] {
+        Sym(name) -> {
+            check_not_reserved(name, env)?;
+            let v = eval(items[2], env)?;
+            env.vars[name] = v;
+            Ok(Value.Void)
+        },
+        Form(sig) -> {
+            if sig.is_empty() {
+                return Err("define: cannot define ()");
+            }
+            let name = sym_name(sig[0])?;
+            check_not_reserved(name, env)?;
+            let params = param_names(sig.slice(1, sig.len()))?;
+            env.vars[name] = Value.Fun(Closure { params, body: items[2], env });
+            Ok(Value.Void)
+        },
+        Num(_) -> Err("define: expected a name, got a number"),
+    }
+}
+
+// (define if 3) would bind inertly — special forms are checked before the
+// environment — so reject reserved words up front. The same specials set
+// that drives dispatch answers the question.
+fn check_not_reserved(name: String, env: Env) -> Result[Unit, String] {
+    if env.specials.contains(name) {
+        return Err("cannot redefine special form '{name}'");
+    }
+    Ok(())
+}
+
+fn eval_lambda(items: List[reader.Sexp], env: Env) -> Result[Value, String] {
+    if items.len() != 3 {
+        return Err("lambda expects (lambda (params) body)");
+    }
+    match items[1] {
+        Form(ps) -> Ok(Value.Fun(Closure { params: param_names(ps)?, body: items[2], env })),
+        _ -> Err("lambda: parameters must be a list, got {items[1].show()}"),
+    }
+}
+
+fn eval_if(items: List[reader.Sexp], env: Env) -> Result[Value, String] {
+    if items.len() != 4 {
+        return Err("if expects (if test then else)");
+    }
+    if truthy(eval(items[1], env)?) { eval(items[2], env) } else { eval(items[3], env) }
+}
+
+// (let ((name expr) ...) body) — parallel let: every expr is evaluated in
+// the *outer* scope, then the body runs in a fresh child scope where all
+// the names are bound at once. A Set catches duplicate binding names.
+fn eval_let(items: List[reader.Sexp], env: Env) -> Result[Value, String] {
+    if items.len() != 3 {
+        return Err("let expects (let ((name expr) ...) body)");
+    }
+    let bindings = match items[1] {
+        Form(bs) -> bs,
+        _ -> return Err("let: bindings must be a list, got {items[1].show()}"),
+    };
+    let local = Env { vars: {:}, parent: Some(env), specials: env.specials };
+    let seen = set.new();
+    for b in bindings {
+        match b {
+            Form(pair) -> {
+                if pair.len() != 2 {
+                    return Err("let: each binding must be (name expr), got {b.show()}");
+                }
+                let name = sym_name(pair[0])?;
+                if !seen.insert(name) {
+                    return Err("let: duplicate binding '{name}'");
+                }
+                local.vars[name] = eval(pair[1], env)?;
+            },
+            _ -> return Err("let: each binding must be (name expr), got {b.show()}"),
+        }
+    }
+    eval(items[2], local)
+}
+
+// Scheme truthiness: everything except #f is true.
+fn truthy(v: Value) -> Bool {
+    match v {
+        BoolV(b) -> b,
+        _ -> true,
+    }
+}
+
+// A quoted expression becomes plain data: nothing is evaluated.
+fn quoted(e: reader.Sexp) -> Value {
+    match e {
+        Num(n) -> Value.Num(n),
+        Sym(s) -> Value.Sym(s),
+        Form(items) -> Value.ListV(items.map(quoted)),
+    }
+}
+
+fn sym_name(e: reader.Sexp) -> Result[String, String] {
+    match e {
+        Sym(s) -> Ok(s),
+        _ -> Err("expected a symbol, got {e.show()}"),
+    }
+}
+
+// Parameter lists must be symbols, all distinct — Set.insert reports the
+// repeat ((lambda (x x) ...) used to bind silently).
+fn param_names(ps: List[reader.Sexp]) -> Result[List[String], String] {
+    let names: List[String] = [];
+    let seen = set.new();
+    for p in ps {
+        let name = sym_name(p)?;
+        if !seen.insert(name) {
+            return Err("duplicate parameter '{name}'");
+        }
+        names.push(name);
+    }
+    Ok(names)
+}
+
+// ---- application ----
+
+// Call a function value. For a closure: bind parameters in a fresh child
+// scope of the *captured* environment (lexical scoping), then eval the body.
+pub fn apply(f: Value, args: List[Value]) -> Result[Value, String] {
+    match f {
+        Fun(c) -> {
+            if args.len() != c.params.len() {
+                return Err("arity mismatch: expected {c.params.len()} arguments, got {args.len()}");
+            }
+            let local = Env { vars: {:}, parent: Some(c.env), specials: c.env.specials };
+            for (name, v) in c.params.zip(args) {
+                local.vars[name] = v;
+            }
+            eval(c.body, local)
+        },
+        Builtin(name) -> apply_builtin(name, args),
+        _ -> Err("{show(f)} is not callable"),
+    }
+}
+
+fn apply_builtin(name: String, args: List[Value]) -> Result[Value, String] {
+    match name {
+        "+" | "-" | "*" | "/" | "%" -> arith(name, args),
+        "=" | "<" | ">" | "<=" | ">=" -> compare(name, args),
+        "cons" -> b_cons(args),
+        "car" -> b_car(args),
+        "cdr" -> b_cdr(args),
+        "list" -> Ok(Value.ListV(args)),
+        "null?" -> b_null(args),
+        "not" -> {
+            if args.len() != 1 {
+                return Err("not expects 1 argument");
+            }
+            Ok(Value.BoolV(!truthy(args[0])))
+        },
+        _ -> Err("unknown builtin '{name}'"),
+    }
+}
+
+// (+ ...) and (* ...) fold from their identity, (- x) negates, and the
+// rest fold left. Socrates's checked arithmetic panics on integer overflow
+// and division by zero; try() turns those panics into ordinary Lisp
+// errors instead of tearing down the interpreter.
+fn arith(name: String, args: List[Value]) -> Result[Value, String] {
+    let nums: List[Int] = [];
+    for a in args {
+        nums.push(as_num(name, a)?);
+    }
+    if nums.is_empty() && name != "+" && name != "*" {
+        return Err("{name} expects at least one argument");
+    }
+    match try(|| arith_loop(name, nums)) {
+        Ok(n) -> Ok(Value.Num(n)),
+        Err(msg) -> Err("{name}: {msg}"),
+    }
+}
+
+fn arith_loop(name: String, nums: List[Int]) -> Int {
+    if name == "+" {
+        return nums.fold(0, |acc, n| acc + n);
+    }
+    if name == "*" {
+        return nums.fold(1, |acc, n| acc * n);
+    }
+    if name == "-" && nums.len() == 1 {
+        return -nums[0];
+    }
+    let mut acc = nums[0];
+    for i in 1..nums.len() {
+        if name == "-" {
+            acc -= nums[i];
+        } else if name == "/" {
+            acc = acc / nums[i];
+        } else {
+            acc = acc % nums[i];
+        }
+    }
+    acc
+}
+
+// Comparisons chain like Scheme's: (< 1 2 3) is 1<2 and 2<3.
+fn compare(name: String, args: List[Value]) -> Result[Value, String] {
+    if args.len() < 2 {
+        return Err("{name} expects at least 2 arguments");
+    }
+    for i in 0..args.len() - 1 {
+        let a = as_num(name, args[i])?;
+        let b = as_num(name, args[i + 1])?;
+        let ok = match name {
+            "=" -> a == b,
+            "<" -> a < b,
+            ">" -> a > b,
+            "<=" -> a <= b,
+            _ -> a >= b,
+        };
+        if !ok {
+            return Ok(Value.BoolV(false));
+        }
+    }
+    Ok(Value.BoolV(true))
+}
+
+fn as_num(who: String, v: Value) -> Result[Int, String] {
+    match v {
+        Num(n) -> Ok(n),
+        _ -> Err("{who}: expected a number, got {show(v)}"),
+    }
+}
+
+fn b_cons(args: List[Value]) -> Result[Value, String] {
+    if args.len() != 2 {
+        return Err("cons expects 2 arguments");
+    }
+    match args[1] {
+        ListV(tail) -> Ok(Value.ListV([args[0]].concat(tail))),
+        _ -> Err("cons: second argument must be a list, got {show(args[1])}"),
+    }
+}
+
+fn b_car(args: List[Value]) -> Result[Value, String] {
+    match as_list("car", args)?.first() {
+        Some(v) -> Ok(v),
+        None -> Err("car of empty list"),
+    }
+}
+
+fn b_cdr(args: List[Value]) -> Result[Value, String] {
+    let items = as_list("cdr", args)?;
+    if items.is_empty() {
+        return Err("cdr of empty list");
+    }
+    Ok(Value.ListV(items.slice(1, items.len())))
+}
+
+fn b_null(args: List[Value]) -> Result[Value, String] {
+    if args.len() != 1 {
+        return Err("null? expects 1 argument");
+    }
+    match args[0] {
+        ListV(items) -> Ok(Value.BoolV(items.is_empty())),
+        _ -> Ok(Value.BoolV(false)),
+    }
+}
+
+fn as_list(who: String, args: List[Value]) -> Result[List[Value], String] {
+    if args.len() != 1 {
+        return Err("{who} expects 1 argument");
+    }
+    match args[0] {
+        ListV(items) -> Ok(items),
+        _ -> Err("{who}: expected a list, got {show(args[0])}"),
+    }
+}

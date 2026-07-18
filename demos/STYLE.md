@@ -1,4 +1,4 @@
-# Fable demo style — best practices as designed to now
+# Socrates demo style — best practices as designed to now
 
 Distilled from the v0.7 demo round: seventeen programs (six new, eleven
 modernized), each written by an independent author under field-test
@@ -27,14 +27,14 @@ every such divergence.
   pinned (`reversi`).
 - **Generate long pin blocks mechanically.** Run the program, pipe
   through `sed 's/^/\/\/? expect: /'` (strip trailing whitespace),
-  append, re-run `fable test`. Never hand-transcribe a transcript
+  append, re-run `socrates test`. Never hand-transcribe a transcript
   (`spectra`, `reversi`, `swarm`). Verify expected values against an
   independent reference *before* pinning.
 - **Deliberate panics get their own tiny file** — a panic ends the run,
   so nothing after it prints. Pin extra contract checks in the main file
   through `try(|| ...)` with the message as a normal expect line
   (`bloom` guardrails, `spectra`).
-- **Print-free modules are free tests.** A library `.fable` with no
+- **Print-free modules are free tests.** A library `.soc` with no
   top-level statements passes the harness as a silent no-directive file
   — keeping demo modules print-free is both hygiene and coverage.
 
@@ -55,7 +55,7 @@ every such divergence.
   with one more digit so the boundary moves away from the value
   (`spectra`).
 - **Corpora that must outlive releases come from your own PRNG** (LCG /
-  xorshift32 in plain Fable integer ops), not `math.seed` — seeded
+  xorshift32 in plain Socrates integer ops), not `math.seed` — seeded
   streams are stable only within a release. Pick a PRNG family different
   from any hash under test (`bloom`).
 - **Committed binary artifacts want an all-integer signal path.** Phase
@@ -89,20 +89,20 @@ every such divergence.
 - Precedence is Rust's: most bitboard/checksum expressions read
   paren-free (`x >> n & mask`, `acc | run & empty`, `x & m != 0`,
   `table[(c ^ b) & 255] ^ c >> 8`) — but `& | ^` bind *looser* than
-  `+ -`, so `(v & 0x7f) + top` needs its parens. `fable fmt` strips
+  `+ -`, so `(v & 0x7f) + top` needs its parens. `socrates fmt` strips
   merely-clarifying parens, so precedence knowledge is not optional;
   comment intent instead.
 - **`>>` is arithmetic.** Any value that can carry bit 63 goes through
   the `Int.ushr(n)` intrinsic (logical shift, `>>`'s panic contract).
   Never hand-build the mask — the textbook `(1 << 64 - n) - 1` panics
-  at n = 1 (`reversi/bits.fable` documents every trap; its hand-rolled
+  at n = 1 (`reversi/bits.soc` documents every trap; its hand-rolled
   bodies live in git history).
 - **Overflow panics disable classic bit tricks.** `x & -x` and
   `x & (x - 1)` both panic on the bit-63-only value; iterate set bits
   with `trailing_zeros` + `^` (which also yields ascending order — a
   free deterministic tie-break). Counting is `count_ones()` — never
   hand-roll a popcount. When a bit algorithm assumes wrapping
-  arithmetic, assume it is broken in Fable until proven otherwise
+  arithmetic, assume it is broken in Socrates until proven otherwise
   (`reversi`).
 - **32-bit hashing rules:** mask `& 0xFFFFFFFF` after every add/multiply
   that can exceed 32 bits; split full 32×32 multiplies into 16-bit
@@ -168,7 +168,7 @@ every such divergence.
 
 ## 7. Formatter-aware authoring
 
-- Run `fable fmt -w` and re-run tests as the *last* step of every
+- Run `socrates fmt -w` and re-run tests as the *last* step of every
   change; format before hand-polishing comments (the first pass on old
   files is a big canonicalization diff — polish after).
 - **Comments belong above statements.** Interior comments in bracketed
@@ -184,7 +184,7 @@ every such divergence.
 
 ## 8. Performance under GC stress
 
-- CI runs everything under `FABLE_GC_STRESS=1`. Pure-integer,
+- CI runs everything under `SOCRATES_GC_STRESS=1`. Pure-integer,
   low-allocation demos are essentially free (`png`: 26 ms); transient
   allocation is what hurts (an allocation-heavy demo: 11 s). Budget
   pinned heavyweight loops accordingly and measure per-file
@@ -208,7 +208,7 @@ These rules are numbered because divergence comments cite them by name.
   `checkers`' `best_move`, `swarm`'s `collatz_champion`.
 - **R2 — extremes.** Running extremes accumulate with the `min`/`max`
   methods — `worst = worst.max(dr)` — never an `if`-and-assign;
-  `Float.min`/`max` exist since v0.9 precisely for this (`spectra`,
+  `Float.min`/`max` exist since v0.8 precisely for this (`spectra`,
   `synthwave`).
 - **R3 — std idioms in non-hot code.** Where a std spelling exists, use
   it: `lists.fill`, `pad_left`, `unwrap_or`, `Range.any`/`all`,

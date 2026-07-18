@@ -1,0 +1,68 @@
+// Window + gfx demo (SPEC § 7.3 window / § 7.4 gfx): open a window, compile
+// a trivial pass-through vertex+fragment shader pair, upload a 3-vertex
+// triangle, draw one frame, and close the window.
+//
+//   cargo run --release --features gl -- docs/assets/gl_triangle.soc
+//
+// Prints `ok: triangle drawn` when a GL context is available, `err: <reason>`
+// when gl support isn't compiled in or no display/driver is available — and
+// exits 0 either way (this file runs on machines with and without a live
+// X/GLX display, e.g. under Xvfb).
+// Not wired into the golden test suite: the output is build- and
+// environment-dependent (see demos/glcube for a fuller gfx demo that *is*
+// golden-tested via pixel spot-checks, which only requires a live GL
+// context because the whole point is to check real rendered pixels).
+
+fn run() -> Result[Unit, String] {
+    let win = window.create("gl_triangle", 320, 240)?;
+    win.make_current();
+
+    // The vertex shader forwards clip-space positions verbatim; the
+    // fragment shader paints every fragment the same flat color, driven by
+    // a `vec3` uniform. (`\{` is Socrates's escape for a literal brace inside
+    // a string.)
+    let vertex_src = [
+        "#version 330 core",
+        "layout(location = 0) in vec3 pos;",
+        "void main() \{",
+        "    gl_Position = vec4(pos, 1.0);",
+        "}",
+    ].join("\n");
+    let fragment_src = [
+        "#version 330 core",
+        "uniform vec3 tint;",
+        "out vec4 frag_color;",
+        "void main() \{",
+        "    frag_color = vec4(tint, 1.0);",
+        "}",
+    ].join("\n");
+    let program = gfx.compile_program(vertex_src, fragment_src)?;
+
+    // Three vertices (x, y, z) forming one triangle, as little-endian f32
+    // bytes — the wire format gfx.upload_buffer expects.
+    let verts = bytes(0);
+    for c in [0.0, 0.6, 0.0, -0.6, -0.6, 0.0, 0.6, -0.6, 0.0] {
+        verts.push_f32le(c);
+    }
+
+    let vao = gfx.create_vertex_array();
+    gfx.bind_vertex_array(vao);
+    let vbo = gfx.create_buffer();
+    gfx.bind_buffer("vertex", vbo);
+    gfx.upload_buffer("vertex", verts, false);
+    gfx.set_vertex_attrib(0, 3, 12, 0); // 3 floats/vertex, 12-byte stride, no offset
+
+    gfx.use_program(program);
+    gfx.set_uniform_vec3(program, "tint", 1.0, 0.5, 0.25);
+
+    gfx.clear(0.0, 0.0, 0.0, 1.0);
+    gfx.draw_arrays(0, 3);
+    win.swap_buffers();
+    win.close();
+    Ok(())
+}
+
+match run() {
+    Ok(_) -> println("ok: triangle drawn"),
+    Err(msg) -> println("err: {msg}"),
+}

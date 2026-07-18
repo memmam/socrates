@@ -1086,7 +1086,7 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             // `width`/`height` come straight from the caller and drive how
             // many bytes `glTexImage2D` reads from `data.as_ptr()` -- with
             // no check here, a too-short buffer is an out-of-bounds heap
-            // read reaching the GL driver (demos/png/png.fable's own
+            // read reaching the GL driver (demos/png/png.soc's own
             // `pixels.len() != w * h * 3` check is the same guard one
             // directory over; this native had none).
             let bpp: i64 = if has_alpha { 4 } else { 3 };
@@ -1472,7 +1472,7 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
         ListJoin => {
             // Borrow the separator and every element straight from the heap
             // (no per-element String clones), sized exactly up front. Nothing
-            // allocates on the Fable heap until the borrows end.
+            // allocates on the Socrates heap until the borrows end.
             let s = {
                 let sep = str_ref(vm, argc, 1)?;
                 let items = list_ref(vm, argc)?;
@@ -1639,7 +1639,7 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             let s = str_ref(vm, argc, 0)?;
             let sub = str_ref(vm, argc, 1)?;
             let from = int_arg(vm, argc, 2)?.max(0) as usize;
-            // `from` is a character index, like every string index in Fable.
+            // `from` is a character index, like every string index in Socrates.
             // Past-the-end starts find nothing (except the empty pattern,
             // which matches at the very end).
             let byte_from = s
@@ -2327,14 +2327,14 @@ fn gfx_window(
     gfx_window_msg(vm).map_err(|m| vm.error(m))
 }
 
-/// A GL object handle (`Int` on the Fable side) as `u32` — every
+/// A GL object handle (`Int` on the Socrates side) as `u32` — every
 /// `gfx.*` shader/program/buffer/VAO/texture parameter.
 fn u32_arg(vm: &Vm, argc: u8, i: u8) -> Result<u32, VmError> {
     let v = int_arg(vm, argc, i)?;
     u32::try_from(v).map_err(|_| vm.error(format!("gfx: Int {v} is out of range for a GL handle")))
 }
 
-/// A GL size/offset/count (`Int` on the Fable side) as `i32`.
+/// A GL size/offset/count (`Int` on the Socrates side) as `i32`.
 fn i32_arg(vm: &Vm, argc: u8, i: u8) -> Result<i32, VmError> {
     let v = int_arg(vm, argc, i)?;
     i32::try_from(v).map_err(|_| vm.error(format!("gfx: Int {v} is out of i32 range")))
@@ -2367,7 +2367,7 @@ fn struct_fields(vm: &Vm, v: Value) -> Option<Vec<Value>> {
     }
 }
 
-/// Flatten a `Mat4` argument (`std/glm.fable`: 4 `Vec4` columns `c0..c3`,
+/// Flatten a `Mat4` argument (`std/glm.soc`: 4 `Vec4` columns `c0..c3`,
 /// each an `{x, y, z, w}` struct of `Float`s — already column-major,
 /// matching GL's own convention) into 16 column-major `f32`s for
 /// `glUniformMatrix4fv`. `gfx.set_uniform_mat4`'s third parameter is a

@@ -1,12 +1,12 @@
-# The Fable Programming Language
+# The Socrates Programming Language
 
-Fable is a statically-typed, garbage-collected programming language with
+Socrates is a statically-typed, garbage-collected programming language with
 algebraic data types, exhaustive pattern matching, closures, and generics —
 implemented from scratch in Rust with **zero dependencies**. It is designed
 to be written fluently by AI as much as by hand: deterministic, golden-test
 first, and spec-ruled, so a program's behavior is legible and checkable.
 
-```fable
+```soc
 enum Shape {
     Circle(Float),
     Rect(Float, Float),
@@ -28,21 +28,21 @@ Everything here — lexer, parser, unification-based type inference, Maranget
 exhaustiveness checking, bytecode compiler, stack VM, mark-and-sweep garbage
 collector, REPL, formatter, language server, and disassembler — lives in
 about 41,000 lines of dependency-free Rust in `src/`. It is pinned down by
-311 golden spec tests (every one a runnable Fable program), a book 135 of
+311 golden spec tests (every one a runnable Socrates program), a book 135 of
 whose snippets execute in CI, and eighteen demo programs whose complete
-output is golden-tested. This image is Fable output too:
+output is golden-tested. This image is Socrates output too:
 
 <p align="center">
   <img src="docs/assets/hero.png" width="720"
        alt="A raytraced scene — chrome and colored spheres on a checkered
             floor with mirror reflections and shadows — rendered by a
-            raytracer written in Fable">
+            raytracer written in Socrates">
 </p>
 <p align="center">
-  <sub>A Whitted raytracer in ~190 lines of Fable
-  (<a href="docs/assets/hero.fable">docs/assets/hero.fable</a>):
+  <sub>A Whitted raytracer in ~190 lines of Socrates
+  (<a href="docs/assets/hero.soc">docs/assets/hero.soc</a>):
   mirror reflections, shadows, specular highlights, 2×2 supersampling.
-  Reproduce it: <code>fable run docs/assets/hero.fable > hero.ppm</code></sub>
+  Reproduce it: <code>socrates run docs/assets/hero.soc > hero.ppm</code></sub>
 </p>
 
 ## The language
@@ -69,7 +69,7 @@ output is golden-tested. This image is Fable output too:
   operator for both, and `try(f)` to catch a runtime panic as
   `Err(message)` with the VM stack fully restored — even a stack overflow.
 - **Multi-file programs.** `import geo;` with diamond dedup, cycle
-  detection, private-by-default items under `pub`, and a `FABLE_PATH`
+  detection, private-by-default items under `pub`, and a `SOCRATES_PATH`
   search path.
 - **Tail-call optimization.** Calls in tail position reuse the frame — the
   Lisp interpreter in `demos/lisp` runs a 100,000-iteration tail-recursive
@@ -84,11 +84,11 @@ output is golden-tested. This image is Fable output too:
   `synthwave` demos write real PNG and WAV. Hex/binary literals name the
   full 64-bit bit pattern, so `0x8080808080808080` is as writable as `1`.
 - **Parallelism as a first-class citizen.** `worker.spawn` runs a whole
-  Fable program on its own OS thread with its own heap, communicating over
+  Socrates program on its own OS thread with its own heap, communicating over
   string channels — shared-nothing isolates with panic isolation. `recv`
   blocks; `try_recv` doesn't, for a parent polling several workers without
   picking one to wait on. Plus a native `fft` namespace (`std.fft` layers a
-  `magnitude` helper over it in pure Fable) and a `gpu` compute path with
+  `magnitude` helper over it in pure Socrates) and a `gpu` compute path with
   five native zero-dependency
   backends (Metal, Vulkan, Direct3D 12, CUDA, OpenCL — MSL, SPIR-V,
   HLSL, and PTX kernels).
@@ -99,33 +99,33 @@ output is golden-tested. This image is Fable output too:
   behaves identically on all of them (the `glcube` demo renders
   byte-identical golden frames on GL, Metal, and Vulkan). Shader input
   follows the backend (GLSL, MSL, SPIR-V); `std.glm` supplies the
-  GLM-shaped `vec3`/`Mat4`/`Quat` math in pure Fable. All raw FFI, zero
+  GLM-shaped `vec3`/`Mat4`/`Quat` math in pure Socrates. All raw FFI, zero
   dependencies, like everything else.
 - **Batteries.** 150+ built-in methods across `List`, `Map`, `String`,
   `Bytes`, `Option`, `Result`, `Range` (short-circuiting `any`/`all`),
   `Int`, `Float`; `math`/`fs`/`os`/`fft` namespaces (Result-based and
   `?`-friendly); and an embedded standard library — `import std.json;` —
-  written in Fable itself: json (with ergonomic construction), flags, path,
+  written in Socrates itself: json (with ergonomic construction), flags, path,
   strings (with a `Builder`), lazy iterators, deferred/memoized `Lazy[T]`
   values, and the `set`/`deque`/`lists` collections (including key-based
   `min_by_key`/`max_by_key`).
 
 ## The toolchain
 
-- **A test runner.** `fable test dir/` — any `.fable` file with
+- **A test runner.** `socrates test dir/` — any `.soc` file with
   `//? expect/error/panic` directives is a golden test; the interpreter's
   own 311-test suite runs through the same command's code. `--bless`
   rewrites a mismatched `//? expect:` line in place when the value changed
   but the print statements around it didn't, instead of making you retype it.
-- **A language server.** `fable lsp` — diagnostics as you type, hover
+- **A language server.** `socrates lsp` — diagnostics as you type, hover
   types, go-to-definition across modules, and completion that works
   mid-edit. JSON-RPC hand-rolled; still zero dependencies.
 - **A REPL** with persistent incremental compilation, working imports, and
   `:type`; plus a comment-preserving formatter (`fmt`) and a bytecode
   disassembler (`dis`).
-- **Self-contained binaries.** `fable build dir/` staples a program — its
-  modules, data files, and worker `.fable`s — onto the interpreter as an
-  appended payload, producing one executable that needs no `fable` and no
+- **Self-contained binaries.** `socrates build dir/` staples a program — its
+  modules, data files, and worker `.soc`s — onto the interpreter as an
+  appended payload, producing one executable that needs no `socrates` and no
   source tree. Cross-target by design: every release ships the whole
   [demo zoo](demos/#the-demo-zoo--download-and-run) built for `x86_64` and
   `aarch64` Linux and Windows, plus Apple Silicon macOS (where the payload
@@ -136,7 +136,7 @@ output is golden-tested. This image is Fable output too:
 
   ```text
   error[E0301]: type mismatch
-    --> demo.fable:3:18
+    --> demo.soc:3:18
      |
    3 |     let x: Int = "hi";
      |            ---   ^^^^ expected `Int`, found `String`
@@ -146,9 +146,9 @@ output is golden-tested. This image is Fable output too:
 ## The receipts
 
 - **A real GC, stress-tested.** Tracing mark-and-sweep with checkpoint
-  rooting. Run anything with `FABLE_GC_STRESS=1` to collect before *every*
+  rooting. Run anything with `SOCRATES_GC_STRESS=1` to collect before *every*
   allocation — the entire test suite passes under it.
-- **An executable book.** 135 of the 136 ```` ```fable ```` snippets in
+- **An executable book.** 135 of the 136 ```` ```soc ```` snippets in
   [`book/`](book/) execute in CI — including the deliberate-error demos,
   verified to fail the way the prose says they do (the one exception is a
   fragment fence-tagged `skip`).
@@ -181,43 +181,43 @@ output is golden-tested. This image is Fable output too:
 cargo build --release
 
 # Run a program
-./target/release/fable examples/mandelbrot.fable
+./target/release/socrates examples/mandelbrot.soc
 
-# A raytracer written in Fable (writes a PPM image)
-./target/release/fable examples/raytracer.fable > scene.ppm
+# A raytracer written in Socrates (writes a PPM image)
+./target/release/socrates examples/raytracer.soc > scene.ppm
 
 # Watch checkers play itself — negamax, ~500k nodes, forced captures
-./target/release/fable demos/checkers/main.fable
+./target/release/socrates demos/checkers/main.soc
 
-# A Lisp, running inside Fable, running inside Rust
-./target/release/fable demos/lisp/main.fable
+# A Lisp, running inside Socrates, running inside Rust
+./target/release/socrates demos/lisp/main.soc
 
 # Query a CSV like a database
-./target/release/fable demos/csvql/main.fable \
+./target/release/socrates demos/csvql/main.soc \
   "select city, pop where continent == Asia order by pop desc limit 3"
 
 # Golden-test the spec suite and all eighteen demos with the built-in runner
 # (glcube's three windowing mains need a live window — CI covers those)
-./target/release/fable test tests/spec
+./target/release/socrates test tests/spec
 shopt -s extglob
-./target/release/fable test demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable
+./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc
 
 # Poke at the machinery
-./target/release/fable dis examples/algorithms.fable
-./target/release/fable repl
+./target/release/socrates dis examples/algorithms.soc
+./target/release/socrates repl
 ```
 
 ```text
-fable> let double = |x: Int| x * 2;
-fable> [1, 2, 3].map(double)
+socrates> let double = |x: Int| x * 2;
+socrates> [1, 2, 3].map(double)
 [2, 4, 6] : List[Int]
-fable> :type |acc: Int, x: Int| acc + x
+socrates> :type |acc: Int, x: Int| acc + x
 : fn(Int, Int) -> Int
 ```
 
 ## A four-minute tour
 
-```fable
+```soc
 // Bindings are immutable unless marked `mut`; types are inferred.
 let name = "Aesop";
 let mut count = 0;
@@ -305,18 +305,18 @@ src/
   window/         the window + gfx namespaces: GL (X11/WGL/CGL), Metal,
                   and Vulkan backends; vulkan.rs is the platform-neutral
                   Vulkan core shared by the Linux and Windows shims
-  bundle.rs       fable build: staple a program into a standalone binary
+  bundle.rs       socrates build: staple a program into a standalone binary
   fmt.rs          comment-preserving, width-aware formatter
   repl.rs         incremental REPL with rollback
-  modules.rs      the import loader (dedup, cycles, FABLE_PATH, std)
-  testing.rs      the golden-test runner (fable test + the spec suite)
+  modules.rs      the import loader (dedup, cycles, SOCRATES_PATH, std)
+  testing.rs      the golden-test runner (socrates test + the spec suite)
   lsp.rs          the language server (diagnostics, hover, definition)
   jsonlite.rs     hand-rolled JSON for JSON-RPC
-  stdlib.rs       embeds std/*.fable into the binary
+  stdlib.rs       embeds std/*.soc into the binary
   dis.rs          disassembler
-std/              the standard library, written in Fable
+std/              the standard library, written in Socrates
 docs/SPEC.md      the normative language specification
-book/             the Fable book (every snippet runs in CI)
+book/             the Socrates book (every snippet runs in CI)
 tests/spec/       golden tests (expect / error / panic directives)
 examples/         mandelbrot, raytracer, game of life, brainfuck,
                   JSON parser, algorithms, a tiny text adventure
@@ -331,12 +331,12 @@ CLAUDE.md         project memory: purpose, invariants, release ledger
 
 ```sh
 cargo test                      # unit tests + the golden spec suite
-FABLE_GC_STRESS=1 cargo test    # same, collecting before every allocation
+SOCRATES_GC_STRESS=1 cargo test    # same, collecting before every allocation
 ```
 
-Golden tests are plain Fable programs with expectations in comments:
+Golden tests are plain Socrates programs with expectations in comments:
 
-```fable
+```soc
 println(1 + 2 * 3);   //? expect: 7
 let x: Int = "no";    //? error: type mismatch
 [1, 2][9];            //? panic: out of bounds
@@ -344,19 +344,19 @@ let x: Int = "no";    //? error: type mismatch
 
 ## Status
 
-Fable is a complete, working language. The spec (`docs/SPEC.md`) is the
+Socrates is a complete, working language. The spec (`docs/SPEC.md`) is the
 source of truth; deviations are bugs. It has grown through eight releases —
 the core language and toolchain (v0.1–v0.5), a field-test pass that removed
 the walls real demo programs hit (v0.6), an infrastructure release that
 added `Bytes`, native FFT, worker isolates, bitwise operators, a GPU path,
 and a standard-library collections layer, then a measured efficiency pass
-over the interpreter and `fable build` — self-contained single-file binaries,
+over the interpreter and `socrates build` — self-contained single-file binaries,
 shipped as a demo zoo cross-compiled for Linux, Windows, and macOS (v0.7) —
 and a release that worked directly through the demo round's own
 deduplicated feature-request queue: `if let`/`while let`, bitwise compound
 assignment, 64-bit hex literals and `Bytes` accessors, wrapping arithmetic,
 `Range.any`/`all`, non-blocking `worker.try_recv`, a `std.lazy` module,
-ergonomic `std.json` construction, and `fable test --bless` — plus, in
+ergonomic `std.json` construction, and `socrates test --bless` — plus, in
 the same release, the native graphics-and-compute programme: `window`/`gfx`
 across OpenGL, Metal, and Vulkan with the glcube demo pinned byte-identical
 on all three, five native compute backends, `std.glm`, and the deletion of

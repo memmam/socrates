@@ -722,9 +722,9 @@ unsafe fn create_instance(
     let app = VkApplicationInfo {
         s_type: ST_APPLICATION_INFO,
         p_next: std::ptr::null(),
-        p_application_name: c"fable".as_ptr(),
+        p_application_name: c"socrates".as_ptr(),
         application_version: 0,
-        p_engine_name: c"fable".as_ptr(),
+        p_engine_name: c"socrates".as_ptr(),
         engine_version: 0,
         api_version: VK_API_VERSION_1_0,
     };

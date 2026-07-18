@@ -1,0 +1,284 @@
+// claudewave.synths — Socrates port of upstream lib/synths.py (byte-for-byte
+// copy vendored at ports/claudewave/upstream/synths.py).
+//
+// Programmatic synth voices for claudewave remixes. All voices return
+// mono arrays in approximately [-1, 1] range, EXCEPT voice_juno_pad
+// which returns stereo. The port is function-for-function and keeps
+// every arithmetic expression in the upstream evaluation order (see
+// ports/pyl/CONTRACT.md); f64 throughout — upstream's .astype(float32)
+// casts are copying no-ops under the contract.
+//
+// Port notes:
+//   * Socrates has no default arguments: callers pass the upstream
+//     defaults explicitly (documented per function).
+//   * Randomness comes from the shared unit-float stream; call
+//     set_stream() once before any stream-fed voice (mirrors the
+//     harness's sys.modules['random'] injection).
+//   * parse_chord returns Option[(Int, String)] where upstream returns
+//     (None, None); chord_root_midi returns Option[Int]. A Python
+//     `name=None` chord maps to any unparseable name (e.g. ""), which
+//     takes the same code path (empty voicing, callers skip).
+
+import pyl.nd;
+import pyl.signal;
+import pyl.rand;
+
+let mut rng: rand.Stream = rand.from_vals([]);
+
+// Wire the shared random stream (one Stream object is shared by every
+// claudewave module — reference semantics keep one cursor).
+pub fn set_stream(s: rand.Stream) { rng = s; }
+
+pub fn env_adsr(n: Int, sr: Int, a_s: Float, d_s: Float, s_lvl: Float, r_s: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let a = (a_s * srf).to_int();
+    let d = (d_s * srf).to_int();
+    let r = (r_s * srf).to_int();
+    let s = (0).max(n - (a + d + r));
+    let env = nd.concat([
+        nd.linspace(0.0, 1.0, a),
+        nd.linspace(1.0, s_lvl, d),
+        nd.full(s, s_lvl),
+        nd.linspace(s_lvl, 0.0, r),
+    ]);
+    // np.pad to n if short, then env[:n]
+    env.pad_end(n)
+}
+
+// ====================== Chord / melody instruments ======================
+
+// DX7-style FM Rhodes. 2-op FM with decaying index. Default velocity=0.75.
+pub fn voice_rhodes(freq: Float, dur_s: Float, sr: Int, velocity: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let n = (dur_s * srf).to_int();
+    if n < 64 { return nd.zeros(n); }
+    let t = nd.arange(n).divs(srf);
+    let idx = t.muls(-4.5).expv().muls(velocity * 3.0) + t.muls(-0.8).expv().muls(0.4 * velocity);
+    let mod = t.muls(2.0 * math.pi * freq).sinv();
+    let vib = t.muls(2.0 * math.pi * 5.5).sinv().muls(0.003).mul(t.muls(-2.0).expv().k_minus(1.0));
+    let y = vib.adds(1.0).muls(2.0 * math.pi * freq).mul(t).add(idx.mul(mod)).sinv();
+    let amp = t.muls(-0.4).expv().muls(0.25).adds(0.75).mul(t.muls(-1.3).expv());
+    y.mul(amp).muls(velocity).muls(0.9)
+}
+
+// Funk/citypop bass: sub sine + filtered saw + click transient,
+// tanh-saturated. Default velocity=0.8. Stream-fed (randn click).
+pub fn voice_slap_bass(freq: Float, dur_s: Float, sr: Int, velocity: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let n = (dur_s * srf).to_int();
+    if n < 64 { return nd.zeros(n); }
+    let t = nd.arange(n).divs(srf);
+    let click_env = t.muls(-80.0).expv();
+    let click0 = (rng.randn(n).muls(0.5) + t.muls(2.0 * math.pi * freq * 2.0).sinv().muls(0.35)).mul(click_env);
+    let sos = signal.butter(2, 200.0 / (srf / 2.0), 2500.0 / (srf / 2.0), "band");
+    let click = signal.sosfilt(sos, click0);
+    let sub = t.muls(2.0 * math.pi * freq).add(t.muls(2.0 * math.pi * freq * 0.5).sinv().muls(0.05)).sinv();
+    let tf = t.muls(freq);
+    let saw0 = tf.sub(tf.adds(0.5).floorv()).muls(2.0);
+    let sos2 = signal.butter(2, 800.0 / (srf / 2.0), 0.0, "low");
+    let saw = signal.sosfilt(sos2, saw0);
+    let env = env_adsr(n, sr, 0.003, 0.08, 0.55, (0.35).min(dur_s * 0.3));
+    let y = (sub.muls(0.55) + saw.muls(0.28) + click.muls(0.5)).mul(env);
+    let y2 = y.muls(1.3).tanhv().muls(0.82);
+    y2.muls(velocity).muls(0.7)
+}
+
+// Deep sine with gentle self-modulation. Default velocity=0.7.
+pub fn voice_sub(freq: Float, dur_s: Float, sr: Int, velocity: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let n = (dur_s * srf).to_int();
+    if n < 64 { return nd.zeros(n); }
+    let t = nd.arange(n).divs(srf);
+    let y = t.muls(2.0 * math.pi * freq).add(t.muls(2.0 * math.pi * freq * 0.5).sinv().muls(0.08)).sinv();
+    let env = env_adsr(n, sr, 0.05, 0.3, 0.6, (0.8).min(dur_s * 0.5));
+    y.mul(env).muls(velocity).muls(0.5)
+}
+
+// Glassy bell — sine with 2nd and 3rd harmonics, fast decay. Default velocity=0.5.
+pub fn voice_bell(freq: Float, dur_s: Float, sr: Int, velocity: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let n = (dur_s * srf).to_int();
+    if n < 64 { return nd.zeros(n); }
+    let t = nd.arange(n).divs(srf);
+    let y = t.muls(2.0 * math.pi * freq).sinv().muls(0.7)
+        + t.muls(2.0 * math.pi * freq * 2.0).sinv().muls(0.4)
+        + t.muls(2.0 * math.pi * freq * 3.0).sinv().muls(0.2);
+    let env = t.muls(-2.0).expv();
+    y.mul(env).muls(velocity).muls(0.25)
+}
+
+// Warm detuned-saw pad, low-passed, stereo spread. RETURNS STEREO.
+// Defaults: velocity=0.7, n_voices=5, spread_cents=12.0. Stream-fed
+// (one random() phase per voice).
+pub fn voice_juno_pad(freq: Float, dur_s: Float, sr: Int, velocity: Float, n_voices: Int, spread_cents: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let n = (dur_s * srf).to_int();
+    if n < 64 { return nd.zeros2(n); }
+    let t = nd.arange(n).divs(srf);
+    let l = nd.zeros(n);
+    let r = nd.zeros(n);
+    let half = (n_voices - 1).to_float() / 2.0;
+    for i in 0..n_voices {
+        let cents = (i.to_float() - half) * (spread_cents * 2.0 / (n_voices - 1).to_float());
+        let f = freq * math.pow(2.0, cents / 1200.0);
+        let ph = rng.random_();
+        let tf = t.muls(f).adds(ph);
+        let saw = tf.sub(tf.adds(0.5).floorv()).muls(2.0);
+        let sine = t.muls(2.0 * math.pi * f).adds(ph).sinv().muls(0.22);
+        let v = saw + sine;
+        let pan = (i.to_float() - half) / (1.0).max(half);
+        let gl = math.cos((pan + 1.0) * math.pi / 4.0);
+        let gr = math.sin((pan + 1.0) * math.pi / 4.0);
+        l.add_range(0, v, gl);
+        r.add_range(0, v, gr);
+    }
+    let s0 = nd.stack2(l, r).divs(n_voices.to_float());
+    let sos = signal.butter(2, 2800.0 / (srf / 2.0), 0.0, "low");
+    let s = signal.sosfilt(sos, s0);
+    let env = env_adsr(n, sr, 0.9, 0.7, 0.72, (2.5).min(dur_s * 0.35));
+    s.mul_env(env).muls(velocity).muls(0.32)
+}
+
+// Bright 2:1 FM lead for citypop countermelodies. Default velocity=0.8.
+pub fn voice_fm_lead(freq: Float, dur_s: Float, sr: Int, velocity: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let n = (dur_s * srf).to_int();
+    if n < 64 { return nd.zeros(n); }
+    let t = nd.arange(n).divs(srf);
+    let idx = t.muls(-2.5).expv().muls(velocity * 2.5).adds(0.5 * velocity);
+    let mod = t.muls(2.0 * math.pi * freq * 2.0).sinv();
+    let y = t.muls(2.0 * math.pi * freq).add(idx.mul(mod)).sinv();
+    let amp = env_adsr(n, sr, 0.06, 0.2, 0.65, (0.6).min(dur_s * 0.4));
+    y.mul(amp).muls(velocity).muls(0.45)
+}
+
+// Natural-feeling whistle: randomized slow oscillators + smoothed noise
+// wobble, delayed vibrato onset, breath noise. Default velocity=0.8.
+// Stream-fed (draw order matches upstream statement order exactly).
+pub fn voice_whistle(freq: Float, dur_s: Float, sr: Int, velocity: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let n = (dur_s * srf).to_int();
+    if n < 64 { return nd.zeros(n); }
+    let t = nd.arange(n).divs(srf);
+
+    let rate_a = rng.uniform(4.6, 6.2);
+    let rate_b = rng.uniform(2.3, 3.5);
+    let rate_c = rng.uniform(0.8, 1.4);
+    let ph_a = rng.uniform(0.0, 2.0 * math.pi);
+    let ph_b = rng.uniform(0.0, 2.0 * math.pi);
+    let ph_c = rng.uniform(0.0, 2.0 * math.pi);
+    let osc_a = t.muls(2.0 * math.pi * rate_a).adds(ph_a).sinv();
+    let osc_b = t.muls(2.0 * math.pi * rate_b).adds(ph_b).sinv();
+    let osc_c = t.muls(2.0 * math.pi * rate_c).adds(ph_c).sinv();
+
+    // smoothed noise wobble for organic irregularity
+    let raw = rng.randn(n);
+    let sos_n = signal.butter(2, 7.0 / (srf / 2.0), 0.0, "low");
+    let nw0 = signal.sosfilt(sos_n, raw);
+    let noise_wobble = nw0.divs(nw0.max_abs() + 1e-9);
+
+    let onset_delay = rng.uniform(0.30, 0.55);
+    let onset_rise = 0.25;
+    let vib_env = t.adds(-onset_delay).divs(onset_rise).clip(0.0, 1.0);
+    let depth_mod = t.muls(2.0 * math.pi * 0.8).adds(rng.uniform(0.0, 2.0 * math.pi)).sinv()
+        .muls(0.5).adds(0.5).muls(0.45).adds(0.55);
+    let pitch_wobble = vib_env.mul(depth_mod).mul(
+        osc_a.muls(0.004) + osc_b.muls(0.002) + osc_c.muls(0.0015) + noise_wobble.muls(0.003)
+    );
+    let fixed_offset = rng.uniform(-0.004, 0.004);
+    let freq_t = pitch_wobble.adds(1.0).adds(fixed_offset).muls(freq);
+
+    // integrate freq -> phase (time-varying pitch done right)
+    let dt = 1.0 / srf;
+    let phase = freq_t.cumsum().muls(2.0 * math.pi).muls(dt);
+    let y_sine = phase.sinv() + phase.muls(2.0).sinv().muls(0.025);
+
+    // continuous breath noise, band-limited
+    let bnoise = rng.randn(n);
+    let sos_b = signal.butter(3, 1800.0 / (srf / 2.0), 4800.0 / (srf / 2.0), "band");
+    let breath = signal.sosfilt(sos_b, bnoise);
+    let breath_env = t.muls(-8.0).expv().muls(0.65).adds(0.35).muls(0.055);
+
+    // amplitude: soft attack + slow random wobble (not sine tremolo)
+    let a_s = rng.uniform(0.06, 0.12);
+    let s_lvl = rng.uniform(0.78, 0.90);
+    let amp = env_adsr(n, sr, a_s, 0.15, s_lvl, (0.22).min(dur_s * 0.25));
+    let amp_raw = rng.randn(n);
+    let aw0 = signal.sosfilt(signal.butter(2, 1.3 / (srf / 2.0), 0.0, "low"), amp_raw);
+    let amp_wobble = aw0.muls(0.04).divs(aw0.max_abs() + 1e-9).adds(1.0);
+
+    (y_sine + breath.mul(breath_env)).mul(amp).mul(amp_wobble).muls(velocity).muls(0.36)
+}
+
+// ====================== Chord voicing helpers ======================
+
+let roots = {"C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5,
+             "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10,
+             "Bb": 10, "B": 11};
+
+// (root_pitch_class 0-11, kind in {maj, m, 7, m7, maj7}); None for an
+// unparseable name (upstream's (None, None)).
+pub fn parse_chord(name: String) -> Option[(Int, String)] {
+    let mut base = name;
+    let mut kind = "";
+    for sx in ["maj7", "m7", "7", "m"] {
+        if base.ends_with(sx) {
+            kind = sx;
+            base = base.slice(0, base.len() - sx.len());
+            break;
+        }
+    }
+    match roots.get(base) {
+        Some(r) -> Some((r, if kind == "" { "maj" } else { kind })),
+        None -> None,
+    }
+}
+
+// Root of chord at a given base octave. Default octave_midi=33 (A1).
+pub fn chord_root_midi(name: String, octave_midi: Int) -> Option[Int] {
+    match parse_chord(name) {
+        Some((r, _)) -> Some(octave_midi + r),
+        None -> None,
+    }
+}
+
+// Chord voicing in MIDI (standard close-ish, for Rhodes comp). Default
+// base_midi=60. Empty list for an unparseable name.
+pub fn chord_voicing_midi(name: String, base_midi: Int) -> List[Int] {
+    match parse_chord(name) {
+        None -> [],
+        Some((r, kind)) -> {
+            let degs = if kind == "maj7" { [r, (r + 4) % 12, (r + 7) % 12, (r + 11) % 12] }
+                else if kind == "m7" { [r, (r + 3) % 12, (r + 7) % 12, (r + 10) % 12] }
+                else if kind == "7" { [r, (r + 4) % 12, (r + 7) % 12, (r + 10) % 12] }
+                else if kind == "m" { [r, (r + 3) % 12, (r + 7) % 12] }
+                else { [r, (r + 4) % 12, (r + 7) % 12] };
+            degs.map(|d| base_midi + d)
+        }
+    }
+}
+
+// Wider voicing for pads — adds extensions + top octave. Defaults:
+// base_midi=48, top_octave=true.
+pub fn chord_pad_voicing_midi(name: String, base_midi: Int, top_octave: Bool) -> List[Int] {
+    match parse_chord(name) {
+        None -> [],
+        Some((r, kind)) -> {
+            let degs = if kind == "maj7" { [r, (r + 4) % 12, (r + 7) % 12, (r + 11) % 12, (r + 2) % 12] }
+                else if kind == "m7" { [r, (r + 3) % 12, (r + 7) % 12, (r + 10) % 12, (r + 2) % 12] }
+                else if kind == "7" { [r, (r + 4) % 12, (r + 7) % 12, (r + 10) % 12] }
+                else if kind == "m" { [r, (r + 3) % 12, (r + 7) % 12] }
+                else { [r, (r + 4) % 12, (r + 7) % 12] };
+            let out = degs.map(|d| base_midi + d);
+            if top_octave {
+                out.push(base_midi + 12 + degs[0]);
+            }
+            out
+        }
+    }
+}
+
+// MIDI note -> Hz, optionally scaled by a slowdown ratio. Default slow=1.0.
+pub fn midi_to_hz(m: Int, slow: Float) -> Float {
+    440.0 * math.pow(2.0, (m - 69).to_float() / 12.0) * slow
+}

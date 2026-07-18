@@ -1,4 +1,4 @@
-# pyl — the Python-to-Fable translation layer: numerical contract
+# pyl — the Python-to-Socrates translation layer: numerical contract
 
 This file pins the semantics that BOTH implementations of the claudewave
 port must follow exactly:
@@ -7,12 +7,12 @@ port must follow exactly:
   implementing the numpy/scipy.signal subset below. The upstream
   claudewave `lib/*.py` files run **unmodified** against it (injected via
   `sys.modules['numpy'] = ...` etc.), producing ground-truth output.
-- `ports/pyl/*.fable` — the Fable layer implementing the same subset.
+- `ports/pyl/*.soc` — the Socrates layer implementing the same subset.
 
 Where this contract and real numpy/scipy could disagree, CI (which can
 install the real packages) compares the shim against them; locally the
 shim is the executable contract. Parity between shim-run upstream code
-and the Fable port is judged **numerically**: arithmetic-only paths are
+and the Socrates port is judged **numerically**: arithmetic-only paths are
 expected bit-equal in f64; paths through libm transcendentals
 (sin/cos/exp/tanh/pow) get a documented allowance of max abs diff
 ≤ 1e-9 per sample (report the actual max, always).
@@ -85,7 +85,7 @@ is `{b0, b1, b2, a1, a2}` (a0 normalized to 1). Pinned algorithm:
    p_analog_poles))`; zeros at s = ∞ map to z = −1.
 5. SOS pairing: scipy's `zpk2sos('nearest')`, which both sides
    implement outright (the shim ports it statement for statement, as
-   does `ports/pyl/signal.fable` — its header records the steps):
+   does `ports/pyl/signal.soc` — its header records the steps):
    `_cplxreal` first (lexicographic (re, |im|) sort with 100·eps
    tolerance, run-sorting by |im| within equal-real runs, conjugate
    averaging), then sections filled **worst-pole-first** — the
@@ -100,7 +100,7 @@ is `{b0, b1, b2, a1, a2}` (a0 normalized to 1). Pinned algorithm:
    **the freeze file** (which follows scipy's `zpk2sos` output for
    these designs — note scipy places an odd order's real-pole section
    first and carries the overall gain in the first emitted section);
-   the Fable side must reproduce the freeze however it gets there.
+   the Socrates side must reproduce the freeze however it gets there.
 6. **The per-filter freeze (authoritative):** prose descriptions of SOS
    pairing conventions are error-prone, so the binding artifact is a
    coefficient dump. The shim author implements steps 1–5, then writes
@@ -111,7 +111,7 @@ is `{b0, b1, b2, a1, a2}` (a0 normalized to 1). Pinned algorithm:
    vocoder's per-band designs at its documented band edges) into
    `ports/claudewave/reference/sos_freeze.txt`, one line per section:
    `<design-id> b0 b1 b2 1 a1 a2` in shortest round-trip floats. The
-   Fable implementation must reproduce every frozen coefficient to
+   Socrates implementation must reproduce every frozen coefficient to
    ≤ 1e-12 relative. CI additionally regenerates the same designs with
    real scipy (`butter(..., output='sos')`) and fails if any frozen
    coefficient differs from scipy's by more than 1e-9 relative — the
@@ -151,8 +151,8 @@ The shim monkeypatches upstream's `random` and `np.random` to these.
 
 Audio travels between the two implementations as PAW, a PPM-spirited
 text format chosen for diffability. (The port initially surfaced a real
-language gap here — Fable had no binary file I/O — which became v0.7's
-`Bytes` type; the Fable side can now also emit WAV directly, but PAW
+language gap here — Socrates had no binary file I/O — which became v0.7's
+`Bytes` type; the Socrates side can now also emit WAV directly, but PAW
 remains the parity-comparison format.)
 
 ```

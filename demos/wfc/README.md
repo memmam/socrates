@@ -1,7 +1,7 @@
-# wfc — a wave-function-collapse texture generator in Fable
+# wfc — a wave-function-collapse texture generator in Socrates
 
 The simple-tile wave-function-collapse algorithm in about 350 lines of
-Fable. From one small hand-drawn ASCII sample the demo learns which tiles
+Socrates. From one small hand-drawn ASCII sample the demo learns which tiles
 may sit next to which (and how often each tile occurs), then synthesises
 larger textures that obey the same local rules:
 
@@ -30,8 +30,8 @@ plumbing grids).
 From the repository root:
 
 ```sh
-./target/release/fable demos/wfc/main.fable   # sample, tile set, two textures
-./target/release/fable test demos/wfc         # golden tests (main + spec)
+./target/release/socrates demos/wfc/main.soc   # sample, tile set, two textures
+./target/release/socrates test demos/wfc         # golden tests (main + spec)
 ```
 
 ## Sample output
@@ -73,11 +73,11 @@ the demo to see it.)
 
 | File | Role |
 |------|------|
-| `samples.fable` | the two hand-drawn training patterns, shared by main and spec |
-| `rules.fable` | learning: tile inventory, weights, and the adjacency table — one bitmask per (tile, direction) in a flat `List[Int]` — plus `popcount` and the printable tile-set description |
-| `wfc.fable` | the core loop: cached entropy bookkeeping, weighted collapse, arc-consistency propagation over a `std.deque`, restart-on-contradiction |
-| `main.fable` | seeds, prints sample / learned rules / textures, and pins the full output with `//? expect:` directives |
-| `spec.fable` | component golden tests: learned rules on a tiny sample, the bitmask rule table (all_mask, per-direction masks, popcount, forward/backward mask consistency), zero rule violations in generated output, same-seed determinism, and a provably impossible tile set that must exhaust its seed budget |
+| `samples.soc` | the two hand-drawn training patterns, shared by main and spec |
+| `rules.soc` | learning: tile inventory, weights, and the adjacency table — one bitmask per (tile, direction) in a flat `List[Int]` — plus `popcount` and the printable tile-set description |
+| `wfc.soc` | the core loop: cached entropy bookkeeping, weighted collapse, arc-consistency propagation over a `std.deque`, restart-on-contradiction |
+| `main.soc` | seeds, prints sample / learned rules / textures, and pins the full output with `//? expect:` directives |
+| `spec.soc` | component golden tests: learned rules on a tiny sample, the bitmask rule table (all_mask, per-direction masks, popcount, forward/backward mask consistency), zero rule violations in generated output, same-seed determinism, and a provably impossible tile set that must exhaust its seed budget |
 
 Notes on the algorithm:
 
@@ -93,8 +93,8 @@ Notes on the algorithm:
   version collapses into two bitwise operations.
 - `generate(rules, w, h, seed, max_tries)` reseeds with `seed + attempt`
   on each contradiction and returns `None` only when the budget runs out —
-  `spec.fable` exercises that path with rules learned from the single row
-  `"ab"`, under which a 3-wide strip is unsatisfiable. (Since Fable v0.6
+  `spec.soc` exercises that path with rules learned from the single row
+  `"ab"`, under which a 3-wide strip is unsatisfiable. (Since Socrates v0.6
   `math.seed` scrambles its argument, so the adjacent seeds these retries
   use produce genuinely independent streams — under v0.5 they collided,
   which made a retry mostly replay the failed attempt.)

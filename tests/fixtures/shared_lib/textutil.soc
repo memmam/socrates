@@ -1,0 +1,9 @@
+// A shared-library module found via the search path (SOCRATES_PATH), not
+// relative to the importing file.
+pub fn shout(s: String) -> String {
+    s.to_upper() + "!"
+}
+
+pub fn initials(words: List[String]) -> String {
+    words.map(|w| w.slice(0, 1)).join("")
+}

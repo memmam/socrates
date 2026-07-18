@@ -1,9 +1,9 @@
 //! Self-contained program bundles (v0.7): stapling a program's assets onto
 //! the interpreter to make one fixed, runnable binary.
 //!
-//! `fable build DIR` walks a program's directory, packs every file into a
+//! `socrates build DIR` walks a program's directory, packs every file into a
 //! payload, and appends `payload || u64(len) || MAGIC` to a copy of the
-//! `fable` executable. When that stapled binary starts, [`read_self`] finds
+//! `socrates` executable. When that stapled binary starts, [`read_self`] finds
 //! the trailer, [`Bundle::extract_to`] unpacks the files into a scratch
 //! directory, and the normal runner takes over from there — so imports,
 //! `fs.*`, and `worker.spawn` all resolve against real files with no
@@ -11,7 +11,7 @@
 //!
 //! The format is deliberately dumb and dependency-free: little-endian
 //! length-prefixed records. Reading its own tail costs one 16-byte read for
-//! an ordinary (un-stapled) `fable`, so the launcher path is free until a
+//! an ordinary (un-stapled) `socrates`, so the launcher path is free until a
 //! bundle is actually present.
 
 use std::io::{self, Read, Seek, SeekFrom};
@@ -19,14 +19,14 @@ use std::path::{Path, PathBuf};
 
 /// Trailer sentinel; also the format version (bump the trailing digit on an
 /// incompatible layout change). Chosen to be unlikely in a binary's tail.
-const MAGIC: &[u8; 8] = b"FABLZOO1";
+const MAGIC: &[u8; 8] = b"SOCRZOO1";
 
 /// On macOS the payload can't be appended (a Mach-O with data past
 /// `__LINKEDIT` fails code signing, and Apple Silicon won't run unsigned), so
-/// it is linked in as a section instead — `ld -sectcreate __DATA __fablezoo
+/// it is linked in as a section instead — `ld -sectcreate __DATA __socrateszoo
 /// payload.bin` — and read back out of the image by [`macho_section`]. Names
 /// live in a fixed 16-byte, NUL-padded field.
-const MACHO_SECTION_NAME: &[u8] = b"__fablezoo";
+const MACHO_SECTION_NAME: &[u8] = b"__socrateszoo";
 
 /// An unpacked program: the entry file's bundle-relative path plus every
 /// file's bundle-relative path and contents.
@@ -60,19 +60,19 @@ pub fn staple(launcher: &[u8], payload: &[u8]) -> Vec<u8> {
 }
 
 /// Read the bundle stapled onto the currently running executable, if any.
-/// Returns `None` for an ordinary `fable` (no trailer) and on any read or
+/// Returns `None` for an ordinary `socrates` (no trailer) and on any read or
 /// parse trouble — a malformed tail must never keep the plain CLI from
 /// running.
 pub fn read_self() -> Option<Bundle> {
     let exe = std::env::current_exe().ok()?;
     // Fast path: the trailer is the exact tail (ELF and PE tolerate appended
     // data, so the magic is the last 8 bytes). One 16-byte read for an
-    // ordinary `fable`.
+    // ordinary `socrates`.
     if let Ok(Some(b)) = read_from(&exe) {
         return Some(b);
     }
     let data = std::fs::read(&exe).ok()?;
-    // macOS: the payload rides in a Mach-O `__fablezoo` section, not the tail.
+    // macOS: the payload rides in a Mach-O `__socrateszoo` section, not the tail.
     if let Some(b) = macho_section(&data) {
         return Some(b);
     }
@@ -82,11 +82,11 @@ pub fn read_self() -> Option<Bundle> {
     scan(&data)
 }
 
-/// Find the payload in a `__fablezoo` section of a 64-bit little-endian
+/// Find the payload in a `__socrateszoo` section of a 64-bit little-endian
 /// Mach-O (our only macOS target is arm64), reading it straight from the file
 /// image by its recorded offset — no ASLR/slide concerns. Returns `None` for
 /// any non-Mach-O binary or a Mach-O without the section, so ELF/PE and an
-/// ordinary `fable` fall through untouched.
+/// ordinary `socrates` fall through untouched.
 fn macho_section(data: &[u8]) -> Option<Bundle> {
     const MH_MAGIC_64: u32 = 0xFEED_FACF;
     const LC_SEGMENT_64: u32 = 0x19;
@@ -269,21 +269,21 @@ mod tests {
     #[test]
     fn round_trip() {
         let files = vec![
-            ("main.fable".to_string(), b"println(\"hi\");".to_vec()),
-            ("lib/util.fable".to_string(), b"pub fn f() -> Int { 1 }".to_vec()),
+            ("main.soc".to_string(), b"println(\"hi\");".to_vec()),
+            ("lib/util.soc".to_string(), b"pub fn f() -> Int { 1 }".to_vec()),
             ("data.bin".to_string(), vec![0u8, 1, 2, 255, 254]),
         ];
-        let blob = payload("main.fable", &files);
+        let blob = payload("main.soc", &files);
         let b = parse(&blob).expect("parses");
-        assert_eq!(b.entry, "main.fable");
+        assert_eq!(b.entry, "main.soc");
         assert_eq!(b.files, files);
     }
 
     #[test]
     fn staple_then_read_tail() {
         let launcher = b"pretend-this-is-an-executable-image".to_vec();
-        let files = vec![("main.fable".to_string(), b"1".to_vec())];
-        let img = staple(&launcher, &payload("main.fable", &files));
+        let files = vec![("main.soc".to_string(), b"1".to_vec())];
+        let img = staple(&launcher, &payload("main.soc", &files));
         // The trailer must be exactly the last 16 bytes.
         assert_eq!(&img[img.len() - 8..], MAGIC);
         // And the payload parses back out of the middle.
@@ -300,8 +300,8 @@ mod tests {
 
     #[test]
     fn scan_finds_magic_before_a_trailing_signature() {
-        let files = vec![("main.fable".to_string(), b"println(1);".to_vec())];
-        let mut img = staple(b"mach-o-image", &payload("main.fable", &files));
+        let files = vec![("main.soc".to_string(), b"println(1);".to_vec())];
+        let mut img = staple(b"mach-o-image", &payload("main.soc", &files));
         // Simulate a code signature appended after our trailer.
         img.extend_from_slice(b"\x00fake code signature blob\xff\xfe");
         let b = scan(&img).expect("scan locates the payload past trailing bytes");
@@ -315,10 +315,10 @@ mod tests {
 
     #[test]
     fn macho_section_reads_payload() {
-        let files = vec![("main.fable".to_string(), b"println(42);".to_vec())];
-        let pl = payload("main.fable", &files);
+        let files = vec![("main.soc".to_string(), b"println(42);".to_vec())];
+        let pl = payload("main.soc", &files);
         // Minimal 64-bit Mach-O: header + one __DATA segment with one
-        // __fablezoo section whose file offset points past the load commands.
+        // __socrateszoo section whose file offset points past the load commands.
         let cmdsize = 72 + 80usize; // segment_command_64 + one section_64
         let payload_off = 32 + cmdsize;
         let mut m = vec![0u8; payload_off];
@@ -331,21 +331,21 @@ mod tests {
         m[c + 8..c + 14].copy_from_slice(b"__DATA"); // segname
         m[c + 64..c + 68].copy_from_slice(&1u32.to_le_bytes()); // nsects
         let s = c + 72; // section_64
-        m[s..s + 10].copy_from_slice(b"__fablezoo"); // sectname
+        m[s..s + 13].copy_from_slice(b"__socrateszoo"); // sectname (13 bytes, within the 16-byte field)
         m[s + 16..s + 22].copy_from_slice(b"__DATA"); // segname
         m[s + 40..s + 48].copy_from_slice(&(pl.len() as u64).to_le_bytes()); // size
         m[s + 48..s + 52].copy_from_slice(&(payload_off as u32).to_le_bytes()); // offset
         m.extend_from_slice(&pl);
 
-        let b = macho_section(&m).expect("reads the __fablezoo section");
-        assert_eq!(b.entry, "main.fable");
+        let b = macho_section(&m).expect("reads the __socrateszoo section");
+        assert_eq!(b.entry, "main.soc");
         assert_eq!(b.files, files);
     }
 
     #[test]
     fn macho_section_ignores_non_macho() {
         assert!(macho_section(b"\x7fELF not a mach-o at all, longer than a header").is_none());
-        // A Mach-O with no __fablezoo section (ncmds = 0).
+        // A Mach-O with no __socrateszoo section (ncmds = 0).
         let mut m = vec![0u8; 32];
         m[0..4].copy_from_slice(&0xFEED_FACFu32.to_le_bytes());
         assert!(macho_section(&m).is_none());

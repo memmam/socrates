@@ -1,0 +1,16 @@
+// SPEC 8.2 says of sort(): "element type must be Int/Float/String **at
+// runtime**, else panic", and SPEC 2.5 says generics are type-erased with one
+// compiled body serving all instantiations. So sorting a List[Int] through a
+// generic function is a valid program: the runtime element type is Int and no
+// panic should occur.
+//
+// The implementation instead rejects sort() on a generic receiver at COMPILE
+// time:
+//   error[E0322]: cannot sort the elements of values of generic type `T`
+//     note: Socrates generics have no constraints; use a concrete type here
+// which makes the spec'd runtime check unreachable. (Relatedly,
+// `[true, false].sort()` is also a compile error E0322 rather than the
+// runtime panic the spec describes.)
+fn sort_it[T](xs: List[T]) -> List[T] { xs.sort() }
+println(sort_it([3, 1, 2]));        //? expect: [1, 2, 3]
+println(sort_it(["b", "a", "c"]));  //? expect: ["a", "b", "c"]

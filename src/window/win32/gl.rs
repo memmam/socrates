@@ -287,7 +287,7 @@ struct GlFns {
     enable: FnEnable,
     disable: FnDisable,
     // Resolved but not yet called anywhere: no `gfx.*` member currently
-    // surfaces raw GL error state to Fable. Reserved for a fuller `gfx` API,
+    // surfaces raw GL error state to Socrates. Reserved for a fuller `gfx` API,
     // matching `x11/gl.rs`'s identical note.
     #[allow(dead_code)]
     get_error: FnGetError,
@@ -1017,7 +1017,7 @@ mod tests {
     /// anyway since it's a reasonable defensive measure regardless — it
     /// just wasn't "the fix" for that bug. Scoped to `#[cfg(test)]` since
     /// this is a CI-diagnostic measure, not a production behavior change
-    /// for real Fable programs.
+    /// for real Socrates programs.
     const SEM_FAILCRITICALERRORS: u32 = 0x0001;
     const SEM_NOGPFAULTERRORBOX: u32 = 0x0002;
 
@@ -1034,7 +1034,7 @@ mod tests {
         // anywhere below shows an unclickable WER dialog on CI instead of
         // failing fast.
         unsafe { SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX) };
-        let inner = match Inner::create("fable window test", 320, 240) {
+        let inner = match Inner::create("socrates window test", 320, 240) {
             Ok(inner) => inner,
             Err(e) => {
                 eprintln!("skipping: {e}");

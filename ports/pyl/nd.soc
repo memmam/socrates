@@ -1,0 +1,426 @@
+// pyl.nd — the array type for ported numpy code.
+//
+// Part of the Python-to-Socrates translation layer (see ports/README.md and
+// ports/pyl/CONTRACT.md §Arrays). An `Nd` is f64 throughout: mono (ch=1)
+// or stereo (ch=2, interleaved L R L R ...); frames = len(data)/ch. The
+// mapping from numpy idioms, chosen so ports read line-for-line like
+// their sources:
+//
+//   numpy / Python                     Socrates
+//   -----------------------------      -----------------------------
+//   np.zeros(n) / np.ones(n)           nd.zeros(n) / nd.ones(n)
+//   np.zeros((n, 2))                   nd.zeros2(n)
+//   np.full(n, v)                      nd.full(n, v)
+//   np.array([...])                    nd.of([...])   (mono; of2 = stereo)
+//   np.arange(n).astype(float)         nd.arange(n)
+//   np.linspace(a, b, n)               nd.linspace(a, b, n)
+//   np.geomspace(a, b, n)              nd.geomspace(a, b, n)
+//   x + y  (same shape)                x + y      (also - * /; panics on mismatch)
+//   x + k / x * k / x / k              x.adds(k) / x.muls(k) / x.divs(k)
+//   k - x                              x.k_minus(k)
+//   np.sin(x) / cos / exp / tanh       x.sinv() / cosv() / expv() / tanhv()
+//   np.abs(x) / floor / sqrt           x.absv() / floorv() / sqrtv()
+//   x.mean() / np.max(np.abs(x))       x.mean() / x.max_abs()       (mono)
+//   np.cumsum(x)                       x.cumsum()                   (mono)
+//   np.clip(x, lo, hi)                 x.clip(lo, hi)
+//   np.where(x < t, a, b)              nd.where_lt(x, t, a, b)
+//   x[a:b]        (frame slice, copy)  x.slice(a, b)
+//   x[-k:]                             x.tail(k)
+//   pad/truncate to n frames           x.pad_end(n)
+//   out[at:at+len(src)] = src          out.set_range(at, src)
+//   out[si:ei] += chunk[:ei-si] * g    out.add_range(si, chunk, g)
+//   x[i0]*(1-fr) + x[i0+1]*fr          x.take_lerp(pos)   (pos mono, pre-clipped)
+//   y * env[:, None]                   y.mul_env(env)
+//   np.concatenate(parts)              nd.concat(parts)
+//   np.stack([l, r], axis=1)           nd.stack2(l, r)
+//   np.repeat(x[:, None], 2, axis=1)   nd.mono2(x)
+//   len(x)  (frames)                   x.frames()
+//   x[f] / x[f, c]                     x.get(f, c) / x.set(f, c, v)
+//   x[:, c]     (column copy)          x.channel(c)
+//   np.mean(x)  (all components)       x.mean_all()
+//   np.max(np.abs(x)) (any shape)      x.max_abs_all()
+//
+// Everything returns a fresh array except the in-place ops set_range /
+// add_range / set. Shape mismatches panic with both shapes in the
+// message. Expression order inside every kernel copies the contract's
+// formula verbatim — no algebraic reshuffling.
+//
+// Layer decision — tanh: Socrates's math namespace has no tanh, so this
+// module defines tanh(x) = (e - 1)/(e + 1) with e = exp(2x), guarded to
+// ±1.0 for |x| > 20 (where f64 tanh is exactly ±1.0 anyway, and the
+// unguarded formula would eventually overflow exp). The Python shim uses
+// libm's tanh; the two agree to well under 1e-12 for |x| <= 20 — inside
+// the contract's 1e-9 allowance for transcendental paths.
+
+import std.lists;
+
+pub struct Nd {
+    ch: Int,           // 1 = mono, 2 = stereo (interleaved)
+    data: List[Float],
+}
+
+// ---- scalar helpers ----------------------------------------------------
+
+// math.tanh does not exist in Socrates; see the layer decision above.
+pub fn tanh(x: Float) -> Float {
+    if x > 20.0 { return 1.0; }
+    if x < -20.0 { return -1.0; }
+    let e = math.exp(2.0 * x);
+    (e - 1.0) / (e + 1.0)
+}
+
+// ---- constructors ------------------------------------------------------
+
+pub fn of(data: List[Float]) -> Nd { Nd { ch: 1, data } }
+
+// stereo from an already-interleaved list (length must be even)
+pub fn of2(data: List[Float]) -> Nd {
+    if data.len() % 2 != 0 {
+        panic("pyl.nd: of2: interleaved stereo needs an even list, got {data.len()}");
+    }
+    Nd { ch: 2, data }
+}
+
+pub fn zeros(n: Int) -> Nd { Nd { ch: 1, data: lists.fill(n, 0.0) } }
+
+pub fn zeros2(n: Int) -> Nd { Nd { ch: 2, data: lists.fill(n * 2, 0.0) } }
+
+pub fn ones(n: Int) -> Nd { Nd { ch: 1, data: lists.fill(n, 1.0) } }
+
+pub fn full(n: Int, v: Float) -> Nd { Nd { ch: 1, data: lists.fill(n, v) } }
+
+pub fn arange(n: Int) -> Nd { Nd { ch: 1, data: (0..n).map(|i| i.to_float()) } }
+
+// numpy semantics: endpoint included; n==1 -> [a]; n==0 -> empty;
+// step = (b-a)/(n-1); the last element is set to exactly b (numpy pins
+// the endpoint, it does not trust a + (n-1)*step).
+pub fn linspace(a: Float, b: Float, n: Int) -> Nd {
+    if n <= 0 { return Nd { ch: 1, data: [] }; }
+    if n == 1 { return Nd { ch: 1, data: [a] }; }
+    let step = (b - a) / (n - 1).to_float();
+    let data = (0..n).map(|i| a + i.to_float() * step);
+    data[n - 1] = b;
+    Nd { ch: 1, data }
+}
+
+// numpy semantics: 10^linspace(log10(a), log10(b), n) with both
+// endpoints forced exactly (the shim's formula, digit for digit);
+// n==1 -> [a]; n==0 -> empty; a, b must be positive.
+pub fn geomspace(a: Float, b: Float, n: Int) -> Nd {
+    if a <= 0.0 || b <= 0.0 {
+        panic("pyl.nd: geomspace: endpoints must be positive, got ({a}, {b})");
+    }
+    if n <= 0 { return Nd { ch: 1, data: [] }; }
+    if n == 1 { return Nd { ch: 1, data: [a] }; }
+    let l0 = math.log10(a);
+    let l1 = math.log10(b);
+    let step = (l1 - l0) / (n - 1).to_float();
+    let data = (0..n).map(|i| math.pow(10.0, l0 + i.to_float() * step));
+    data[0] = a;
+    data[n - 1] = b;
+    Nd { ch: 1, data }
+}
+
+pub fn concat(parts: List[Nd]) -> Nd {
+    if parts.len() == 0 { panic("pyl.nd: concat: empty parts list"); }
+    let ch = parts[0].ch;
+    let data = [];
+    for p in parts {
+        if p.ch != ch {
+            panic("pyl.nd: concat: mixed channel counts ({ch} vs {p.ch})");
+        }
+        for v in p.data { data.push(v); }
+    }
+    Nd { ch, data }
+}
+
+// two mono arrays -> one stereo array (l = channel 0, r = channel 1)
+pub fn stack2(l: Nd, r: Nd) -> Nd {
+    if l.ch != 1 || r.ch != 1 { panic("pyl.nd: stack2: both inputs must be mono"); }
+    if l.data.len() != r.data.len() {
+        panic("pyl.nd: stack2: length mismatch ({l.data.len()} vs {r.data.len()})");
+    }
+    let data = [];
+    for (i, v) in l.data.enumerate() {
+        data.push(v);
+        data.push(r.data[i]);
+    }
+    Nd { ch: 2, data }
+}
+
+// duplicate a mono array onto both channels
+pub fn mono2(x: Nd) -> Nd {
+    if x.ch != 1 { panic("pyl.nd: mono2: input must be mono"); }
+    let data = [];
+    for v in x.data {
+        data.push(v);
+        data.push(v);
+    }
+    Nd { ch: 2, data }
+}
+
+// np.where(x < t, a, b), all three arrays the same shape
+pub fn where_lt(x: Nd, t: Float, a: Nd, b: Nd) -> Nd {
+    require_same(x, a, "where_lt");
+    require_same(x, b, "where_lt");
+    let data = [];
+    for (i, v) in x.data.enumerate() {
+        data.push(if v < t { a.data[i] } else { b.data[i] });
+    }
+    Nd { ch: x.ch, data }
+}
+
+// ---- shape checks ------------------------------------------------------
+
+fn require_same(a: Nd, b: Nd, op: String) {
+    if a.ch != b.ch || a.data.len() != b.data.len() {
+        panic("pyl.nd: {op}: shape mismatch ({a.ch}ch x {a.frames()} vs {b.ch}ch x {b.frames()})");
+    }
+}
+
+fn require_mono(x: Nd, op: String) {
+    if x.ch != 1 { panic("pyl.nd: {op}: mono only (got {x.ch} channels)"); }
+}
+
+impl Nd {
+    pub fn frames(self) -> Int { self.data.len() / self.ch }
+
+    pub fn get(self, frame: Int, channel: Int) -> Float {
+        if channel < 0 || channel >= self.ch {
+            panic("pyl.nd: get: channel {channel} out of range (ch {self.ch})");
+        }
+        if frame < 0 || frame >= self.frames() {
+            panic("pyl.nd: get: frame {frame} out of range ({self.frames()} frames)");
+        }
+        self.data[frame * self.ch + channel]
+    }
+
+    pub fn set(self, frame: Int, channel: Int, v: Float) {
+        if channel < 0 || channel >= self.ch {
+            panic("pyl.nd: set: channel {channel} out of range (ch {self.ch})");
+        }
+        if frame < 0 || frame >= self.frames() {
+            panic("pyl.nd: set: frame {frame} out of range ({self.frames()} frames)");
+        }
+        self.data[frame * self.ch + channel] = v;
+    }
+
+    // ---- elementwise operators (same shape; `x + y` dispatches here) ----
+
+    pub fn add(self, o: Nd) -> Nd {
+        require_same(self, o, "add");
+        let data = [];
+        for (i, v) in self.data.enumerate() { data.push(v + o.data[i]); }
+        Nd { ch: self.ch, data }
+    }
+
+    pub fn sub(self, o: Nd) -> Nd {
+        require_same(self, o, "sub");
+        let data = [];
+        for (i, v) in self.data.enumerate() { data.push(v - o.data[i]); }
+        Nd { ch: self.ch, data }
+    }
+
+    pub fn mul(self, o: Nd) -> Nd {
+        require_same(self, o, "mul");
+        let data = [];
+        for (i, v) in self.data.enumerate() { data.push(v * o.data[i]); }
+        Nd { ch: self.ch, data }
+    }
+
+    pub fn div(self, o: Nd) -> Nd {
+        require_same(self, o, "div");
+        let data = [];
+        for (i, v) in self.data.enumerate() { data.push(v / o.data[i]); }
+        Nd { ch: self.ch, data }
+    }
+
+    // ---- scalar ops ----
+
+    pub fn adds(self, k: Float) -> Nd {
+        Nd { ch: self.ch, data: self.data.map(|v| v + k) }
+    }
+
+    pub fn muls(self, k: Float) -> Nd {
+        Nd { ch: self.ch, data: self.data.map(|v| v * k) }
+    }
+
+    pub fn divs(self, k: Float) -> Nd {
+        Nd { ch: self.ch, data: self.data.map(|v| v / k) }
+    }
+
+    // k - x
+    pub fn k_minus(self, k: Float) -> Nd {
+        Nd { ch: self.ch, data: self.data.map(|v| k - v) }
+    }
+
+    // ---- unary maps (per component, stereo included) ----
+
+    pub fn sinv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| math.sin(v)) } }
+    pub fn cosv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| math.cos(v)) } }
+    pub fn expv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| math.exp(v)) } }
+    pub fn tanhv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| tanh(v)) } }
+    pub fn absv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| v.abs()) } }
+    pub fn floorv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| v.floor()) } }
+    pub fn sqrtv(self) -> Nd { Nd { ch: self.ch, data: self.data.map(|v| v.sqrt()) } }
+
+    // ---- reductions / scans (mono) ----
+
+    // left-to-right f64 accumulation / n (the shim's sum(x)/len(x); NOT
+    // numpy's pairwise summation — see the report's decision list)
+    pub fn mean(self) -> Float {
+        require_mono(self, "mean");
+        let mut acc = 0.0;
+        for v in self.data { acc += v; }
+        acc / self.data.len().to_float()
+    }
+
+    // max over |x[i]|; 0.0 on an empty array (layer decision)
+    pub fn max_abs(self) -> Float {
+        require_mono(self, "max_abs");
+        let mut m = 0.0;
+        for v in self.data { m = m.max(v.abs()); }
+        m
+    }
+
+    // ---- claudewave-port additions (kept additive; the mono-only
+    // mean/max_abs semantics above are pinned and unchanged) ----
+
+    // np.mean(x) with axis=None on any shape: plain left-to-right f64
+    // accumulation over every component in storage order / count
+    pub fn mean_all(self) -> Float {
+        let mut acc = 0.0;
+        for v in self.data { acc += v; }
+        acc / self.data.len().to_float()
+    }
+
+    // np.max(np.abs(x)) on any shape; 0.0 on an empty array (layer
+    // decision, same as max_abs)
+    pub fn max_abs_all(self) -> Float {
+        let mut m = 0.0;
+        for v in self.data { m = m.max(v.abs()); }
+        m
+    }
+
+    // x[:, c] — one channel as a mono copy
+    pub fn channel(self, c: Int) -> Nd {
+        if c < 0 || c >= self.ch {
+            panic("pyl.nd: channel: channel {c} out of range (ch {self.ch})");
+        }
+        let data = [];
+        let mut i = c;
+        while i < self.data.len() {
+            data.push(self.data[i]);
+            i += self.ch;
+        }
+        Nd { ch: 1, data }
+    }
+
+    // running sum, same length, left to right, plain f64 accumulation
+    pub fn cumsum(self) -> Nd {
+        require_mono(self, "cumsum");
+        let mut acc = 0.0;
+        let data = [];
+        for v in self.data {
+            acc += v;
+            data.push(acc);
+        }
+        Nd { ch: 1, data }
+    }
+
+    // per component min(max(x, lo), hi)
+    pub fn clip(self, lo: Float, hi: Float) -> Nd {
+        Nd { ch: self.ch, data: self.data.map(|v| v.max(lo).min(hi)) }
+    }
+
+    // ---- slicing (copies; frame indices, clamped) ----
+
+    // x[from:to] by frames, `to` exclusive, both clamped to [0, frames]
+    pub fn slice(self, from: Int, to: Int) -> Nd {
+        let n = self.frames();
+        let f = (0).max(from.min(n));
+        let t = f.max(to.min(n));
+        let data = [];
+        for i in f * self.ch..t * self.ch { data.push(self.data[i]); }
+        Nd { ch: self.ch, data }
+    }
+
+    // x[-k:] — the last k frames (clamped: k >= frames gives the whole array)
+    pub fn tail(self, k: Int) -> Nd {
+        self.slice(self.frames() - k, self.frames())
+    }
+
+    // zero-pad to n frames, truncate if longer
+    pub fn pad_end(self, n: Int) -> Nd {
+        let cur = self.frames();
+        if cur >= n { return self.slice(0, n); }
+        let out = self.slice(0, cur);
+        for _ in 0..(n - cur) * self.ch { out.data.push(0.0); }
+        out
+    }
+
+    // ---- in-place ranges ----
+
+    // out[at:at+len(src)] = src — strict: the whole of src must fit
+    pub fn set_range(self, at: Int, src: Nd) {
+        if src.ch != self.ch {
+            panic("pyl.nd: set_range: channel mismatch ({self.ch} vs {src.ch})");
+        }
+        if at < 0 || at + src.frames() > self.frames() {
+            panic("pyl.nd: set_range: frames [{at}, {at + src.frames()}) out of range for {self.frames()}");
+        }
+        for (i, v) in src.data.enumerate() { self.data[at * self.ch + i] = v; }
+    }
+
+    // out[si:ei] += chunk[:ei-si] * gain, with ei clipped to the
+    // destination's end (past-the-end source frames are dropped)
+    pub fn add_range(self, at: Int, src: Nd, gain: Float) {
+        if src.ch != self.ch {
+            panic("pyl.nd: add_range: channel mismatch ({self.ch} vs {src.ch})");
+        }
+        if at < 0 { panic("pyl.nd: add_range: negative start frame {at}"); }
+        let ei = (at + src.frames()).min(self.frames());
+        let count = (ei - at) * self.ch;
+        let mut i = 0;
+        while i < count {
+            let di = at * self.ch + i;
+            self.data[di] += src.data[i] * gain;
+            i += 1;
+        }
+    }
+
+    // ---- fancy indexing ----
+
+    // result frame i = x[i0]*(1-frac) + x[min(i0+1, n-1)]*frac with
+    // i0 = trunc(pos[i]), frac = pos[i] - i0, per channel. pos is mono
+    // and already clipped to [0, n-2] by the caller (contract).
+    pub fn take_lerp(self, pos: Nd) -> Nd {
+        require_mono(pos, "take_lerp (pos)");
+        let n = self.frames();
+        let data = [];
+        for p in pos.data {
+            let i0 = p.to_int();
+            let frac = p - i0.to_float();
+            let i1 = (i0 + 1).min(n - 1);
+            for c in 0..self.ch {
+                data.push(self.data[i0 * self.ch + c] * (1.0 - frac) + self.data[i1 * self.ch + c] * frac);
+            }
+        }
+        Nd { ch: self.ch, data }
+    }
+
+    // stereo * mono broadcast (y * env[:, None]); on mono it is plain `*`
+    pub fn mul_env(self, env: Nd) -> Nd {
+        require_mono(env, "mul_env (env)");
+        if env.frames() != self.frames() {
+            panic("pyl.nd: mul_env: length mismatch ({self.frames()} vs {env.frames()} frames)");
+        }
+        if self.ch == 1 { return self.mul(env); }
+        let data = [];
+        for (f, e) in env.data.enumerate() {
+            data.push(self.data[f * 2] * e);
+            data.push(self.data[f * 2 + 1] * e);
+        }
+        Nd { ch: 2, data }
+    }
+}

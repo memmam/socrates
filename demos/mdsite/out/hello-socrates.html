@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hello, Socrates · mdsite</title>
+<style>
+  body { margin: 0; color: #24292f; background: #fdfcf8;
+         font: 17px/1.65 Georgia, 'Times New Roman', serif; }
+  header { display: flex; align-items: baseline; gap: 1.5rem;
+           padding: 0.9rem 1.4rem; background: #24292f; }
+  .brand { color: #fdfcf8; font-weight: bold; letter-spacing: 0.06em; }
+  nav a { color: #c9d1d9; text-decoration: none; margin-right: 1rem; }
+  nav a:hover { color: #ffffff; text-decoration: underline; }
+  nav a.here { color: #ffd866; }
+  main { max-width: 42rem; margin: 2.5rem auto; padding: 0 1.2rem; }
+  h1, h2, h3 { line-height: 1.25; }
+  a { color: #0b63b6; }
+  li { margin: 0.2rem 0; }
+  code { background: #f0ede4; padding: 0.1rem 0.3rem; border-radius: 4px;
+         font: 0.88em/1.5 'SF Mono', Consolas, monospace; }
+  pre { background: #24292f; color: #e6edf3; padding: 0.9rem 1.1rem;
+        border-radius: 8px; overflow-x: auto; }
+  pre code { background: none; padding: 0; color: inherit; }
+  footer { max-width: 42rem; margin: 3rem auto 2rem; padding: 0 1.2rem;
+           color: #6a6f7a; font-size: 0.85em; }
+</style>
+</head>
+<body>
+<header><span class="brand">mdsite</span><nav><a href="index.html">Home</a> <a href="about.html">About</a> <a class="here" href="hello-socrates.html">Hello, Socrates</a></nav></header>
+<main>
+<h1>Hello, Socrates</h1>
+<p><em>A whirlwind tour of the language this site is built with.</em></p>
+<p>Socrates is expression-oriented: <code>if</code> and <code>match</code> produce values, and the last expression of a block is its result. Here is the classic first program:</p>
+<pre><code class="language-soc">fn greet(name: String) -&gt; String {
+    &quot;Hello, {name}!&quot;
+}
+
+println(greet(&quot;world&quot;));</code></pre>
+<h2>Sum types and matching</h2>
+<p>Pattern matching is exhaustive — forget a case and the compiler tells you <em>before</em> the program runs:</p>
+<pre><code class="language-soc">enum Shape {
+    Circle(Float),
+    Rect(Float, Float),
+}
+
+fn area(s: Shape) -&gt; Float {
+    match s {
+        Shape.Circle(r) -&gt; math.pi * r * r,
+        Shape.Rect(w, h) -&gt; w * h,
+    }
+}</code></pre>
+<h2>Errors are values</h2>
+<p>Fallible operations return <code>Result</code>, and the <code>?</code> operator threads failures for you. This is exactly how the page you are reading got here — read, convert, write, with every error carried to one place:</p>
+<pre><code class="language-soc">fn build_page(src: String, dst: String) -&gt; Result[Unit, String] {
+    let text = fs.read(src)?;          // Err propagates automatically
+    fs.write(dst, to_html(text))?;
+    Ok(())
+}</code></pre>
+<p>No exceptions, no <code>null</code> — just data. <strong>The compiler keeps the receipts.</strong></p>
+</main>
+<footer>built by mdsite — a static site generator written in Socrates</footer>
+</body>
+</html>

@@ -1,11 +1,11 @@
-//! End-to-end language-server test: spawn `fable lsp`, speak JSON-RPC over
+//! End-to-end language-server test: spawn `socrates lsp`, speak JSON-RPC over
 //! its stdio, and check diagnostics, hover, and go-to-definition.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
 
-fn fable_bin() -> &'static str {
-    env!("CARGO_BIN_EXE_fable")
+fn socrates_bin() -> &'static str {
+    env!("CARGO_BIN_EXE_socrates")
 }
 
 struct Client {
@@ -16,13 +16,13 @@ struct Client {
 
 impl Client {
     fn start() -> Client {
-        let mut child = Command::new(fable_bin())
+        let mut child = Command::new(socrates_bin())
             .arg("lsp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .expect("spawn fable lsp");
+            .expect("spawn socrates lsp");
         let reader = BufReader::new(child.stdout.take().unwrap());
         Client { child, reader, next_id: 1 }
     }
@@ -116,7 +116,7 @@ fn path_to_uri(path: &std::path::Path) -> String {
 }
 
 fn uri_for(name: &str) -> (std::path::PathBuf, String) {
-    let dir = std::env::temp_dir().join("fable-lsp-smoke");
+    let dir = std::env::temp_dir().join("socrates-lsp-smoke");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join(name);
     let uri = path_to_uri(&path);
@@ -127,18 +127,18 @@ fn uri_for(name: &str) -> (std::path::PathBuf, String) {
 fn diagnostics_hover_definition() {
     let mut c = Client::start();
     c.request("initialize", r#"{"capabilities":{}}"#);
-    let init = c.read_until("fable-lsp");
+    let init = c.read_until("socrates-lsp");
     assert!(init.contains("hoverProvider"));
     c.notify("initialized", "{}");
 
     // A document with a type error produces a diagnostic with its code.
-    let (path, uri) = uri_for("bad.fable");
+    let (path, uri) = uri_for("bad.soc");
     std::fs::write(&path, "").unwrap();
     let bad = r#"let x: Int = \"hi\";"#;
     c.notify(
         "textDocument/didOpen",
         &format!(
-            r#"{{"textDocument":{{"uri":"{uri}","languageId":"fable","version":1,"text":"{bad}"}}}}"#
+            r#"{{"textDocument":{{"uri":"{uri}","languageId":"socrates","version":1,"text":"{bad}"}}}}"#
         ),
     );
     let diags = c.read_until("publishDiagnostics");
@@ -155,13 +155,13 @@ fn diagnostics_hover_definition() {
     assert!(diags.contains(r#""diagnostics":[]"#), "diagnostics: {diags}");
 
     // Hover over a call reports the checked type; definition jumps to the fn.
-    let (path2, uri2) = uri_for("good.fable");
+    let (path2, uri2) = uri_for("good.soc");
     std::fs::write(&path2, "").unwrap();
     let good = r#"fn double(n: Int) -> Int {\n    n * 2\n}\nlet answer = double(21);\n"#;
     c.notify(
         "textDocument/didOpen",
         &format!(
-            r#"{{"textDocument":{{"uri":"{uri2}","languageId":"fable","version":1,"text":"{good}"}}}}"#
+            r#"{{"textDocument":{{"uri":"{uri2}","languageId":"socrates","version":1,"text":"{good}"}}}}"#
         ),
     );
     let _ = c.read_until("publishDiagnostics");
@@ -191,13 +191,13 @@ fn diagnostics_hover_definition() {
     assert!(def.contains(r#""character":3"#), "definition: {def}");
 
     // Completion after a dot on a struct value: methods and fields.
-    let (path3, uri3) = uri_for("complete.fable");
+    let (path3, uri3) = uri_for("complete.soc");
     std::fs::write(&path3, "").unwrap();
     let src3 = r#"struct Point { x: Float, y: Float }\nimpl Point {\n    fn len(self) -> Float { (self.x * self.x + self.y * self.y).sqrt() }\n}\nlet p = Point { x: 3.0, y: 4.0 };\nlet d = p.len();\n"#;
     c.notify(
         "textDocument/didOpen",
         &format!(
-            r#"{{"textDocument":{{"uri":"{uri3}","languageId":"fable","version":1,"text":"{src3}"}}}}"#
+            r#"{{"textDocument":{{"uri":"{uri3}","languageId":"socrates","version":1,"text":"{src3}"}}}}"#
         ),
     );
     let _ = c.read_until("publishDiagnostics");
@@ -222,13 +222,13 @@ fn diagnostics_hover_definition() {
     assert!(comp.contains(r#""label":"x""#), "completion: {comp}");
 
     // Completion after a module alias dot: std.json's pub members.
-    let (path5, uri5) = uri_for("complete_mod.fable");
+    let (path5, uri5) = uri_for("complete_mod.soc");
     std::fs::write(&path5, "").unwrap();
     let src5 = r#"import std.json;\nlet x = 1;\n"#;
     c.notify(
         "textDocument/didOpen",
         &format!(
-            r#"{{"textDocument":{{"uri":"{uri5}","languageId":"fable","version":1,"text":"{src5}"}}}}"#
+            r#"{{"textDocument":{{"uri":"{uri5}","languageId":"socrates","version":1,"text":"{src5}"}}}}"#
         ),
     );
     let _ = c.read_until("publishDiagnostics");

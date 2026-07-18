@@ -1,0 +1,105 @@
+// Classic algorithms in Socrates: quicksort, binary search, breadth-first
+// search over a graph, and the sieve of Eratosthenes.
+//
+//   socrates run examples/algorithms.soc
+
+// ---- Quicksort (functional style) ----
+
+fn quicksort(xs: List[Int]) -> List[Int] {
+    if xs.len() <= 1 {
+        return xs;
+    }
+    let pivot = xs[xs.len() / 2];
+    let less = xs.filter(|x| x < pivot);
+    let equal = xs.filter(|x| x == pivot);
+    let greater = xs.filter(|x| x > pivot);
+    quicksort(less).concat(equal).concat(quicksort(greater))
+}
+
+let data = [38, 27, 43, 3, 9, 82, 10, 3, 55, 1];
+println("quicksort: {quicksort(data)}");
+
+// ---- Binary search ----
+
+fn bsearch(xs: List[Int], target: Int) -> Option[Int] {
+    let mut lo = 0;
+    let mut hi = xs.len();
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if xs[mid] == target {
+            return Some(mid);
+        } else if xs[mid] < target {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    None
+}
+
+let sorted = quicksort(data);
+println("index of 43: {bsearch(sorted, 43)}");
+println("index of 99: {bsearch(sorted, 99)}");
+
+// ---- Breadth-first search ----
+
+fn bfs(graph: Map[String, List[String]], start: String, goal: String) -> Option[List[String]] {
+    let mut frontier = [[start]];
+    let visited: Map[String, Bool] = {:};
+    visited[start] = true;
+    while !frontier.is_empty() {
+        let path = frontier.remove(0);
+        let node = path.last().unwrap();
+        if node == goal {
+            return Some(path);
+        }
+        for next in graph.get(node).unwrap_or([]) {
+            if !visited.contains_key(next) {
+                visited[next] = true;
+                frontier.push(path.concat([next]));
+            }
+        }
+    }
+    None
+}
+
+let graph = {
+    "hall": ["library", "kitchen"],
+    "library": ["hall", "tower"],
+    "kitchen": ["hall", "cellar"],
+    "cellar": ["kitchen", "tower"],
+    "tower": ["library", "cellar", "treasury"],
+    "treasury": ["tower"],
+};
+match bfs(graph, "hall", "treasury") {
+    Some(path) -> println("path: {path.join(" -> ")}"),
+    None -> println("unreachable"),
+}
+
+// ---- Sieve of Eratosthenes ----
+
+fn primes_below(n: Int) -> List[Int] {
+    let sieve = (0..n).map(|_i| true);
+    let mut p = 2;
+    while p * p < n {
+        if sieve[p] {
+            let mut multiple = p * p;
+            while multiple < n {
+                sieve[multiple] = false;
+                multiple += p;
+            }
+        }
+        p += 1;
+    }
+    (2..n).filter(|i| sieve[i])
+}
+
+println("primes below 60: {primes_below(60)}");
+
+// ---- Fold-based statistics ----
+
+let values = primes_below(60).map(|p| p.to_float());
+let n = values.len().to_float();
+let mean = values.fold(0.0, |a, v| a + v) / n;
+let variance = values.fold(0.0, |a, v| a + (v - mean) * (v - mean)) / n;
+println("mean {mean}, stddev {variance.sqrt()}");

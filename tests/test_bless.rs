@@ -1,13 +1,13 @@
-//! CLI: `fable test --bless` (v0.8) — rewrites mismatched `//? expect:`
+//! CLI: `socrates test --bless` (v0.8) — rewrites mismatched `//? expect:`
 //! lines in place instead of failing, when the actual/expected line counts
 //! already agree. The automatable half of "generate long pin blocks
 //! mechanically" (demos/STYLE.md § 1).
 
 #[test]
 fn bless_rewrites_matching_line_count() {
-    let dir = std::env::temp_dir().join(format!("fable-bless-cli-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("socrates-bless-cli-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let f = dir.join("t.fable");
+    let f = dir.join("t.soc");
     std::fs::write(
         &f,
         "println(1 + 1);       //? expect: 3\n\
@@ -17,7 +17,7 @@ fn bless_rewrites_matching_line_count() {
     .unwrap();
 
     // Without --bless, the mismatch fails and the file is untouched.
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_socrates"))
         .args(["test"])
         .arg(&f)
         .output()
@@ -32,7 +32,7 @@ fn bless_rewrites_matching_line_count() {
 
     // --bless rewrites only the two mismatched lines; the already-correct
     // third line is untouched (still exits 0 — a bless run isn't a failure).
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_socrates"))
         .args(["test", "--bless"])
         .arg(&f)
         .output()
@@ -46,7 +46,7 @@ fn bless_rewrites_matching_line_count() {
     );
 
     // The blessed file now passes on its own.
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_socrates"))
         .args(["test"])
         .arg(&f)
         .output()
@@ -56,15 +56,15 @@ fn bless_rewrites_matching_line_count() {
 
 #[test]
 fn bless_refuses_a_line_count_change() {
-    let dir = std::env::temp_dir().join(format!("fable-bless-cli-count-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("socrates-bless-cli-count-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let f = dir.join("t.fable");
+    let f = dir.join("t.soc");
     let original = "println(1);       //? expect: 99\nprintln(2);\nprintln(3);\n";
     std::fs::write(&f, original).unwrap();
 
     // 1 expect line, 3 actual output lines: bless can't tell which lines the
     // new output corresponds to, so it leaves the file alone and still fails.
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_socrates"))
         .args(["test", "--bless"])
         .arg(&f)
         .output()
@@ -75,15 +75,15 @@ fn bless_refuses_a_line_count_change() {
 
 #[test]
 fn bless_leaves_error_and_panic_directives_alone() {
-    let dir = std::env::temp_dir().join(format!("fable-bless-cli-panic-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("socrates-bless-cli-panic-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let f = dir.join("t.fable");
+    let f = dir.join("t.soc");
     // Wrong panic substring — --bless must not silently "fix" this by
     // rewriting the panic directive; only `expect:` is ever rewritten.
     let original = "//? panic: this is not the message\nprintln(1);\npanic(\"boom\");\n";
     std::fs::write(&f, original).unwrap();
 
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_socrates"))
         .args(["test", "--bless"])
         .arg(&f)
         .output()
@@ -94,7 +94,7 @@ fn bless_leaves_error_and_panic_directives_alone() {
 
 #[test]
 fn unknown_flag_still_rejected_alongside_bless() {
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_fable"))
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_socrates"))
         .args(["test", "--bogus"])
         .output()
         .unwrap();

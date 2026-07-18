@@ -1,4 +1,4 @@
-# csvql — a mini query engine over CSV, in Fable
+# csvql — a mini query engine over CSV, in Socrates
 
 csvql loads a CSV file into a typed in-memory table (each cell becomes a
 number or text), parses a small SQL-ish query language, executes it, and
@@ -29,10 +29,10 @@ country's alphabetically first city.
 From the repo root:
 
 ```
-./target/release/fable demos/csvql/main.fable           # 12 showcase queries
-./target/release/fable demos/csvql/main.fable \
+./target/release/socrates demos/csvql/main.soc           # 12 showcase queries
+./target/release/socrates demos/csvql/main.soc \
     "select city, pop where continent == Asia order by pop desc limit 3"
-./target/release/fable test demos/csvql                  # golden tests
+./target/release/socrates test demos/csvql                  # golden tests
 ```
 
 Every argument is run as its own query against `cities.csv`.
@@ -63,12 +63,12 @@ query runs.
 
 | File          | What it is                                                        |
 |---------------|-------------------------------------------------------------------|
-| `table.fable` | `Val` (typed cell), CSV loader, aligned renderer                  |
-| `query.fable` | tokenizer, recursive-descent parser, executor (filter/group/sort) |
-| `main.fable`  | CLI glue, the showcase queries, and the golden `//? expect:` output |
+| `table.soc` | `Val` (typed cell), CSV loader, aligned renderer                  |
+| `query.soc` | tokenizer, recursive-descent parser, executor (filter/group/sort) |
+| `main.soc`  | CLI glue, the showcase queries, and the golden `//? expect:` output |
 | `cities.csv`  | the sample data set                                               |
 
-Fable features on display: enums + exhaustive pattern matching for cells
+Socrates features on display: enums + exhaustive pattern matching for cells
 and tokens, `Result` with `?` for error plumbing, a `Map` keyed by *enum
 values* (structural hashing, insertion-order iteration) for `group by`,
 generic `sort_by` comparators for `order by`, closures over module
@@ -77,7 +77,7 @@ and multi-file modules with `pub` visibility. v0.6 additions in use:
 tuple-destructuring loops (`for (key, bucket) in buckets.entries()`,
 `for (c, cell) in cells.enumerate()`), bare `return Err(..)` / `break`
 match arms on the parser's error paths, `index_of_from` to find the
-lexer's closing quote, and `os.exit` in a value position (main.fable no
+lexer's closing quote, and `os.exit` in a value position (main.soc no
 longer needs a dead `panic("unreachable")` after it). `Val.show`
 deliberately skips v0.6's `to_fixed`, which would keep trailing zeros
 ("7.00") that csvql's tables drop ("7").

@@ -1,6 +1,6 @@
 # Functions and Closures
 
-Functions in Fable are ordinary values: you can bind them, pass them, return
+Functions in Socrates are ordinary values: you can bind them, pass them, return
 them, and stash them in lists. Closures capture their surroundings by
 reference — properly, with upvalues that outlive their scope. This chapter
 covers named functions, lambdas, capture semantics, and generic functions.
@@ -11,7 +11,7 @@ A named function declares its parameter types; the return type comes after
 `->`. The body is a block, and the block's tail expression is the return
 value:
 
-```fable
+```soc
 fn greet(name: String) -> String {
     "Hello, {name}!"
 }
@@ -20,17 +20,17 @@ fn area(w: Float, h: Float) -> Float {
     w * h
 }
 
-println(greet("Fable"));
+println(greet("Socrates"));
 println(area(3.0, 4.5));
 ```
 
 ```text
-Hello, Fable!
+Hello, Socrates!
 13.5
 ```
 
 Parameter annotations are not optional. Inference works everywhere else, but
-a named function's signature is its contract, and Fable insists you write it
+a named function's signature is its contract, and Socrates insists you write it
 down — `fn double(x) -> Int` is a parse error: ``error[E0200]: expected `:`
 (parameter types are required)``.
 
@@ -41,7 +41,7 @@ only for their effects. The default bites when you *meant* to return
 something: a body whose tail expression has a non-`Unit` type won't typecheck
 against the implicit `Unit`, and the compiler guesses both likely causes:
 
-```fable errors
+```soc errors
 fn double(x: Int) {
     x * 2
 }
@@ -50,7 +50,7 @@ println(double(4));
 
 ```text
 error[E0301]: function `double` should return `Unit`, but its body has type `Int`
-  --> demo.fable:2:5
+  --> demo.soc:2:5
    |
 2 |     x * 2
    |     ^^^^^ this has type `Int`
@@ -62,7 +62,7 @@ error[E0301]: function `double` should return `Unit`, but its body has type `Int
 The tail expression is the idiomatic way to produce a value, but `return
 expr;` exits immediately from anywhere in the body — handy for guard clauses:
 
-```fable
+```soc
 fn classify(n: Int) -> String {
     if n == 0 {
         return "zero";
@@ -92,7 +92,7 @@ file, including above its own declaration, so top-level code may call a
 function defined further down. It also means mutually recursive functions
 need no forward declarations — define them in whatever order reads best:
 
-```fable
+```soc
 fn is_even(n: Int) -> Bool {
     if n == 0 { true } else { is_odd(n - 1) }
 }
@@ -113,7 +113,7 @@ false
 One restriction: `fn` declarations live at the top level only. There are no
 nested named functions — the compiler points you at the alternative:
 
-```fable errors
+```soc errors
 fn outer() -> Int {
     fn helper() -> Int { 1 }
     helper() + 1
@@ -123,7 +123,7 @@ println(outer());
 
 ```text
 error[E0201]: function declarations are only allowed at the top level
-  --> demo.fable:2:5
+  --> demo.soc:2:5
    |
 2 |     fn helper() -> Int { 1 }
    |     ^^^^^^^^^^^^^^^^^^^^^^^^ declared here
@@ -136,7 +136,7 @@ A lambda is an anonymous function expression: parameters between pipes, then
 a body. The body is a single expression, or — with an optional `-> Type` —
 a block. Zero parameters is `||`:
 
-```fable
+```soc
 let double = |x: Int| x * 2;
 let add = |a: Int, b: Int| a + b;
 let hello = || println("hello from a lambda");
@@ -167,7 +167,7 @@ Unlike named functions, lambda parameters may omit their types when the
 context supplies them — as an argument to `map`, `filter`, or `fold`, or
 against an annotated binding:
 
-```fable
+```soc
 let nums = [1, 2, 3, 4, 5];
 println(nums.map(|n| n * n));
 println(nums.filter(|n| n % 2 == 1));
@@ -192,20 +192,20 @@ The body alone can be enough, too: `x + 1` only works at one type, so
 The identity lambda has nothing to constrain its parameter — not the body
 (`x` works at any type) and, below, not the context either:
 
-```fable errors
+```soc errors
 let id = |x| x;
 ```
 
 ```text
 error[E0302]: cannot infer the type of this lambda parameter
-  --> demo.fable:1:11
+  --> demo.soc:1:11
    |
 1 | let id = |x| x;
    |           ^ add a type annotation
-  note: Fable's inference is local; annotate this or its context
+  note: Socrates's inference is local; annotate this or its context
 ```
 
-The deeper reason: a lambda gets exactly **one** type. Fable's inference is
+The deeper reason: a lambda gets exactly **one** type. Socrates's inference is
 local unification with no let-generalization — polymorphism comes only from
 explicit `[T]` parameter lists on named functions (below). A later use *can*
 pin the lambda down: `let id = |x| x; println(id(5));` compiles, with `id:
@@ -219,7 +219,7 @@ fn(Int) -> Int`. But then that is the lambda's only type — adding
 A named function used without parentheses is a value of function type. Bind
 it, pass it wherever a `fn(...) -> ...` is expected, or print it:
 
-```fable
+```soc
 fn square(x: Int) -> Int { x * x }
 
 let f = square;
@@ -240,7 +240,7 @@ println(|x: Int| x);
 Builtins are function values too. `println` itself has the generic type
 `[T] fn(T) -> Unit`, so it slots straight into `each`:
 
-```fable
+```soc
 [10, 20, 30].each(println);
 ```
 
@@ -256,7 +256,7 @@ A lambda that mentions an outer variable *captures* it — by reference, not by
 copy. Every closure over a variable, and the enclosing scope itself, share
 one box:
 
-```fable
+```soc
 let mut count = 0;
 
 let bump = || { count += 2; };
@@ -283,7 +283,7 @@ Captured variables survive as long as some closure still holds them — even
 after the scope that declared them has returned. Each call to `make_counter`
 creates a fresh `n`, owned by the closure it returns:
 
-```fable
+```soc
 fn make_counter() -> fn() -> Int {
     let mut n = 0;
     || {
@@ -308,7 +308,7 @@ println(tock());
 ```
 
 `tick` and `tock` count independently — separate calls, separate `n`s. A
-closure with private mutable state is the lightest kind of object Fable
+closure with private mutable state is the lightest kind of object Socrates
 offers — for named fields and methods, pair a struct with an `impl` block
 (chapters 4 and 7).
 
@@ -317,7 +317,7 @@ offers — for named fields and methods, pair a struct with an `impl` block
 Named functions take type parameters in square brackets. Type arguments are
 always inferred at the call site; there is no turbofish:
 
-```fable
+```soc
 fn identity[T](x: T) -> T { x }
 
 println(identity(5));
@@ -333,7 +333,7 @@ Type parameters can appear anywhere in the signature, including inside
 function types — which is how higher-order helpers are written. Multiple type
 parameters work the way you'd hope:
 
-```fable
+```soc
 fn twice[T](f: fn(T) -> T, x: T) -> T {
     f(f(x))
 }
@@ -367,7 +367,7 @@ serves every instantiation.
 Generic functions can return closures, too. Function composition captures
 both arguments:
 
-```fable
+```soc
 fn compose[A, B, C](f: fn(A) -> B, g: fn(B) -> C) -> fn(A) -> C {
     |x| g(f(x))
 }
@@ -391,11 +391,11 @@ nothing else determines `A`, `B`, `C`.)
 
 ## Recursion has a depth limit
 
-Recursion is the natural way to write many functions in Fable, but the VM's
+Recursion is the natural way to write many functions in Socrates, but the VM's
 call stack is finite: 4096 frames in the current implementation. Blow past it
 and the program panics:
 
-```fable panics
+```soc panics
 fn sum_to(n: Int) -> Int {
     if n == 0 { 0 } else { n + sum_to(n - 1) }
 }
@@ -405,9 +405,9 @@ println(sum_to(1_000_000));
 
 ```text
 panic: stack overflow
-  at sum_to (demo.fable:2:32)
-  at sum_to (demo.fable:2:32)
-  at sum_to (demo.fable:2:32)
+  at sum_to (demo.soc:2:32)
+  at sum_to (demo.soc:2:32)
+  at sum_to (demo.soc:2:32)
   ...
   at ... and 4032 more frames
 ```
@@ -420,7 +420,7 @@ holds an unfinished `+`. A call in *tail position* reuses the current frame
 instead of pushing a new one, so the accumulator version runs at any depth
 in constant stack space:
 
-```fable
+```soc
 fn sum_acc(n: Int, acc: Int) -> Int {
     if n == 0 { acc } else { sum_acc(n - 1, acc + n) }
 }
@@ -441,7 +441,7 @@ through a function value.
 
 What does *not* qualify is anything with work left to do after the call:
 
-```fable panics
+```soc panics
 fn sum_to(n: Int) -> Int {
     if n == 0 { 0 } else { n + sum_to(n - 1) }   // the `+` runs after the call
 }

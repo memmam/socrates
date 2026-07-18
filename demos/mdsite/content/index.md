@@ -1,6 +1,6 @@
 # Welcome to mdsite
 
-**mdsite** is a tiny static site generator written in the *Fable*
+**mdsite** is a tiny static site generator written in the *Socrates*
 programming language. It reads Markdown from `content/`, converts it to
 HTML, and writes a complete little site to `out/` — shared template,
 navigation bar, and all.
@@ -9,7 +9,7 @@ This sample site has three pages:
 
 - this front page
 - an [about page](about.html) describing the generator
-- a [blog post](hello-fable.html) with fenced code blocks
+- a [blog post](hello-socrates.html) with fenced code blocks
 
 ## How the site is built
 
@@ -21,7 +21,7 @@ inline CSS: no build steps, no dependencies, ready for any web server.
 ## Rebuild it
 
 ```
-./target/release/fable demos/mdsite/main.fable
+./target/release/socrates demos/mdsite/main.soc
 ```
 
 One command, and the whole site under `out/` is fresh again.

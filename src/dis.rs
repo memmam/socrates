@@ -1,4 +1,4 @@
-//! Bytecode disassembler (`fable dis file.fable`).
+//! Bytecode disassembler (`socrates dis file.soc`).
 
 use crate::bytecode::{CompiledProgram, Const, Op};
 

@@ -1,0 +1,146 @@
+// spec — component tests for the png demo: published checksum vectors,
+// the CRC table itself, hex/big-endian helpers, zlib stored-block framing
+// (down to the exact bytes), the integer trig, and the failure paths the
+// parser must catch — including a deliberately corrupted file.
+//
+//   ./target/release/socrates test demos/png
+
+import bits;
+import crc;
+import zlib;
+import png;
+import image;
+
+// -- CRC-32: table entries and published vectors ------------------------------
+
+println("table[0]   = {bits.to_hex(crc.table_entry(0), 8)}");
+println("table[1]   = {bits.to_hex(crc.table_entry(1), 8)}");
+println("table[128] = {bits.to_hex(crc.table_entry(128), 8)}");
+println("table[255] = {bits.to_hex(crc.table_entry(255), 8)}");
+
+let check = "123456789";
+println("crc32(\"\")          = {bits.to_hex(crc.crc32(bytes(0)), 8)}");
+println("crc32({check})   = {bits.to_hex(crc.crc32(check.to_bytes()), 8)}");
+println("crc32(IEND)        = {bits.to_hex(crc.crc32("IEND".to_bytes()), 8)}");
+let fox = "The quick brown fox jumps over the lazy dog";
+println("crc32(quick fox)   = {bits.to_hex(crc.crc32(fox.to_bytes()), 8)}");
+
+// -- Adler-32 vectors -----------------------------------------------------------
+
+println("adler32(\"\")          = {bits.to_hex(crc.adler32(bytes(0)), 8)}");
+println("adler32(abc)         = {bits.to_hex(crc.adler32("abc".to_bytes()), 8)}");
+println("adler32(Wikipedia)   = {bits.to_hex(crc.adler32("Wikipedia".to_bytes()), 8)}");
+
+// -- hex and big-endian helpers ----------------------------------------------------
+
+println(bits.to_hex(0, 8));
+println(bits.to_hex(0xdeadbeef, 8));
+println(bits.to_hex(0xFFFFFFFF, 8));
+println(bits.to_hex(255, 2));
+let be = bytes(0);
+bits.push_u32be(be, 0x0a0b0c0d);
+println("u32be bytes {be.to_list()} read back {bits.to_hex(bits.read_u32be(be, 0), 8)}");
+println("u16le {bits.read_u16le(bytes_of([0x20, 0x12]), 0)}");
+
+// -- zlib stored blocks: exact framing -----------------------------------------------
+
+// "hello" in one stored block: header 78 01, then [final=1][LEN][~LEN],
+// the five raw bytes, and the big-endian Adler-32.
+println(bits.dump(zlib.deflate_stored("hello".to_bytes(), 65535)));
+
+// The empty stream still needs one (empty, final) stored block.
+println(bits.dump(zlib.deflate_stored(bytes(0), 100)));
+
+// A 5-byte payload through 2-byte blocks: 2 + 2 + 1, roundtripped.
+let z = zlib.deflate_stored(bytes_of([10, 20, 30, 40, 50]), 2);
+match zlib.inflate_stored(z) {
+    Ok(inf) -> println("5 bytes via 2-byte blocks: {inf.blocks} blocks, adler_ok={inf.adler_ok}, roundtrip={inf.data.to_list()}"),
+    Err(e) -> println("unexpected: {e}"),
+}
+
+// Tampering with a LEN byte must be caught by NLEN.
+let bad = zlib.deflate_stored("hello".to_bytes(), 65535);
+bad.set(3, bad.get(3) ^ 1);
+match zlib.inflate_stored(bad) {
+    Ok(_) -> println("tampered LEN accepted?!"),
+    Err(e) -> println("tampered LEN: {e}"),
+}
+
+// -- chunk framing --------------------------------------------------------------------
+
+println(bits.dump(png.chunk("TEST", bytes_of([1, 2, 3]))));
+
+// -- integer trig and isqrt -------------------------------------------------------------
+
+println(
+    "isin: {[image.isin(0), image.isin(30), image.isin(90), image.isin(150), image.isin(180)]}",
+);
+println("isin: {[image.isin(270), image.isin(-90), image.isin(450), image.icos(0)]}");
+let squares = [0, 1, 2, 3, 4, 15, 16, 17, 99, 100, 1000000].map(|n| image.isqrt(n));
+println("isqrt: {squares}");
+println("isqrt(2^62) = {image.isqrt(1 << 62)} (2^31 = {1 << 31})");
+
+// -- a complete 2x2 PNG, corrupted and caught ----------------------------------------------
+
+// Four solid pixels: red, green, blue, white.
+let quad = bytes_of([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255]);
+let tiny = png.encode(2, 2, quad);
+println("2x2 png: {tiny.len()} bytes");
+let ok = png.parse(tiny).unwrap();
+println("2x2 parse: {ok.width}x{ok.height}, crcs {ok.chunks.all(|c| c.crc_ok)}, adler {ok.adler_ok}, pixels match {ok.pixels == quad}");
+
+// Flip one bit of pixel data inside IDAT: the stored-block structure
+// survives, but both the chunk CRC and the zlib Adler-32 must now fail.
+let evil = tiny.slice(0, tiny.len()); // slice = copy; leave `tiny` intact
+evil.set(8 + 25 + 8 + 10, evil.get(8 + 25 + 8 + 10) ^ 0x80);
+let hurt = png.parse(evil).unwrap();
+let idat = hurt.chunks[1];
+println("corrupted: IDAT crc_ok={idat.crc_ok}, adler_ok={hurt.adler_ok}, all crcs={hurt.chunks.all(|c| c.crc_ok)}");
+println(
+    "corruption is local: IHDR crc_ok={hurt.chunks[0].crc_ok}, IEND crc_ok={hurt.chunks[2].crc_ok}",
+);
+
+// -- parser failure paths ---------------------------------------------------------------------
+
+match png.parse(bytes_of([1, 2, 3])) {
+    Ok(_) -> println("junk accepted?!"),
+    Err(e) -> println("junk: {e}"),
+}
+match png.parse(tiny.slice(0, 20)) {
+    Ok(_) -> println("truncation accepted?!"),
+    Err(e) -> println("truncated: {e}"),
+}
+
+// Pinned output for `socrates test demos/png`:
+//? expect: table[0]   = 00000000
+//? expect: table[1]   = 77073096
+//? expect: table[128] = edb88320
+//? expect: table[255] = 2d02ef8d
+//? expect: crc32("")          = 00000000
+//? expect: crc32(123456789)   = cbf43926
+//? expect: crc32(IEND)        = ae426082
+//? expect: crc32(quick fox)   = 414fa339
+//? expect: adler32("")          = 00000001
+//? expect: adler32(abc)         = 024d0127
+//? expect: adler32(Wikipedia)   = 11e60398
+//? expect: 00000000
+//? expect: deadbeef
+//? expect: ffffffff
+//? expect: ff
+//? expect: u32be bytes [10, 11, 12, 13] read back 0a0b0c0d
+//? expect: u16le 4640
+//? expect: 78 01 01 05 00 fa ff 68 65 6c 6c 6f 06 2c 02 15
+//? expect: 78 01 01 00 00 ff ff 00 00 00 01
+//? expect: 5 bytes via 2-byte blocks: 3 blocks, adler_ok=true, roundtrip=[10, 20, 30, 40, 50]
+//? expect: tampered LEN: zlib: LEN/NLEN mismatch in block 0
+//? expect: 00 00 00 03 54 45 53 54 01 02 03 84 42 fd e4
+//? expect: isin: [0, 128, 256, 128, 0]
+//? expect: isin: [-256, -256, 256, 256]
+//? expect: isqrt: [0, 1, 1, 1, 2, 3, 4, 4, 9, 10, 1000]
+//? expect: isqrt(2^62) = 2147483648 (2^31 = 2147483648)
+//? expect: 2x2 png: 82 bytes
+//? expect: 2x2 parse: 2x2, crcs true, adler true, pixels match true
+//? expect: corrupted: IDAT crc_ok=false, adler_ok=false, all crcs=false
+//? expect: corruption is local: IHDR crc_ok=true, IEND crc_ok=true
+//? expect: junk: not a PNG: bad signature
+//? expect: truncated: chunk at 8 runs past end of file

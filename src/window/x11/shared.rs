@@ -202,8 +202,8 @@ pub(super) type XErrorHandler = unsafe extern "C" fn(*mut Display, *mut XErrorEv
 /// value, with the error only surfacing later, typically on the next
 /// server round-trip. Xlib's *default* handler calls `exit()`
 /// unconditionally on any such error, which would take down the whole
-/// Fable process — contrary to every other failure mode in this module (and
-/// Fable's own convention that nothing panics the interpreter). Installing
+/// Socrates process — contrary to every other failure mode in this module (and
+/// Socrates's own convention that nothing panics the interpreter). Installing
 /// this handler for the risky span of `create` and `XSync`-ing before
 /// declaring success converts that into a normal, catchable `Err` instead.
 pub(super) static X_PROTOCOL_ERROR: AtomicBool = AtomicBool::new(false);

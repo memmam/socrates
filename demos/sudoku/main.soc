@@ -1,0 +1,162 @@
+// sudoku — a solver built from naked-singles constraint propagation and
+// backtracking search with the most-constrained-cell heuristic. Candidate
+// sets are 9-bit Int masks (bit d-1 = digit d; see board.soc), so the
+// constraint algebra is v0.7 bitwise arithmetic: & | ^ << >>.
+//
+//   ./target/release/socrates demos/sudoku/main.soc            solve the three puzzles
+//   ./target/release/socrates demos/sudoku/main.soc --time     also print wall times
+//   ./target/release/socrates test demos/sudoku                  golden tests
+//
+// Output is fully deterministic (candidates are tried in ascending order,
+// ties in the heuristic break toward the first cell), so the whole run is
+// pinned by the golden `expect` directives at the bottom of this file.
+
+import board;
+import solver;
+import std.flags;
+
+// A puzzle a newspaper would rate easy: propagation does most of the work.
+let easy = "53..7...."
+    + "6..195..."
+    + ".98....6."
+    + "8...6...3"
+    + "4..8.3..1"
+    + "7...2...6"
+    + ".6....28."
+    + "...419..5"
+    + "....8..79";
+
+// Arto Inkala's 2010 "world's hardest sudoku".
+let hard = "8........"
+    + "..36....."
+    + ".7..9.2.."
+    + ".5...7..."
+    + "....457.."
+    + "...1...3."
+    + "..1....68"
+    + "..85...1."
+    + ".9....4..";
+
+// A 17-clue puzzle (the fewest clues a proper sudoku can have) from Gordon
+// Royle's minimal-sudoku collection.
+let minimal = ".......1."
+    + "4........"
+    + ".2......."
+    + "....5.4.7"
+    + "..8...3.."
+    + "..1.9...."
+    + "3..4..2.."
+    + ".5.1....."
+    + "...8.6...";
+
+// Interleave two pretty grids so puzzle and solution sit side by side.
+fn side_by_side(a: String, b: String) -> String {
+    a.split("\n").zip(b.split("\n")).map(|p| "{p.0}     {p.1}").join("\n")
+}
+
+// Parse, solve, verify, and report one puzzle. Any failure — bad input,
+// no solution, a verification error — propagates out as an Err via `?`.
+fn run_puzzle(name: String, clues: String, timed: Bool) -> Result[Unit, String] {
+    let givens = board.parse(clues)?; // pristine copy for verification
+    let grid = board.parse(clues)?; // working copy the solver mutates
+
+    println("");
+    println("== {name} — {givens.clue_count()} clues ==");
+    println("");
+    println("   puzzle                        solution");
+
+    let st = solver.new_stats();
+    let t0 = clock();
+    if !solver.solve(grid, st) {
+        return Err("{name}: no solution exists");
+    }
+    let elapsed = clock() - t0;
+
+    println(side_by_side(givens.show(), grid.show()));
+
+    // Re-check the answer from scratch: all 27 units and every given.
+    board.verify(grid, givens)?;
+    println("verified OK: {st.line()}");
+    if timed {
+        println("  solved in {(elapsed * 1000.0).round()} ms");
+    }
+    Ok(())
+}
+
+let timed = flags.flag(os.args(), "time");
+
+println("sudoku — naked-singles propagation + most-constrained-cell backtracking");
+
+let puzzles = [
+    ("easy", easy),
+    ("hard (Inkala 2010)", hard),
+    ("minimal (from Gordon Royle's 17-clue list)", minimal),
+];
+
+for (name, clues) in puzzles {
+    match run_puzzle(name, clues, timed) {
+        Ok(_) -> {},
+        Err(e) -> {
+            println("sudoku: {e}");
+            os.exit(1);
+        },
+    }
+}
+
+// ---- golden output (the entire run, pinned) ----
+
+//? expect: sudoku — naked-singles propagation + most-constrained-cell backtracking
+//? expect:
+//? expect: == easy — 30 clues ==
+//? expect:
+//? expect:    puzzle                        solution
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: | 5 3 . | . 7 . | . . . |     | 5 3 4 | 6 7 8 | 9 1 2 |
+//? expect: | 6 . . | 1 9 5 | . . . |     | 6 7 2 | 1 9 5 | 3 4 8 |
+//? expect: | . 9 8 | . . . | . 6 . |     | 1 9 8 | 3 4 2 | 5 6 7 |
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: | 8 . . | . 6 . | . . 3 |     | 8 5 9 | 7 6 1 | 4 2 3 |
+//? expect: | 4 . . | 8 . 3 | . . 1 |     | 4 2 6 | 8 5 3 | 7 9 1 |
+//? expect: | 7 . . | . 2 . | . . 6 |     | 7 1 3 | 9 2 4 | 8 5 6 |
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: | . 6 . | . . . | 2 8 . |     | 9 6 1 | 5 3 7 | 2 8 4 |
+//? expect: | . . . | 4 1 9 | . . 5 |     | 2 8 7 | 4 1 9 | 6 3 5 |
+//? expect: | . . . | . 8 . | . 7 9 |     | 3 4 5 | 2 8 6 | 1 7 9 |
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: verified OK: assignments=51 guesses=0 backtracks=0
+//? expect:
+//? expect: == hard (Inkala 2010) — 21 clues ==
+//? expect:
+//? expect:    puzzle                        solution
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: | 8 . . | . . . | . . . |     | 8 1 2 | 7 5 3 | 6 4 9 |
+//? expect: | . . 3 | 6 . . | . . . |     | 9 4 3 | 6 8 2 | 1 7 5 |
+//? expect: | . 7 . | . 9 . | 2 . . |     | 6 7 5 | 4 9 1 | 2 8 3 |
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: | . 5 . | . . 7 | . . . |     | 1 5 4 | 2 3 7 | 8 9 6 |
+//? expect: | . . . | . 4 5 | 7 . . |     | 3 6 9 | 8 4 5 | 7 2 1 |
+//? expect: | . . . | 1 . . | . 3 . |     | 2 8 7 | 1 6 9 | 5 3 4 |
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: | . . 1 | . . . | . 6 8 |     | 5 2 1 | 9 7 4 | 3 6 8 |
+//? expect: | . . 8 | 5 . . | . 1 . |     | 4 3 8 | 5 2 6 | 9 1 7 |
+//? expect: | . 9 . | . . . | 4 . . |     | 7 9 6 | 3 1 8 | 4 5 2 |
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: verified OK: assignments=10939 guesses=1850 backtracks=1837
+//? expect:
+//? expect: == minimal (from Gordon Royle's 17-clue list) — 17 clues ==
+//? expect:
+//? expect:    puzzle                        solution
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: | . . . | . . . | . 1 . |     | 6 9 3 | 7 8 4 | 5 1 2 |
+//? expect: | 4 . . | . . . | . . . |     | 4 8 7 | 5 1 2 | 9 3 6 |
+//? expect: | . 2 . | . . . | . . . |     | 1 2 5 | 9 6 3 | 8 7 4 |
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: | . . . | . 5 . | 4 . 7 |     | 9 3 2 | 6 5 1 | 4 8 7 |
+//? expect: | . . 8 | . . . | 3 . . |     | 5 6 8 | 2 4 7 | 3 9 1 |
+//? expect: | . . 1 | . 9 . | . . . |     | 7 4 1 | 3 9 8 | 6 2 5 |
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: | 3 . . | 4 . . | 2 . . |     | 3 1 9 | 4 7 5 | 2 6 8 |
+//? expect: | . 5 . | 1 . . | . . . |     | 8 5 6 | 1 2 9 | 7 4 3 |
+//? expect: | . . . | 8 . 6 | . . . |     | 2 7 4 | 8 3 6 | 1 5 9 |
+//? expect: +-------+-------+-------+     +-------+-------+-------+
+//? expect: verified OK: assignments=5273 guesses=1456 backtracks=1439

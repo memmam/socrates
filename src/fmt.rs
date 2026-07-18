@@ -1,4 +1,4 @@
-//! The canonical source formatter (`fable fmt`).
+//! The canonical source formatter (`socrates fmt`).
 //!
 //! Prints the AST back out with normalized indentation (4 spaces), spacing,
 //! and trailing commas. Literals (numbers, strings) are copied verbatim from
@@ -49,7 +49,7 @@ use crate::source::Source;
 use crate::span::Span;
 use crate::token::Comment;
 
-/// The default maximum line width (`fable fmt --width N` overrides it).
+/// The default maximum line width (`socrates fmt --width N` overrides it).
 pub const DEFAULT_WIDTH: usize = 100;
 
 pub fn format_source(name: &str, text: &str) -> Result<String, Vec<Diagnostic>> {

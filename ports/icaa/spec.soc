@@ -1,0 +1,103 @@
+// Golden tests for the ICAA port. Run with:
+//
+//   SOCRATES_PATH=ports socrates test ports/icaa/spec.soc
+//
+// (Not via `socrates test ports` — the CLI mains under ports/ exit when run
+// without arguments, which would end the test runner.)
+//
+// A small hard-aliased scene is built in memory, processed by both
+// presets, and pinned by an order-sensitive checksum of the quantized
+// output; identity paths (a flat field and a sub-threshold ramp) are
+// pinned to their inputs' checksums. Values here were cross-validated
+// byte-for-byte against the plain-JS reference implementation
+// (reference/icaa-cpu.mjs) — see reference/ and the CI cross-validation
+// step.
+
+import icaa;
+import jsl.image;
+import jsl.vec;
+
+fn to_byte(c: Float) -> Int {
+    let v = (c * 255.0).round().to_int();
+    (0).max(v.min(255))
+}
+
+// Order-sensitive checksum over quantized RGB bytes.
+fn checksum(img: image.Image) -> Int {
+    let mut acc = 0;
+    let mut i = 0;
+    for y in 0..img.h {
+        for x in 0..img.w {
+            let base = (y * img.w + x) * 4;
+            acc = (acc + to_byte(img.px[base]) * (i % 97 + 1)) % 999983;
+            acc = (acc + to_byte(img.px[base + 1]) * (i % 89 + 1)) % 999983;
+            acc = (acc + to_byte(img.px[base + 2]) * (i % 83 + 1)) % 999983;
+            i += 1;
+        }
+    }
+    acc
+}
+
+// Hard-aliased shallow edge, 64x48: foreground iff the pixel center is
+// below the line y = 12.5 + 0.08 x.
+fn edge_scene() -> image.Image {
+    let img = image.new_image(64, 48);
+    for y in 0..48 {
+        for x in 0..64 {
+            let inside = y.to_float() + 0.5 > 12.5 + 0.08 * (x.to_float() + 0.5);
+            let g = if inside { 0.85 } else { 0.12 };
+            img.set_px(x, y, vec.v4(g, g, g, 1.0));
+        }
+    }
+    img
+}
+
+fn flat_scene(g: Float) -> image.Image {
+    let img = image.new_image(32, 24);
+    for y in 0..24 {
+        for x in 0..32 {
+            img.set_px(x, y, vec.v4(g, g, g, 1.0));
+        }
+    }
+    img
+}
+
+// Smooth horizontal ramp: every local contrast is below the floor, so
+// ICAA must be an exact identity on it.
+fn ramp_scene() -> image.Image {
+    let img = image.new_image(64, 16);
+    for y in 0..16 {
+        for x in 0..64 {
+            let g = (x.to_float() + 0.5) / 64.0;
+            img.set_px(x, y, vec.v4(g, g, g, 1.0));
+        }
+    }
+    img
+}
+
+let edge = edge_scene();
+let edge_in_sum = checksum(edge);
+println("edge in: {edge_in_sum}");            //? expect: edge in: 344346
+
+let q = icaa.apply(edge, icaa.default_params(false));
+let f = icaa.apply(edge, icaa.default_params(true));
+println("edge quality: {checksum(q)}");       //? expect: edge quality: 590276
+println("edge fast: {checksum(f)}");          //? expect: edge fast: 533281
+
+// Both presets must change the edge (not identity)...
+println(checksum(q) != edge_in_sum && checksum(f) != edge_in_sum);  //? expect: true
+
+// ...and be exact identities on flat and sub-threshold inputs.
+let flat = flat_scene(0.5);
+let flat_q = icaa.apply(flat, icaa.default_params(false));
+println(checksum(flat_q) == checksum(flat));  //? expect: true
+let ramp = ramp_scene();
+let ramp_f = icaa.apply(ramp, icaa.default_params(true));
+println(checksum(ramp_f) == checksum(ramp));  //? expect: true
+
+// Debug view 2 (coverage) produces grayscale in [0,1]: spot-check bounds.
+let dbg = icaa.default_params(false);
+dbg.debug = 2;
+let dv = icaa.apply(edge, dbg);
+let ok = dv.px.all(|v| v >= 0.0 && v <= 1.0);
+println(ok);                                  //? expect: true

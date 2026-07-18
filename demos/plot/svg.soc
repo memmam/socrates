@@ -1,0 +1,67 @@
+// svg.soc — a tiny SVG document builder.
+//
+// A Doc accumulates element strings and renders them as one standalone
+// <svg> file. Everything is plain string building: Socrates's interpolation
+// ("cx=\"{x}\"") does the heavy lifting, and a strings.Builder (v0.7)
+// glues the document together — element strings go in as they come,
+// build() concatenates once at the end, O(n) total.
+
+import std.strings;
+
+// Format a coordinate: round to 2 decimals and drop a trailing ".0" so
+// the generated file stays compact ("12.5" and "40", never "40.0").
+// (Deliberately not v0.6's to_fixed(2): that keeps trailing zeros —
+// "12.50" — and breaks .x25-style ties toward even where round() goes
+// away from zero, so switching would change the output bytes.)
+pub fn num(v: Float) -> String {
+    let r = (v * 100.0).round() / 100.0;
+    let s = str(r);
+    if s.ends_with(".0") { s.slice(0, s.len() - 2) } else { s }
+}
+
+pub struct Doc {
+    width: Int,
+    height: Int,
+    body: strings.Builder,
+}
+
+pub fn doc(width: Int, height: Int) -> Doc {
+    Doc { width, height, body: strings.builder() }
+}
+
+impl Doc {
+    // Escape hatch: append any element verbatim, newline-separated —
+    // push_joined lands the separator only between elements.
+    pub fn add(self, element: String) {
+        self.body.push_joined("\n", element);
+    }
+
+    pub fn rect(self, x: Float, y: Float, w: Float, h: Float, fill: String) {
+        self.add("<rect x=\"{num(x)}\" y=\"{num(y)}\" width=\"{num(w)}\" height=\"{num(h)}\" fill=\"{fill}\"/>");
+    }
+
+    pub fn line(self, x1: Float, y1: Float, x2: Float, y2: Float, stroke: String, width: Float) {
+        self.add("<line x1=\"{num(x1)}\" y1=\"{num(y1)}\" x2=\"{num(x2)}\" y2=\"{num(y2)}\" stroke=\"{stroke}\" stroke-width=\"{num(width)}\"/>");
+    }
+
+    pub fn polyline(self, pts: List[(Float, Float)], stroke: String, width: Float) {
+        let coords = pts.map(|p| "{num(p.0)},{num(p.1)}").join(" ");
+        self.add("<polyline points=\"{coords}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{num(width)}\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>");
+    }
+
+    pub fn circle(self, cx: Float, cy: Float, r: Float, fill: String) {
+        self.add("<circle cx=\"{num(cx)}\" cy=\"{num(cy)}\" r=\"{num(r)}\" fill=\"{fill}\"/>");
+    }
+
+    // anchor is "start" | "middle" | "end".
+    pub fn text(self, x: Float, y: Float, size: Int, anchor: String, fill: String, s: String) {
+        self.add("<text x=\"{num(x)}\" y=\"{num(y)}\" font-size=\"{size}\" text-anchor=\"{anchor}\" fill=\"{fill}\" font-family=\"system-ui, sans-serif\">{s}</text>");
+    }
+
+    // Non-consuming, like Builder.build(): rendering twice gives the same
+    // document, and elements can still be added afterwards.
+    pub fn render(self) -> String {
+        let head = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{self.width}\" height=\"{self.height}\" viewBox=\"0 0 {self.width} {self.height}\">";
+        "{head}\n{self.body.build()}\n</svg>\n"
+    }
+}

@@ -1,21 +1,21 @@
-//! The embedded standard library: Fable modules compiled into the binary and
+//! The embedded standard library: Socrates modules compiled into the binary and
 //! resolved by the loader for `import std.*;` (the `std.` prefix is reserved
-//! — it never touches the filesystem or `FABLE_PATH`).
+//! — it never touches the filesystem or `SOCRATES_PATH`).
 
 /// The source of an embedded module, by key ("std.json").
 pub fn std_module(key: &str) -> Option<&'static str> {
     Some(match key {
-        "std.json" => include_str!("../std/json.fable"),
-        "std.flags" => include_str!("../std/flags.fable"),
-        "std.iter" => include_str!("../std/iter.fable"),
-        "std.path" => include_str!("../std/path.fable"),
-        "std.strings" => include_str!("../std/strings.fable"),
-        "std.lists" => include_str!("../std/lists.fable"),
-        "std.set" => include_str!("../std/set.fable"),
-        "std.deque" => include_str!("../std/deque.fable"),
-        "std.lazy" => include_str!("../std/lazy.fable"),
-        "std.glm" => include_str!("../std/glm.fable"),
-        "std.fft" => include_str!("../std/fft.fable"),
+        "std.json" => include_str!("../std/json.soc"),
+        "std.flags" => include_str!("../std/flags.soc"),
+        "std.iter" => include_str!("../std/iter.soc"),
+        "std.path" => include_str!("../std/path.soc"),
+        "std.strings" => include_str!("../std/strings.soc"),
+        "std.lists" => include_str!("../std/lists.soc"),
+        "std.set" => include_str!("../std/set.soc"),
+        "std.deque" => include_str!("../std/deque.soc"),
+        "std.lazy" => include_str!("../std/lazy.soc"),
+        "std.glm" => include_str!("../std/glm.soc"),
+        "std.fft" => include_str!("../std/fft.soc"),
         _ => return None,
     })
 }

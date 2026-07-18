@@ -1,0 +1,12 @@
+// Bench: the counted `while` loop itself — Int add/mul/mod plus the
+// loop's own compare/branch/increment bookkeeping (the pre-`for`
+// dispatch floor). The while-shape is deliberate: the loop bookkeeping
+// IS the measurand; bench/for_range.soc is the fused range-loop
+// counterpart.
+let mut acc = 0;
+let mut i = 0;
+while i < 5000000 {
+    acc = (acc + i * 3) % 1000003;
+    i += 1;
+}
+println(acc);

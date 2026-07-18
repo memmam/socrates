@@ -1,0 +1,495 @@
+// main.soc — drive the regex engine: a look at how patterns compile, a
+// self-checking table of match tests, and a small grep over a bundled log.
+//
+//   ./target/release/socrates demos/regex/main.soc                    # full demo
+//   ./target/release/socrates demos/regex/main.soc <pattern> [file]   # grep mode
+//   ./target/release/socrates test demos/regex                          # golden test
+//
+// Run from the repo root; the bundled sample file is found either way.
+
+import syntax;
+import engine;
+import std.strings as strings;
+import std.path as path;
+
+// ---- test harness ---------------------------------------------------------
+
+struct Case { pattern: String, text: String, want: Bool }
+struct Score { pass: Int, fail: Int }
+
+fn c(pattern: String, text: String, want: Bool) -> Case {
+    Case { pattern: pattern, text: text, want: want }
+}
+
+// One report row: does /pattern/ match text as expected?
+fn check(sc: Score, case: Case) {
+    let shown = "/{case.pattern}/";
+    match syntax.compile(case.pattern) {
+        Err(e) -> {
+            sc.fail += 1;
+            println("FAIL  {shown} did not compile: {e}");
+        }
+        Ok(re) -> {
+            let got = engine.matches(re, case.text);
+            let verdict = if got == case.want { "  ok" } else { "FAIL" };
+            if got == case.want { sc.pass += 1; } else { sc.fail += 1; }
+            println("{verdict}  {shown.pad_right(20, " ")} \"{case.text}\"".pad_right(52, " ") + " -> {got}");
+        }
+    }
+}
+
+// A malformed pattern must be rejected, with a helpful message.
+fn check_error(sc: Score, pattern: String) {
+    let shown = "/{pattern}/";
+    match syntax.compile(pattern) {
+        Err(e) -> {
+            sc.pass += 1;
+            println("  ok  {shown.pad_right(10, " ")} error: {e}");
+        }
+        Ok(re) -> {
+            sc.fail += 1;
+            println("FAIL  {shown} compiled to {syntax.show(re)} - expected an error");
+        }
+    }
+}
+
+// (pattern, input, should-match) — the feature tour.
+fn cases() -> List[Case] {
+    [
+        // literals and '.'
+        c("cat", "the cat sat", true),
+        c("cat", "the dog sat", false),
+        c("c.t", "cot", true),
+        c("c.t", "ct", false),
+        c("", "anything", true),
+        // quantifiers
+        c("ab*c", "ac", true),
+        c("ab*c", "abbbc", true),
+        c("ab+c", "ac", false),
+        c("ab+c", "abbc", true),
+        c("colou?r", "color", true),
+        c("colou?r", "colour", true),
+        c("colou?r", "colouur", false),
+        // alternation and grouping
+        c("cat|dog", "hotdog", true),
+        c("gr(a|e)y", "gray", true),
+        c("gr(a|e)y", "grey", true),
+        c("gr(a|e)y", "griy", false),
+        c("(ab|c)*d", "ababccd", true),
+        c("(ha)+!", "hahaha!", true),
+        c("(ha)+!", "h a h a", false),
+        // character classes
+        c("[abc]at", "bat", true),
+        c("[abc]at", "rat", false),
+        c("[a-z]+", "HELLO there", true),
+        c("^[a-z]+$", "HELLO there", false),
+        c("[^0-9]", "42", false),
+        c("[^0-9]", "4a2", true),
+        c("[0-9a-f]+", "deadbeef", true),
+        // anchors
+        c("^fox", "foxtrot", true),
+        c("^fox", "the fox", false),
+        c("fox$", "red fox", true),
+        c("fox$", "foxes", false),
+        c("^$", "", true),
+        c("^$", "x", false),
+        // escapes and shorthands
+        c("\\d+", "no digits here", false),
+        c("\\d+\\.\\d+", "pi is 3.14", true),
+        c("\\w+@\\w+\\.com", "mail bob@example.com now", true),
+        c("\\s", "one two", true),
+        c("\\S+", "   ", false),
+        c("3\\.14", "3914", false),
+        c("3.14", "3914", true),
+        // strings are Unicode scalars, so '.' is one whole character
+        c(".é.", "café!", true),
+        c("^.....$", "héllo", true),
+        // backtracking
+        c("a*a*a*b", "aaaaaaab", true),
+        c("(x+x+)+y", "xxxxxxxxxx", false),
+        c("^(a|ab)*c$", "ababc", true),
+        c("(a?)*b", "aab", true),
+        c("(a?)*b", "cc", false),
+        c("^-?\\d+(\\.\\d+)?$", "-3.14", true),
+        c("^-?\\d+(\\.\\d+)?$", "1.2.3", false),
+    ]
+}
+
+fn bad_patterns() -> List[String] {
+    ["(ab", "a)b", "*a", "a|+", "[z-a]", "[]", "[abc", "abc\\"]
+}
+
+// ---- the v0.7 additions -----------------------------------------------------
+
+// Classes with code points above 255 exercise the bitmap's range fallback;
+// é (U+00E9 = 233) and ÿ (U+00FF = 255) still fit the bitmap, λ (U+03BB =
+// 955) does not, and [é-λ] straddles the boundary.
+fn wide_cases() -> List[Case] {
+    [
+        c("[à-ÿ]+", "café", true),
+        c("^[à-ÿ]+$", "café", false),
+        c("[α-ω]", "φ", true),
+        c("[α-ω]", "Ω", false),
+        c("[é-λ]", "ÿ", true),
+        c("[é-λ]", "ā", true),
+        c("[é-λ]", "ä", false),
+        c("[^α-ω]", "φ", false),
+        c("[^α-ω]", "φx", true),
+    ]
+}
+
+// Bounded quantifiers, including the "not a bound spec, so the brace is a
+// literal" cases on the last few rows.
+fn rep_cases() -> List[Case] {
+    [
+        c("^a\{3}$", "aaa", true),
+        c("^a\{3}$", "aa", false),
+        c("^a\{3}$", "aaaa", false),
+        c("^a\{2,4}$", "aa", true),
+        c("^a\{2,4}$", "aaaa", true),
+        c("^a\{2,4}$", "aaaaa", false),
+        c("^a\{2,4}$", "a", false),
+        c("^a\{2,4}a$", "aaa", true),
+        c("^a\{2,}$", "aaaaa", true),
+        c("^a\{2,}$", "a", false),
+        c("^(ab)\{2,3}$", "ababab", true),
+        c("^(ab)\{2,3}$", "ab", false),
+        c("\\d\{4}-\\d\{2}-\\d\{2}", "on 2026-07-14 at", true),
+        c("^x\{0,2}y$", "y", true),
+        c("^x\{0,2}y$", "xxxy", false),
+        c("^a\{0}b$", "b", true),
+        c("a\{b", "za\{bc", true),
+        c("a\{2b}", "xa\{2b}x", true),
+        c("a\{,3}", "a\{,3}", true),
+        c("\{3}x", "\{3}x", true),
+    ]
+}
+
+fn bad_bounds() -> List[String] {
+    ["a\{2,1}", "a\{999}"]
+}
+
+// The four 64-bit words of a class's 256-bit membership bitmap, read
+// back out of the Bytes buffer in one `read_u64le` (v0.8: the 8 bytes
+// reinterpreted as Int directly, bit 63 included), and `Int.to_hex`
+// renders the two's-complement pattern — zero-padded to 16 digits.
+fn word_hex(bm: Bytes, j: Int) -> String {
+    bm.read_u64le(8 * j).to_hex().pad_left(16, "0")
+}
+
+fn show_bitmap(pattern: String) {
+    match syntax.compile(pattern) {
+        Ok(syntax.Ast.Class(set)) -> {
+            let words = (0..4).map(|j| word_hex(set.bits, j));
+            println("  /{pattern}/".pad_right(12, " ") + "=>  {words.join(" ")}");
+        }
+        _ -> println("  /{pattern}/ is not a single class"),
+    }
+}
+
+// ---- grep mode --------------------------------------------------------------
+
+// One underline row for every match on the line: spaces up to each span,
+// carets across it. find_all returns spans sorted and non-overlapping, so
+// the builder's running length is the current column — and strings.Builder
+// keeps the row O(line) where `+=` per character would be O(line²).
+fn underline(spans: List[(Int, Int)]) -> String {
+    let b = strings.builder();
+    for span in spans {
+        let (s, e) = span;
+        while b.len() < s {
+            b.push(" ");
+        }
+        while b.len() < e {
+            b.push("^");
+        }
+    }
+    b.build()
+}
+
+// Print the lines of `file` matching `pattern`, underlining every match.
+fn grep(pattern: String, file: String) {
+    match syntax.compile(pattern) {
+        Err(e) -> println("grep: bad pattern /{pattern}/: {e}"),
+        Ok(re) -> grep_lines(re, pattern, file),
+    }
+}
+
+fn grep_lines(re: syntax.Ast, pattern: String, file: String) {
+    let text = match fs.read(file) {
+        Err(e) -> return println("grep: {e}"),
+        Ok(text) -> text,
+    };
+    println("grep /{pattern}/ {path.base_name(file)}");
+    let all = strings.lines(text);
+    let mut hits = 0;
+    for (i, line) in all.enumerate() {
+        // A backtracking matcher recurses per character, so a
+        // pathological pattern on a very long line can exhaust the
+        // call stack; try() turns that panic into a plain Result.
+        match try(|| engine.find_all(re, line)) {
+            Err(msg) -> println("{str(i + 1).pad_left(4, " ")}: (skipped: {msg})"),
+            Ok(spans) -> {
+                if spans.is_empty() {
+                    continue;
+                }
+                hits += 1;
+                println("{str(i + 1).pad_left(4, " ")}: {line}");
+                let marks = underline(spans);
+                // All-zero-width matches leave nothing to underline.
+                if marks != "" {
+                    println(" ".repeat(6) + marks);
+                }
+            }
+        }
+    }
+    println("      {hits} of {all.len()} lines match");
+}
+
+// ---- the demo ---------------------------------------------------------------
+
+fn show_compiled(pattern: String) {
+    match syntax.compile(pattern) {
+        Ok(re) -> println("  /{pattern}/".pad_right(22, " ") + "=>  {syntax.show(re)}"),
+        Err(e) -> println("  /{pattern}/  !!  {e}"),
+    }
+}
+
+// The sample file lives next to this script; find it whether we are run
+// from the repo root (the documented way) or from inside demos/regex.
+fn bundled(name: String) -> String {
+    let from_root = "demos/regex/{name}";
+    if fs.exists(from_root) { from_root } else { name }
+}
+
+fn summarize(label: String, sc: Score) {
+    let total = sc.pass + sc.fail;
+    if sc.fail == 0 {
+        println("{label}: all {total} checks passed");
+    } else {
+        println("{label}: {sc.fail} of {total} checks FAILED");
+    }
+}
+
+fn demo() {
+    println("regex - a backtracking regular-expression engine in Socrates");
+    println("");
+    println("-- how patterns compile --");
+    show_compiled("(ab|c)*d");
+    show_compiled("^-?\\d+(\\.\\d+)?$");
+    show_compiled("[a-f][a-f0-9_]*");
+    println("");
+    println("-- match tests --");
+    let sc = Score { pass: 0, fail: 0 };
+    for case in cases() {
+        check(sc, case);
+    }
+    println("");
+    println("-- patterns that must not compile --");
+    for p in bad_patterns() {
+        check_error(sc, p);
+    }
+    println("");
+    summarize("summary", sc);
+    println("");
+    println("-- v0.7: classes compile to 256-bit bitmaps --");
+    println("  (four 64-bit words; bit c = code point c, tested with '>> 3' and '& 7')");
+    show_bitmap("[0-9a-f]");
+    show_bitmap("\\w");
+    show_bitmap("[^ \\t]");
+    println("");
+    println("-- code points above 255 use the bitmap's range fallback --");
+    let v7 = Score { pass: 0, fail: 0 };
+    for case in wide_cases() {
+        check(v7, case);
+    }
+    println("");
+    println("-- v0.7: bounded quantifiers \{m,n} desugar to seq/opt/star --");
+    show_compiled("a\{2,4}");
+    show_compiled("(ab)\{2}!");
+    show_compiled("\\d\{2,}");
+    for case in rep_cases() {
+        check(v7, case);
+    }
+    println("");
+    println("-- bounds that must not compile --");
+    for p in bad_bounds() {
+        check_error(v7, p);
+    }
+    println("");
+    summarize("v0.7 additions", v7);
+    println("");
+    grep("ERROR|WARN", bundled("sample.txt"));
+    println("");
+    grep("\\d\\d+ms$", bundled("sample.txt"));
+    println("");
+    grep("WARN|\\d+ms", bundled("sample.txt"));
+}
+
+// With arguments, act as a tiny grep; without, run the full demo.
+let args = os.args();
+if args.is_empty() {
+    demo();
+} else {
+    let file = if args.len() > 1 { args[1] } else { bundled("sample.txt") };
+    grep(args[0], file);
+}
+
+// Golden output for './target/release/socrates test demos/regex' (run from
+// the repo root). Regenerate by running the program and prefixing every
+// output line with the expect-directive marker.
+//? expect: regex - a backtracking regular-expression engine in Socrates
+//? expect:
+//? expect: -- how patterns compile --
+//? expect:   /(ab|c)*d/          =>  (seq (star (alt (seq 'a' 'b') 'c')) 'd')
+//? expect:   /^-?\d+(\.\d+)?$/   =>  (seq start (opt '-') (plus [0-9]) (opt (seq '.' (plus [0-9]))) end)
+//? expect:   /[a-f][a-f0-9_]*/   =>  (seq [a-f] (star [a-f 0-9 _]))
+//? expect:
+//? expect: -- match tests --
+//? expect:   ok  /cat/                "the cat sat"             -> true
+//? expect:   ok  /cat/                "the dog sat"             -> false
+//? expect:   ok  /c.t/                "cot"                     -> true
+//? expect:   ok  /c.t/                "ct"                      -> false
+//? expect:   ok  //                   "anything"                -> true
+//? expect:   ok  /ab*c/               "ac"                      -> true
+//? expect:   ok  /ab*c/               "abbbc"                   -> true
+//? expect:   ok  /ab+c/               "ac"                      -> false
+//? expect:   ok  /ab+c/               "abbc"                    -> true
+//? expect:   ok  /colou?r/            "color"                   -> true
+//? expect:   ok  /colou?r/            "colour"                  -> true
+//? expect:   ok  /colou?r/            "colouur"                 -> false
+//? expect:   ok  /cat|dog/            "hotdog"                  -> true
+//? expect:   ok  /gr(a|e)y/           "gray"                    -> true
+//? expect:   ok  /gr(a|e)y/           "grey"                    -> true
+//? expect:   ok  /gr(a|e)y/           "griy"                    -> false
+//? expect:   ok  /(ab|c)*d/           "ababccd"                 -> true
+//? expect:   ok  /(ha)+!/             "hahaha!"                 -> true
+//? expect:   ok  /(ha)+!/             "h a h a"                 -> false
+//? expect:   ok  /[abc]at/            "bat"                     -> true
+//? expect:   ok  /[abc]at/            "rat"                     -> false
+//? expect:   ok  /[a-z]+/             "HELLO there"             -> true
+//? expect:   ok  /^[a-z]+$/           "HELLO there"             -> false
+//? expect:   ok  /[^0-9]/             "42"                      -> false
+//? expect:   ok  /[^0-9]/             "4a2"                     -> true
+//? expect:   ok  /[0-9a-f]+/          "deadbeef"                -> true
+//? expect:   ok  /^fox/               "foxtrot"                 -> true
+//? expect:   ok  /^fox/               "the fox"                 -> false
+//? expect:   ok  /fox$/               "red fox"                 -> true
+//? expect:   ok  /fox$/               "foxes"                   -> false
+//? expect:   ok  /^$/                 ""                        -> true
+//? expect:   ok  /^$/                 "x"                       -> false
+//? expect:   ok  /\d+/                "no digits here"          -> false
+//? expect:   ok  /\d+\.\d+/           "pi is 3.14"              -> true
+//? expect:   ok  /\w+@\w+\.com/       "mail bob@example.com now" -> true
+//? expect:   ok  /\s/                 "one two"                 -> true
+//? expect:   ok  /\S+/                "   "                     -> false
+//? expect:   ok  /3\.14/              "3914"                    -> false
+//? expect:   ok  /3.14/               "3914"                    -> true
+//? expect:   ok  /.é./                "café!"                   -> true
+//? expect:   ok  /^.....$/            "héllo"                   -> true
+//? expect:   ok  /a*a*a*b/            "aaaaaaab"                -> true
+//? expect:   ok  /(x+x+)+y/           "xxxxxxxxxx"              -> false
+//? expect:   ok  /^(a|ab)*c$/         "ababc"                   -> true
+//? expect:   ok  /(a?)*b/             "aab"                     -> true
+//? expect:   ok  /(a?)*b/             "cc"                      -> false
+//? expect:   ok  /^-?\d+(\.\d+)?$/    "-3.14"                   -> true
+//? expect:   ok  /^-?\d+(\.\d+)?$/    "1.2.3"                   -> false
+//? expect:
+//? expect: -- patterns that must not compile --
+//? expect:   ok  /(ab/      error: unclosed '(' opened at 0
+//? expect:   ok  /a)b/      error: unmatched ')' at 1
+//? expect:   ok  /*a/       error: nothing to repeat: '*' at 0
+//? expect:   ok  /a|+/      error: nothing to repeat: '+' at 2
+//? expect:   ok  /[z-a]/    error: bad range z-a in character class
+//? expect:   ok  /[]/       error: empty character class at 0
+//? expect:   ok  /[abc/     error: unterminated '[' opened at 0
+//? expect:   ok  /abc\/     error: dangling '\' at the end of the pattern
+//? expect:
+//? expect: summary: all 56 checks passed
+//? expect:
+//? expect: -- v0.7: classes compile to 256-bit bitmaps --
+//? expect:   (four 64-bit words; bit c = code point c, tested with '>> 3' and '& 7')
+//? expect:   /[0-9a-f]/=>  03ff000000000000 0000007e00000000 0000000000000000 0000000000000000
+//? expect:   /\w/      =>  03ff000000000000 07fffffe87fffffe 0000000000000000 0000000000000000
+//? expect:   /[^ \t]/  =>  0000000100000200 0000000000000000 0000000000000000 0000000000000000
+//? expect:
+//? expect: -- code points above 255 use the bitmap's range fallback --
+//? expect:   ok  /[à-ÿ]+/             "café"                    -> true
+//? expect:   ok  /^[à-ÿ]+$/           "café"                    -> false
+//? expect:   ok  /[α-ω]/              "φ"                       -> true
+//? expect:   ok  /[α-ω]/              "Ω"                       -> false
+//? expect:   ok  /[é-λ]/              "ÿ"                       -> true
+//? expect:   ok  /[é-λ]/              "ā"                       -> true
+//? expect:   ok  /[é-λ]/              "ä"                       -> false
+//? expect:   ok  /[^α-ω]/             "φ"                       -> false
+//? expect:   ok  /[^α-ω]/             "φx"                      -> true
+//? expect:
+//? expect: -- v0.7: bounded quantifiers {m,n} desugar to seq/opt/star --
+//? expect:   /a{2,4}/            =>  (seq 'a' 'a' (opt (seq 'a' (opt 'a'))))
+//? expect:   /(ab){2}!/          =>  (seq (seq (seq 'a' 'b') (seq 'a' 'b')) '!')
+//? expect:   /\d{2,}/            =>  (seq [0-9] [0-9] (star [0-9]))
+//? expect:   ok  /^a{3}$/             "aaa"                     -> true
+//? expect:   ok  /^a{3}$/             "aa"                      -> false
+//? expect:   ok  /^a{3}$/             "aaaa"                    -> false
+//? expect:   ok  /^a{2,4}$/           "aa"                      -> true
+//? expect:   ok  /^a{2,4}$/           "aaaa"                    -> true
+//? expect:   ok  /^a{2,4}$/           "aaaaa"                   -> false
+//? expect:   ok  /^a{2,4}$/           "a"                       -> false
+//? expect:   ok  /^a{2,4}a$/          "aaa"                     -> true
+//? expect:   ok  /^a{2,}$/            "aaaaa"                   -> true
+//? expect:   ok  /^a{2,}$/            "a"                       -> false
+//? expect:   ok  /^(ab){2,3}$/        "ababab"                  -> true
+//? expect:   ok  /^(ab){2,3}$/        "ab"                      -> false
+//? expect:   ok  /\d{4}-\d{2}-\d{2}/  "on 2026-07-14 at"        -> true
+//? expect:   ok  /^x{0,2}y$/          "y"                       -> true
+//? expect:   ok  /^x{0,2}y$/          "xxxy"                    -> false
+//? expect:   ok  /^a{0}b$/            "b"                       -> true
+//? expect:   ok  /a{b/                "za{bc"                   -> true
+//? expect:   ok  /a{2b}/              "xa{2b}x"                 -> true
+//? expect:   ok  /a{,3}/              "a{,3}"                   -> true
+//? expect:   ok  /{3}x/               "{3}x"                    -> true
+//? expect:
+//? expect: -- bounds that must not compile --
+//? expect:   ok  /a{2,1}/   error: bad repeat range {2,1} at 1
+//? expect:   ok  /a{999}/   error: repeat bound above 255 at 1
+//? expect:
+//? expect: v0.7 additions: all 31 checks passed
+//? expect:
+//? expect: grep /ERROR|WARN/ sample.txt
+//? expect:    3: 2026-07-14 09:12:09 WARN  slow request GET /search 200 1450ms
+//? expect:                           ^^^^
+//? expect:    4: 2026-07-14 09:12:11 ERROR database timeout after 3000ms
+//? expect:                           ^^^^^
+//? expect:    6: 2026-07-14 09:12:20 ERROR unhandled exception in worker-3
+//? expect:                           ^^^^^
+//? expect:    8: 2026-07-14 09:12:23 WARN  retrying job 42 (attempt 2)
+//? expect:                           ^^^^
+//? expect:       4 of 10 lines match
+//? expect:
+//? expect: grep /\d\d+ms$/ sample.txt
+//? expect:    2: 2026-07-14 09:12:04 INFO  GET /index.html 200 12ms
+//? expect:                                                     ^^^^
+//? expect:    3: 2026-07-14 09:12:09 WARN  slow request GET /search 200 1450ms
+//? expect:                                                              ^^^^^^
+//? expect:    4: 2026-07-14 09:12:11 ERROR database timeout after 3000ms
+//? expect:                                                        ^^^^^^
+//? expect:    9: 2026-07-14 09:12:30 INFO  GET /api/items 200 17ms
+//? expect:                                                    ^^^^
+//? expect:       4 of 10 lines match
+//? expect:
+//? expect: grep /WARN|\d+ms/ sample.txt
+//? expect:    2: 2026-07-14 09:12:04 INFO  GET /index.html 200 12ms
+//? expect:                                                     ^^^^
+//? expect:    3: 2026-07-14 09:12:09 WARN  slow request GET /search 200 1450ms
+//? expect:                           ^^^^                               ^^^^^^
+//? expect:    4: 2026-07-14 09:12:11 ERROR database timeout after 3000ms
+//? expect:                                                        ^^^^^^
+//? expect:    5: 2026-07-14 09:12:15 INFO  GET /img/logo.png 304 2ms
+//? expect:                                                       ^^^
+//? expect:    7: 2026-07-14 09:12:22 INFO  POST /api/login 401 8ms
+//? expect:                                                     ^^^
+//? expect:    8: 2026-07-14 09:12:23 WARN  retrying job 42 (attempt 2)
+//? expect:                           ^^^^
+//? expect:    9: 2026-07-14 09:12:30 INFO  GET /api/items 200 17ms
+//? expect:                                                    ^^^^
+//? expect:       7 of 10 lines match

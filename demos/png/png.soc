@@ -1,0 +1,160 @@
+// png — the container format: signature, chunks, encoder, and a parser
+// that re-verifies everything the encoder claims.
+//
+// A PNG is the 8-byte signature followed by chunks; each chunk is
+// [length u32be] [4-byte type] [data] [CRC-32 of type+data, u32be].
+// With 8-bit RGB, filter 0 on every scanline, and stored deflate blocks
+// (zlib.soc), the whole format needs no compression at all.
+
+import bits;
+import crc;
+import zlib;
+
+// Stored-block payload cap for IDAT. 65535 is the format's limit; 2000
+// forces this demo's 4640-byte image through the multi-block path.
+pub let idat_block_size = 2000;
+
+pub fn signature() -> Bytes {
+    bytes_of([137, 80, 78, 71, 13, 10, 26, 10])
+}
+
+// One chunk, framed and checksummed.
+pub fn chunk(name: String, data: Bytes) -> Bytes {
+    if name.byte_len() != 4 {
+        panic("chunk type must be 4 bytes, got \"{name}\"");
+    }
+    let body = name.to_bytes().concat(data); // CRC covers type + data
+    let mut out = bytes(0);
+    bits.push_u32be(out, data.len());
+    out = out.concat(body);
+    bits.push_u32be(out, crc.crc32(body));
+    out
+}
+
+// Encode a w*h raster of packed RGB bytes (3 per pixel) as a complete PNG.
+pub fn encode(w: Int, h: Int, pixels: Bytes) -> Bytes {
+    if pixels.len() != w * h * 3 {
+        panic("encode: want {w * h * 3} pixel bytes, got {pixels.len()}");
+    }
+
+    // IHDR: dimensions, bit depth 8, color type 2 (truecolor RGB),
+    // compression 0, filter method 0, no interlace.
+    let ihdr = bytes(0);
+    bits.push_u32be(ihdr, w);
+    bits.push_u32be(ihdr, h);
+    for v in [8, 2, 0, 0, 0] {
+        ihdr.push(v);
+    }
+
+    // Scanlines: each row is a filter byte (0 = None) then its raw pixels.
+    let mut raw = bytes(0);
+    for y in 0..h {
+        raw.push(0);
+        raw = raw.concat(pixels.slice(y * w * 3, (y + 1) * w * 3));
+    }
+
+    signature().concat(chunk("IHDR", ihdr))
+        .concat(chunk("IDAT", zlib.deflate_stored(raw, idat_block_size)))
+        .concat(chunk("IEND", bytes(0)))
+}
+
+// --- the reader half -----------------------------------------------------
+
+pub struct Chunk {
+    name: String,
+    length: Int,
+    crc: Int, // the CRC stored in the file
+    crc_ok: Bool, // it matched a fresh CRC over type + data
+    data: Bytes,
+}
+
+pub struct Parsed {
+    width: Int,
+    height: Int,
+    bit_depth: Int,
+    color_type: Int,
+    chunks: List[Chunk],
+    idat_blocks: Int, // stored blocks inside the zlib stream
+    adler_ok: Bool, // zlib trailer verified
+    raw_len: Int, // filtered scanline bytes (pixels + filter bytes)
+    pixels: Bytes, // de-filtered packed RGB
+}
+
+// Parse a whole PNG file and re-verify every checksum in it. Only the
+// subset this encoder emits is accepted (8-bit RGB, filter 0, stored
+// blocks) — anything else is a descriptive Err.
+pub fn parse(file: Bytes) -> Result[Parsed, String] {
+    if file.slice(0, 8) != signature() {
+        return Err("not a PNG: bad signature");
+    }
+
+    let chunks = [];
+    let mut idat = bytes(0);
+    let mut pos = 8;
+    let mut seen_iend = false;
+    while pos < file.len() {
+        if seen_iend {
+            return Err("data after IEND");
+        }
+        if pos + 12 > file.len() {
+            return Err("truncated chunk header at {pos}");
+        }
+        let length = bits.read_u32be(file, pos);
+        if pos + 12 + length > file.len() {
+            return Err("chunk at {pos} runs past end of file");
+        }
+        let name = file.slice(pos + 4, pos + 8).utf8()?;
+        let body = file.slice(pos + 4, pos + 8 + length);
+        let stored = bits.read_u32be(file, pos + 8 + length);
+        let data = file.slice(pos + 8, pos + 8 + length);
+        chunks.push(Chunk { name, length, crc: stored, crc_ok: stored == crc.crc32(body), data });
+        if name == "IDAT" {
+            idat = idat.concat(data);
+        }
+        if name == "IEND" {
+            seen_iend = true;
+        }
+        pos += 12 + length;
+    }
+
+    if chunks.is_empty() || chunks[0].name != "IHDR" || chunks[0].length != 13 {
+        return Err("first chunk is not a 13-byte IHDR");
+    }
+    if !seen_iend {
+        return Err("missing IEND");
+    }
+    let ihdr = chunks[0].data;
+    let w = bits.read_u32be(ihdr, 0);
+    let h = bits.read_u32be(ihdr, 4);
+    let depth = ihdr.get(8);
+    let color = ihdr.get(9);
+    if depth != 8 || color != 2 {
+        return Err("unsupported format: bit depth {depth}, color type {color}");
+    }
+
+    let inflated = zlib.inflate_stored(idat)?;
+    let raw = inflated.data;
+    if raw.len() != h * (1 + w * 3) {
+        return Err("want {h * (1 + w * 3)} scanline bytes, got {raw.len()}");
+    }
+    let mut pixels = bytes(0);
+    for y in 0..h {
+        let row = y * (1 + w * 3);
+        if raw.get(row) != 0 {
+            return Err("row {y} uses filter {raw.get(row)}, only 0 supported");
+        }
+        pixels = pixels.concat(raw.slice(row + 1, row + 1 + w * 3));
+    }
+
+    Ok(Parsed {
+        width: w,
+        height: h,
+        bit_depth: depth,
+        color_type: color,
+        chunks,
+        idat_blocks: inflated.blocks,
+        adler_ok: inflated.adler_ok,
+        raw_len: raw.len(),
+        pixels,
+    })
+}

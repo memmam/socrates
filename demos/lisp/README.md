@@ -1,8 +1,8 @@
-# mini-lisp — a Lisp interpreter written in Fable
+# mini-lisp — a Lisp interpreter written in Socrates
 
 A small, classic tree-walking Lisp: an s-expression reader, an evaluator
 with lexical closures, and a handful of builtins — about 450 lines of
-Fable. The demo runs six sample Lisp programs from `programs/*.lisp`,
+Socrates. The demo runs six sample Lisp programs from `programs/*.lisp`,
 printing each program's source and every top-level result.
 
 ## Run it
@@ -10,11 +10,11 @@ printing each program's source and every top-level result.
 From the repository root:
 
 ```sh
-./target/release/fable demos/lisp/main.fable   # run the demo
-./target/release/fable test demos/lisp         # golden tests (main + spec)
+./target/release/socrates demos/lisp/main.soc   # run the demo
+./target/release/socrates test demos/lisp         # golden tests (main + spec)
 ```
 
-(`main.fable` also works with `demos/lisp/` as the working directory.)
+(`main.soc` also works with `demos/lisp/` as the working directory.)
 
 ## Sample output
 
@@ -55,9 +55,9 @@ error demo: (car (quote ())) -> error: car of empty list
   lists only (no dotted pairs).
 - **Comments** run from `;` to end of line.
 
-## How it maps onto Fable
+## How it maps onto Socrates
 
-| Lisp concept | Fable feature |
+| Lisp concept | Socrates feature |
 |---|---|
 | s-expressions | a recursive `enum Sexp { Num, Sym, Form(List[Sexp]) }` |
 | runtime values | `enum Value`, with a `Closure` struct for lambdas |
@@ -67,12 +67,12 @@ error demo: (car (quote ())) -> error: car of empty list
 | duplicate names | `Set.insert -> Bool` ("did it change?") catches `(lambda (x x) ...)` and `(let ((a 1) (a 2)) ...)` |
 | error reporting | `Result[Value, String]` + the `?` operator everywhere |
 | overflow, stack overflow | `try()` converts runtime panics into Lisp-level errors |
-| tail calls | Fable's TCO reaches *through* `eval`, so tail-recursive Lisp loops (see `programs/loop.lisp`) run in constant stack space |
+| tail calls | Socrates's TCO reaches *through* `eval`, so tail-recursive Lisp loops (see `programs/loop.lisp`) run in constant stack space |
 
 Files:
 
-- `reader.fable` — tokenizer + recursive-descent parser (`Sexp`)
-- `eval.fable` — values, environments, special forms, builtins
-- `main.fable` — driver: reads each `.lisp` file with `fs.read`, prints
+- `reader.soc` — tokenizer + recursive-descent parser (`Sexp`)
+- `eval.soc` — values, environments, special forms, builtins
+- `main.soc` — driver: reads each `.lisp` file with `fs.read`, prints
   source and results; its full output is pinned by test directives
-- `spec.fable` — 41 one-liner golden tests, happy paths and error paths
+- `spec.soc` — 41 one-liner golden tests, happy paths and error paths

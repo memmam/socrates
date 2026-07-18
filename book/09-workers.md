@@ -4,22 +4,22 @@ The interpreter runs one program on one thread. Three namespaces reach past
 that when a task is bigger than a single core's patience: `worker` runs
 whole programs in parallel, `fft` drops to native code for the one numeric
 kernel a tree-walker cannot make fast, and `gpu` (behind a build flag) hands
-a compute shader to the graphics card. All three keep Fable's contract —
+a compute shader to the graphics card. All three keep Socrates's contract —
 nothing shared implicitly, everything typed at the boundary.
 
 ## Workers: parallel isolates
 
-`worker.spawn(file, args)` runs another Fable program on its own OS thread,
+`worker.spawn(file, args)` runs another Socrates program on its own OS thread,
 in its own VM with its own heap and garbage collector. The two sides share
 *nothing*; they communicate only by passing `String` messages down a
 channel. That is the whole concurrency model — no locks, because there is
 nothing to lock.
 
-A worker is an ordinary Fable file that checks `worker.is_worker()` and
+A worker is an ordinary Socrates file that checks `worker.is_worker()` and
 talks to its parent with `worker.recv()` and `worker.send()`:
 
-```fable
-// square_worker.fable
+```soc
+// square_worker.soc
 if worker.is_worker() {
     while let Some(msg) = worker.recv() {
         let n = msg.parse_int().unwrap();
@@ -34,8 +34,8 @@ directly — only when spawned does it enter the loop. `while let` is exactly
 (chapter 4) — the recv-loop is the idiom that motivated adding it. The
 parent spawns the worker, sends work, and reads results off the handle:
 
-```fable
-let w = worker.spawn("square_worker.fable", []).unwrap();
+```soc
+let w = worker.spawn("square_worker.soc", []).unwrap();
 w.send("3");
 w.send("10");
 println(w.recv().unwrap());
@@ -62,8 +62,8 @@ workers without picking one to block on: outer `None` means no message is
 ready yet, `Some(None)` is `recv`'s own terminal state one level deeper (the
 worker finished), and `Some(Some(s))` is a message:
 
-```fable
-let w = worker.spawn("square_worker.fable", []).unwrap();
+```soc
+let w = worker.spawn("square_worker.soc", []).unwrap();
 println(w.try_recv());     // None — nothing sent yet, and it never blocks
 w.send("6");
 let mut got = None;
@@ -100,7 +100,7 @@ interpreter cannot make competitive, so it is a builtin. The `fft` namespace
 operates on split-complex signals — a real list and an imaginary list of the
 same length — and follows numpy's conventions:
 
-```fable
+```soc
 let (re, im) = fft.fft([1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]);
 println(re);   // the transform of an impulse is all ones
 println(im);
@@ -121,11 +121,11 @@ synthesized land on the frequencies it intended.
 
 Reading a spectrum almost always means magnitude, not raw re/im — a
 signal alternating every other sample puts all its energy in one bin.
-The `magnitude` helper lives in `std.fft` (pure Fable — it is the
+The `magnitude` helper lives in `std.fft` (pure Socrates — it is the
 `sqrt(re²+im²)` one-liner, packaged), which also wraps `rfft` so the
 `fft.` spellings survive the import:
 
-```fable
+```soc
 import std.fft;
 
 let (re, im) = fft.rfft([1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0]);
@@ -148,7 +148,7 @@ because they pull anything in. A default build stays lean, and the
 namespace still type-checks and runs — it just reports that it is
 unavailable.
 
-```fable
+```soc
 println(gpu.available());   // false in a default build; true with a native backend + device
 ```
 
@@ -161,7 +161,7 @@ on Metal, PTX on CUDA, HLSL on Direct3D 12, and SPIR-V binaries through
 `gpu.run_spirv` on Vulkan and OpenCL (each in its own SPIR-V profile —
 the spec's § 7.2 documents both):
 
-```fable skip
+```soc skip
 let shader = "...MSL that doubles each f32...";
 let input = bytes_of([/* four little-endian f32s */]);
 match gpu.run(shader, input, 16, 4, 1, 1) {
@@ -170,12 +170,12 @@ match gpu.run(shader, input, 16, 4, 1, 1) {
 }
 ```
 
-`docs/assets/metal_compute.fable`, `vulkan_compute.fable`,
-`opencl_compute.fable`, `cuda_compute.fable`, and `d3d12_compute.fable`
-are the runnable versions, one per backend. Fable
+`docs/assets/metal_compute.soc`, `vulkan_compute.soc`,
+`opencl_compute.soc`, `cuda_compute.soc`, and `d3d12_compute.soc`
+are the runnable versions, one per backend. Socrates
 once took its single Cargo dependency here (wgpu, quarantined behind a
 `gpu` feature); the native backends replaced it, and today every build of
-Fable — any feature set — is the same zero-dependency language the rest
+Socrates — any feature set — is the same zero-dependency language the rest
 of this book describes.
 
 ---

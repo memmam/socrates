@@ -1,6 +1,6 @@
 # Collections, Strings, and Bytes
 
-Fable ships four workhorse containers — `List[T]`, `Map[K, V]`, tuples, and
+Socrates ships four workhorse containers — `List[T]`, `Map[K, V]`, tuples, and
 `Range` — plus a well-stocked string toolbox. This chapter tours all of
 them. Every snippet is a complete program, and every output block is real
 output.
@@ -10,7 +10,7 @@ output.
 A list literal is square brackets; the element type is inferred. Lists
 index from zero, know their length, and grow and shrink in place:
 
-```fable
+```soc
 let primes = [2, 3, 5, 7, 11];
 println(primes[0]);
 println(primes.len());
@@ -38,14 +38,14 @@ Indexing past the end is not an `Option` — it's a panic, the runtime error
 that aborts the program (exit code 70). Negative indices panic too; there
 is no Python-style `xs[-1]`:
 
-```fable panics
+```soc panics
 let xs = [1, 2, 3];
 println(xs[3]);
 ```
 
 ```text
 panic: list index out of bounds: index 3, length 3
-  at <script> (demo.fable:2:9)
+  at <script> (demo.soc:2:9)
 ```
 
 When an index might be out of range, ask with `get`, which returns
@@ -60,7 +60,7 @@ Assigning a list to a new name does not copy it — both names refer to the
 same list, and mutation through one is visible through the other. When you
 want an independent copy, say so with `clone`:
 
-```fable
+```soc
 let xs = [1, 2, 3];
 let ys = xs;          // another name for the SAME list
 ys.push(4);
@@ -90,7 +90,7 @@ Lists carry around thirty methods (the full inventory is in the
 transformers, which all return *new* lists. The big three — `map`,
 `filter`, `fold` — chain naturally:
 
-```fable
+```soc
 let scores = [72, 91, 58, 88, 96, 45];
 
 let passing = scores.filter(|s| s >= 60);
@@ -116,7 +116,7 @@ elements and is a compile error on anything else (`error[E0322]: cannot
 sort elements of type ...`); for other types, or other orders, use
 `sort_by` with a comparator returning negative, zero, or positive:
 
-```fable
+```soc
 let words = ["pear", "fig", "apple", "damson"];
 println(words.sort());
 println(words.sort_by(|a, b| b.len() - a.len()));   // longest first
@@ -138,7 +138,7 @@ tell `["a, b"]` from `["a", "b"]`. `sort_by` is a stable merge sort:
 and `enumerate` pairs each element with its index. Both produce lists of
 tuples:
 
-```fable
+```soc
 let names = ["Gold", "Silver", "Bronze"];
 let times = [9.81, 9.89, 9.94];
 println(names.zip(times));
@@ -156,7 +156,7 @@ To loop over those pairs, destructure right in the `for` head — a `for` head
 takes any irrefutable pattern (a name, `_`, or a nested tuple or struct
 pattern):
 
-```fable
+```soc
 for (i, name) in ["Gold", "Silver", "Bronze"].enumerate() {
     println("{i}: {name}");
 }
@@ -171,7 +171,7 @@ for (i, name) in ["Gold", "Silver", "Bronze"].enumerate() {
 Finally, `flat_map` maps each element to a *list* and splices the results
 into one:
 
-```fable
+```soc
 let lines = ["a,b", "c", "d,e,f"];
 println(lines.flat_map(|l| l.split(",")));
 println([1, 2, 3].flat_map(|n| [n, n * 10]));
@@ -193,11 +193,11 @@ elements first: .map(|x| str(x)).join(...)`.
 ## Tuples
 
 A tuple is a fixed-size group of values, possibly of different types:
-`("fable", 2026, true)` has type `(String, Int, Bool)`. Access components
+`("socrates", 2026, true)` has type `(String, Int, Bool)`. Access components
 with `.0`, `.1`, ... or destructure the whole thing:
 
-```fable
-let entry = ("fable", 2026, true);
+```soc
+let entry = ("socrates", 2026, true);
 println(entry.0);
 
 let (name, year, active) = entry;
@@ -205,8 +205,8 @@ println("{name} / {year} / {active}");
 ```
 
 ```text
-fable
-fable / 2026 / true
+socrates
+socrates / 2026 / true
 ```
 
 Unlike lists and structs, tuples are immutable *values* — `entry.0 =
@@ -221,7 +221,7 @@ prefer a struct with named fields.
 A `Map[K, V]` literal looks like JSON. `m[k]` reads; `m[k] = v` inserts or
 overwrites:
 
-```fable
+```soc
 let ages = {"amy": 34, "ben": 27};
 println(ages["amy"]);
 
@@ -242,13 +242,13 @@ already means an empty block — `let m: Map[String, Int] = {};` is a type
 error (`expected Map[String, Int], found Unit`). And since `{:}` has no
 entries to infer types from, it needs an annotation or other context:
 
-```fable errors
+```soc errors
 let tally = {:};
 ```
 
 ```text
 error[E0302]: cannot infer the type of `tally`
-  --> demo.fable:1:5
+  --> demo.soc:1:5
    |
 1 | let tally = {:};
    |     ^^^^^ add a type annotation
@@ -263,14 +263,14 @@ the same `[]`-versus-`get` split: `[]` panics on a missing key, while
 `ages.get("zed")` is `None` and `ages.get("zed").unwrap_or(0)` supplies a
 default:
 
-```fable panics
+```soc panics
 let ages = {"amy": 34};
 println(ages["zed"]);
 ```
 
 ```text
 panic: key not found in map: zed
-  at <script> (demo.fable:2:9)
+  at <script> (demo.soc:2:9)
 ```
 
 The method forms `insert(k, v)` and `remove(k)` do the same jobs as
@@ -283,7 +283,7 @@ Iteration order is *insertion order*, deterministically — not the
 arbitrary scramble of many hash-map implementations. Overwriting a key
 keeps its position; removing and re-inserting moves it to the end:
 
-```fable
+```soc
 let m: Map[String, Int] = {:};
 m["zebra"] = 1;
 m["aardvark"] = 2;
@@ -309,7 +309,7 @@ Keys are compared and hashed *structurally*, so they don't have to be
 strings — any value works, including tuples. A `Map[(Int, Int), V]` is a
 sparse 2-D grid with no encoding tricks:
 
-```fable
+```soc
 let board: Map[(Int, Int), String] = {:};
 board[(0, 0)] = "rook";
 board[(4, 7)] = "queen";
@@ -337,7 +337,7 @@ pass them, call methods on them. `map`, `filter`, and `fold` work directly
 on a range and produce lists; `any`/`all` short-circuit and return a `Bool`
 without materializing one:
 
-```fable
+```soc
 let r = 1..=5;          // ranges are ordinary values
 println(r.to_list());
 println(r.contains(5));
@@ -363,7 +363,7 @@ true
 Endpoints are always `Int`. `rev()` returns a reversed *list*, so counting
 down is `for i in (1..=5).rev()`, and `(0..n).map(...)` is the cheap way
 to conjure an indexed list — see the sieve in
-[`examples/algorithms.fable`](../examples/algorithms.fable).
+[`examples/algorithms.soc`](../examples/algorithms.soc).
 
 ## Strings
 
@@ -372,7 +372,7 @@ everyday purposes — not bytes. `len` is the character count, `byte_len`
 the storage size, and `chars` explodes a string into a list of
 one-character strings (there is no separate character type):
 
-```fable
+```soc
 let word = "héllo";
 println(word.len());
 println(word.byte_len());
@@ -393,7 +393,7 @@ ambiguous bait, so it's simply not allowed — the compile error
 The everyday toolbox — trimming, case, searching, replacing, padding — in
 one pass:
 
-```fable
+```soc
 let s = "  The Tortoise and the Hare  ";
 println(s.trim());
 println(s.trim().to_upper());
@@ -424,7 +424,7 @@ memorize: adjacent (or leading/trailing) separators produce *empty
 strings*, not nothing. That's what lets `split` round-trip with `join`,
 and it matches Rust:
 
-```fable
+```soc
 println("a,b,c".split(","));
 println("a,,c".split(","));       // adjacent separators keep the empty field
 println(",a,".split(","));        // ...as do leading/trailing ones
@@ -450,7 +450,7 @@ Parsing sloppy input and want the empty fields gone? That's a one-liner:
 return `Option`s, and `index_of` reports a character index, consistent
 with everything else:
 
-```fable
+```soc
 let s = "collections";
 println(s.slice(0, 7));
 println(s.slice(7, 999));        // out-of-range ends are clamped
@@ -474,7 +474,7 @@ bad input. `parse_int` is strict — an optional sign, decimal digits,
 nothing else — while `parse_float` accepts the usual notations including
 exponents:
 
-```fable
+```soc
 println("42".parse_int());
 println(" 42 ".parse_int());     // no surrounding whitespace allowed
 println("0x2A".parse_int());     // decimal only
@@ -504,7 +504,7 @@ onto a `List[String]` and `join` once at the end. The difference is not
 academic — here are both strategies building the same 80,000-piece
 string, timed with the builtin `clock()`:
 
-```fable
+```soc
 let n = 80000;
 
 let t0 = clock();
@@ -549,7 +549,7 @@ growable, mutable buffer of 8-bit values. Build one with `bytes(n)`
 little-endian and big-endian multi-byte pushers, so wire formats need no
 bit-shuffling by hand:
 
-```fable
+```soc
 let buf = bytes(0);
 buf.push(0x89);           // one byte
 buf.push_str("PNG");      // a string's UTF-8 bytes
@@ -570,7 +570,7 @@ println("{buf}");
 multi-byte fields back with the matching `read_*` accessors, and index
 single bytes with `get`:
 
-```fable
+```soc
 let buf = bytes_of([137, 80, 78, 71, 0, 0, 0, 13]);
 println(buf.read_u32be(4));   // the length field, decoded
 println(buf.get(0));          // the signature byte
@@ -585,7 +585,7 @@ The same LE/BE pair exists at 64 bits (`push_u64le`/`be`, `read_u64le`/`be`)
 for wide fields like a file size or byte offset — no range check needed,
 since `Int` already *is* the 64-bit value being written:
 
-```fable
+```soc
 let wide = bytes(0);
 wide.push_u64be(1000000000000);
 println(wide.len());
@@ -602,7 +602,7 @@ println(wide.read_u64be(0));
 a panic). Equality is structural — two buffers with the same bytes are
 equal regardless of how they were built — and `Bytes` can be a map key:
 
-```fable
+```soc
 let hi = "hi".to_bytes();
 println(hi.to_list());                  // [104, 105]
 println(hi.utf8());                     // Ok("hi")
@@ -617,7 +617,7 @@ true
 
 `fs.read_bytes` and `fs.write_bytes` (chapter 8) move a `Bytes` to and from
 disk unchanged, which is how the `png` and `synthwave` demos write real PNG
-and WAV files from Fable.
+and WAV files from Socrates.
 
 ## Putting it together
 
@@ -626,7 +626,7 @@ each section — `split` to tokenize, `get(...).unwrap_or(0)` to count into
 a map, `entries` to get the map back out, a stable `sort_by` to rank, and
 `slice` to take the top three:
 
-```fable
+```soc
 let text = "the quick brown fox jumps over the lazy dog";
 
 let counts: Map[String, Int] = {:};
@@ -657,6 +657,6 @@ Lists and maps are mutable reference types — `clone` when you want a copy,
 immutable glue, ranges are values, strings count characters and build
 efficiently with collect-then-join, and `Bytes` carries the raw binary when
 text is the wrong shape. Between the containers and the `Option`-returning
-methods everywhere, most day-to-day Fable is a transformation pipeline
+methods everywhere, most day-to-day Socrates is a transformation pipeline
 ending in a pattern match — and those `Option`s and `Result`s are the
 subject of the next chapter.

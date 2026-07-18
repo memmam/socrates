@@ -1,0 +1,241 @@
+// synthwave — a chiptune track renderer that proves its own output twice.
+//
+// Three voices (square lead, triangle bass, LFSR noise drums) render two
+// 12/8 bars at 8000 Hz into 16-bit PCM, packed into a real RIFF/WAVE file
+// with the v0.7 Bytes pushers. The demo then turns around and checks
+// itself: the committed track.wav must equal the freshly built bytes,
+// the RIFF header is decoded back out of those bytes with the native LE
+// readers, and fft.rfft must find each probe note's fundamental on
+// exactly the intended bin.
+//
+//   ./target/release/socrates demos/synthwave/main.soc   # from the repo root
+//   ./target/release/socrates test demos/synthwave         # golden tests
+//
+// Determinism: every sample comes from + - * / and bitwise ops (no libm
+// in the signal path), so the WAV is byte-identical on every machine.
+
+import synth;
+import wav;
+import std.lists;
+import std.set;
+import std.strings;
+
+// --- the track ---------------------------------------------------------------
+//
+// One step is 1000 samples (125 ms); 24 steps = two bars of 12/8 = 3.0 s.
+// Pitches are equal temperament snapped to multiples of 4 Hz: the FFT
+// self-check uses 2000-sample windows, whose bins sit every 8000/2000 =
+// 4 Hz, so each intended fundamental lands on an exact integer bin.
+
+let names = {
+    132: "C3",
+    164: "E3",
+    196: "G3",
+    220: "A3",
+    328: "E4",
+    392: "G4",
+    440: "A4",
+    492: "B4",
+    524: "C5",
+    660: "E5",
+    784: "G5",
+    880: "A5",
+};
+
+fn note_name(f: Int) -> String {
+    names.get(f).unwrap_or("??")
+}
+
+// A part is a list of (freq_hz, steps); freq 0 would be a rest. Written a
+// bar at a time so the sheet's structure survives on the page.
+let lead_a = [(440, 1), (524, 1), (660, 2), (524, 1), (440, 1), (392, 2)];
+let lead_b = [(328, 1), (392, 1), (440, 2), (492, 1), (524, 1), (492, 1), (392, 1)];
+let lead_c = [(440, 1), (524, 1), (660, 1), (880, 1), (784, 1), (660, 1), (524, 1), (440, 1)];
+let lead = lead_a.concat(lead_b).concat(lead_c);
+
+let bass_a = [(220, 2), (220, 2), (164, 2), (164, 2)];
+let bass_b = [(132, 2), (132, 2), (196, 2), (196, 2)];
+let bass_c = [(220, 2), (164, 2), (196, 2), (220, 2)];
+let bass = bass_a.concat(bass_b).concat(bass_c);
+
+// one char per step: h = hat, S = snare, . = rest
+let drums = "h.h.S.h.h.h.S.h.h.h.S.hS";
+
+// --- track-sheet helpers -------------------------------------------------------
+
+// One row of the sheet: a note name where a note starts, -- where it
+// sustains, a bar line every 8 steps. Built with strings.Builder — += in
+// a loop would be O(n^2).
+fn part_row(part: List[(Int, Int)]) -> String {
+    let sb = strings.builder();
+    let mut step = 0;
+    for (freq, len) in part {
+        for k in 0..len {
+            sb.push(if step % 8 == 0 { "|" } else { " " });
+            sb.push(match (freq, k) {
+                (0, _) -> "..",
+                (_, 0) -> note_name(freq),
+                _ -> "--",
+            });
+            step += 1;
+        }
+    }
+    sb.push("|");
+    sb.build()
+}
+
+fn drum_row(pattern: String) -> String {
+    let sb = strings.builder();
+    for (i, ch) in pattern.chars().enumerate() {
+        sb.push(if i % 8 == 0 { "|" } else { " " });
+        sb.push(ch.pad_right(2, " "));
+    }
+    sb.push("|");
+    sb.build()
+}
+
+// The distinct pitches of a part in first-played order (std.set keeps
+// insertion order).
+fn pitches(part: List[(Int, Int)]) -> String {
+    let s = set.new();
+    for (f, _) in part {
+        if f > 0 {
+            s.insert(f);
+        }
+    }
+    s.to_list().map(note_name).join(" ")
+}
+
+// --- fft self-check helpers ------------------------------------------------------
+
+fn cmp_bin(a: (Int, Float), b: (Int, Float)) -> Int {
+    if a.1 < b.1 {
+        return -1;
+    }
+    if a.1 > b.1 {
+        return 1;
+    }
+    0
+}
+
+// (dominant bin, runner-up bin) of a real signal by squared magnitude,
+// DC excluded. std.lists.max_by keeps the first winner on ties, so even a
+// pathological tie would stay deterministic.
+fn spectrum_peaks(xs: List[Float]) -> (Int, Int) {
+    let (re, im) = fft.rfft(xs);
+    let m2 = re.zip(im).map(|p| p.0 * p.0 + p.1 * p.1);
+    let bins = m2.enumerate().slice(1, m2.len());
+    let best = lists.max_by(bins, cmp_bin).unwrap();
+    let runner = lists.max_by(bins.filter(|c| c.0 != best.0), cmp_bin).unwrap();
+    (best.0, runner.0)
+}
+
+// --- render --------------------------------------------------------------------
+
+println("synthwave — a 3-voice chiptune track renderer");
+println("tuning: equal temperament snapped to 4 Hz, so every note is an exact fft bin");
+println("");
+println("lead   square   {part_row(lead)}");
+println("bass   triangle {part_row(bass)}");
+println("drums  noise    {drum_row(drums)}");
+println("");
+
+let step_samples = 1000;
+let total = 24 * step_samples;
+let rate = synth.sample_rate;
+let mix = lists.fill(total, 0.0);
+
+let lead_env = synth.Adsr { attack: 30, decay: 120, sustain: 0.75, release: 120 };
+let bass_env = synth.Adsr { attack: 20, decay: 100, sustain: 0.875, release: 200 };
+
+let lead_notes = synth.render_part(mix, lead, synth.osc_square, 0.3, lead_env, step_samples);
+let bass_notes = synth.render_part(mix, bass, synth.osc_triangle, 0.34, bass_env, step_samples);
+let drum_hits = synth.render_drums(mix, drums, 0.16, step_samples, 1);
+
+println("lead : {lead_notes} notes over 24 steps, pitches {pitches(lead)}");
+println("bass : {bass_notes} notes over 24 steps, pitches {pitches(bass)}");
+println("drums: {drum_hits} hits, 9-bit lfsr (taps 9,5), period {synth.lfsr(1).period()} of 511");
+
+let peak = mix.fold(0.0, |m, x| m.max(x.abs()));
+let secs = (total.to_float() / rate.to_float()).to_fixed(1);
+println("mix  : {total} samples at {rate} Hz = {secs} s, float peak {peak.to_fixed(3)}");
+println("");
+
+// --- pack, write, and re-verify the WAV ---------------------------------------------
+
+let pcm = synth.quantize(mix);
+let built = wav.encode(pcm, rate);
+println("wav: {built.len()} bytes = 44 header + {built.len() - 44} data");
+
+let dir = if fs.is_dir("demos/synthwave") { "demos/synthwave" } else { "." };
+let path = "{dir}/track.wav";
+if !fs.exists(path) {
+    // first run in a fresh checkout: lay down the reference artifact
+    fs.write_bytes(path, built).unwrap();
+}
+let committed = fs.read_bytes(path).unwrap();
+println("regeneration: {path} == rebuilt bytes -> {committed == built}");
+println("");
+
+println("decoded header (native LE readers over our own bytes):");
+println("  '{wav.tag_at(built, 0)}' size={wav.u32_at(built, 4)} format={wav.tag_at(built, 8)}");
+println("  '{wav.tag_at(built, 12)}' size={wav.u32_at(built, 16)} codec={wav.u16_at(built, 20)} channels={wav.u16_at(built, 22)}");
+println("  rate={wav.u32_at(built, 24)} byte_rate={wav.u32_at(built, 28)} align={wav.u16_at(built, 32)} bits={wav.u16_at(built, 34)}");
+println("  '{wav.tag_at(built, 36)}' size={wav.u32_at(built, 40)} -> {wav.u32_at(built, 40) / 2} samples");
+
+let mut decoded_peak = 0;
+let mut off = 44;
+while off < built.len() {
+    decoded_peak = decoded_peak.max(wav.i16_at(built, off).abs());
+    off += 2;
+}
+let q_peak = lists.max(pcm.map(|v| v.abs())).unwrap();
+println("  peak sample {decoded_peak} == quantized peak {q_peak} -> {decoded_peak == q_peak}");
+println("");
+
+// --- fft self-check ---------------------------------------------------------------------
+//
+// For each probe the fundamental must land on bin f/4 and the runner-up on
+// the 3rd harmonic (both square and triangle have only odd harmonics,
+// falling off at 1/k and 1/k^2 — so bin 3k is the clear second).
+
+println("fft self-check: 2000-sample windows, bin = 4 Hz, dc excluded");
+let probes = [
+    ("square  ", synth.osc_square, 440),
+    ("square  ", synth.osc_square, 880),
+    ("triangle", synth.osc_triangle, 220),
+];
+for (kind, osc, f) in probes {
+    let tone = synth.pure_tone(osc, f, 2000);
+    let (best, runner) = spectrum_peaks(tone);
+    let ok = best * 4 == f && runner == best * 3;
+    println("  {kind} {note_name(f)} {f} Hz -> bin {best} = {best * 4} Hz, runner-up {runner} = 3x -> ok {ok}");
+}
+
+// Golden output (checked by `./target/release/socrates test demos/synthwave`):
+//? expect: synthwave — a 3-voice chiptune track renderer
+//? expect: tuning: equal temperament snapped to 4 Hz, so every note is an exact fft bin
+//? expect:
+//? expect: lead   square   |A4 C5 E5 -- C5 A4 G4 --|E4 G4 A4 -- B4 C5 B4 G4|A4 C5 E5 A5 G5 E5 C5 A4|
+//? expect: bass   triangle |A3 -- A3 -- E3 -- E3 --|C3 -- C3 -- G3 -- G3 --|A3 -- E3 -- G3 -- A3 --|
+//? expect: drums  noise    |h  .  h  .  S  .  h  . |h  .  h  .  S  .  h  . |h  .  h  .  S  .  h  S |
+//? expect:
+//? expect: lead : 21 notes over 24 steps, pitches A4 C5 E5 G4 E4 B4 A5 G5
+//? expect: bass : 12 notes over 24 steps, pitches A3 E3 C3 G3
+//? expect: drums: 13 hits, 9-bit lfsr (taps 9,5), period 511 of 511
+//? expect: mix  : 24000 samples at 8000 Hz = 3.0 s, float peak 0.812
+//? expect:
+//? expect: wav: 48044 bytes = 44 header + 48000 data
+//? expect: regeneration: demos/synthwave/track.wav == rebuilt bytes -> true
+//? expect:
+//? expect: decoded header (native LE readers over our own bytes):
+//? expect:   'RIFF' size=48036 format=WAVE
+//? expect:   'fmt ' size=16 codec=1 channels=1
+//? expect:   rate=8000 byte_rate=16000 align=2 bits=16
+//? expect:   'data' size=48000 -> 24000 samples
+//? expect:   peak sample 26622 == quantized peak 26622 -> true
+//? expect:
+//? expect: fft self-check: 2000-sample windows, bin = 4 Hz, dc excluded
+//? expect:   square   A4 440 Hz -> bin 110 = 440 Hz, runner-up 330 = 3x -> ok true
+//? expect:   square   A5 880 Hz -> bin 220 = 880 Hz, runner-up 660 = 3x -> ok true
+//? expect:   triangle A3 220 Hz -> bin 55 = 220 Hz, runner-up 165 = 3x -> ok true

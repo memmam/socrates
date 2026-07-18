@@ -8,3 +8,7 @@ v0.8.0
 # programme: window/gfx across OpenGL, Metal, and Vulkan (glcube
 # byte-identical on all three), five native compute backends, std.glm,
 # wgpu deleted — every build zero-dependency.
+# Folded in before publication: the rename to Socrates (`.soc` extension,
+# SOCRATES_* env vars) and the minification + consistency passes (the
+# four-arch Bench A/B gate, compact dispatch with per-target binding,
+# math namespace minified, docs/ports/bench reconciled to CI).

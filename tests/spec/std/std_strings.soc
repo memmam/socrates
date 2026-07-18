@@ -1,0 +1,19 @@
+// SPEC §7.1 (v0.4): std.strings — line/word helpers.
+import std.strings as s;
+
+println(s.lines("a\nb\nc\n"));           //? expect: ["a", "b", "c"]
+println(s.lines("a\nb"));                //? expect: ["a", "b"]
+println(s.lines(""));                    //? expect: [""]
+
+println(s.words("  the   quick\tfox\n jumps "));  //? expect: ["the", "quick", "fox", "jumps"]
+
+println(s.join_lines(["x", "y"]));       //? expect: x
+//? expect: y
+
+println(s.ellipsize("hello world", 8));  //? expect: hello...
+println(s.ellipsize("hi", 8));           //? expect: hi
+
+println(s.strip_prefix("socrates.rs", "socrates"));  //? expect: .rs
+println(s.strip_prefix("socrates.rs", "x"));      //? expect: socrates.rs
+println(s.strip_suffix("socrates.rs", ".rs"));    //? expect: socrates
+println(s.strip_suffix("socrates.rs", ""));       //? expect: socrates.rs

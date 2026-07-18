@@ -1,0 +1,185 @@
+// The README hero image: a Whitted-style raytrace at 960x540 with 2x2
+// supersampling — spheres, a checkered floor, hard shadows, and mirror
+// reflections. A richer cousin of examples/raytracer.soc.
+//
+//   socrates run docs/assets/hero.soc > hero.ppm
+//
+// docs/assets/hero.png in this repository is this program's output,
+// converted PPM -> PNG losslessly. Reproduce it and check.
+
+struct Vec3 { x: Float, y: Float, z: Float }
+
+fn v3(x: Float, y: Float, z: Float) -> Vec3 { Vec3 { x, y, z } }
+
+impl Vec3 {
+    fn add(self, b: Vec3) -> Vec3 { v3(self.x + b.x, self.y + b.y, self.z + b.z) }
+    fn sub(self, b: Vec3) -> Vec3 { v3(self.x - b.x, self.y - b.y, self.z - b.z) }
+    fn scale(self, s: Float) -> Vec3 { v3(self.x * s, self.y * s, self.z * s) }
+    fn mul(self, b: Vec3) -> Vec3 { v3(self.x * b.x, self.y * b.y, self.z * b.z) }
+    fn dot(self, b: Vec3) -> Float { self.x * b.x + self.y * b.y + self.z * b.z }
+    fn norm(self) -> Vec3 { self.scale(1.0 / self.dot(self).sqrt()) }
+    fn reflect(self, n: Vec3) -> Vec3 { self.sub(n.scale(2.0 * self.dot(n))) }
+}
+
+struct Sphere {
+    center: Vec3,
+    radius: Float,
+    color: Vec3,
+    mirror: Float,   // 0.0 matte .. 1.0 perfect mirror
+    shine: Float,    // specular highlight strength
+}
+
+struct Hit {
+    t: Float,
+    point: Vec3,
+    normal: Vec3,
+    color: Vec3,
+    mirror: Float,
+    shine: Float,
+}
+
+fn hit_sphere(s: Sphere, origin: Vec3, dir: Vec3) -> Option[Float] {
+    let oc = origin.sub(s.center);
+    let b = 2.0 * oc.dot(dir);
+    let c = oc.dot(oc) - s.radius * s.radius;
+    let disc = b * b - 4.0 * c;
+    if disc < 0.0 {
+        return None;
+    }
+    let sq = disc.sqrt();
+    let t1 = (0.0 - b - sq) / 2.0;
+    let t2 = (0.0 - b + sq) / 2.0;
+    if t1 > 0.001 { Some(t1) } else if t2 > 0.001 { Some(t2) } else { None }
+}
+
+// The checkered floor plane at y = -1.
+fn hit_floor(origin: Vec3, dir: Vec3) -> Option[Hit] {
+    if dir.y >= -0.0001 {
+        return None;
+    }
+    let t = (-1.0 - origin.y) / dir.y;
+    if t <= 0.001 {
+        return None;
+    }
+    let p = origin.add(dir.scale(t));
+    let checker = (p.x.floor().to_int() + p.z.floor().to_int()) % 2;
+    let color = if checker == 0 { v3(0.92, 0.91, 0.88) } else { v3(0.13, 0.14, 0.19) };
+    Some(Hit { t, point: p, normal: v3(0.0, 1.0, 0.0), color, mirror: 0.22, shine: 0.0 })
+}
+
+fn scene() -> List[Sphere] {
+    [
+        // The chrome centerpiece, reflecting the whole board.
+        Sphere { center: v3(0.9, 0.25, -3.4), radius: 1.25, color: v3(0.95, 0.96, 1.0), mirror: 0.92, shine: 1.0 },
+        // The matte red hero.
+        Sphere { center: v3(-1.5, 0.0, -2.9), radius: 1.0, color: v3(0.92, 0.23, 0.2), mirror: 0.3, shine: 0.7 },
+        // Supporting cast.
+        Sphere { center: v3(-3.1, -0.55, -2.1), radius: 0.45, color: v3(0.22, 0.5, 0.92), mirror: 0.35, shine: 0.8 },
+        Sphere { center: v3(-0.15, -0.62, -1.9), radius: 0.38, color: v3(0.98, 0.78, 0.2), mirror: 0.5, shine: 0.9 },
+        Sphere { center: v3(2.6, -0.6, -2.0), radius: 0.4, color: v3(0.3, 0.82, 0.42), mirror: 0.3, shine: 0.8 },
+        Sphere { center: v3(1.6, -0.72, -1.5), radius: 0.28, color: v3(0.72, 0.38, 0.9), mirror: 0.45, shine: 0.9 },
+        Sphere { center: v3(-2.2, 1.35, -4.6), radius: 0.6, color: v3(0.25, 0.8, 0.8), mirror: 0.65, shine: 0.9 },
+        Sphere { center: v3(3.4, 0.9, -5.2), radius: 0.85, color: v3(0.95, 0.6, 0.25), mirror: 0.55, shine: 0.9 },
+    ]
+}
+
+fn closest_hit(origin: Vec3, dir: Vec3) -> Option[Hit] {
+    let mut best: Option[Hit] = hit_floor(origin, dir);
+    for s in scene() {
+        match hit_sphere(s, origin, dir) {
+            None -> continue,
+            Some(t) -> {
+                let better = match best {
+                    None -> true,
+                    Some(h) -> t < h.t,
+                };
+                if better {
+                    let p = origin.add(dir.scale(t));
+                    best = Some(Hit {
+                        t,
+                        point: p,
+                        normal: p.sub(s.center).norm(),
+                        color: s.color,
+                        mirror: s.mirror,
+                        shine: s.shine,
+                    });
+                }
+            }
+        }
+    }
+    best
+}
+
+let light = v3(-5.0, 6.0, 2.0);
+
+fn in_shadow(p: Vec3) -> Bool {
+    let to_light = light.sub(p);
+    let dist = to_light.dot(to_light).sqrt();
+    let dir = to_light.scale(1.0 / dist);
+    match closest_hit(p, dir) {
+        Some(h) -> h.t < dist,
+        None -> false,
+    }
+}
+
+fn sky(dir: Vec3) -> Vec3 {
+    let t = (dir.y + 1.0) * 0.5;
+    // Warm horizon into deep blue.
+    v3(0.98, 0.92, 0.82).scale(1.0 - t).add(v3(0.3, 0.5, 0.92).scale(t))
+}
+
+fn trace(origin: Vec3, dir: Vec3, depth: Int) -> Vec3 {
+    match closest_hit(origin, dir) {
+        None -> return sky(dir),
+        Some(h) -> {
+            let ldir = light.sub(h.point).norm();
+            let diffuse = (0.0).max(h.normal.dot(ldir));
+            let lit = if in_shadow(h.point) { 0.0 } else { diffuse };
+            let ambient = 0.13;
+            let mut color = h.color.scale(ambient + 0.87 * lit);
+            // Blinn-Phong specular highlight.
+            if h.shine > 0.0 && lit > 0.0 {
+                let half = ldir.sub(dir).norm();
+                let spec = math.pow((0.0).max(h.normal.dot(half)), 64.0);
+                color = color.add(v3(1.0, 1.0, 1.0).scale(spec * h.shine * 0.6));
+            }
+            if h.mirror > 0.0 && depth > 0 {
+                let bounce = trace(h.point, dir.reflect(h.normal).norm(), depth - 1);
+                color = color.scale(1.0 - h.mirror).add(bounce.scale(h.mirror));
+            }
+            color
+        }
+    }
+}
+
+fn to_byte(c: Float) -> Int {
+    // Gamma 2.0, clamped.
+    let g = ((0.0).max((1.0).min(c))).sqrt();
+    (g * 255.0).round().to_int()
+}
+
+let width = 960;
+let height = 540;
+let cam = v3(0.0, 0.7, 1.8);
+
+println("P3");
+println("{width} {height}");
+println("255");
+
+let aspect = width.to_float() / height.to_float();
+for y in 0..height {
+    let mut row = [];
+    for x in 0..width {
+        // 2x2 supersampling.
+        let mut acc = v3(0.0, 0.0, 0.0);
+        for (dx, dy) in [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)] {
+            let u = (x.to_float() + dx) / width.to_float() * 2.0 - 1.0;
+            let v = 1.0 - (y.to_float() + dy) / height.to_float() * 2.0;
+            let dir = v3(u * aspect * 0.55, v * 0.55, -1.0).norm();
+            acc = acc.add(trace(cam, dir, 5));
+        }
+        let c = acc.scale(0.25);
+        row.push("{to_byte(c.x)} {to_byte(c.y)} {to_byte(c.z)}");
+    }
+    println(row.join(" "));
+}

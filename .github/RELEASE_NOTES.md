@@ -1,12 +1,20 @@
-Fable is a statically-typed, garbage-collected programming language — ADTs,
+Socrates is a statically-typed, garbage-collected programming language — ADTs,
 exhaustive pattern matching, closures, generics, modules, a test runner, a
 language server, a REPL, and an embedded standard library — implemented from
-scratch in about 40,000 lines of Rust with **zero dependencies**. As of this
+scratch in about 41,000 lines of Rust with **zero dependencies**. As of this
 release that sentence has no asterisk: `Cargo.toml` has no `[dependencies]`
 section at all, in the default build and in every feature set, and CI
 asserts it (`cargo tree` is a single line everywhere).
 
-v0.8 is two releases' worth in one. The native graphics and compute
+**First, the name.** This is the first release under the language's new
+name: what was called Fable is now **Socrates** — binary `socrates`,
+source extension `.soc`, env vars `SOCRATES_*`. The old name was
+trademark-encumbered and collision-prone (an established F#-to-JS
+compiler already holds "Fable"); "Socrates" names the language's
+substrate role, and the `.soc` extension nods at the system-on-a-chip
+trajectory of the HDL roadmap. Git history preserves the old name.
+
+v0.8 is three releases' worth in one. The native graphics and compute
 programme: the one quarantined dependency v0.7 allowed itself (wgpu,
 behind a `gpu` feature) has been replaced — and then some — by native
 raw-FFI backends for every graphics and compute API worth having, built
@@ -16,10 +24,15 @@ windowing/draw-call backends and five compute backends, all
 vendored, nothing downloaded. And alongside it, the entire
 feature-request queue the v0.7 demo round left behind — seventeen
 independent demo authors, a ranked list of every wall they hit — worked
-through directly.
+through directly. And folded in before this release was ever published:
+the minification and consistency passes — the four-arch interleaved
+Bench A/B gate, the compact dispatch loop with per-target binding, the
+math namespace minified to what only it provides, and a consistency
+sweep that makes every claim in the tree (SPEC, ports, bench harness,
+core docs, demo style) match what CI actually enforces.
 
 Highlights of v0.8 over v0.7 (full list in
-[`CHANGELOG.md`](https://github.com/memmam/fable/blob/main/CHANGELOG.md)):
+[`CHANGELOG.md`](https://github.com/memmam/socrates/blob/main/CHANGELOG.md)):
 
 - **The `window` and `gfx` namespaces** — real OS windows and a GL-shaped
   draw-call surface (programs, buffers, vertex arrays, uniforms by name,
@@ -38,7 +51,7 @@ Highlights of v0.8 over v0.7 (full list in
   Vulkan.
 - **`std.glm`** — vector/matrix/quaternion math named and shaped after GLM
   (`vec3`, `perspective`, `look_at`, `proj.mul(view).mul(model)`), in pure
-  Fable.
+  Socrates.
 - **Five native compute backends** behind `gpu.run`/`gpu.run_spirv`:
   Metal (MSL), Vulkan (SPIR-V), OpenCL (SPIR-V via
   `clCreateProgramWithIL`), CUDA (PTX, JIT'ed by the driver — no toolkit),
@@ -52,22 +65,22 @@ Highlights of v0.8 over v0.7 (full list in
   64-bit accessors and `Int.wrapping_*`, `fft.magnitude`,
   `Range.any`/`all`, non-blocking `worker.try_recv()`, a new `std.lazy`
   module, ergonomic `std.json` construction, `strings.Builder` ergonomics,
-  and `fable test --bless`.
+  and `socrates test --bless`.
 
-Everything observable is pinned: 311 golden spec tests, 136 executable book
+Everything observable is pinned: 311 golden spec tests, 135 executed book
 snippets, and 73 demo golden tests, the whole suite green under
-`FABLE_GC_STRESS=1` — and the graphics backends are pinned with real
+`SOCRATES_GC_STRESS=1` — and the graphics backends are pinned with real
 pixels, in CI, on plain runners (lavapipe for Vulkan, Xvfb for GL, macOS
 runners for Metal, WARP for D3D12 compute).
 
 ## The demo zoo
 
-Every one of the eighteen [`demos/`](https://github.com/memmam/fable/tree/main/demos)
+Every one of the eighteen [`demos/`](https://github.com/memmam/socrates/tree/main/demos)
 — a Lisp, a spreadsheet, a backtracking regex engine, checkers with an
 alpha-beta engine, a from-scratch PNG encoder, a chiptune renderer, a
 parallel Mandelbrot, a spinning GL/Metal/Vulkan cube, and ten more — ships
-as a **self-contained binary**: no `fable`, no source, one file you run.
-They are attached as `fable-demozoo-v0.8.0-<target>.tar.gz` for five
+as a **self-contained binary**: no `socrates`, no source, one file you run.
+They are attached as `socrates-demozoo-v0.8.0-<target>.tar.gz` for five
 desktop targets:
 
 - `x86_64-linux`, `aarch64-linux`
@@ -86,11 +99,11 @@ Unpack the attached interpreter for your platform (or `cargo build --release`
 from source on anything Rust supports), then:
 
 ```sh
-fable examples/mandelbrot.fable
-fable demos/checkers/main.fable      # watch it play itself
-fable test tests/spec demos          # run the whole golden suite
-fable build demos/lisp -o lisp && ./lisp   # or make your own standalone binary
-fable repl
+socrates examples/mandelbrot.soc
+socrates demos/checkers/main.soc      # watch it play itself
+socrates test tests/spec demos          # run the whole golden suite
+socrates build demos/lisp -o lisp && ./lisp   # or make your own standalone binary
+socrates repl
 ```
 
 Licensed under the Apache License 2.0 — see `LICENSE` and `NOTICE`.

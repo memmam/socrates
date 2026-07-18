@@ -1,0 +1,214 @@
+// ports/icaa/scenes.soc — deterministic test-scene generator for the ICAA
+// port's validation suite (see ports/README.md, "The validation pattern").
+//
+//   SOCRATES_PATH=ports socrates ports/icaa/scenes.soc <outdir>
+//
+// Writes nine hard-aliased 128x96 P3 PPMs into <outdir>. "Hard-aliased" is
+// the point: every shape is rasterized binary — a pixel (x, y) takes the
+// foreground color iff its CENTER (x + 0.5, y + 0.5) is inside the shape.
+// No coverage math, no smoothing; antialiasing these inputs is ICAA's job,
+// not the generator's. (The one deliberate exception is ramp.ppm, a smooth
+// gradient that must sit below ICAA's contrast floor.)
+//
+// A tie — a pixel center exactly on a shape boundary, which happens along
+// the 45-degree edge — goes to the background: "inside" is a strict
+// inequality. Either choice is deterministic; strictness pins one.
+//
+// After writing, every scene is read back through image.read_ppm, checked
+// byte-exact against the in-memory original, and a few probe pixels are
+// printed from the read-back image — so a run doubles as the round-trip
+// check. Exit 0 only when all nine scenes verify.
+//
+// Scenes (dark 0.12 / light 0.85 gray unless noted):
+//   edge_shallow.ppm  near-horizontal edge, slope 0.08
+//   edge_diag.ppm     45-degree edge
+//   edge_steep.ppm    near-vertical edge, slope 12 (mostly vertical)
+//   edge_color.ppm    slope-0.35 edge, red (0.8,0.15,0.1) / blue (0.1,0.2,0.75)
+//   disc.ppm          filled circle r=30, light on dark (curvature: all
+//                     edge orientations in one scene)
+//   checker.ppm       2x2-px checkerboard (low coherence: ICAA ~identity)
+//   grating.ppm       1-px vertical stripes (thin-stroke veto path)
+//   ramp.ppm          smooth horizontal gradient 0..1 (below contrast
+//                     floor: early exit)
+//   text_bars.ppm     1-2 px horizontal bars of varying lengths on a light
+//                     background
+
+import jsl.vec;
+import jsl.image;
+
+let w = 128;
+let h = 96;
+let cx = 64.0;   // image center; a pixel corner, so no pixel center lies on it
+let cy = 48.0;
+
+let dark = vec.v3(0.12, 0.12, 0.12);
+let light = vec.v3(0.85, 0.85, 0.85);
+let red = vec.v3(0.8, 0.15, 0.1);
+let blue = vec.v3(0.1, 0.2, 0.75);
+
+// ---- rasterizer: the pixel-center rule ----
+
+// Evaluate `shade_px` at every pixel center (x + 0.5, y + 0.5).
+fn raster(shade_px: fn(Float, Float) -> vec.Vec3) -> image.Image {
+    let img = image.new_image(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            let c = shade_px(x.to_float() + 0.5, y.to_float() + 0.5);
+            img.set_px(x, y, c.to4(1.0));
+        }
+    }
+    img
+}
+
+// ---- scenes ----
+
+// Half-plane split by the line through the image center with the given
+// slope: `above` where the pixel center is strictly above the line
+// (y < cy + slope * (x - cx)), `below` elsewhere (ties included).
+fn edge_scene(slope: Float, above: vec.Vec3, below: vec.Vec3) -> image.Image {
+    raster(|px, py| {
+        let f = (py - cy) - slope * (px - cx);
+        if f < 0.0 { above } else { below }
+    })
+}
+
+// Filled circle, radius 30, centered.
+fn disc_scene() -> image.Image {
+    let r = 30.0;
+    raster(|px, py| {
+        let dx = px - cx;
+        let dy = py - cy;
+        if dx * dx + dy * dy < r * r { light } else { dark }
+    })
+}
+
+// 2x2-px checkerboard. For grid-aligned cells the center rule reduces to
+// integer cell indices: floor((x + 0.5) / 2) == x / 2.
+fn checker_scene() -> image.Image {
+    raster(|px, py| {
+        let ix = (px / 2.0).floor().to_int();
+        let iy = (py / 2.0).floor().to_int();
+        if (ix + iy) % 2 == 0 { light } else { dark }
+    })
+}
+
+// 1-px vertical stripes: even columns light, odd columns dark.
+fn grating_scene() -> image.Image {
+    raster(|px, _| {
+        if px.floor().to_int() % 2 == 0 { light } else { dark }
+    })
+}
+
+// Smooth horizontal gradient, gray 0 at column 0 up to 1 at column w-1 —
+// the one non-binary scene; per-pixel steps (~2/255) stay under ICAA's
+// contrast floor, so it must pass through untouched via the early exits.
+fn ramp_scene() -> image.Image {
+    raster(|px, _| vec.splat3((px - 0.5) / (w - 1).to_float()))
+}
+
+// Text-like horizontal bars, dark on a light background: (bx, by, len,
+// thick) covers the half-open rect [bx, bx+len) x [by, by+thick) under the
+// center rule. Lengths, offsets, and 1-2 px thicknesses vary — the scale
+// of text strokes and hairlines.
+fn text_bars_scene() -> image.Image {
+    let bars = [
+        (10, 14, 72, 1),
+        (18, 24, 96, 2),
+        (10, 34, 44, 1),
+        (30, 46, 68, 2),
+        (12, 58, 100, 1),
+        (22, 70, 56, 2),
+        (10, 80, 30, 1),
+    ];
+    raster(|px, py| {
+        let mut hit = false;
+        for (bx, by, len, thick) in bars {
+            if px >= bx.to_float() && px < (bx + len).to_float() &&
+               py >= by.to_float() && py < (by + thick).to_float() {
+                hit = true;
+            }
+        }
+        if hit { dark } else { light }
+    })
+}
+
+// ---- CLI + write / read-back verification ----
+
+// Mirror of jsl.image's write quantization: round(c * 255), clamped.
+fn byte_of(c: Float) -> Int {
+    let v = (c * 255.0).round().to_int();
+    (0).max(v.min(255))
+}
+
+let args = os.args();
+if args.len() != 1 {
+    println("usage: scenes <outdir>");
+    os.exit(64);
+}
+let outdir = args[0];
+match fs.create_dir(outdir) {
+    Ok(v) -> v,
+    Err(e) -> { println(e); os.exit(66) }
+}
+
+// (file name, image, probe pixels). Probes are chosen to pin both sides of
+// each boundary — including the tie pixel (64,48) on the 45-degree edge —
+// and are printed from the read-back image, so they check the file on
+// disk, not the in-memory original.
+let scenes = [
+    ("edge_shallow.ppm", edge_scene(0.08, light, dark), [(64, 45), (64, 50), (0, 43)]),
+    ("edge_diag.ppm", edge_scene(1.0, light, dark), [(100, 20), (10, 80), (64, 48)]),
+    ("edge_steep.ppm", edge_scene(12.0, light, dark), [(120, 48), (10, 48), (60, 20)]),
+    ("edge_color.ppm", edge_scene(0.35, red, blue), [(64, 40), (64, 60), (0, 20)]),
+    ("disc.ppm", disc_scene(), [(64, 48), (64, 18), (64, 17)]),
+    ("checker.ppm", checker_scene(), [(0, 0), (2, 0), (2, 2)]),
+    ("grating.ppm", grating_scene(), [(0, 0), (1, 0), (127, 95)]),
+    ("ramp.ppm", ramp_scene(), [(0, 48), (64, 48), (127, 48)]),
+    ("text_bars.ppm", text_bars_scene(), [(12, 14), (12, 13), (9, 14)]),
+];
+
+let mut failures = 0;
+for (name, img, probes) in scenes {
+    let path = "{outdir}/{name}";
+    match image.write_ppm(img, path) {
+        Ok(v) -> v,
+        Err(e) -> { println(e); os.exit(66) }
+    }
+    let back = match image.read_ppm(path) {
+        Ok(v) -> v,
+        Err(e) -> { println(e); os.exit(66) }
+    };
+    if back.w != w || back.h != h {
+        println("{name}: FAIL dims {back.w}x{back.h}, want {w}x{h}");
+        failures += 1;
+        continue;
+    }
+    let mut bad = 0;
+    for y in 0..h {
+        for x in 0..w {
+            let a = img.get_px(x, y);
+            let b = back.get_px(x, y);
+            if byte_of(a.x) != byte_of(b.x) || byte_of(a.y) != byte_of(b.y)
+                || byte_of(a.z) != byte_of(b.z) {
+                bad += 1;
+            }
+        }
+    }
+    if bad > 0 {
+        println("{name}: FAIL {bad} pixels differ after round-trip");
+        failures += 1;
+        continue;
+    }
+    let mut shown = [];
+    for (qx, qy) in probes {
+        let c = back.get_px(qx, qy);
+        shown.push("({qx},{qy})=[{byte_of(c.x)} {byte_of(c.y)} {byte_of(c.z)}]");
+    }
+    println("{name}: {back.w}x{back.h} round-trip ok, probes " + shown.join(" "));
+}
+
+if failures > 0 {
+    println("{failures} scene(s) failed verification");
+    os.exit(1);
+}
+println("wrote {scenes.len()} scenes to {outdir}");

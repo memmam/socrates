@@ -1,6 +1,6 @@
 # swarm — a worker-pool job scheduler
 
-Three `crunch_worker.fable` isolates (v0.7 workers: separate VM, heap, and
+Three `crunch_worker.soc` isolates (v0.7 workers: separate VM, heap, and
 GC per OS thread) crunch integer jobs — Collatz max-steps champions and
 prime counts per block — handed out over a tiny JSON protocol built with
 `std.json`, with the pending queue held in a `std.deque`:
@@ -36,17 +36,17 @@ despite true parallelism — determinism by protocol, not by luck.
 From the repo root:
 
 ```
-./target/release/fable demos/swarm/main.fable   # run the scheduler
-./target/release/fable test demos/swarm         # golden tests
+./target/release/socrates demos/swarm/main.soc   # run the scheduler
+./target/release/socrates test demos/swarm         # golden tests
 ```
 
-`crunch_worker.fable` is guarded by `worker.is_worker()`, so run standalone
+`crunch_worker.soc` is guarded by `worker.is_worker()`, so run standalone
 it prints nothing and the golden harness passes it through.
 
 Note: this demo found the v0.7 bug where `worker.spawn`'s relative-path
 resolution lost the entry script's directory whenever the script had
 imports. The bug was fixed in-round, with
-`tests/spec/workers/spawn_with_import.fable` as the regression test, so
-`main.fable` now spawns `crunch_worker.fable` script-relative directly;
+`tests/spec/workers/spawn_with_import.soc` as the regression test, so
+`main.soc` now spawns `crunch_worker.soc` script-relative directly;
 the two-candidate fallback helper it carried while reporting the bug
 lives in git history.

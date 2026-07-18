@@ -20,7 +20,7 @@
 //! cannot execute anywhere without an NVIDIA GPU, which neither the dev
 //! container nor any CI runner has. CI proves compilation, clippy, the
 //! graceful no-driver paths, and zero-dependency-ness; the battery asset
-//! (`docs/assets/cuda_compute.fable`) hard-asserts its bytes whenever real
+//! (`docs/assets/cuda_compute.soc`) hard-asserts its bytes whenever real
 //! hardware eventually runs it.
 //!
 //! **Per-call lifecycle, deliberately**: each `run` creates and destroys

@@ -1,0 +1,29 @@
+// worker.try_recv() (v0.8): a non-blocking `recv`, returning
+// `Option[Option[String]]` — outer `None` = no message ready right now (a
+// blocking `recv` would have waited); `Some(None)` = the worker finished
+// and the queue is drained (recv's own terminal state, one level deeper);
+// `Some(Some(s))` = a message. Lets a parent poll several workers without
+// blocking on any one of them (swarm's dynamic-scheduler workaround).
+
+let w = worker.spawn("echo_worker.soc", ["try"]).unwrap();
+println(w.send("hello"));              //? expect: true
+
+// Poll until ready. A busy loop isn't the recommended idiom — a blocking
+// `recv` is simpler when there's only one worker to wait on — but this
+// proves try_recv never blocks and the eventual message matches what
+// `recv()` would have returned.
+let mut result = None;
+while result.is_none() {
+    match w.try_recv() {
+        Some(inner) -> { result = Some(inner); }
+        None -> {}
+    }
+}
+println(result);                       //? expect: Some(Some("try: hello"))
+
+println(w.join());                     //? expect: Ok(())
+
+// After the worker has finished and the queue is drained, try_recv reports
+// the same terminal state recv() reports, one level deeper.
+println(w.try_recv());                 //? expect: Some(None)
+println(w.recv());                     //? expect: None

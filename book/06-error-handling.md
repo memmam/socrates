@@ -1,6 +1,6 @@
 # Error Handling
 
-Fable has no exceptions. A function that can fail says so in its return
+Socrates has no exceptions. A function that can fail says so in its return
 type, using the two prelude enums from the last chapter: `Option[T]` for
 "a value or nothing", and `Result[T, E]` for "a value or an explanation".
 This chapter is the toolkit for working with them — combinators for the
@@ -14,7 +14,7 @@ A `match` is always available, but for the common moves there are methods.
 `unwrap_or` supplies a default, `map` transforms the success case and leaves
 the failure untouched, and `and_then` chains another fallible step:
 
-```fable
+```soc
 let n = "42".parse_int();      // Option[Int]
 
 println(n.map(|v| v * 2));                 // transform if present
@@ -46,7 +46,7 @@ fail, and for throwaway code; in anything that must stay running, prefer
 Deep chains of "give me the value or bail" are the reason `?` exists. It is
 that pattern spelled in one character:
 
-```fable
+```soc
 fn parse_sum(a: String, b: String) -> Option[Int] {
     Some(a.parse_int()? + b.parse_int()?)
 }
@@ -85,7 +85,7 @@ That is usually what you want, but not when you are fifty files into a batch
 job and one is malformed. `try(f)` runs a function and turns a panic into a
 `Result`:
 
-```fable
+```soc
 let results = ["10", "0", "x"].map(|s| try(|| 100 / s.parse_int().unwrap()));
 println(results);
 ```
@@ -115,14 +115,14 @@ conditions a program can usually check for first:
 - an explicit `panic("message")`, or `assert` / `assert_eq` failing;
 - a shift count outside `0..=63`.
 
-```fable panics
+```soc panics
 let xs = [10, 20, 30];
 println(xs[5]);
 ```
 
 ```text
 panic: list index out of bounds: index 5, length 3
-  at <script> (demo.fable:2:9)
+  at <script> (demo.soc:2:9)
 ```
 
 The trace names each active call with its source location — across module

@@ -27,22 +27,22 @@
 </style>
 </head>
 <body>
-<header><span class="brand">mdsite</span><nav><a class="here" href="index.html">Home</a> <a href="about.html">About</a> <a href="hello-fable.html">Hello, Fable</a></nav></header>
+<header><span class="brand">mdsite</span><nav><a class="here" href="index.html">Home</a> <a href="about.html">About</a> <a href="hello-socrates.html">Hello, Socrates</a></nav></header>
 <main>
 <h1>Welcome to mdsite</h1>
-<p><strong>mdsite</strong> is a tiny static site generator written in the <em>Fable</em> programming language. It reads Markdown from <code>content/</code>, converts it to HTML, and writes a complete little site to <code>out/</code> — shared template, navigation bar, and all.</p>
+<p><strong>mdsite</strong> is a tiny static site generator written in the <em>Socrates</em> programming language. It reads Markdown from <code>content/</code>, converts it to HTML, and writes a complete little site to <code>out/</code> — shared template, navigation bar, and all.</p>
 <p>This sample site has three pages:</p>
 <ul>
   <li>this front page</li>
   <li>an <a href="about.html">about page</a> describing the generator</li>
-  <li>a <a href="hello-fable.html">blog post</a> with fenced code blocks</li>
+  <li>a <a href="hello-socrates.html">blog post</a> with fenced code blocks</li>
 </ul>
 <h2>How the site is built</h2>
 <p>Every page is wrapped in one shared template, and the navigation bar above is generated from the page list itself — add a Markdown file to <code>content/</code> and it shows up everywhere. The output is plain HTML with inline CSS: no build steps, no dependencies, ready for any web server.</p>
 <h2>Rebuild it</h2>
-<pre><code>./target/release/fable demos/mdsite/main.fable</code></pre>
+<pre><code>./target/release/socrates demos/mdsite/main.soc</code></pre>
 <p>One command, and the whole site under <code>out/</code> is fresh again.</p>
 </main>
-<footer>built by mdsite — a static site generator written in Fable</footer>
+<footer>built by mdsite — a static site generator written in Socrates</footer>
 </body>
 </html>

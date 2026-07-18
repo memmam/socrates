@@ -3,7 +3,7 @@
 gen_stream.py — generate rand_stream.txt per ports/pyl/CONTRACT.md.
 
 The stream is the single source of randomness for both the shim-run
-upstream code and the Fable port: unit floats from Python's
+upstream code and the Socrates port: unit floats from Python's
 random.Random(20260714).random(), one per line, shortest round-trip repr.
 
 Usage:

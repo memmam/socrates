@@ -1,0 +1,18 @@
+// Wrapping arithmetic (v0.8): `wrapping_add`/`wrapping_sub`/`wrapping_mul`
+// truncate to the low 64 bits instead of panicking like the checked
+// `+ - *` operators (SPEC § 8.5, operators/overflow_*.soc). One 64-bit
+// primitive covers 32-bit hash finalizers too — mask after wrapping.
+
+println(9223372036854775807.wrapping_add(1));   //? expect: -9223372036854775808
+println((-9223372036854775807 - 1).wrapping_sub(1)); //? expect: 9223372036854775807
+println(1000000000.wrapping_mul(1000000000));   //? expect: 1000000000000000000
+println((-1).wrapping_mul(-1));                  //? expect: 1
+println(0.wrapping_sub(-9223372036854775807 - 1)); //? expect: -9223372036854775808
+
+// Values that don't actually overflow behave exactly like the checked ops.
+println(2.wrapping_add(3));                      //? expect: 5
+println(10.wrapping_sub(4));                     //? expect: 6
+println(6.wrapping_mul(7));                      //? expect: 42
+
+// The 32-bit hash-finalizer idiom: wrap at 64 bits, then mask to 32.
+println(0xFFFFFFFF.wrapping_mul(0xFFFFFFFF) & 0xFFFFFFFF); //? expect: 1

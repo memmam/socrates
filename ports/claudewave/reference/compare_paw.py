@@ -20,7 +20,7 @@ the three items whose divergence sits at the f64 rounding floor.
 Enforcement adds ULP_FLOOR because the upstream oracle's own output
 drifts by a few ulps across environments — the recorded instance:
 dsp_rms_normalize measured 0.0 in the reference environment and
-6.7e-16 on the ubuntu-latest CI runner's numpy the same day (the Fable
+6.7e-16 on the ubuntu-latest CI runner's numpy the same day (the Socrates
 side is deterministic, so upstream(CI) != upstream(local)).  The floor
 still fails anything algorithmic (a real degradation lands orders of
 magnitude above 2e-15); only oracle-side libm/numpy rounding hides

@@ -271,7 +271,7 @@ mod tests {
     /// the whole pipe for real.
     #[test]
     fn create_clear_present_smoke() {
-        let mut inner = match Inner::create("fable vulkan window test", 320, 240) {
+        let mut inner = match Inner::create("socrates vulkan window test", 320, 240) {
             Ok(inner) => inner,
             Err(e) => {
                 eprintln!("skipping: {e}");

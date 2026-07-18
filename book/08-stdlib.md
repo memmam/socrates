@@ -1,11 +1,11 @@
 # The Standard Library and System Namespaces
 
-Fable ships with batteries of two kinds. **System namespaces** — `math`,
+Socrates ships with batteries of two kinds. **System namespaces** — `math`,
 `fs`, `os`, the graphics namespaces `window` and `gfx` at the end of this
 chapter, and the numeric namespaces of the next — are implemented in Rust,
 always present, and used without an import, like `math.sin`. The
 **standard library** — `std.json`, `std.set`, and friends — is written in
-Fable, compiled into the binary, and brought in with `import`. Nothing is on
+Socrates, compiled into the binary, and brought in with `import`. Nothing is on
 disk to install either way.
 
 ## `fs` and `os`: touching the world
@@ -14,7 +14,7 @@ A program that only reads stdin and writes stdout can't do much glue work.
 The `fs` and `os` namespaces cover the essentials, and everything fallible
 returns `Result[_, String]`, so it composes with `?`:
 
-```fable
+```soc
 fs.write("greeting.txt", "hello\nworld\n").unwrap();
 let text = fs.read("greeting.txt").unwrap();
 println(text.trim().split("\n").len());
@@ -43,7 +43,7 @@ means it could not be launched at all.
 ## The standard library
 
 The `std.` prefix is reserved and needs no path. Each module is ordinary
-Fable, readable under `std/` in the repository, and follows the same `pub`
+Socrates, readable under `std/` in the repository, and follows the same `pub`
 rules as your code. The most useful additions to what the builtins already
 give you:
 
@@ -51,7 +51,7 @@ give you:
 loop is quadratic. `strings.Builder` wraps the collect-then-join pattern in
 an object you push onto:
 
-```fable
+```soc
 import std.strings;
 
 let b = strings.builder();
@@ -68,7 +68,7 @@ Hello, world (12 chars)
 field-oriented output — the latter pushes `sep` before every piece except
 the first, so a CSV row or a joined list needs no manual `if len() > 0`:
 
-```fable
+```soc
 import std.strings;
 
 let row = strings.builder();
@@ -85,7 +85,7 @@ a,bb,ccc
 **Collections beyond `List` and `Map`.** `std.set` is a `Set[T]` whose
 `insert` returns whether the value was new — the one-call membership test:
 
-```fable
+```soc
 import std.set;
 
 let seen = set.new();
@@ -106,7 +106,7 @@ false
 aggregates `List` leaves out — `sum`, `min`/`max` (returning `Option`),
 `min_by`/`max_by`, `min_by_key`/`max_by_key`, and `fill`:
 
-```fable
+```soc
 import std.lists;
 
 println(lists.sum([1, 2, 3, 4]));
@@ -122,7 +122,7 @@ Some("bbb")
 
 **JSON**, parsed and generated, with `?`-friendly accessors:
 
-```fable
+```soc
 import std.json;
 
 match json.parse("\{\"port\": 8080}") {
@@ -135,13 +135,13 @@ match json.parse("\{\"port\": 8080}") {
 Some(8080.0)
 ```
 
-(`\{` writes a literal brace, since a bare `{` in a Fable string opens an
+(`\{` writes a literal brace, since a bare `{` in a Socrates string opens an
 interpolation hole.) `json.stringify` and `json.pretty` go the other way.
 Building a document by hand is just as direct with the constructors named
 for what they build — `obj`, `arr`, `jstr`, `num`, `int`, `bool`, `null`
 (`jstr`, not `str` — this module's own code needs the builtin `str()`):
 
-```fable
+```soc
 import std.json;
 
 let cfg = json.obj([("port", json.int(8080)), ("host", json.jstr("localhost"))]);
@@ -156,7 +156,7 @@ println(json.stringify(cfg));
 interpreter support required. An `Iter[T]` computes nothing until a consumer
 pulls:
 
-```fable
+```soc
 import std.iter;
 
 let touched = [];
@@ -176,7 +176,7 @@ println(touched);                     // [1, 2] — only what was pulled
 already runs once, at import — but eagerly, whether or not `table` ends up
 used. `Lazy[T]` defers the work to the first `get()` and caches it:
 
-```fable
+```soc
 import std.lazy;
 
 let mut calls = 0;
@@ -201,9 +201,9 @@ operators plus `dot`, `cross`, `length`, `normalize`, and `lerp`; `Mat4`
 is column-major with the full constructor set (`translation`, `scaling`,
 `rotation_*`, `perspective`, `ortho`, `look_at`), composed with `mul` and
 applied with `mul_vec4`; `Quat` adds `from_axis_angle`, `slerp`, and
-`to_mat4`. Pure Fable, no native code:
+`to_mat4`. Pure Socrates, no native code:
 
-```fable
+```soc
 import std.glm;
 
 let a = glm.vec3(3.0, 0.0, 4.0);
@@ -241,7 +241,7 @@ Rounding out the set: `std.flags` is deliberately rigid CLI parsing
 (`flag`, `value`, `value_or`, `positionals`), and `std.path` handles the
 textual path chores (`join`, `base_name`, `dir_name`, `ext`, `strip_ext`).
 The full method inventories live in the [spec](../docs/SPEC.md); the point
-of the standard library is that all of it is Fable you can read, and none of
+of the standard library is that all of it is Socrates you can read, and none of
 it cost the interpreter a line of Rust or the binary a dependency.
 
 ## `window` and `gfx`: native graphics
@@ -262,8 +262,8 @@ branch point, and the `demos/glcube` demo renders the same golden frames
 byte-for-byte on all three. A default build stays lean and reports itself
 cleanly:
 
-```fable
-match window.create("fable", 640, 480) {
+```soc
+match window.create("socrates", 640, 480) {
     Ok(win) -> {
         win.make_current();
         gfx.clear(0.1, 0.2, 0.3, 1.0);

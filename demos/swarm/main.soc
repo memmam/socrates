@@ -1,0 +1,226 @@
+// swarm — a worker-pool job scheduler (v0.7): three crunch_worker isolates
+// fed integer jobs over a tiny JSON protocol, with the queue in a std.deque.
+//
+//   parent -> worker   {"cmd":"collatz"|"primes","job":id,"lo":lo,"hi":hi}
+//                      {"cmd":"quit"}                (shutdown convention)
+//   worker -> parent   {"job":id,"result":r}         (+ "arg" for collatz)
+//
+// Three sections, each deterministic BY PROTOCOL — workers never print, the
+// parent alone decides output order:
+//   1. static assignment: job k always goes to worker k % 3, and the parent
+//      drains one worker at a time (per-worker replies are FIFO), so even
+//      per-worker stats are pinnable.
+//   2. dynamic balancing: each worker holds one job in flight and is handed
+//      the next the moment it replies. Only schedule-independent facts are
+//      pinned: results aggregate by job id, and no line says which worker
+//      did what, so a smarter scheduler could drop in without re-pinning.
+//   3. panic isolation: a fragile worker drops its job and dies; the panic
+//      comes back as Err from join, the handle refuses further sends, and
+//      the parent reassigns the same job JSON to a fresh worker.
+
+import std.json;
+import std.deque;
+import std.lists;
+
+fn int_field(j: json.Json, key: String) -> Int {
+    j.get(key).unwrap().as_num().unwrap().to_int()
+}
+
+fn job_msg(kind: String, id: Int, lo: Int, hi: Int) -> String {
+    let fields = [
+        ("cmd", json.jstr(kind)),
+        ("job", json.int(id)),
+        ("lo", json.int(lo)),
+        ("hi", json.int(hi)),
+    ];
+    json.stringify(json.obj(fields))
+}
+
+let quit_msg = json.stringify(json.obj([("cmd", json.jstr("quit"))]));
+
+// worker.spawn resolves a relative file against the entry script's
+// directory — including, since the v0.7 in-round fix, when the entry
+// script has imports (tests/spec/workers/spawn_with_import.soc is the
+// regression test; the two-candidate fallback this demo carried while
+// reporting that bug lives in git history).
+fn spawn_cruncher(args: List[String]) -> Worker {
+    worker.spawn("crunch_worker.soc", args).unwrap()
+}
+
+// ---- 1. static assignment --------------------------------------------------
+
+println("== 1. static assignment: 9 collatz jobs, worker = job % 3 ==");
+
+let mut jobs = deque.new();
+for k in 0..9 {
+    jobs.push_back((k, 1 + k * 1000, 1 + (k + 1) * 1000));
+}
+
+let mut pool = [];
+for _ in 0..3 {
+    pool.push(spawn_cruncher([]));
+}
+
+// Deal every job up front — channels buffer, so all three isolates crunch in
+// parallel while the parent is still dealing.
+while !jobs.is_empty() {
+    let (id, lo, hi) = jobs.pop_front().unwrap();
+    pool[id % 3].send(job_msg("collatz", id, lo, hi));
+}
+
+// Drain workers in a fixed order; within one worker replies arrive in job
+// order, so every line here is schedule-proof.
+let mut champions = [];
+for (wi, w) in pool.enumerate() {
+    let mut total = 0;
+    for _ in 0..3 {
+        let reply = json.parse(w.recv().unwrap()).unwrap();
+        let id = int_field(reply, "job");
+        let arg = int_field(reply, "arg");
+        let steps = int_field(reply, "result");
+        println("worker {wi} job {id}: hardest n in block is {arg} ({steps} steps)");
+        total += steps;
+        champions.push((id, arg, steps));
+    }
+    println("worker {wi} total: {total} steps");
+    w.send(quit_msg);
+    w.join().unwrap();
+}
+
+let (champ_job, champ_n, champ_steps) = lists.max_by_key(champions, |c| c.2).unwrap();
+println("global champion: n={champ_n} at {champ_steps} steps (job {champ_job})");
+
+// ---- 2. dynamic load balancing ----------------------------------------------
+
+println("== 2. dynamic balancing: 12 prime-count jobs, feed on return ==");
+
+// Deliberately lopsided blocks: static dealing would strand one worker with
+// most of the work; here a worker that draws a big block simply comes back
+// for its next job later.
+let blocks = [
+    (2, 500),
+    (500, 3000),
+    (3000, 3200),
+    (3200, 5600),
+    (5600, 5700),
+    (5700, 7000),
+    (7000, 8500),
+    (8500, 8600),
+    (8600, 9000),
+    (9000, 9500),
+    (9500, 9900),
+    (9900, 10000),
+];
+let mut queue = deque.new();
+for (i, b) in blocks.enumerate() {
+    queue.push_back((i, b.0, b.1));
+}
+
+let mut pool2 = [];
+for _ in 0..3 {
+    pool2.push(spawn_cruncher([]));
+}
+
+// There is no select/poll over handles — recv blocks on ONE worker — so the
+// parent cannot ask "who finished first?". Instead each worker holds exactly
+// one job in flight and gets its successor the moment it replies, with the
+// parent collecting in rotation.
+let mut busy = [false, false, false];
+for (wi, w) in pool2.enumerate() {
+    if let Some((id, lo, hi)) = queue.pop_front() {
+        w.send(job_msg("primes", id, lo, hi));
+        busy[wi] = true;
+    }
+}
+
+let mut counts = {:};
+let mut done = 0;
+let mut turn = 0;
+while done < blocks.len() {
+    if busy[turn] {
+        let reply = json.parse(pool2[turn].recv().unwrap()).unwrap();
+        counts.insert(int_field(reply, "job"), int_field(reply, "result"));
+        done += 1;
+        if let Some((id, lo, hi)) = queue.pop_front() {
+            pool2[turn].send(job_msg("primes", id, lo, hi));
+        } else {
+            busy[turn] = false;
+        }
+    }
+    turn = (turn + 1) % 3;
+}
+for w in pool2 {
+    w.send(quit_msg);
+    w.join().unwrap();
+}
+
+// Aggregated by job id into a fixed order: independent of who computed what.
+let mut total_primes = 0;
+for (i, b) in blocks.enumerate() {
+    let count = counts.get(i).unwrap();
+    let (lo, hi) = b;
+    println("job {i}: {count} primes in [{lo}, {hi})");
+    total_primes += count;
+}
+println("primes below 10000: {total_primes}");
+
+// ---- 3. panic isolation ------------------------------------------------------
+
+println("== 3. panic isolation: a fragile worker drops its job ==");
+
+let fragile = spawn_cruncher(["fragile"]);
+fragile.send(job_msg("collatz", 99, 1, 100));
+match fragile.recv() {
+    Some(m) -> println("unexpected reply: {m}"),
+    None -> println("no reply: the worker is gone"),
+}
+match fragile.join() {
+    Ok(_) -> println("clean exit?!"),
+    Err(e) -> println("join reports the panic: {e}"),
+}
+let dead_send = fragile.send(quit_msg);
+println("dead handle accepts sends: {dead_send}");
+
+// The crash cost us a worker, not the job: hand the same JSON to a fresh one.
+let rescue = spawn_cruncher([]);
+rescue.send(job_msg("collatz", 99, 1, 100));
+let reply = json.parse(rescue.recv().unwrap()).unwrap();
+let rescued_id = int_field(reply, "job");
+let rescued_n = int_field(reply, "arg");
+let rescued_steps = int_field(reply, "result");
+rescue.send(quit_msg);
+rescue.join().unwrap();
+println("job {rescued_id} reassigned and done: n={rescued_n} ({rescued_steps} steps)");
+//? expect: == 1. static assignment: 9 collatz jobs, worker = job % 3 ==
+//? expect: worker 0 job 0: hardest n in block is 871 (178 steps)
+//? expect: worker 0 job 3: hardest n in block is 3711 (237 steps)
+//? expect: worker 0 job 6: hardest n in block is 6171 (261 steps)
+//? expect: worker 0 total: 676 steps
+//? expect: worker 1 job 1: hardest n in block is 1161 (181 steps)
+//? expect: worker 1 job 4: hardest n in block is 4379 (214 steps)
+//? expect: worker 1 job 7: hardest n in block is 7963 (251 steps)
+//? expect: worker 1 total: 646 steps
+//? expect: worker 2 job 2: hardest n in block is 2919 (216 steps)
+//? expect: worker 2 job 5: hardest n in block is 5567 (235 steps)
+//? expect: worker 2 job 8: hardest n in block is 8959 (246 steps)
+//? expect: worker 2 total: 697 steps
+//? expect: global champion: n=6171 at 261 steps (job 6)
+//? expect: == 2. dynamic balancing: 12 prime-count jobs, feed on return ==
+//? expect: job 0: 95 primes in [2, 500)
+//? expect: job 1: 335 primes in [500, 3000)
+//? expect: job 2: 22 primes in [3000, 3200)
+//? expect: job 3: 286 primes in [3200, 5600)
+//? expect: job 4: 12 primes in [5600, 5700)
+//? expect: job 5: 150 primes in [5700, 7000)
+//? expect: job 6: 159 primes in [7000, 8500)
+//? expect: job 7: 12 primes in [8500, 8600)
+//? expect: job 8: 46 primes in [8600, 9000)
+//? expect: job 9: 60 primes in [9000, 9500)
+//? expect: job 10: 43 primes in [9500, 9900)
+//? expect: job 11: 9 primes in [9900, 10000)
+//? expect: primes below 10000: 1229
+//? expect: == 3. panic isolation: a fragile worker drops its job ==
+//? expect: no reply: the worker is gone
+//? expect: join reports the panic: dropped job 99: simulated hardware fault
+//? expect: dead handle accepts sends: false
+//? expect: job 99 reassigned and done: n=97 (118 steps)

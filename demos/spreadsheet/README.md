@@ -1,4 +1,4 @@
-# spreadsheet — a formula engine in Fable
+# spreadsheet — a formula engine in Socrates
 
 A small spreadsheet: cells hold numbers, words, or formulas; formulas are
 parsed with a Pratt parser, evaluated with memoization and cycle detection,
@@ -16,10 +16,10 @@ are `0`, while `avg`/`min`/`max` need at least one number and turn an
 empty range into `#VALUE!` (std.lists' `min_float`/`max_float` return
 `Option`, and `None` maps straight onto the error). Any error cell in any
 argument wins over everything else — first one in argument order, row-major
-within a range. `aggregates.fable` + `stats.sheet` pin all of this.
+within a range. `aggregates.soc` + `stats.sheet` pin all of this.
 
 Bad cells become error *values* instead of crashing the sheet: `#CYCLE!`
-(reference cycles, found by the busy-set walk in `sheet.fable`), `#DIV/0!`,
+(reference cycles, found by the busy-set walk in `sheet.soc`), `#DIV/0!`,
 `#VALUE!` (words in arithmetic), `#NAME?` (unknown function), `#REF!`
 (address off the grid), and `#PARSE!` (formula didn't parse). Errors
 propagate through every formula that reads them.
@@ -29,10 +29,10 @@ propagate through every formula that reads them.
 From the repo root:
 
 ```
-./target/release/fable demos/spreadsheet/main.fable                # both demo sheets
-./target/release/fable demos/spreadsheet/main.fable my.sheet       # your own file
-./target/release/fable demos/spreadsheet/aggregates.fable          # aggregate edge cases
-./target/release/fable test demos/spreadsheet                      # golden tests
+./target/release/socrates demos/spreadsheet/main.soc                # both demo sheets
+./target/release/socrates demos/spreadsheet/main.soc my.sheet       # your own file
+./target/release/socrates demos/spreadsheet/aggregates.soc          # aggregate edge cases
+./target/release/socrates test demos/spreadsheet                      # golden tests
 ```
 
 Sheet files are CSV-ish: one line per row, commas between columns, `#`
@@ -43,14 +43,14 @@ comment lines, and commas inside parentheses belong to the formula
 
 | File               | What it is                                              |
 |--------------------|---------------------------------------------------------|
-| `formula.fable`    | lexer + Pratt parser producing the `Expr` tree          |
-| `sheet.fable`      | grid model, loader, evaluator (cycle detection), renderer |
-| `main.fable`       | CLI glue, plus the golden `//? expect:` output          |
-| `checks.fable`     | unit-style golden tests against the public API          |
-| `aggregates.fable` | min/max/avg on empty, words-only, and error-poisoned ranges |
+| `formula.soc`    | lexer + Pratt parser producing the `Expr` tree          |
+| `sheet.soc`      | grid model, loader, evaluator (cycle detection), renderer |
+| `main.soc`       | CLI glue, plus the golden `//? expect:` output          |
+| `checks.soc`     | unit-style golden tests against the public API          |
+| `aggregates.soc` | min/max/avg on empty, words-only, and error-poisoned ranges |
 | `budget.sheet`     | the happy-path demo sheet                               |
 | `cycles.sheet`     | the unhappy-path demo sheet                             |
-| `stats.sheet`      | the aggregate torture sheet (`aggregates.fable` renders it) |
+| `stats.sheet`      | the aggregate torture sheet (`aggregates.soc` renders it) |
 
 The engine leans on the v0.7 collections layer: the cycle-detection busy
 set is a `std.set` (one `insert()` both marks the cell and detects the

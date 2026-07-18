@@ -1,11 +1,11 @@
-//! The Fable language server: JSON-RPC over stdio (Content-Length framing),
+//! The Socrates language server: JSON-RPC over stdio (Content-Length framing),
 //! zero dependencies like everything else.
 //!
 //! Capabilities: full-text document sync with diagnostics on open/change,
 //! hover (the checked type of the expression under the cursor), and
 //! go-to-definition for variables, globals, functions, and methods. Analysis
 //! runs the ordinary loader/checker pipeline with the unsaved buffer
-//! overlaid, so diagnostics match `fable check` exactly.
+//! overlaid, so diagnostics match `socrates check` exactly.
 
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
@@ -141,7 +141,7 @@ impl Server<'_> {
                     (
                         "serverInfo",
                         J::obj(vec![
-                            ("name", J::str("fable-lsp")),
+                            ("name", J::str("socrates-lsp")),
                             ("version", J::str(env!("CARGO_PKG_VERSION"))),
                         ]),
                     ),
@@ -281,7 +281,7 @@ impl Server<'_> {
         let shown = a.checker.display_type_public(ty);
         let contents = J::obj(vec![
             ("kind", J::str("markdown")),
-            ("value", J::str(format!("```fable\n{shown}\n```"))),
+            ("value", J::str(format!("```soc\n{shown}\n```"))),
         ]);
         Some(J::obj(vec![
             ("contents", contents),
@@ -577,7 +577,7 @@ fn analyze(path: &Path, text: &str) -> Analysis {
     let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let mut overlay = HashMap::new();
     overlay.insert(canon, text.to_string());
-    let search: Vec<PathBuf> = std::env::var("FABLE_PATH")
+    let search: Vec<PathBuf> = std::env::var("SOCRATES_PATH")
         .ok()
         .map(|v| v.split(':').filter(|s| !s.is_empty()).map(PathBuf::from).collect())
         .unwrap_or_default();
@@ -622,7 +622,7 @@ fn diagnostics_json(a: &Analysis, text: &str) -> Vec<J> {
             out.push(J::obj(vec![
                 ("range", range_json(text, Span::new(0, 0))),
                 ("severity", J::Num(1.0)),
-                ("source", J::str("fable")),
+                ("source", J::str("socrates")),
                 ("message", J::str(msg)),
             ]));
         }
@@ -639,7 +639,7 @@ fn diagnostics_json(a: &Analysis, text: &str) -> Vec<J> {
                     out.push(J::obj(vec![
                         ("range", range_json(text, Span::new(0, 0))),
                         ("severity", J::Num(1.0)),
-                        ("source", J::str("fable")),
+                        ("source", J::str("socrates")),
                         (
                             "message",
                             J::str(format!(
@@ -666,7 +666,7 @@ fn diag_json(d: &Diagnostic, text: &str) -> J {
         ("range", range_json(text, span)),
         ("severity", J::Num(if d.is_error() { 1.0 } else { 2.0 })),
         ("code", J::str(d.code)),
-        ("source", J::str("fable")),
+        ("source", J::str("socrates")),
         ("message", J::str(message)),
     ])
 }
@@ -986,8 +986,8 @@ mod tests {
     #[test]
     fn uri_conversions() {
         assert_eq!(
-            uri_to_path("file:///a/b%20c/d.fable").unwrap(),
-            PathBuf::from("/a/b c/d.fable")
+            uri_to_path("file:///a/b%20c/d.soc").unwrap(),
+            PathBuf::from("/a/b c/d.soc")
         );
     }
 }

@@ -1,0 +1,104 @@
+// mdsite — a static site generator written in Socrates.
+//
+//   ./target/release/socrates demos/mdsite/main.soc
+//
+// Reads every .md file under content/, converts it to HTML with the
+// `markdown` module, wraps it in the shared template from `site` (nav
+// generated from the page list), writes the results to out/, and prints
+// a build report.
+
+import markdown as md;
+import site;
+import std.path;
+import std.set;
+import std.strings;
+
+// The demo works from the repo root or from demos/mdsite/ itself.
+fn root_dir() -> String {
+    if fs.is_dir("demos/mdsite/content") { "demos/mdsite" } else { "." }
+}
+
+// Read one Markdown source and turn it into a Page.
+fn load_page(dir: String, name: String) -> Result[site.Page, String] {
+    let src = fs.read(path.join(dir, name))?;
+    let slug = path.strip_ext(name);
+    Ok(site.Page {
+        slug,
+        title: md.first_heading(src).unwrap_or(slug),
+        body: md.to_html(src),
+        words: strings.words(src).len(),
+    })
+}
+
+// One aligned line of the build report.
+fn row(source: String, title: String, words: String, bytes: String) -> String {
+    "  {source.pad_right(16, " ")} {title.pad_right(19, " ")} {words.pad_left(5, " ")} {bytes.pad_left(6, " ")}"
+}
+
+// The whole build. Every fallible step uses `?`, so a single match at
+// the bottom of the file handles all I/O errors in one place.
+fn build() -> Result[Unit, String] {
+    let content = path.join(root_dir(), "content");
+    let out_dir = path.join(root_dir(), "out");
+    fs.create_dir(out_dir)?;
+
+    // Collect the pages. fs.list_dir returns sorted names, so the build
+    // is fully deterministic. A Set guards the slugs: two sources must
+    // never claim the same output file (insert reports the change).
+    let pages: List[site.Page] = [];
+    let slugs = set.new();
+    for name in fs.list_dir(content)? {
+        if path.ext(name) == "md" {
+            let page = load_page(content, name)?;
+            if !slugs.insert(page.slug) {
+                return Err("duplicate slug '{page.slug}' (from {name})");
+            }
+            pages.push(page);
+        }
+    }
+    let ordered = site.ordered(pages);
+
+    println("mdsite: building {ordered.len()} pages  content/ -> out/");
+    println("");
+    println(row("source", "title", "words", "bytes"));
+    println(row("------", "-----", "-----", "-----"));
+
+    let mut total_bytes = 0;
+    let mut unchanged = 0;
+    for p in ordered {
+        let html = site.render("mdsite", p, site.nav_html(ordered, p.slug));
+        let dest = path.join(out_dir, "{p.slug}.html");
+        // Regeneration check: out/ is committed, and a fresh build must
+        // reproduce it byte for byte (Bytes `==` is structural).
+        if let Ok(old) = fs.read_bytes(dest) {
+            if old == html.to_bytes() {
+                unchanged += 1;
+            }
+        }
+        fs.write(dest, html)?;
+        total_bytes += html.byte_len();
+        println(row("{p.slug}.md", p.title, str(p.words), str(html.byte_len())));
+    }
+
+    println("");
+    println("  wrote {ordered.len()} pages, {total_bytes} bytes of HTML");
+    println("  {unchanged}/{ordered.len()} pages byte-identical to the committed out/");
+    Ok(())
+}
+
+if let Err(e) = build() {
+    println("mdsite: error: {e}");
+    os.exit(1);
+}
+
+// The full build report, so `socrates test demos/mdsite` pins the demo:
+//? expect: mdsite: building 3 pages  content/ -> out/
+//? expect:
+//? expect:   source           title               words  bytes
+//? expect:   ------           -----               -----  -----
+//? expect:   index.md         Welcome to mdsite     140   2618
+//? expect:   about.md         About                 139   2774
+//? expect:   hello-socrates.md Hello, Socrates       178   2990
+//? expect:
+//? expect:   wrote 3 pages, 8382 bytes of HTML
+//? expect:   3/3 pages byte-identical to the committed out/

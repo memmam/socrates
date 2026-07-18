@@ -223,8 +223,8 @@ impl Default for Heap {
 
 impl Heap {
     pub fn new() -> Heap {
-        let stress = std::env::var("FABLE_GC_STRESS").map(|v| v == "1").unwrap_or(false);
-        let log = std::env::var("FABLE_GC_LOG").map(|v| v == "1").unwrap_or(false);
+        let stress = std::env::var("SOCRATES_GC_STRESS").map(|v| v == "1").unwrap_or(false);
+        let log = std::env::var("SOCRATES_GC_LOG").map(|v| v == "1").unwrap_or(false);
         Heap {
             objs: Vec::new(),
             marks: Vec::new(),

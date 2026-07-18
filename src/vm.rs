@@ -24,20 +24,20 @@ fn mix(h: u64, x: u64) -> u64 {
     (h ^ x).wrapping_mul(FNV_PRIME)
 }
 
-/// The call-depth cap. `FABLE_MAX_DEPTH` overrides the default (floor 64 —
+/// The call-depth cap. `SOCRATES_MAX_DEPTH` overrides the default (floor 64 —
 /// below that the prelude itself couldn't run); recursive tree-walking
 /// workloads on deep data legitimately want more headroom than the default.
 /// A malformed value warns rather than being silently ignored — the variable
 /// is usually set by someone actively chasing a stack-overflow panic.
 fn max_frames() -> usize {
-    let Ok(raw) = std::env::var("FABLE_MAX_DEPTH") else {
+    let Ok(raw) = std::env::var("SOCRATES_MAX_DEPTH") else {
         return DEFAULT_MAX_FRAMES;
     };
     match raw.trim().parse::<usize>() {
         Ok(n) => n.max(64),
         Err(_) => {
             eprintln!(
-                "warning: ignoring FABLE_MAX_DEPTH={raw:?} (not a number); \
+                "warning: ignoring SOCRATES_MAX_DEPTH={raw:?} (not a number); \
                  using the default of {DEFAULT_MAX_FRAMES}"
             );
             DEFAULT_MAX_FRAMES
@@ -127,7 +127,7 @@ pub struct Vm {
     pub gfx_current_window: Option<std::rc::Rc<std::cell::RefCell<crate::window::WindowHandle>>>,
     start: Instant,
     rng: u64,
-    /// Call-depth cap, read once from `FABLE_MAX_DEPTH` at construction.
+    /// Call-depth cap, read once from `SOCRATES_MAX_DEPTH` at construction.
     max_frames: usize,
 }
 

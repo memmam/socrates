@@ -1,16 +1,16 @@
 # Fundamentals
 
-This chapter covers the bones of Fable: values, bindings, operators, strings,
+This chapter covers the bones of Socrates: values, bindings, operators, strings,
 and control flow. Everything here is runnable — save any snippet to a file
-and run it with `fable run file.fable` (or just `fable file.fable`).
+and run it with `socrates run file.soc` (or just `socrates file.soc`).
 
 ## Values and types
 
-Fable has five primitive types: `Int` (64-bit signed), `Float` (IEEE-754
+Socrates has five primitive types: `Int` (64-bit signed), `Float` (IEEE-754
 double), `Bool`, `String` (immutable UTF-8), and `Unit` (the single value
 `()`). Types are inferred from initializers, so annotations are rarely needed:
 
-```fable
+```soc
 let answer = 42;        // Int
 let ratio = 2.5;        // Float
 let ready = true;       // Bool
@@ -32,28 +32,28 @@ need a digit on both sides of the dot: `0.5` and `1.0` are valid, `.5` and
 
 ## No implicit conversions
 
-Fable never converts numbers behind your back. Mixing `Int` and `Float` is a
+Socrates never converts numbers behind your back. Mixing `Int` and `Float` is a
 compile error:
 
-```fable errors
+```soc errors
 println(1 + 2.0);
 ```
 
 ```text
 error[E0320]: mismatched operand types `Int` and `Float`
-  --> demo.fable:1:11
+  --> demo.soc:1:11
    |
 1 | println(1 + 2.0);
    |         - ^ --- this is `Float`
    |         this is `Int`
-  note: Fable has no implicit numeric conversion; use `.to_float()` or `.to_int()`
+  note: Socrates has no implicit numeric conversion; use `.to_float()` or `.to_int()`
 ```
 
 The fix is to say what you mean. `Int` has `.to_float()`, and `Float` has
 `.to_int()`, which truncates toward zero (and panics on NaN or out-of-range
 values):
 
-```fable
+```soc
 let n = 3;
 let x = n.to_float() + 2.0;
 println(x);
@@ -74,7 +74,7 @@ so you can tell the types apart in output.
 
 Bindings are immutable by default. To reassign, declare with `let mut`:
 
-```fable
+```soc
 let mut count = 0;
 count = count + 1;
 count += 10;
@@ -88,14 +88,14 @@ println(count);
 The compound assignments `+=`, `-=`, `*=`, `/=`, `%=` are sugar for the
 spelled-out form. Assigning to a plain `let` is a compile error:
 
-```fable errors
+```soc errors
 let limit = 100;
 limit = 200;
 ```
 
 ```text
 error[E0307]: cannot assign to immutable binding `limit`
-  --> demo.fable:2:1
+  --> demo.soc:2:1
    |
 1 | let limit = 100;
    |     ----- declared without `mut` here
@@ -110,7 +110,7 @@ A new `let` with an old name is not assignment — it creates a fresh binding
 that *shadows* the previous one, possibly with a different type. This makes
 shadowing handy for step-by-step transformations:
 
-```fable
+```soc
 let input = "42";
 let input = input.parse_int().unwrap();
 let input = input * 2;
@@ -125,7 +125,7 @@ The difference between assignment and shadowing shows up with scopes.
 Assignment (`=`) updates the existing binding, wherever it lives; a `let`
 inside a block creates a new binding that disappears when the block ends:
 
-```fable
+```soc
 let mut x = 10;
 if true {
     x = 20;        // assignment: updates the existing binding
@@ -152,7 +152,7 @@ The operators are the usual suspects with the usual precedence: `*`, `/`, `%`
 bind tighter than `+` and `-`, which bind tighter than comparisons, which
 bind tighter than `&&` (short-circuit), which binds tighter than `||`:
 
-```fable
+```soc
 println(1 + 2 * 3);
 println((1 + 2) * 3);
 println(7 / 2);
@@ -178,7 +178,7 @@ Comparisons do not chain: `1 < 2 < 3` is a parse error (`error[E0200]:
 comparison operators cannot be chained; use parentheses`) — write
 `1 < 2 && 2 < 3`.
 
-`+` also concatenates strings (`"fab" + "le"` is `"fable"`), and the
+`+` also concatenates strings (`"fab" + "le"` is `"socrates"`), and the
 ordering operators compare strings lexicographically (`"apple" < "banana"`
 is `true`).
 
@@ -193,7 +193,7 @@ integer overflow`) rather than silently wrapping.
 `Int` also has the bitwise operators — `&`, `|`, `^` (and, or, xor) and the
 shifts `<<`, `>>`. Binary and hex literals make the bit patterns legible:
 
-```fable
+```soc
 println(0b1010 & 0b0110);   // bits set in both
 println(0b1010 | 0b0101);   // bits set in either
 println(0b1010 ^ 0b1111);   // bits that differ
@@ -219,7 +219,7 @@ copies the sign bit, so a negative number stays negative. When you are
 treating an `Int` as a bag of 64 bits and want zeros shifted in from the
 top, use the `ushr` (unsigned/logical shift right) method instead:
 
-```fable
+```soc
 println(-8 >> 1);          // arithmetic: sign preserved
 println((-8).ushr(1));     // logical: zeros from the top
 ```
@@ -232,7 +232,7 @@ println((-8).ushr(1));     // logical: zeros from the top
 The bitwise operators have compound-assignment forms too — `&=`, `|=`,
 `^=`, `<<=`, `>>=` — matching the arithmetic set (`+=` and friends):
 
-```fable
+```soc
 let mut flags = 0b0011;
 flags |= 0b1100;     // set bits
 println(flags);
@@ -254,7 +254,7 @@ literals name the same full 64-bit pattern `to_hex()` prints — bit 63
 included, so `0x8000000000000000` is `Int`'s most negative value — and
 `String.parse_hex()` is `to_hex()`'s inverse:
 
-```fable
+```soc
 println(0x8000000000000000);
 println((-1).to_hex());
 println("ffffffffffffffff".parse_hex());
@@ -269,7 +269,7 @@ Some(-1)
 A `Set`-of-small-ints as a single integer is a common idiom — the sudoku
 demo keeps each cell's candidate digits in a 9-bit mask:
 
-```fable
+```soc
 let all = (1 << 9) - 1;    // nine ones: digits 1..9
 let used = 0b000010010;    // digits 2 and 5 taken
 let free = all ^ used;     // candidates
@@ -289,7 +289,7 @@ written `\{`; a `}` outside an interpolation is just a character. The other
 escapes are `\n`, `\t`, `\r`, `\\`, `\"`, `\0`, and `\u{...}` for a Unicode
 scalar value:
 
-```fable
+```soc
 let a = 6;
 let b = 7;
 println("{a} * {b} = {a * b}");
@@ -309,7 +309,7 @@ The holes hold full expressions — including `if` expressions and even other
 strings with their own interpolations. The lexer tracks nesting, so inner
 quotes do not end the outer string:
 
-```fable
+```soc
 let hour = 23;
 println("status: {if hour < 12 { "morning" } else { "evening" }}");
 
@@ -326,7 +326,7 @@ Taste is another matter — deep nesting is legal, not encouraged.
 
 ## Comments
 
-```fable
+```soc
 // A line comment runs to the end of the line.
 /* Block comments /* nest properly */ so you can
    comment out code that already contains comments. */
@@ -335,11 +335,11 @@ println("still here");
 
 ## Blocks are expressions
 
-Fable is expression-oriented: a block evaluates to its final expression, if
+Socrates is expression-oriented: a block evaluates to its final expression, if
 that expression has no trailing semicolon. This is called the *tail
 expression*:
 
-```fable
+```soc
 let hypotenuse = {
     let a = 3.0;
     let b = 4.0;
@@ -359,7 +359,7 @@ that ends with a semicolon-terminated statement has type `Unit`.
 
 There is no ternary operator because `if` already is one:
 
-```fable
+```soc
 let score = 87;
 let grade = if score >= 90 { "A" } else if score >= 80 { "B" } else { "C" };
 println(grade);
@@ -373,13 +373,13 @@ Both branches must have the same type. An `if` *without* an `else` has type
 `Unit` — there would be no value when the condition is false — so using one
 for its value is a compile error:
 
-```fable errors
+```soc errors
 let x = if true { 1 };
 ```
 
 ```text
 error[E0316]: `if` without `else` must have type `Unit`, found `Int`
-  --> demo.fable:1:17
+  --> demo.soc:1:17
    |
 1 | let x = if true { 1 };
    |                 ^^^^^ help: add an `else` branch or a `;`
@@ -392,7 +392,7 @@ with an `Int` is a type error.
 
 `while` repeats as long as a `Bool` condition holds:
 
-```fable
+```soc
 let mut n = 1;
 while n < 100 {
     n *= 2;
@@ -407,7 +407,7 @@ println(n);
 `for` iterates. `a..b` is a half-open range (excludes `b`); `a..=b` is
 inclusive:
 
-```fable
+```soc
 for i in 0..4 {
     print("{i} ");
 }
@@ -431,7 +431,7 @@ characters (`h`, `é`, `l`, `l`, `o`), not six bytes.
 
 `break` exits the innermost loop; `continue` skips to its next iteration:
 
-```fable
+```soc
 let mut total = 0;
 for i in 1..=10 {
     if i % 2 == 0 { continue; }
@@ -462,7 +462,7 @@ The semicolon rules follow from "blocks are expressions":
 This matters most in function bodies, where the tail expression is the return
 value:
 
-```fable
+```soc
 fn double(x: Int) -> Int {
     x * 2
 }
@@ -476,7 +476,7 @@ println(double(21));
 Add a semicolon after `x * 2` and the block's value becomes `()` — and the
 compiler tells you exactly that:
 
-```fable errors
+```soc errors
 fn double(x: Int) -> Int {
     x * 2;
 }
@@ -485,7 +485,7 @@ println(double(21));
 
 ```text
 error[E0301]: function `double` should return `Int`, but its body has type `Unit`
-  --> demo.fable:2:5
+  --> demo.soc:2:5
    |
 1 | fn double(x: Int) -> Int {
    |                      --- return type declared here
@@ -498,20 +498,20 @@ is just the idiomatic way to produce the final value.
 
 ## Top-level programs: order matters
 
-A Fable program is a single file executed top to bottom. `fn`, `struct`, and
+A Socrates program is a single file executed top to bottom. `fn`, `struct`, and
 `enum` declarations are *hoisted* — visible everywhere, in any order, so
 mutually recursive functions just work. But top-level `let` bindings and
 statements run in order, and top-level code may only refer to globals
 declared above it:
 
-```fable errors
+```soc errors
 println(greeting);
 let greeting = "hello";
 ```
 
 ```text
 error[E0412]: `greeting` is used before its `let` declaration
-  --> demo.fable:1:9
+  --> demo.soc:1:9
    |
 1 | println(greeting);
    |         ^^^^^^^^ used here
@@ -524,7 +524,7 @@ is fine as long as the function isn't *called* until the global's `let` has
 run. Call it too early, though, and the compiler can't save you — the
 global's initializer simply hasn't run yet, and you get a panic at runtime:
 
-```fable panics
+```soc panics
 fn shout() -> String {
     greeting.to_upper()
 }
@@ -535,12 +535,12 @@ let greeting = "hello";
 
 ```text
 panic: global `greeting` used before initialization
-  at shout (demo.fable:2:5)
-  at <script> (demo.fable:5:9)
+  at shout (demo.soc:2:5)
+  at <script> (demo.soc:5:9)
 ```
 
 Swap the last two lines — `let greeting` above `println(shout())` — and the
-program prints `HELLO`. This is the one place where Fable's static checking
+program prints `HELLO`. This is the one place where Socrates's static checking
 hands off to a runtime check, so keep your `let`s near the top of the file,
 above the first top-level call that needs them. Globals follow the same mutability rules as
 locals — a function may assign to a global declared `let mut` — but prefer
@@ -548,7 +548,7 @@ parameters and return values where you can.
 
 ## Where we are
 
-You can now read and write straight-line Fable: typed values with no silent
+You can now read and write straight-line Socrates: typed values with no silent
 conversions, immutable-by-default bindings, expression-based control flow,
 and a strict top-to-bottom execution model. Next up: functions and closures,
 then modeling data with structs, enums, and pattern matching.

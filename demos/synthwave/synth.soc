@@ -1,0 +1,182 @@
+// synth.soc — three chiptune voices from pure integer/float arithmetic.
+//
+// There is deliberately no math.sin here: the square and triangle voices
+// come out of a phase accumulator driven only by + - * / and comparisons
+// (exact IEEE-754, so byte-identical on every machine), and the noise
+// voice is a 9-bit maximal-length LFSR clocked with the v0.7 bitwise
+// operators. That is what lets the demo commit track.wav and pin a
+// byte-for-byte regeneration check.
+
+pub let sample_rate = 8000;
+
+// --- oscillators ------------------------------------------------------------
+
+// phase in [0, 1) -> square in {-1, +1} (duty 0.5)
+pub fn osc_square(phase: Float) -> Float {
+    if phase < 0.5 { 1.0 } else { -1.0 }
+}
+
+// phase in [0, 1) -> triangle in [-1, +1]: -1 at 0, +1 at 0.5, back down
+pub fn osc_triangle(phase: Float) -> Float {
+    if phase < 0.5 { 4.0 * phase - 1.0 } else { 3.0 - 4.0 * phase }
+}
+
+// n samples of a bare oscillator at freq Hz, unit amplitude, no envelope.
+// The FFT self-check analyzes exactly these.
+pub fn pure_tone(osc: fn(Float) -> Float, freq: Int, n: Int) -> List[Float] {
+    let inc = freq.to_float() / sample_rate.to_float();
+    let mut phase = 0.0;
+    let out = [];
+    for _ in 0..n {
+        out.push(osc(phase));
+        phase += inc;
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
+    }
+    out
+}
+
+// --- the noise voice: a Fibonacci LFSR ---------------------------------------
+
+// 9-bit register, taps at bits 9 and 5 (x^9 + x^5 + 1), which is maximal:
+// every nonzero state is on one cycle of period 511. checks.soc pins that.
+pub struct Lfsr {
+    state: Int,
+}
+
+pub fn lfsr(seed: Int) -> Lfsr {
+    let s = seed & 511;
+    Lfsr { state: if s == 0 { 1 } else { s } }
+}
+
+impl Lfsr {
+    // One clock: shift right, feed bit0 ^ bit4 back into bit8.
+    // Returns the output bit mapped to +1.0 / -1.0.
+    pub fn step(self) -> Float {
+        let out = self.state & 1;
+        let fb = (self.state ^ self.state >> 4) & 1;
+        self.state = self.state >> 1 | fb << 8;
+        if out == 1 { 1.0 } else { -1.0 }
+    }
+
+    // Clocks until the register revisits its starting state (consumes self's
+    // position on the cycle). 511 for every seed iff the taps are maximal.
+    pub fn period(self) -> Int {
+        let start = self.state;
+        let mut n = 0;
+        while true {
+            self.step();
+            n += 1;
+            if self.state == start {
+                break;
+            }
+            // n > 512 would mean the taps are not maximal; report the overflow
+            if n > 512 {
+                break;
+            }
+        }
+        n
+    }
+}
+
+// --- envelope -----------------------------------------------------------------
+
+// Linear attack/decay/sustain, times in samples; release is a fade over the
+// note's last `release` samples. All plain arithmetic.
+pub struct Adsr {
+    attack: Int,
+    decay: Int,
+    sustain: Float,
+    release: Int,
+}
+
+pub fn envelope(i: Int, n: Int, a: Adsr) -> Float {
+    let level = if i < a.attack {
+        i.to_float() / a.attack.to_float()
+    } else if i < a.attack + a.decay {
+        1.0 - (1.0 - a.sustain) * (i - a.attack).to_float() / a.decay.to_float()
+    } else {
+        a.sustain
+    };
+    let rel = if i >= n - a.release { (n - i).to_float() / a.release.to_float() } else { 1.0 };
+    level * rel
+}
+
+// --- rendering ------------------------------------------------------------------
+
+// A melodic part is a list of (freq_hz, steps); freq 0 is a rest. Notes are
+// mixed (added) into buf at amp, gated 60 samples short of the step boundary
+// so repeated pitches articulate. Returns the number of sounded notes.
+pub fn render_part(
+    buf: List[Float],
+    part: List[(Int, Int)],
+    osc: fn(Float) -> Float,
+    amp: Float,
+    adsr: Adsr,
+    step_samples: Int,
+) -> Int {
+    let mut at = 0;
+    let mut notes = 0;
+    for (freq, steps) in part {
+        let n = steps * step_samples;
+        if freq > 0 {
+            notes += 1;
+            let inc = freq.to_float() / sample_rate.to_float();
+            let gate = n - 60;
+            let mut phase = 0.0;
+            for i in 0..gate {
+                buf[at + i] += amp * envelope(i, gate, adsr) * osc(phase);
+                phase += inc;
+                if phase >= 1.0 {
+                    phase -= 1.0;
+                }
+            }
+        }
+        at += n;
+    }
+    notes
+}
+
+// A drum pattern is one char per step: 'h' hat (short burst), 'S' snare
+// (longer, louder burst), '.' silence. One continuously-clocked LFSR supplies
+// every hit; each burst decays geometrically (amp *= k is exact arithmetic).
+// Returns the number of hits.
+pub fn render_drums(
+    buf: List[Float],
+    pattern: String,
+    amp: Float,
+    step_samples: Int,
+    seed: Int,
+) -> Int {
+    let noise = lfsr(seed);
+    let mut at = 0;
+    let mut hits = 0;
+    for ch in pattern {
+        if ch != "." {
+            hits += 1;
+            let (level, len, decay) = if ch == "S" {
+                (1.6, 900, 0.9955)
+            } else {
+                (1.0, 300, 0.985)
+            };
+            let mut a = amp * level;
+            for i in 0..len {
+                buf[at + i] += a * noise.step();
+                a *= decay;
+            }
+        }
+        at += step_samples;
+    }
+    hits
+}
+
+// --- output ---------------------------------------------------------------------
+
+// [-1, 1] float mix -> 16-bit PCM ints (clamped, round half-away-from-zero).
+pub fn quantize(mix: List[Float]) -> List[Int] {
+    mix.map(|x| {
+        let c = (-1.0).max((1.0).min(x));
+        (c * 32767.0).round().to_int()
+    })
+}

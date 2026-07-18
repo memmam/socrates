@@ -1,0 +1,107 @@
+// main.soc — a tiny spreadsheet engine, as a tour of Socrates.
+//
+//   ./target/release/socrates demos/spreadsheet/main.soc [file.sheet ...]
+//
+// With no arguments it loads the two bundled sheets: budget.sheet (a happy
+// grocery budget) and cycles.sheet (cycle detection and error cells).
+// Formulas start with '=' and support numbers, cell references, ranges,
+// + - * /, parentheses, unary minus, and sum/avg/min/max/count.
+
+import sheet;
+
+// The bundled sheets live next to this script; support running from the
+// repo root (the documented way) or from inside demos/spreadsheet.
+fn bundled(name: String) -> String {
+    let from_root = "demos/spreadsheet/{name}";
+    if fs.exists(from_root) { from_root } else { name }
+}
+
+fn show(path: String) {
+    println("=== {path}");
+    match sheet.load(path) {
+        Err(e) -> println("cannot load sheet: {e}"),
+        // try() turns a runtime panic (say, a dependency chain deep enough
+        // to exhaust the call stack) into a Result instead of a crash.
+        Ok(s) -> match try(|| s.render()) {
+            Err(panic_msg) -> println("cannot evaluate sheet: {panic_msg}"),
+            Ok(grid) -> {
+                println(grid);
+                println("");
+                println("formulas:");
+                let report = s.formulas();
+                if report != "" {
+                    println(report);
+                }
+            },
+        },
+    }
+}
+
+let paths = if os.args().is_empty() {
+    [bundled("budget.sheet"), bundled("cycles.sheet")]
+} else {
+    os.args()
+};
+
+for (i, path) in paths.enumerate() {
+    if i > 0 {
+        println("");
+    }
+    show(path);
+}
+
+// Golden output for './target/release/socrates test demos/spreadsheet' (run
+// from the repo root). Regenerate by piping the program through sed.
+//? expect: === demos/spreadsheet/budget.sheet
+//? expect:    |   A    |  B  |     C     |   D
+//? expect: ---+--------+-----+-----------+------
+//? expect:  1 | Item   | Qty | Price     | Total
+//? expect:  2 | Apples |   4 |       1.5 |     6
+//? expect:  3 | Bread  |   2 |      3.25 |   6.5
+//? expect:  4 | Cheese |   1 |       7.9 |   7.9
+//? expect:  5 | Milk   |   3 |      0.95 |  2.85
+//? expect:  6 |        |     | Subtotal  | 23.25
+//? expect:  7 |        |     | Tax (8%)  |  1.86
+//? expect:  8 |        |     | Total     | 25.11
+//? expect:  9 |        |     | Priciest  |   7.9
+//? expect: 10 |        |     | Avg price |   3.4
+//? expect:
+//? expect: formulas:
+//? expect:   D2  =B2*C2                 => 6
+//? expect:   D3  =B3*C3                 => 6.5
+//? expect:   D4  =B4*C4                 => 7.9
+//? expect:   D5  =B5*C5                 => 2.85
+//? expect:   D6  =sum(D2:D5)            => 23.25
+//? expect:   D7  =D6*0.08               => 1.86
+//? expect:   D8  =D6+D7                 => 25.11
+//? expect:   D9  =max(D2:D5)            => 7.9
+//? expect:   D10 =avg(C2:C5)            => 3.4
+//? expect:
+//? expect: === demos/spreadsheet/cycles.sheet
+//? expect:    |         A          |    B
+//? expect: ---+--------------------+--------
+//? expect:  1 | case               | result
+//? expect:  2 | three-cell cycle a | #CYCLE!
+//? expect:  3 | three-cell cycle b | #CYCLE!
+//? expect:  4 | three-cell cycle c | #CYCLE!
+//? expect:  5 | reads the cycle    | #CYCLE!
+//? expect:  6 | self reference     | #CYCLE!
+//? expect:  7 | divide by zero     | #DIV/0!
+//? expect:  8 | words in math      | #VALUE!
+//? expect:  9 | unknown function   |  #NAME?
+//? expect: 10 | out-of-grid ref    |   #REF!
+//? expect: 11 | parse error        | #PARSE!
+//? expect: 12 | still fine         |      18
+//? expect:
+//? expect: formulas:
+//? expect:   B2  =B3+1                  => #CYCLE!
+//? expect:   B3  =B4*2                  => #CYCLE!
+//? expect:   B4  =B2-3                  => #CYCLE!
+//? expect:   B5  =B2+10                 => #CYCLE!
+//? expect:   B6  =B6                    => #CYCLE!
+//? expect:   B7  =10/0                  => #DIV/0!
+//? expect:   B8  =A1+1                  => #VALUE!
+//? expect:   B9  =frobnicate(7)         => #NAME?
+//? expect:   B10 =XYZ99+1               => #REF!
+//? expect:   B11 =1++2                  => #PARSE! (unexpected '+')
+//? expect:   B12 =sum(1,2,3)*avg(2,4)   => 18

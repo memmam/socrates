@@ -1,0 +1,98 @@
+// site — the page model, the shared HTML template, and the nav builder.
+
+import markdown as md;
+import std.strings;
+
+// One built page. Struct values have reference semantics, so pages can
+// be passed around and collected freely without copying.
+pub struct Page {
+    slug: String, // output name without extension ("about" -> about.html)
+    title: String, // first `# ` heading of the source
+    body: String, // converted HTML body
+    words: Int, // word count of the Markdown source
+}
+
+// Site order: index first, everything else alphabetically by slug.
+pub fn ordered(pages: List[Page]) -> List[Page] {
+    pages.sort_by(|a, b| cmp(nav_key(a), nav_key(b)))
+}
+
+fn nav_key(p: Page) -> String {
+    // The empty string sorts before everything, pinning index to the front.
+    if p.slug == "index" { "" } else { p.slug }
+}
+
+fn cmp(a: String, b: String) -> Int {
+    if a < b {
+        -1
+    } else if a > b { 1 } else { 0 }
+}
+
+// One <a> per page; the current page is marked so the CSS can highlight it.
+pub fn nav_html(pages: List[Page], current: String) -> String {
+    let links = pages.map(|p| {
+        let label = if p.slug == "index" { "Home" } else { md.escape(p.title) };
+        let here = if p.slug == current { " class=\"here\"" } else { "" };
+        "<a{here} href=\"{p.slug}.html\">{label}</a>"
+    });
+    links.join(" ")
+}
+
+// Wrap one converted page in the shared HTML shell. The document
+// accumulates in a strings.Builder (v0.7) — each `line` push is O(1),
+// the final `build` one join.
+pub fn render(site_name: String, p: Page, nav: String) -> String {
+    let doc = strings.builder();
+    line(doc, "<!doctype html>");
+    line(doc, "<html lang=\"en\">");
+    line(doc, "<head>");
+    line(doc, "<meta charset=\"utf-8\">");
+    line(doc, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+    line(doc, "<title>{md.escape(p.title)} · {site_name}</title>");
+    line(doc, "<style>");
+    line(doc, stylesheet());
+    line(doc, "</style>");
+    line(doc, "</head>");
+    line(doc, "<body>");
+    line(doc, "<header><span class=\"brand\">{site_name}</span><nav>{nav}</nav></header>");
+    line(doc, "<main>");
+    line(doc, p.body);
+    line(doc, "</main>");
+    line(doc, "<footer>built by mdsite — a static site generator written in Socrates</footer>");
+    line(doc, "</body>");
+    line(doc, "</html>");
+    doc.build()
+}
+
+// One "\n"-terminated line of the document.
+fn line(doc: strings.Builder, s: String) {
+    doc.push(s);
+    doc.push("\n");
+}
+
+// Inline CSS, shared by every page. (A literal `\{` must be escaped in
+// Socrates strings because a bare `\{` opens interpolation.)
+fn stylesheet() -> String {
+    let rules = [
+        "  body \{ margin: 0; color: #24292f; background: #fdfcf8;",
+        "         font: 17px/1.65 Georgia, 'Times New Roman', serif; }",
+        "  header \{ display: flex; align-items: baseline; gap: 1.5rem;",
+        "           padding: 0.9rem 1.4rem; background: #24292f; }",
+        "  .brand \{ color: #fdfcf8; font-weight: bold; letter-spacing: 0.06em; }",
+        "  nav a \{ color: #c9d1d9; text-decoration: none; margin-right: 1rem; }",
+        "  nav a:hover \{ color: #ffffff; text-decoration: underline; }",
+        "  nav a.here \{ color: #ffd866; }",
+        "  main \{ max-width: 42rem; margin: 2.5rem auto; padding: 0 1.2rem; }",
+        "  h1, h2, h3 \{ line-height: 1.25; }",
+        "  a \{ color: #0b63b6; }",
+        "  li \{ margin: 0.2rem 0; }",
+        "  code \{ background: #f0ede4; padding: 0.1rem 0.3rem; border-radius: 4px;",
+        "         font: 0.88em/1.5 'SF Mono', Consolas, monospace; }",
+        "  pre \{ background: #24292f; color: #e6edf3; padding: 0.9rem 1.1rem;",
+        "        border-radius: 8px; overflow-x: auto; }",
+        "  pre code \{ background: none; padding: 0; color: inherit; }",
+        "  footer \{ max-width: 42rem; margin: 3rem auto 2rem; padding: 0 1.2rem;",
+        "           color: #6a6f7a; font-size: 0.85em; }",
+    ];
+    rules.join("\n")
+}

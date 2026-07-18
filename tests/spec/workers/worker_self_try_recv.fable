@@ -1,8 +1,0 @@
-// worker.try_recv() from inside a worker (v0.8): the self-side mirror of
-// Worker.try_recv() (worker_try_recv.fable), symmetric with
-// worker.recv()/Worker.recv().
-
-let w = worker.spawn("tryrecv_worker.fable", []).unwrap();
-w.send("ping");
-println(w.recv());                 //? expect: Some("got:ping")
-println(w.join());                 //? expect: Ok(())

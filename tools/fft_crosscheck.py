@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Cross-check Fable's fft namespace against numpy.fft.
+"""Cross-check Socrates's fft namespace against numpy.fft.
 
-Usage: python3 tools/fft_crosscheck.py <path-to-fable-binary>
+Usage: python3 tools/fft_crosscheck.py <path-to-socrates-binary>
 
-Generates one Fable program covering a spread of sizes (radix-2 and
+Generates one Socrates program covering a spread of sizes (radix-2 and
 Bluestein paths), runs it, and compares every bin against numpy at
 1e-9 relative tolerance. The input signals use small integer-derived
 values so both sides construct bit-identical f64 inputs.
@@ -26,7 +26,7 @@ def signal(n):
     return re, im
 
 
-def fable_list(xs):
+def socrates_list(xs):
     return "[" + ", ".join(repr(x) for x in xs) + "]"
 
 
@@ -38,12 +38,12 @@ def parse_list(line):
 
 
 def main():
-    fable = sys.argv[1]
+    socrates = sys.argv[1]
     prog = []
     for n in SIZES:
         re, im = signal(n)
-        prog.append(f"let re{n} = {fable_list(re)};")
-        prog.append(f"let im{n} = {fable_list(im)};")
+        prog.append(f"let re{n} = {socrates_list(re)};")
+        prog.append(f"let im{n} = {socrates_list(im)};")
         prog.append(f"let (fr{n}, fi{n}) = fft.fft(re{n}, im{n});")
         prog.append(f"println(fr{n});")
         prog.append(f"println(fi{n});")
@@ -55,11 +55,11 @@ def main():
         prog.append(f"println(ri{n});")
 
     with tempfile.TemporaryDirectory() as td:
-        path = os.path.join(td, "fft_check.fable")
+        path = os.path.join(td, "fft_check.soc")
         with open(path, "w") as f:
             f.write("\n".join(prog) + "\n")
         out = subprocess.run(
-            [fable, path], capture_output=True, text=True, check=True
+            [socrates, path], capture_output=True, text=True, check=True
         ).stdout.splitlines()
 
     lines = iter(out)

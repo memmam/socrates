@@ -1,7 +1,7 @@
 //! The module loader: resolves `import` statements to files, parses each
 //! module once, and returns all modules in dependency order (root last).
 //!
-//! `import a.b;` in `/dir/file.fable` loads `/dir/a/b.fable`. Every module is
+//! `import a.b;` in `/dir/file.soc` loads `/dir/a/b.soc`. Every module is
 //! identified by a *key* — its import path as first encountered ("a.b") — used
 //! as the name-mangling prefix inside the shared checker; the root module's
 //! key is empty (its names stay unprefixed). Files are deduplicated by
@@ -35,13 +35,13 @@ pub struct ModuleUnit {
 /// globally unique `NodeId`s so they can share one checker.
 ///
 /// Imports resolve relative to the importing file first, then against each
-/// directory in the `FABLE_PATH` environment variable (colon-separated) —
+/// directory in the `SOCRATES_PATH` environment variable (colon-separated) —
 /// the home for utility modules shared across projects.
 ///
 /// On failure, returns the diagnostics together with the source they belong
 /// to (lex/parse errors of any module, unreadable files, cycles).
 pub fn load_modules(root: &Path) -> Result<Vec<ModuleUnit>, (Source, Vec<Diagnostic>)> {
-    let search: Vec<PathBuf> = std::env::var("FABLE_PATH")
+    let search: Vec<PathBuf> = std::env::var("SOCRATES_PATH")
         .ok()
         .map(|v| v.split(':').filter(|s| !s.is_empty()).map(PathBuf::from).collect())
         .unwrap_or_default();
@@ -90,7 +90,7 @@ pub struct ModuleSession {
 
 impl ModuleSession {
     pub fn new() -> ModuleSession {
-        let search: Vec<PathBuf> = std::env::var("FABLE_PATH")
+        let search: Vec<PathBuf> = std::env::var("SOCRATES_PATH")
             .ok()
             .map(|v| v.split(':').filter(|s| !s.is_empty()).map(PathBuf::from).collect())
             .unwrap_or_default();
@@ -139,7 +139,7 @@ struct Loader<'a> {
     loading: Vec<(PathBuf, String)>,
     next_id: u32,
     /// Extra directories imports resolve against, after the importing file's
-    /// own directory (`FABLE_PATH`).
+    /// own directory (`SOCRATES_PATH`).
     search: Vec<PathBuf>,
     /// In-memory file contents that shadow the disk (canonical path → text).
     overlay: &'a HashMap<PathBuf, String>,
@@ -310,8 +310,8 @@ impl Loader<'_> {
         for s in segs {
             rel.push(&s.name);
         }
-        rel.set_extension("fable");
-        // File-relative first, then each FABLE_PATH directory.
+        rel.set_extension("soc");
+        // File-relative first, then each SOCRATES_PATH directory.
         let mut tried = Vec::new();
         let mut found = None;
         for base in std::iter::once(dir).chain(self.search.iter().map(PathBuf::as_path)) {
@@ -326,7 +326,7 @@ impl Loader<'_> {
             let mut d = Diagnostic::error("E0337", format!("cannot find module `{dotted}`"))
                 .with_label(span, format!("looked for `{}`", tried[0].display()));
             for t in &tried[1..] {
-                d = d.with_note(format!("also tried `{}` (FABLE_PATH)", t.display()));
+                d = d.with_note(format!("also tried `{}` (SOCRATES_PATH)", t.display()));
             }
             return Err((importer.clone(), vec![d]));
         };

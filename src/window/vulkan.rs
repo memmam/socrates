@@ -932,7 +932,7 @@ pub(crate) struct Chain {
     off_layout: i32,
 
     // gfx.* state (the draw-call surface). Handle tables map the Int
-    // handles Fable sees onto Vulkan objects, exactly the Metal backend's
+    // handles Socrates sees onto Vulkan objects, exactly the Metal backend's
     // pattern (Vulkan handles are 64-bit and driver-owned, not the small
     // driver-issued integers GL hands out).
     off_view: u64,

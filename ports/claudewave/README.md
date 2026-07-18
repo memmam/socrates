@@ -1,6 +1,6 @@
-# claudewave DSP core, ported to Fable
+# claudewave DSP core, ported to Socrates
 
-A Fable port of the DSP core of **claudewave** by SkyeShark
+A Socrates port of the DSP core of **claudewave** by SkyeShark
 ([SkyeShark/claudewave](https://github.com/SkyeShark/claudewave)) — a
 vaporwave / citypop remix toolkit whose `lib/` renders synth voices,
 drums, tape/vinyl treatments, ambience layers and an 18-band channel
@@ -11,18 +11,18 @@ the six ported source files are vendored byte-for-byte in
 
 This is the first port through the [`pyl` translation layer](../pyl/)
 (numpy / scipy.signal / random / audio subset — the numerical contract is
-[`ports/pyl/CONTRACT.md`](../pyl/CONTRACT.md)). Each `.fable` file is
+[`ports/pyl/CONTRACT.md`](../pyl/CONTRACT.md)). Each `.soc` file is
 structured function-for-function against its upstream `.py` so the two
 read side by side:
 
-| Fable | Upstream | Contents |
+| Socrates | Upstream | Contents |
 |-------|----------|----------|
-| `synths.fable` | `upstream/synths.py` | ADSR, rhodes/sub/bell/juno/FM-lead/slap-bass/whistle voices, chord helpers |
-| `drums.fable` | `upstream/drums.py` | kick, brush snare, snap, shaker, hat, conga, beat-grid renderer |
-| `dsp.fable` | `upstream/dsp.py` | RMS normalize, tape wobble, sidechain pump, vinyl crackle, hiss, fades, limiter |
-| `choppers.fable` | `upstream/choppers.py` | hook extraction + echoing loop placement |
-| `ambience.fable` | `upstream/ambience.py` | water, crickets, wind, equal-power stereo pan |
-| `vocoder.fable` | `upstream/vocoder.py` | chord carrier, 18-band channel vocoder, ring mod |
+| `synths.soc` | `upstream/synths.py` | ADSR, rhodes/sub/bell/juno/FM-lead/slap-bass/whistle voices, chord helpers |
+| `drums.soc` | `upstream/drums.py` | kick, brush snare, snap, shaker, hat, conga, beat-grid renderer |
+| `dsp.soc` | `upstream/dsp.py` | RMS normalize, tape wobble, sidechain pump, vinyl crackle, hiss, fades, limiter |
+| `choppers.soc` | `upstream/choppers.py` | hook extraction + echoing loop placement |
+| `ambience.soc` | `upstream/ambience.py` | water, crickets, wind, equal-power stereo pan |
+| `vocoder.soc` | `upstream/vocoder.py` | chord carrier, 18-band channel vocoder, ring mod |
 
 ## Run it
 
@@ -37,25 +37,25 @@ python3 ports/claudewave/reference/gen_stream.py /tmp/cw/rand_stream.txt
 CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt \
     python3 ports/claudewave/reference/run_upstream.py /tmp/cw/truth
 
-# 3. the same 32-item battery from the Fable port
-FABLE_PATH=ports CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt \
-    ./target/release/fable ports/claudewave/battery.fable /tmp/cw/fable
+# 3. the same 32-item battery from the Socrates port
+SOCRATES_PATH=ports CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt \
+    ./target/release/socrates ports/claudewave/battery.soc /tmp/cw/socrates
 
 # 4. numeric comparison, item by item (exit 0 iff each item's max abs
 #    diff is within max(its row in compare_paw.py's expected-max
 #    table, the 2e-15 oracle-drift floor), 1e-9 as the global outer
 #    bound)
 for p in /tmp/cw/truth/*.paw; do
-  python3 ports/claudewave/reference/compare_paw.py "$p" "/tmp/cw/fable/$(basename "$p")"
+  python3 ports/claudewave/reference/compare_paw.py "$p" "/tmp/cw/socrates/$(basename "$p")"
 done
-diff /tmp/cw/truth/chords.txt /tmp/cw/fable/chords.txt
+diff /tmp/cw/truth/chords.txt /tmp/cw/socrates/chords.txt
 ```
 
-Audio travels as PAW, the contract's diffable text format;
+Audio travels as PAW, the contract's difsocrates text format;
 `tools/paw2wav.py` converts to 16-bit WAV for listening. Battery item i
 seeks the shared stream cursor to offset i·100000 before rendering, so
 every item is independently reproducible on both sides;
-`battery.fable OUTDIR ITEM` re-renders a single item.
+`battery.soc OUTDIR ITEM` re-renders a single item.
 
 ## The receipts
 
@@ -94,7 +94,7 @@ five-plus orders of magnitude under the 1e-9 outer bound:
   the port contract): upstream `analysis.py`, `viz.py`, `ace_step.py`,
   and the two `dsp.py` functions that need `soundfile` /
   `scipy.signal.resample` — `load_stereo` and `resample_rate`.
-- Fable has no default arguments: call sites pass the upstream defaults
+- Socrates has no default arguments: call sites pass the upstream defaults
   explicitly (each function's doc comment records them). Tuple
   parameters (`noise_band`, `chirp_freq_band`) are flattened to two
   floats.
@@ -105,6 +105,6 @@ five-plus orders of magnitude under the 1e-9 outer bound:
   `parse_chord` returns `Option`, `chord_voicing_midi` returns `[]`,
   and callers skip the bar exactly like upstream.
 - The port added three helpers to `pyl.nd` (pinned in
-  `ports/pyl/spec.fable`): `channel(c)` (`x[:, c]`), `mean_all()`
+  `ports/pyl/spec.soc`): `channel(c)` (`x[:, c]`), `mean_all()`
   (`np.mean` over every component) and `max_abs_all()`
   (`np.max(np.abs(x))` on any shape).

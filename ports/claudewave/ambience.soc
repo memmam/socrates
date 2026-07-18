@@ -1,0 +1,80 @@
+// claudewave.ambience — Socrates port of upstream lib/ambience.py
+// (byte-for-byte copy vendored at ports/claudewave/upstream/ambience.py).
+//
+// Synthesized "field recording" layers — crickets, water lapping, wind.
+// Function-for-function port with upstream expression order (see
+// ports/pyl/CONTRACT.md). Socrates has no default arguments: callers pass
+// the upstream defaults explicitly (documented per function); tuple
+// parameters (noise_band, chirp_freq_band) are flattened to two floats.
+
+import pyl.nd;
+import pyl.signal;
+import pyl.rand;
+
+let mut rng: rand.Stream = rand.from_vals([]);
+
+pub fn set_stream(s: rand.Stream) { rng = s; }
+
+// Slow amplitude-modulated band-passed noise — distant water lapping.
+// Defaults: lap_rate=0.15, noise_band=(120, 1500), mix_level=0.12.
+pub fn render_water(dur_s: Float, sr: Int, lap_rate: Float,
+                    band_lo: Float, band_hi: Float, mix_level: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let n = (dur_s * srf).to_int();
+    let noise = rng.randn(n);
+    let sos = signal.butter(2, band_lo / (srf / 2.0), band_hi / (srf / 2.0), "band");
+    let water = signal.sosfilt(sos, noise);
+    let t = nd.arange(n).divs(srf);
+    // slow double-sinusoidal envelope so it doesn't feel periodic
+    let env = t.muls(2.0 * math.pi * lap_rate).sinv().muls(0.5).adds(0.5)
+        .mul(t.muls(2.0 * math.pi * (lap_rate * 2.1)).sinv().muls(0.5).adds(0.5));
+    water.mul(env).muls(mix_level)
+}
+
+// Rhythmic cricket chirps: filtered noise bursts at chirp_rate with
+// random skipping. Defaults: chirp_rate_hz=4.0, chirp_freq_band=
+// (4200, 6200), chirp_duration_ms=30, p_chirp=0.75, level=0.06.
+pub fn render_crickets(dur_s: Float, sr: Int, chirp_rate_hz: Float,
+                       band_lo: Float, band_hi: Float, chirp_duration_ms: Float,
+                       p_chirp: Float, level: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let n = (dur_s * srf).to_int();
+    let cnoise0 = rng.randn(n);
+    let sos = signal.butter(3, band_lo / (srf / 2.0), band_hi / (srf / 2.0), "band");
+    let cnoise = signal.sosfilt(sos, cnoise0);
+    let out = nd.zeros(n);
+    let period = (srf / chirp_rate_hz).to_int();
+    let chirp_dur = (chirp_duration_ms * 1e-3 * srf).to_int();
+    let mut i = 0;
+    while i < n {
+        if rng.random_() < p_chirp {
+            let end = n.min(i + chirp_dur);
+            let tt = nd.arange(end - i).divs(srf);
+            let env = tt.muls(-80.0).expv().mul(tt.muls(-400.0).expv().k_minus(1.0));
+            // out[i:end] += cnoise[i:end] * env * uniform(0.4, 1.0)
+            out.add_range(i, cnoise.slice(i, end).mul(env), rng.uniform(0.4, 1.0));
+        }
+        i += period;
+    }
+    out.muls(level)
+}
+
+// Slow low-passed noise with amplitude modulation — distant wind.
+// Defaults: rate=0.15, level=0.04.
+pub fn render_wind(dur_s: Float, sr: Int, rate: Float, level: Float) -> nd.Nd {
+    let srf = sr.to_float();
+    let n = (dur_s * srf).to_int();
+    let noise = rng.randn(n);
+    let sos = signal.butter(2, 800.0 / (srf / 2.0), 0.0, "low");
+    let w = signal.sosfilt(sos, noise);
+    let t = nd.arange(n).divs(srf);
+    let env = t.muls(2.0 * math.pi * rate).adds(0.7).sinv().muls(0.5).adds(0.5).muls(0.6).adds(0.4);
+    w.mul(env).muls(level)
+}
+
+// Mono -> stereo with equal-power pan. Default pan=0.0.
+pub fn stereo(mono: nd.Nd, pan: Float) -> nd.Nd {
+    let gl = math.cos((pan + 1.0) * math.pi / 4.0);
+    let gr = math.sin((pan + 1.0) * math.pi / 4.0);
+    nd.stack2(mono.muls(gl), mono.muls(gr))
+}

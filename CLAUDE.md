@@ -1,16 +1,26 @@
-# Fable — project memory
+# Socrates — project memory
 
-Fable is a statically-typed, garbage-collected programming language with
+Socrates is a statically-typed, garbage-collected programming language with
 algebraic data types, exhaustive pattern matching, closures, and generics,
 implemented from scratch in Rust with **zero dependencies** — every build.
-This file is the working memory for the project: what Fable is *for*, the
+This file is the working memory for the project: what Socrates is *for*, the
 invariants that must never break, the engineering principles that decide
 close calls, how to verify a change, where the detailed records live, and a
 terse release ledger to draw on when writing changelogs and release posts.
 
-## What Fable is for
+## What Socrates is for
 
-Fable is an **AI-native language**: its design mirrors the way current
+**The name** (recorded 2026-07-18, when the language was renamed from
+Fable): trademark pre-emption and namespace collisions — an established
+F#-to-JS compiler already holds "Fable". "Socrates" names the language's
+substrate role; "Timaeus" was considered and is reserved for the eventual
+top-of-stack agent; "Quine" was considered and rejected (an existing OSS
+graph database holds it). The `.soc` extension nods at the
+system-on-a-chip trajectory of the HDL roadmap. Git history preserves the
+old name; `bench/ab.py` and the Bench A/B workflow carry the permanent
+cross-name fallback that keeps pre-rename refs benchable.
+
+Socrates is an **AI-native language**: its design mirrors the way current
 frontier models reason, so an AI writes it fluently and uses it as a
 recursive force multiplier — a substrate for building the tools that build
 more tools. When AI-authorship fluency and human readability/ergonomics
@@ -27,13 +37,13 @@ rough order:
 - **Hardware testing → an HDL pipeline.** Bit-exact integer semantics,
   `Bytes`, and bitwise intrinsics are load-bearing here; the near-term
   target is the user's 9-bit toy ISA (an AI-coprocessor design) — an
-  assembler, emulator, and conformance battery in Fable, then codegen.
-- **Transpilation *into* Fable** from Python and JavaScript and their
+  assembler, emulator, and conformance battery in Socrates, then codegen.
+- **Transpilation *into* Socrates** from Python and JavaScript and their
   frameworks (numpy/scipy already shimmed as `pyl`; Three.js-class and AIML
   frameworks next). The `ports/` programme (`jsl`, `pyl`) is the seed: run
-  upstream unmodified against a Fable-backed shim, cross-validate to
+  upstream unmodified against a Socrates-backed shim, cross-validate to
   numeric/pixel equality.
-- **Transpilation *from* Fable to raw Rust**, reaching for `unsafe`,
+- **Transpilation *from* Socrates to raw Rust**, reaching for `unsafe`,
   pre-existing binary blobs, or external dependencies **only where
   necessary** — the same zero-dep-by-default discipline the interpreter
   holds itself to.
@@ -88,7 +98,7 @@ their place fastest.
   rule**: it ships additive alongside OpenGL/CGL, not as a replacement.
   Apple marking OpenGL deprecated is not the same as Apple removing it —
   both backends stay until and unless macOS itself actually drops OpenGL
-  support. The Fable-facing API is the stable surface across any such swap
+  support. The Socrates-facing API is the stable surface across any such swap
   (a windowing layer shared across backends, e.g.); the backend underneath
   it is free to change as long as the observable output stays testably
   correct (golden tests, pixel/numeric cross-checks — whatever the
@@ -102,7 +112,7 @@ their place fastest.
   preemptively as legacy-support insurance. This is a different axis from
   the backend-supersession rule above (that one swaps backends for a single
   platform; this one decides which platform/OS-version targets are in
-  scope at all): it follows from the AI-native trajectory (see "What Fable
+  scope at all): it follows from the AI-native trajectory (see "What Socrates
   is for") — build for where each platform's ecosystem is actively headed,
   not for carrying yesterday's compatibility weight up front. Older
   platforms broadly are still in scope long-term; the ordering is
@@ -128,12 +138,12 @@ releases: re-read this before planning any graphics/compute work) is
 native, raw-FFI, zero-dependency backends for everything — OpenGL,
 OpenCL, CUDA, Vulkan, Metal, and DirectX — built over a
 maximally-performant, minimal-duplication shared graphics/compute core:
-the `window`/`gfx` pattern generalized (one backend-neutral Fable-facing
+the `window`/`gfx` pattern generalized (one backend-neutral Socrates-facing
 surface; thin per-API backends over dlopen/`objc_msgSend`/COM raw FFI;
 handle tables + enum dispatch in shared code, as `window/macos/` does in
 miniature). The `wgpu`/`pollster` dependency was **deleted the same day
 the coverage condition was met** (2026-07-17: Metal ✓, Vulkan ✓ compute +
-graphics, OpenCL ✓ with a CI-proven real dispatch) — every build of Fable
+graphics, OpenCL ✓ with a CI-proven real dispatch) — every build of Socrates
 is now zero-dependency. CUDA compute (`src/cu.rs`, PTX via dlopen'd
 libcuda), DirectX (`src/dx.rs`, D3D12/DirectCompute via COM FFI,
 WARP-proven on windows runners), and the Win32 Vulkan window surface
@@ -173,12 +183,12 @@ build is GL-compute, if a concrete need appears. Settled decisions:
   tests, and the book must all agree with it; a deviation is a bug. Any
   language change updates the spec in the same PR.
 - **Everything observable is golden-tested and byte-identical.** Every
-  demo's full stdout is pinned (`demos/`), every ```fable block in `book/`
+  demo's full stdout is pinned (`demos/`), every ```soc block in `book/`
   executes in CI except the rare fragment fence-tagged `skip` (one today —
   135 of 136 execute), and the spec suite (`tests/spec/`, 311 tests) runs
-  through the same `fable test` path users get. A refactor that changes any
+  through the same `socrates test` path users get. A refactor that changes any
   pinned output is wrong unless the output change is the point.
-- **GC-stress must stay green.** `FABLE_GC_STRESS=1` collects before every
+- **GC-stress must stay green.** `SOCRATES_GC_STRESS=1` collects before every
   allocation; the whole suite (unit, spec, demos) passes under it. New
   natives that allocate must root correctly (see `temp_roots` in `vm.rs`).
 - **Seeded randomness is stable only within a release**, never across.
@@ -188,16 +198,16 @@ build is GL-compute, if a concrete need appears. Settled decisions:
 
 ```sh
 cargo test                                    # unit + golden spec suite
-FABLE_GC_STRESS=1 cargo test --test spec_runner
+SOCRATES_GC_STRESS=1 cargo test --test spec_runner
 cargo clippy --all-targets -- -D warnings
 cargo build --release
-./target/release/fable test tests/spec        # 311
+./target/release/socrates test tests/spec        # 311
 # glcube's three mains need a live GL/Metal/Vulkan window (CI runs them in
-# the windowing jobs); everything else, cube.fable/spec.fable included:
+# the windowing jobs); everything else, cube.soc/spec.soc included:
 shopt -s extglob
-./target/release/fable test demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable  # 73, also with FABLE_GC_STRESS=1
-FABLE_PATH=ports ./target/release/fable test ports/pyl/spec.fable   # + ports/icaa/spec.fable
-./target/release/fable build demos/csvql -o /tmp/csvql && (cd /tmp && ./csvql)  # `fable build` smoke
+./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc  # 73, also with SOCRATES_GC_STRESS=1
+SOCRATES_PATH=ports ./target/release/socrates test ports/pyl/spec.soc   # + ports/icaa/spec.soc
+./target/release/socrates build demos/csvql -o /tmp/csvql && (cd /tmp && ./csvql)  # `socrates build` smoke
 python3 bench/ab.py <base-tree> <head-tree>   # local interleaved perf A/B
 ```
 
@@ -250,9 +260,9 @@ numbers: `bench/RESULTS.md`.
   multi-file modules (`import`, diamond dedup, cycle detection), tail-call
   optimization.
 - **v0.3** — `pub` visibility (private-by-default modules), operator methods
-  (`add`/`sub`/…), `FABLE_PATH` search path, `fs`/`os` namespaces.
-- **v0.4** — `fable test` command, the embedded standard library
-  (json/flags/path/strings/iter, written in Fable), `fable lsp`, catchable
+  (`add`/`sub`/…), `SOCRATES_PATH` search path, `fs`/`os` namespaces.
+- **v0.4** — `socrates test` command, the embedded standard library
+  (json/flags/path/strings/iter, written in Socrates), `socrates lsp`, catchable
   panics (`try`).
 - **v0.5** — REPL imports, LSP completion, the book became a CI test suite.
 - **v0.6 — the field-test release.** Ten demo programs written by ten
@@ -273,7 +283,7 @@ numbers: `bench/RESULTS.md`.
   Then a measured efficiency pass (see `bench/RESULTS.md`): checkers −15%,
   lisp −20%, string building −55%, map ops −37%, GC-stress suite −67% on the
   heaviest demo — all with byte-identical golden output. Finally, distribution:
-  `fable build` staples a program (modules, data files, worker `.fable`s) onto
+  `socrates build` staples a program (modules, data files, worker `.soc`s) onto
   the interpreter as an appended, dependency-free payload the binary reads from
   its own tail at startup — a self-contained executable whose output is
   byte-identical to the source run. Target-independent stapling (`--launcher`)
@@ -281,7 +291,7 @@ numbers: `bench/RESULTS.md`.
   `x86_64`/`aarch64` Linux + Windows and Apple-Silicon macOS, shipped in the
   release. macOS can't append (a payload past the Mach-O `__LINKEDIT` fails
   `codesign` and arm64 won't run unsigned), so there the payload is linked in
-  as a `__DATA,__fablezoo` section (`ld -sectcreate`; `fable build
+  as a `__DATA,__socrateszoo` section (`ld -sectcreate`; `socrates build
   --payload-only` emits it; `read_self` parses the running image to read it
   back) and ad-hoc signed. Developer ID signing + notarization are wired in
   `release.yml`, dormant until the `MACOS_CERT_P12_BASE64` etc. secrets exist.
@@ -298,7 +308,7 @@ numbers: `bench/RESULTS.md`.
   `worker.try_recv()`; `strings.Builder.is_empty`/`push_joined`;
   `lists.min_by_key`/`max_by_key`; a new `std.lazy` module (`Lazy[T]`,
   deferred/memoized computation); ergonomic `std.json` construction
-  (`obj`/`arr`/`jstr`/`num`/`int`/`bool`/`null`); and `fable test --bless`,
+  (`obj`/`arr`/`jstr`/`num`/`int`/`bool`/`null`); and `socrates test --bless`,
   which rewrites mismatched `//? expect:` lines in place when the
   actual/expected count already agrees. One item (a counting-map helper)
   declined — one demo, one-line workaround, `std` grows reluctantly. Four
@@ -306,7 +316,7 @@ numbers: `bench/RESULTS.md`.
   own efficiency pass; `demos/NOTES.md` now says so.
   **And, in the same release, the native graphics-and-compute
   programme** — the standing roadmap directive executed end to end: `std.glm` (GLM-shaped
-  vector/matrix/quaternion math, pure Fable) + `Bytes` f32 accessors; the
+  vector/matrix/quaternion math, pure Socrates) + `Bytes` f32 accessors; the
   `window` namespace (OpenGL via X11/GLX, Win32/WGL, Cocoa/CGL raw FFI) and
   the GL-shaped `gfx` draw-call surface; the Metal backend (additive,
   windows + compute, MSL, interpreter moved to the macOS main thread); the
@@ -324,6 +334,18 @@ numbers: `bench/RESULTS.md`.
   second consumer: `objc.rs`/`mtl.rs`, `vk.rs`, `window/vulkan.rs`
   (−1212 lines; the lavapipe asserts prove the code Windows runs). Book
   ch8 gained executable `std.glm` + `window`/`gfx` sections.
+  **And, folded in before the release was ever published** (the same way
+  an earlier mis-cut became this release's feature-queue half): the
+  minification pass (the four-arch Bench A/B gate; the compact dispatch
+  loop with the per-target `monolithic_dispatch` binding; `fft.magnitude`
+  moved to `std.fft`; the math namespace minified to what only it
+  provides; the `std.json` escape fast path; the demo adoption gap
+  closed), the consistency passes (SPEC↔implementation reconciliation,
+  ports validating exactly what CI enforces with 184 new cross-checks,
+  the bench harness enforcing its own claims, the core docs re-measured
+  against the current system, STYLE.md made normative with the demos
+  conforming), and the rename itself — Fable became Socrates, with the
+  rationale recorded atop this file and in the CHANGELOG.
 
 ## Workflow conventions
 

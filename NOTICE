@@ -1,4 +1,4 @@
-Fable
+Socrates
 Copyright (c) 2026 Roxy Alessandra Williams-Lalonde, pending formal
 registration of Alterna Systems LLC
 
@@ -16,7 +16,8 @@ PRIOR-LICENSE NOTICE
    paragraph 3.
 
 2. For a brief window, an MIT License file with the placeholder
-   attribution "The Fable Authors" was present in this repository:
+   attribution "The Fable Authors" (the language's name at the time; the
+   work was renamed Socrates in 2026-07) was present in this repository:
    first published in commit e512fab (2026-07-14 18:15:17 UTC), present
    on the main branch only between commits 096627f (merged 2026-07-14
    18:37:03 UTC) and 31751f0 (merged 2026-07-14 19:03:28 UTC), and
@@ -43,7 +44,7 @@ PRIOR-LICENSE NOTICE
 
 THIRD-PARTY ATTRIBUTIONS
 
-ports/icaa/ is a Fable-language port of ICAA (Isoline-Coverage
+ports/icaa/ is a Socrates-language port of ICAA (Isoline-Coverage
 Anti-Aliasing) from https://github.com/SkyeShark/icaa-antialiasing,
 Copyright (c) 2026 ICAA contributors, used under the MIT License. The
 original license text accompanies the port at ports/icaa/LICENSE-upstream.

@@ -3,7 +3,7 @@
 //! Rendered format:
 //! ```text
 //! error[E0301]: type mismatch
-//!   --> examples/foo.fable:3:9
+//!   --> examples/foo.soc:3:9
 //!    |
 //!  3 |     let x: Int = "hi";
 //!    |            ---   ^^^^ expected `Int`, found `String`

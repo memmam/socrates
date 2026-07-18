@@ -1,7 +1,7 @@
 # Idioms and Style
 
 The language has been laid out; this chapter is about using it well. None of
-these are rules the compiler enforces — they are the habits that make Fable
+these are rules the compiler enforces — they are the habits that make Socrates
 programs fast, clear, and easy to test. The through-line is a single
 preference: when two spellings do the same job, choose the one that is
 faster and parallelizes more cleanly, and reach for the primitive built for
@@ -9,10 +9,10 @@ the task rather than hand-rolling it.
 
 ## Prefer expressions to statements
 
-Fable is expression-oriented, so most "compute a value conditionally" code
+Socrates is expression-oriented, so most "compute a value conditionally" code
 needs no mutable variable. Let `if` and `match` produce the value directly:
 
-```fable
+```soc
 let n = 0 - 5;
 let sign = match n {
     m if m < 0 -> "negative",
@@ -77,8 +77,8 @@ parallelism with no synchronization code of your own.
 
 Golden-test everything with `//?` directives — pinning a program's complete
 output is the cheapest possible regression net, and it is why this book and
-the demo suite can be refactored fearlessly. Run `fable fmt` before you
-commit so diffs show intent, not whitespace. Point your editor at `fable
+the demo suite can be refactored fearlessly. Run `socrates fmt` before you
+commit so diffs show intent, not whitespace. Point your editor at `socrates
 lsp` and let the checker answer questions you would otherwise guess at.
 
 ## Design values
@@ -89,10 +89,10 @@ dependencies** by default — a feature you can only lose once, so it is
 guarded. `docs/SPEC.md` is the **source of truth**: the implementation, the
 tests, and this book all answer to it. Features are **pulled in by use, not
 pushed by a roadmap** — the bitwise operators, `Bytes`, and workers all
-arrived because real programs needed them. And Fable is built to be written
+arrived because real programs needed them. And Socrates is built to be written
 *by* automated tooling as much as by hand, which is why so much of it —
 golden tests, deterministic output, a spec that rules — is about making a
-program's behavior legible and checkable. Write Fable so a machine could
+program's behavior legible and checkable. Write Socrates so a machine could
 verify it, and you will have written it well.
 
 ---

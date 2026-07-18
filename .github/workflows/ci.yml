@@ -38,80 +38,80 @@ jobs:
       - name: Unit + golden spec tests
         run: cargo test
       - name: Golden spec tests under GC stress
-        run: FABLE_GC_STRESS=1 cargo test --test spec_runner
+        run: SOCRATES_GC_STRESS=1 cargo test --test spec_runner
       - name: Clippy (deny warnings)
         run: cargo clippy --all-targets -- -D warnings
       - name: Examples smoke test
         run: |
           cargo build --release
-          ./target/release/fable examples/mandelbrot.fable > /dev/null
-          ./target/release/fable examples/algorithms.fable > /dev/null
-          ./target/release/fable examples/life.fable > /dev/null
-          ./target/release/fable examples/brainfuck.fable > /dev/null
-          ./target/release/fable examples/json.fable > /dev/null
-          ./target/release/fable examples/adventure.fable < /dev/null > /dev/null
-          ./target/release/fable examples/orbit/main.fable > /dev/null
-          ./target/release/fable examples/loc.fable . > /dev/null
-          ./target/release/fable check examples/raytracer.fable
-          ./target/release/fable test tests/spec > /dev/null
+          ./target/release/socrates examples/mandelbrot.soc > /dev/null
+          ./target/release/socrates examples/algorithms.soc > /dev/null
+          ./target/release/socrates examples/life.soc > /dev/null
+          ./target/release/socrates examples/brainfuck.soc > /dev/null
+          ./target/release/socrates examples/json.soc > /dev/null
+          ./target/release/socrates examples/adventure.soc < /dev/null > /dev/null
+          ./target/release/socrates examples/orbit/main.soc > /dev/null
+          ./target/release/socrates examples/loc.soc . > /dev/null
+          ./target/release/socrates check examples/raytracer.soc
+          ./target/release/socrates test tests/spec > /dev/null
       - name: Demo golden tests
-        # demos/glcube/main.fable needs a live GL context (see the `gl` job's
-        # own Xvfb step below) — every other .fable file under demos/,
-        # including glcube's own GL-free cube.fable/spec.fable, runs here.
+        # demos/glcube/main.soc needs a live GL context (see the `gl` job's
+        # own Xvfb step below) — every other .soc file under demos/,
+        # including glcube's own GL-free cube.soc/spec.soc, runs here.
         run: |
           shopt -s extglob
-          ./target/release/fable test demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable > /dev/null
-      - name: Self-contained demo binary (fable build)
+          ./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc > /dev/null
+      - name: Self-contained demo binary (socrates build)
         # Staple a data-reading demo and a worker demo into standalone
         # binaries and prove each reproduces its source run byte-for-byte
         # from an unrelated working directory.
         run: |
           for demo in csvql parmandel; do
-            ./target/release/fable build "demos/$demo" -o "/tmp/$demo-bin"
+            ./target/release/socrates build "demos/$demo" -o "/tmp/$demo-bin"
             ( cd /tmp && "/tmp/$demo-bin" ) > "/tmp/$demo-bin.out"
-            ./target/release/fable "demos/$demo/main.fable" > "/tmp/$demo-src.out"
+            ./target/release/socrates "demos/$demo/main.soc" > "/tmp/$demo-src.out"
             diff "/tmp/$demo-src.out" "/tmp/$demo-bin.out"
           done
       - name: FFT numpy cross-check
         run: |
           python3 -m pip install --quiet numpy
-          python3 tools/fft_crosscheck.py ./target/release/fable
+          python3 tools/fft_crosscheck.py ./target/release/socrates
       - name: pyl layer golden tests + SOS freeze check
         run: |
-          FABLE_PATH=ports ./target/release/fable test ports/pyl/spec.fable
-          FABLE_GC_STRESS=1 FABLE_PATH=ports ./target/release/fable test ports/pyl/spec.fable
-          FABLE_PATH=ports ./target/release/fable ports/pyl/check_freeze.fable
+          SOCRATES_PATH=ports ./target/release/socrates test ports/pyl/spec.soc
+          SOCRATES_GC_STRESS=1 SOCRATES_PATH=ports ./target/release/socrates test ports/pyl/spec.soc
+          SOCRATES_PATH=ports ./target/release/socrates ports/pyl/check_freeze.soc
           python3 -m pip install --quiet scipy
           python3 ports/claudewave/reference/check_sos_vs_scipy.py ports/claudewave/reference/sos_freeze.txt
-      - name: claudewave port cross-validation (Fable vs shim-run upstream)
+      - name: claudewave port cross-validation (Socrates vs shim-run upstream)
         run: |
           mkdir -p /tmp/cw
           python3 ports/claudewave/reference/gen_stream.py /tmp/cw/rand_stream.txt
           CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt python3 ports/claudewave/reference/run_upstream.py /tmp/cw/truth
-          FABLE_PATH=ports CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt ./target/release/fable ports/claudewave/battery.fable /tmp/cw/fable
+          SOCRATES_PATH=ports CLAUDEWAVE_STREAM=/tmp/cw/rand_stream.txt ./target/release/socrates ports/claudewave/battery.soc /tmp/cw/socrates
           n=$(ls /tmp/cw/truth/*.paw | wc -l)
           test "$n" -eq 32 || { echo "expected 32 battery items, got $n"; exit 1; }
           for p in /tmp/cw/truth/*.paw; do
             name=$(basename "$p")
             echo "== $name"
-            python3 ports/claudewave/reference/compare_paw.py "$p" "/tmp/cw/fable/$name" || exit 1
+            python3 ports/claudewave/reference/compare_paw.py "$p" "/tmp/cw/socrates/$name" || exit 1
           done
-          diff /tmp/cw/truth/chords.txt /tmp/cw/fable/chords.txt
+          diff /tmp/cw/truth/chords.txt /tmp/cw/socrates/chords.txt
       - name: ICAA port golden tests
-        run: FABLE_PATH=ports ./target/release/fable test ports/icaa/spec.fable
-      - name: ICAA port cross-validation (Fable vs JS reference)
+        run: SOCRATES_PATH=ports ./target/release/socrates test ports/icaa/spec.soc
+      - name: ICAA port cross-validation (Socrates vs JS reference)
         run: |
           mkdir -p /tmp/icaa-scenes
-          FABLE_PATH=ports ./target/release/fable ports/icaa/scenes.fable /tmp/icaa-scenes > /dev/null
+          SOCRATES_PATH=ports ./target/release/socrates ports/icaa/scenes.soc /tmp/icaa-scenes > /dev/null
           for scene in /tmp/icaa-scenes/*.ppm; do
             name=$(basename "$scene" .ppm)
             for preset in quality fast; do
               node ports/icaa/reference/icaa-cpu.mjs "$scene" "/tmp/icaa-scenes/${name}_${preset}_js.ppm" "$preset"
-              FABLE_PATH=ports ./target/release/fable ports/icaa/main.fable "$scene" "/tmp/icaa-scenes/${name}_${preset}_fb.ppm" "$preset"
+              SOCRATES_PATH=ports ./target/release/socrates ports/icaa/main.soc "$scene" "/tmp/icaa-scenes/${name}_${preset}_fb.ppm" "$preset"
               node ports/icaa/reference/compare.mjs "/tmp/icaa-scenes/${name}_${preset}_js.ppm" "/tmp/icaa-scenes/${name}_${preset}_fb.ppm"
             done
           done
-      - name: ICAA debug-view cross-validation (Fable vs JS reference)
+      - name: ICAA debug-view cross-validation (Socrates vs JS reference)
         # All five debug views (1=confidence 2=coverage 3=distance
         # 4=orientation 5=rms) on every base scene at both presets:
         # 9 x 2 x 5 = 90 pixel-exact comparisons. Scenes are regenerated
@@ -119,14 +119,14 @@ jobs:
         # rendered outputs.
         run: |
           mkdir -p /tmp/icaa-dbg/scenes /tmp/icaa-dbg/out
-          FABLE_PATH=ports ./target/release/fable ports/icaa/scenes.fable /tmp/icaa-dbg/scenes > /dev/null
+          SOCRATES_PATH=ports ./target/release/socrates ports/icaa/scenes.soc /tmp/icaa-dbg/scenes > /dev/null
           count=0
           for scene in /tmp/icaa-dbg/scenes/*.ppm; do
             name=$(basename "$scene" .ppm)
             for preset in quality fast; do
               for view in 1 2 3 4 5; do
                 node ports/icaa/reference/icaa-cpu.mjs "$scene" "/tmp/icaa-dbg/out/${name}_${preset}_d${view}_js.ppm" "$preset" debug "$view"
-                FABLE_PATH=ports ./target/release/fable ports/icaa/main.fable "$scene" "/tmp/icaa-dbg/out/${name}_${preset}_d${view}_fb.ppm" "$preset" debug "$view"
+                SOCRATES_PATH=ports ./target/release/socrates ports/icaa/main.soc "$scene" "/tmp/icaa-dbg/out/${name}_${preset}_d${view}_fb.ppm" "$preset" debug "$view"
                 node ports/icaa/reference/compare.mjs "/tmp/icaa-dbg/out/${name}_${preset}_d${view}_js.ppm" "/tmp/icaa-dbg/out/${name}_${preset}_d${view}_fb.ppm"
                 count=$((count+1))
               done
@@ -134,9 +134,9 @@ jobs:
           done
           echo "debug-view comparisons: $count"
           test "$count" -eq 90
-      - name: ICAA adversarial perturbation battery (Fable vs JS reference)
+      - name: ICAA adversarial perturbation battery (Socrates vs JS reference)
         # The original one-time adversarial review round, reconstructed as
-        # a permanent deterministic corpus: adversarial.fable draws 47
+        # a permanent deterministic corpus: adversarial.soc draws 47
         # perturbed scenes (edges down to slope 0.02, thin lines, rings,
         # discs, noise fields, gratings, ramps, bars, and 1x1/8x1-class
         # tiny images) from a fixed-seed hand-rolled SplitMix64 stream —
@@ -145,13 +145,13 @@ jobs:
         # 47 x 2 = 94 pixel-exact comparisons.
         run: |
           mkdir -p /tmp/icaa-adv/scenes /tmp/icaa-adv/out
-          FABLE_PATH=ports ./target/release/fable ports/icaa/adversarial.fable /tmp/icaa-adv/scenes
+          SOCRATES_PATH=ports ./target/release/socrates ports/icaa/adversarial.soc /tmp/icaa-adv/scenes
           count=0
           for scene in /tmp/icaa-adv/scenes/*.ppm; do
             name=$(basename "$scene" .ppm)
             for preset in quality fast; do
               node ports/icaa/reference/icaa-cpu.mjs "$scene" "/tmp/icaa-adv/out/${name}_${preset}_js.ppm" "$preset"
-              FABLE_PATH=ports ./target/release/fable ports/icaa/main.fable "$scene" "/tmp/icaa-adv/out/${name}_${preset}_fb.ppm" "$preset"
+              SOCRATES_PATH=ports ./target/release/socrates ports/icaa/main.soc "$scene" "/tmp/icaa-adv/out/${name}_${preset}_fb.ppm" "$preset"
               node ports/icaa/reference/compare.mjs "/tmp/icaa-adv/out/${name}_${preset}_js.ppm" "/tmp/icaa-adv/out/${name}_${preset}_fb.ppm"
               count=$((count+1))
             done
@@ -188,11 +188,11 @@ jobs:
         # § 7.4's own verification convention: pixel spot-checks, not a
         # framebuffer hash — see demos/glcube/README.md). Xvfb from the step
         # above is still running on :99. Explicit files, not the directory:
-        # main_metal.fable (the Metal twin, identical pins) can only render
+        # main_metal.soc (the Metal twin, identical pins) can only render
         # on Apple Silicon macOS — the gl-macos-metal job asserts it there.
         run: |
           cargo build --release --features gl
-          DISPLAY=:99 ./target/release/fable test demos/glcube/main.fable demos/glcube/cube.fable demos/glcube/spec.fable
+          DISPLAY=:99 ./target/release/socrates test demos/glcube/main.soc demos/glcube/cube.soc demos/glcube/spec.soc
 
   gl-windows:
     name: window feature (Win32/WGL)
@@ -250,7 +250,7 @@ jobs:
         shell: bash
         run: |
           cargo build --release --features gl,vulkan
-          out=$(./target/release/fable.exe docs/assets/vulkan_window.fable)
+          out=$(./target/release/socrates.exe docs/assets/vulkan_window.soc)
           echo "$out"
 
   gl-macos:
@@ -321,24 +321,24 @@ jobs:
         # visible in the job output.
         run: |
           cargo build --release --features metal
-          ./target/release/fable docs/assets/metal_triangle.fable
+          ./target/release/socrates docs/assets/metal_triangle.soc
       - name: Metal compute battery (hard-asserted bytes when a device exists)
         # gpu.run on the native Metal backend: an MSL doubling kernel whose
         # output bytes the script itself hard-asserts (assert_eq panics ->
         # exit 70 -> job fails) whenever a Metal device exists — compute
         # needs no window server, so on this runner it is a real
         # correctness gate. `err: <reason>` (no device) exits 0.
-        run: ./target/release/fable docs/assets/metal_compute.fable
+        run: ./target/release/socrates docs/assets/metal_compute.soc
       - name: glcube-Metal golden test (real rendered pixels, hard assert)
         # The cross-backend pixel-parity proof (the Metal arc's Phase 3):
-        # main_metal.fable renders the same cube through the same gfx calls
-        # as main.fable and is pinned to the IDENTICAL two frames / pixel
+        # main_metal.soc renders the same cube through the same gfx calls
+        # as main.soc and is pinned to the IDENTICAL two frames / pixel
         # coordinates / expected bytes as the OpenGL version. Unlike the
         # smoke step above, this one hard-asserts: macos-14 runners have a
         # Metal-capable paravirtual GPU and a window server (proven by the
         # smoke step's ok-line since Phase 1), so a mismatch here is a real
         # rendering divergence, not a capability gap.
-        run: ./target/release/fable test demos/glcube/main_metal.fable demos/glcube/cube.fable demos/glcube/spec.fable
+        run: ./target/release/socrates test demos/glcube/main_metal.soc demos/glcube/cube.soc demos/glcube/spec.soc
 
   vulkan:
     # The roadmap's second native compute backend -- raw dlopen FFI to
@@ -389,15 +389,15 @@ jobs:
       - name: Vulkan compute battery (hard-asserted bytes)
         run: |
           cargo build --release --features vulkan
-          ./target/release/fable docs/assets/vulkan_compute.fable
+          ./target/release/socrates docs/assets/vulkan_compute.soc
       - name: glcube-Vulkan golden (real rendered pixels, hard assert)
-        # The three-backend pixel-parity contract: main_vulkan.fable's
-        # pins are byte-identical to main.fable's (OpenGL, the gl job) and
-        # main_metal.fable's (Metal, the gl-macos-metal job). Explicit
+        # The three-backend pixel-parity contract: main_vulkan.soc's
+        # pins are byte-identical to main.soc's (OpenGL, the gl job) and
+        # main_metal.soc's (Metal, the gl-macos-metal job). Explicit
         # files, not the directory — the GL and Metal twins can't render
         # in this job's environment. Xvfb from the gl,vulkan step is on
         # :99; lavapipe renders.
-        run: DISPLAY=:99 ./target/release/fable test demos/glcube/main_vulkan.fable demos/glcube/cube.fable demos/glcube/spec.fable
+        run: DISPLAY=:99 ./target/release/socrates test demos/glcube/main_vulkan.soc demos/glcube/cube.soc demos/glcube/spec.soc
       - name: Vulkan triangle (SPIR-V gfx draw calls, hard-asserted pixel)
         # The full gfx.* surface on the Vulkan backend: hand-assembled
         # SPIR-V shaders through gfx.compile_program_spirv, reflection-
@@ -405,7 +405,7 @@ jobs:
         # center-pixel assert — a wrong color panics the program (exit
         # 70), failing this step. Xvfb from the gl,vulkan step is on :99.
         run: |
-          out=$(DISPLAY=:99 ./target/release/fable docs/assets/vulkan_triangle.fable)
+          out=$(DISPLAY=:99 ./target/release/socrates docs/assets/vulkan_triangle.soc)
           echo "$out"
           test "$out" = "ok: vulkan triangle drawn, center=[255, 128, 64, 255]"
       - name: Vulkan window smoke (real WSI presentation, hard-asserted)
@@ -414,10 +414,10 @@ jobs:
         # exact ok line is asserted, so a silent fall-through to the err
         # branch fails the job. (Pixel-exactness of the presented clear is
         # asserted by window::x11::vulkan's XGetImage roundtrip unit test
-        # in the gl,vulkan test step above; this asserts the Fable-facing
+        # in the gl,vulkan test step above; this asserts the Socrates-facing
         # surface.) Xvfb from the gl,vulkan step above is still on :99.
         run: |
-          out=$(DISPLAY=:99 ./target/release/fable docs/assets/vulkan_window.fable)
+          out=$(DISPLAY=:99 ./target/release/socrates docs/assets/vulkan_window.soc)
           echo "$out"
           test "$out" = "ok: vulkan window presented 3 frames (backend=vulkan, 320x240)"
 
@@ -484,7 +484,7 @@ jobs:
         # the doubled bytes (a wrong result panics, exit 70).
         run: |
           cargo build --release --features opencl
-          out=$(./target/release/fable docs/assets/opencl_compute.fable)
+          out=$(./target/release/socrates docs/assets/opencl_compute.soc)
           echo "$out"
           test "$out" = "ok: [2, 0, 0, 0, 4, 0, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0, 10, 0, 0, 0, 12, 0, 0, 0, 14, 0, 0, 0, 200, 0, 0, 0]"
 
@@ -536,7 +536,7 @@ jobs:
         # which point this flips to asserting the ok bytes.
         run: |
           cargo build --release --features cuda
-          out=$(./target/release/fable docs/assets/cuda_compute.fable)
+          out=$(./target/release/socrates docs/assets/cuda_compute.soc)
           echo "$out"
           test "$out" = "err: gpu.run: no CUDA driver (libcuda) on this system"
 
@@ -585,12 +585,12 @@ jobs:
         shell: bash
         run: |
           cargo build --release --features d3d12
-          out=$(./target/release/fable.exe docs/assets/d3d12_compute.fable)
+          out=$(./target/release/socrates.exe docs/assets/d3d12_compute.soc)
           echo "$out"
           test "$out" = "ok: [2, 0, 0, 0, 4, 0, 0, 0, 6, 0, 0, 0, 8, 0, 0, 0, 10, 0, 0, 0, 12, 0, 0, 0, 14, 0, 0, 0, 200, 0, 0, 0]"
 
   demo-zoo:
-    # Proves the release's cross-compile + `fable build` stapling works on
+    # Proves the release's cross-compile + `socrates build` stapling works on
     # every non-native target before a release is ever cut (x86_64-linux is
     # covered by the `test` job's build smoke). For a target whose arch
     # matches the runner, a stapled demo is run and diffed against its source
@@ -639,8 +639,8 @@ jobs:
       - name: Staple + verify
         shell: bash
         run: |
-          host="target/release/fable${{ matrix.ext }}"
-          launcher="target/${{ matrix.target }}/release/fable${{ matrix.ext }}"
+          host="target/release/socrates${{ matrix.ext }}"
+          launcher="target/${{ matrix.target }}/release/socrates${{ matrix.ext }}"
           for demo in csvql parmandel; do
             "$host" build "demos/$demo" --launcher "$launcher" -o "${demo}${{ matrix.ext }}"
             test -s "${demo}${{ matrix.ext }}" || { echo "no binary produced for $demo" >&2; exit 1; }
@@ -650,7 +650,7 @@ jobs:
             # the source run byte-for-byte.
             for demo in csvql parmandel; do
               ( ./"${demo}${{ matrix.ext }}" ) > "${demo}.bin.out"
-              "$host" "demos/$demo/main.fable" > "${demo}.src.out"
+              "$host" "demos/$demo/main.soc" > "${demo}.src.out"
               diff "${demo}.src.out" "${demo}.bin.out"
             done
             echo "ran and matched source on ${{ matrix.label }}"
@@ -661,7 +661,7 @@ jobs:
   macos-singlefile:
     # macOS can't use the append trick (a payload past the Mach-O __LINKEDIT
     # fails codesign, and arm64 macOS won't run unsigned), so a single-file
-    # binary is built by linking the payload in as a `__DATA,__fablezoo`
+    # binary is built by linking the payload in as a `__DATA,__socrateszoo`
     # section (`ld -sectcreate`). This proves the whole chain on Apple Silicon:
     # emit the payload, link it in, sign, and run — matching the source run.
     name: macOS single-file demo (aarch64)
@@ -671,25 +671,25 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - name: Spec + demo golden suites on Apple Silicon
-        # demos/glcube/main.fable needs a live GL context (this job builds
+        # demos/glcube/main.soc needs a live GL context (this job builds
         # without --features gl) — see the `gl`/`gl-macos` jobs' own
         # exclusion of the same demo for the same reason.
         run: |
           shopt -s extglob
           cargo build --release
-          ./target/release/fable test tests/spec demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable > /dev/null
+          ./target/release/socrates test tests/spec demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc > /dev/null
       - name: Build, sign, and run a section-embedded demo binary
         run: |
-          host="target/release/fable"                       # payload emitter
+          host="target/release/socrates"                       # payload emitter
           for demo in csvql parmandel; do
             "$host" build "demos/$demo" --payload-only -o "$PWD/$demo.payload"
-            RUSTFLAGS="-Clink-arg=-Wl,-sectcreate,__DATA,__fablezoo,$PWD/$demo.payload" \
+            RUSTFLAGS="-Clink-arg=-Wl,-sectcreate,__DATA,__socrateszoo,$PWD/$demo.payload" \
               cargo build --release --target aarch64-apple-darwin
-            cp "target/aarch64-apple-darwin/release/fable" "./$demo-bin"
+            cp "target/aarch64-apple-darwin/release/socrates" "./$demo-bin"
             codesign --force --sign - "./$demo-bin"
             codesign --verify --strict "./$demo-bin"
             ( ./"$demo-bin" ) > "$demo.bin.out"
-            "$host" "demos/$demo/main.fable" > "$demo.src.out"
+            "$host" "demos/$demo/main.soc" > "$demo.src.out"
             diff "$demo.src.out" "$demo.bin.out"
           done
           echo "section-embedded macOS binaries sign, run, and match source"

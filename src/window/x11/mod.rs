@@ -2,7 +2,7 @@
 //! two coexisting rendering backends, OpenGL/GLX ([`gl`]) and Vulkan
 //! ([`vulkan`]), never replacing one with the other. The exact structural
 //! twin of `macos/mod.rs`'s GL/Metal dispatch (see the standing native-
-//! backend roadmap in `CLAUDE.md`: one backend-neutral Fable-facing
+//! backend roadmap in `CLAUDE.md`: one backend-neutral Socrates-facing
 //! surface, thin per-API backends over raw FFI).
 //!
 //! **Why an enum, not a single struct**: [`super::WindowHandle`]'s one
@@ -495,7 +495,7 @@ mod tests {
     /// build shape is deterministic — no panic paths.
     #[test]
     fn create_vulkan_opens_or_errs_cleanly() {
-        match super::Inner::create_vulkan("fable window test", 320, 240) {
+        match super::Inner::create_vulkan("socrates window test", 320, 240) {
             Ok(inner) => {
                 assert_eq!(inner.backend_name(), "vulkan");
                 inner.teardown();

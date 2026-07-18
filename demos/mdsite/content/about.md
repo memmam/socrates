@@ -1,12 +1,12 @@
 # About
 
-mdsite is a demo program for **Fable**, a statically-typed,
+mdsite is a demo program for **Socrates**, a statically-typed,
 garbage-collected scripting language. The generator is a few hundred
-lines of Fable, split into three modules:
+lines of Socrates, split into three modules:
 
-- `markdown.fable` — a line-based Markdown-to-HTML converter
-- `site.fable` — the page model, the HTML template, and the nav builder
-- `main.fable` — the driver: reads `content/`, writes `out/`, prints a report
+- `markdown.soc` — a line-based Markdown-to-HTML converter
+- `site.soc` — the page model, the HTML template, and the nav builder
+- `main.soc` — the driver: reads `content/`, writes `out/`, prints a report
 
 ## Supported Markdown
 
@@ -15,7 +15,7 @@ lines of Fable, split into three modules:
 - **bold**, *italic*, and `inline code`
 - [links](index.html), like this one back home
 - unordered lists (you are reading one)
-- fenced code blocks — see the [hello post](hello-fable.html)
+- fenced code blocks — see the [hello post](hello-socrates.html)
 
 ## Escaping
 

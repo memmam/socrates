@@ -1,0 +1,131 @@
+// dsp.soc — synthesis and rfft-side analysis for the chord analyzer.
+//
+// Everything here leans on one framing rule: a window is exactly one
+// second — n samples at a nominal n Hz — so bin k of the rfft is exactly
+// k Hz, and a chord built from integer frequencies has zero spectral
+// leakage. The pinned goldens are therefore derived integers (bin
+// indices, gcd-reduced ratios, bar heights) and to_fixed strings; raw
+// libm output is never printed.
+
+import std.lists;
+import std.set;
+import std.strings;
+
+// --- synthesis ---------------------------------------------------------------
+
+// One second of a sum of sinusoids. A partial is (freq_hz, amplitude).
+// The phase index (f * t) % n is reduced in exact integer arithmetic, so
+// every math.sin argument stays inside [0, 2*pi) no matter how high the
+// frequency or how long the window.
+pub fn synth(partials: List[(Int, Float)], n: Int) -> List[Float] {
+    let w = 2.0 * math.pi / n.to_float();
+    (0..n).map(|t| partials.fold(0.0, |s, p| s + p.1 * math.sin(w * (p.0 * t % n).to_float())))
+}
+
+// --- spectrum ----------------------------------------------------------------
+
+// Squared magnitude of every rfft bin (n/2 + 1 of them). Power, not
+// magnitude: comparisons need no sqrt.
+pub fn power_spectrum(x: List[Float]) -> List[Float] {
+    let (re, im) = fft.rfft(x);
+    re.zip(im).map(|p| p.0 * p.0 + p.1 * p.1)
+}
+
+// sort_by-convention comparator over (bin, power) pairs. std.lists.max_by
+// keeps the first winner on ties, so equal power resolves to the lower bin.
+pub fn by_power(a: (Int, Float), b: (Int, Float)) -> Int {
+    if a.1 < b.1 {
+        return -1;
+    }
+    if a.1 > b.1 {
+        return 1;
+    }
+    0
+}
+
+// The k strongest bins, strongest first, without sorting the whole
+// spectrum: k linear scans, marking picked bins in a std.set. Strict >
+// means a tie stays with the earlier (lower) bin — deterministic.
+pub fn top_k(power: List[Float], k: Int) -> List[(Int, Float)] {
+    let picked = set.new();
+    let out = [];
+    for _ in 0..k {
+        let mut bin = -1;
+        let mut best = -1.0;
+        for (i, p) in power.enumerate() {
+            if !picked.contains(i) && p > best {
+                bin = i;
+                best = p;
+            }
+        }
+        picked.insert(bin);
+        out.push((bin, best));
+    }
+    out
+}
+
+// --- interval ratios ---------------------------------------------------------
+
+pub fn gcd(a: Int, b: Int) -> Int {
+    let mut x = a;
+    let mut y = b;
+    while y != 0 {
+        let t = x % y;
+        x = y;
+        y = t;
+    }
+    x
+}
+
+// [240, 300, 360] -> [4, 5, 6]: the chord's shape with the tuning divided out.
+pub fn reduce_ratio(bins: List[Int]) -> List[Int] {
+    let g = bins.fold(0, gcd);
+    bins.map(|b| b / g)
+}
+
+// --- the ASCII spectrogram -----------------------------------------------------
+
+// Bars over buckets of 8 bins (peak magnitude per bucket), `rows` rows
+// tall, with a row label in the left margin (magnitude at that height)
+// and an Hz label under every 16th column. Assembled with a
+// strings.Builder — += in a loop would be O(n^2).
+pub fn spectrogram(power: List[Float], rows: Int) -> String {
+    let cols = (power.len() + 7) / 8;
+    let mags = (0..cols).map(|c| {
+        let mut best = 0.0;
+        let mut k = c * 8;
+        while k < power.len() && k < (c + 1) * 8 {
+            if power[k] > best {
+                best = power[k];
+            }
+            k += 1;
+        }
+        best.sqrt()
+    });
+    let peak = lists.max_float(mags).unwrap();
+    let heights = mags.map(|m| (rows.to_float() * m / peak).round().to_int());
+    let sb = strings.builder();
+    let mut r = rows;
+    while r >= 1 {
+        sb.push((peak * r.to_float() / rows.to_float()).to_fixed(1).pad_left(6, " "));
+        sb.push(" |");
+        for h in heights {
+            sb.push(if h >= r { "#" } else { " " });
+        }
+        sb.push("|\n");
+        r -= 1;
+    }
+    sb.push(" ".repeat(7));
+    sb.push("+");
+    sb.push("-".repeat(cols));
+    sb.push("+\n");
+    sb.push(" ".repeat(8));
+    let labels = strings.builder();
+    let mut c = 0;
+    while c < cols {
+        labels.push(str(c * 8).pad_right(16, " "));
+        c += 16;
+    }
+    sb.push(labels.build().trim_end());
+    sb.build()
+}

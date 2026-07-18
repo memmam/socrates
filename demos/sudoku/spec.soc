@@ -1,0 +1,144 @@
+// spec — golden tests for the sudoku demo's plumbing: the 9-bit mask kit,
+// parser validation, the unsolvable path (including trail unwinding), the
+// solver against a published ground-truth solution, and the independent
+// verifier.
+//
+//   ./target/release/socrates test demos/sudoku
+
+import board;
+import solver;
+
+fn err_of[T](r: Result[T, String]) -> String {
+    match r {
+        Ok(_) -> "(no error)",
+        Err(e) -> e,
+    }
+}
+
+// -- the 9-bit mask kit ------------------------------------------------------
+// Bit d-1 stands for digit d; "all nine digits" is 0b111111111 = 511.
+
+let bit_row = (1..=9).map(|d| str(board.digit_bit(d))).join(" ");
+println("full mask   : {board.full_mask} popcount={board.popcount(board.full_mask)}");
+println("digit bits  : {bit_row}");
+
+// digit_bit and lowest_digit are inverses across all nine digits, and an
+// empty mask has no bits. (Range.all landed in v0.8; the filter-for-
+// counterexamples spelling it replaced lives in git history.)
+let round_trip = (1..=9).all(|d| board.lowest_digit(board.digit_bit(d)) == d);
+println("round trip  : {round_trip} popcount(0)={board.popcount(0)}");
+
+// Set algebra is bitwise arithmetic: union |, intersection &, complement
+// within nine bits ^ full_mask.
+let evens = board.digit_bit(2) | board.digit_bit(4) | board.digit_bit(6) | board.digit_bit(8);
+let highs = 0b111110000; // digits 5..9
+let both = evens & highs;
+println(
+    "evens&highs : {board.digits_of(both)} complement={board.digits_of(both ^ board.full_mask)}",
+);
+
+// The precedence this demo leans on (Rust relative precedence): arithmetic
+// binds tighter than shifts, shifts tighter than `&`, and `==` looser than
+// all of them — so `1 << d - 1` shifts by d-1 and `m & 1 == 1` needs no
+// parens. `>>` is arithmetic (sign-extending), which a 9-bit mask never
+// notices; a full-width bitboard would.
+println("precedence  : 1 << 3 - 1 = {1 << 3 - 1}, 6 & 3 == 2 is {6 & 3 == 2}");
+println("arith shift : -4 >> 1 = {-4 >> 1}");
+
+// -- parser validation -------------------------------------------------------
+
+println("short input : {err_of(board.parse("12345"))}");
+println("stray char  : {err_of(board.parse("x" + ".".repeat(80)))}");
+println("clashing 5s : {err_of(board.parse("55" + ".".repeat(79)))}");
+
+// -- an unsolvable (but self-consistent) puzzle ------------------------------
+// Row 1 forces its last cell to 9, but column 9 already holds a 9, so the
+// very first propagation pass hits a contradiction. solve() must report
+// failure AND leave the board exactly as it found it (the trail unwinds).
+
+let unsolvable = "12345678." + ".".repeat(63) + "........9";
+let u = board.parse(unsolvable).unwrap();
+let before = u.flat();
+let st_u = solver.new_stats();
+let solved_u = solver.solve(u, st_u);
+println("unsolvable  : solved={solved_u} board_restored={u.flat() == before}");
+
+// -- ground truth --------------------------------------------------------------
+// The Inkala 2010 puzzle has a unique, published solution; the solver must
+// reproduce it exactly.
+
+let hard = "8........"
+    + "..36....."
+    + ".7..9.2.."
+    + ".5...7..."
+    + "....457.."
+    + "...1...3."
+    + "..1....68"
+    + "..85...1."
+    + ".9....4..";
+let known = "812753649943682175675491283154237896"
+    + "369845721287169534521974368438526917796318452";
+let inkala = board.parse(hard).unwrap();
+let st_h = solver.new_stats();
+let solved_h = solver.solve(inkala, st_h);
+println("inkala 2010 : solved={solved_h} matches_published={inkala.flat() == known}");
+
+// -- candidate elimination on a real grid --------------------------------------
+// r1c3 of the easy puzzle sees 5, 3, 7 in its row, 8 in its column, and
+// 5, 3, 6, 9, 8 in its box; the mask arithmetic must leave {1, 2, 4}.
+
+let easy = "53..7...."
+    + "6..195..."
+    + ".98....6."
+    + "8...6...3"
+    + "4..8.3..1"
+    + "7...2...6"
+    + ".6....28."
+    + "...419..5"
+    + "....8..79";
+let e = board.parse(easy).unwrap();
+println("cands r1c3  : {board.digits_of(e.candidates(0, 2))}");
+
+// -- propagation solves the easy puzzle on its own -----------------------------
+
+let st_e = solver.new_stats();
+let solved_e = solver.solve(e, st_e);
+println("easy        : solved={solved_e} guesses={st_e.guesses} backtracks={st_e.backtracks}");
+
+// -- the verifier really is independent ----------------------------------------
+// Stomp one solved (non-given) cell; verify must flag the duplicated digit.
+
+e.cells[2] = 5;
+println("verifier    : {err_of(board.verify(e, board.parse(easy).unwrap()))}");
+
+// -- panics stay contained ------------------------------------------------------
+// Reading off the board panics (index out of bounds); try() catches it.
+// lowest_digit on an empty mask panics too — also caught.
+
+match try(|| e.get(9, 0)) {
+    Ok(v) -> println("off-board   : returned {v}"),
+    Err(m) -> println("off-board   : caught panic: {m}"),
+}
+match try(|| board.lowest_digit(0)) {
+    Ok(v) -> println("empty mask  : returned {v}"),
+    Err(m) -> println("empty mask  : caught panic: {m}"),
+}
+
+// ---- golden output ----
+
+//? expect: full mask   : 511 popcount=9
+//? expect: digit bits  : 1 2 4 8 16 32 64 128 256
+//? expect: round trip  : true popcount(0)=0
+//? expect: evens&highs : [6, 8] complement=[1, 2, 3, 4, 5, 7, 9]
+//? expect: precedence  : 1 << 3 - 1 = 4, 6 & 3 == 2 is true
+//? expect: arith shift : -4 >> 1 = -2
+//? expect: short input : expected 81 cells, got 5
+//? expect: stray char  : cell 0: invalid character "x"
+//? expect: clashing 5s : given 5 at r1c2 clashes with another given
+//? expect: unsolvable  : solved=false board_restored=true
+//? expect: inkala 2010 : solved=true matches_published=true
+//? expect: cands r1c3  : [1, 2, 4]
+//? expect: easy        : solved=true guesses=0 backtracks=0
+//? expect: verifier    : row 1 is not a permutation of 1..9
+//? expect: off-board   : caught panic: list index out of bounds: index 81, length 81
+//? expect: empty mask  : caught panic: lowest_digit: empty mask

@@ -1,11 +1,11 @@
 # Under the Hood
 
-You don't need this chapter to write Fable. But if you've wondered what
-happens between saving a `.fable` file and seeing output — why a captured
+You don't need this chapter to write Socrates. But if you've wondered what
+happens between saving a `.soc` file and seeing output — why a captured
 variable outlives its scope, or when the garbage collector actually runs —
 this is the tour. Everything here was produced by running the real tools.
 
-Fable compiles to bytecode and runs it on a stack-based virtual machine —
+Socrates compiles to bytecode and runs it on a stack-based virtual machine —
 about 41,000 lines of dependency-free Rust in `src/`. This chapter describes
 it from the outside in; pointers into the source are at the end.
 
@@ -33,13 +33,13 @@ bytecode
 your output
 ```
 
-`fable check` stops after the checker; `fable dis` stops after the compiler
-and prints what it produced; `fable fmt` only needs tokens and the AST. The
+`socrates check` stops after the checker; `socrates dis` stops after the compiler
+and prints what it produced; `socrates fmt` only needs tokens and the AST. The
 REPL keeps all five stages alive across lines, compiling each entry
 incrementally into the same program.
 
 The first two stages have debugging dumps. Given the one-line program
-`let y = 3 * 4 + 1;`, `fable tokens pipe.fable` shows the lexer's view — a
+`let y = 3 * 4 + 1;`, `socrates tokens pipe.soc` shows the lexer's view — a
 flat list of tagged tokens with line:column positions:
 
 ```text
@@ -55,15 +55,15 @@ flat list of tagged tokens with line:column positions:
 2:1	Eof
 ```
 
-`fable ast pipe.fable` prints the parse tree — verbose, but every node in it
+`socrates ast pipe.soc` prints the parse tree — verbose, but every node in it
 carries a source span, which is how errors and stack traces later point at
 exact positions.
 
-## Reading bytecode with `fable dis`
+## Reading bytecode with `socrates dis`
 
 Here is a tiny program and its complete disassembly:
 
-```fable
+```soc
 let x = 3;
 let y = x * 4 + 1;
 println(y);
@@ -110,7 +110,7 @@ Things to notice:
 Closures capture variables *by reference*, and captured variables outlive
 their scope. The bytecode shows how. Recall the counter from chapter 3:
 
-```fable
+```soc
 fn make_counter() -> fn() -> Int {
     let mut n = 0;
     || {
@@ -164,7 +164,7 @@ from Lua:
 There is no magic `match` instruction. A `match` compiles into a chain of
 small tests with carefully bookkept jumps:
 
-```fable
+```soc
 fn describe(opt: Option[Int]) -> String {
     match opt {
         Some(n) -> "got {n}",
@@ -248,7 +248,7 @@ whole slot table, so a lower floor would make small working sets collect
 every few hundred allocations for no real memory back, while 4,096 slots of
 headroom costs a few hundred kilobytes at worst.
 
-The design question for any GC is *when is it safe to collect?* Fable's
+The design question for any GC is *when is it safe to collect?* Socrates's
 answer is a **checkpoint discipline**: allocating never collects. The VM
 offers the collector an opportunity only at checkpoints — points where every
 live object is reachable from a root (before an instruction pops its
@@ -256,9 +256,9 @@ operands, while a builtin's arguments are still on the stack). Between
 checkpoints, code allocates freely; a half-built object can never be swept
 out from under it.
 
-You can watch it work. `FABLE_GC_LOG=1` logs every collection to stderr:
+You can watch it work. `SOCRATES_GC_LOG=1` logs every collection to stderr:
 
-```fable
+```soc
 let mut survivors = [];
 for i in 0..10000 {
     let tmp = [i, i * 2, i * 3];   // becomes garbage each iteration
@@ -270,7 +270,7 @@ println(survivors.len());
 ```
 
 ```text
-$ FABLE_GC_LOG=1 fable gc.fable
+$ SOCRATES_GC_LOG=1 socrates gc.soc
 [gc] collected 4078 of 4096 objects (18 live, next at 4096)
 [gc] collected 4062 of 4096 objects (34 live, next at 4096)
 40
@@ -283,19 +283,19 @@ collector correctly refuses to touch — seventeen kept lists plus the
 `survivors` list itself at the first collection, thirty-three plus one at
 the second.
 
-`FABLE_GC_STRESS=1` turns *every* checkpoint into a collection — the
+`SOCRATES_GC_STRESS=1` turns *every* checkpoint into a collection — the
 harshest schedule possible. If any code path forgot to root a live object,
 stress mode makes it vanish at the worst moment; that's how the rooting
 discipline is tested (the whole test suite passes under it). On a tiny
 program:
 
-```fable
+```soc
 let words = ["once", "upon", "a", "time"];
 println(words.join(" "));
 ```
 
 ```text
-$ FABLE_GC_STRESS=1 FABLE_GC_LOG=1 fable stress.fable
+$ SOCRATES_GC_STRESS=1 SOCRATES_GC_LOG=1 socrates stress.soc
 [gc] collected 0 of 5 objects (5 live, next at 4096)
 [gc] collected 0 of 6 objects (6 live, next at 4096)
 once upon a time
@@ -309,7 +309,7 @@ A panic aborts the program with exit code 70, a message, and a stack trace.
 Traces are real: every compiled instruction remembers its source span, and
 every proto knows which file it came from.
 
-```fable panics
+```soc panics
 fn third(xs: List[Int]) -> Int {
     xs[2]
 }
@@ -325,24 +325,24 @@ println(summarize([10, 20]));
 ```text
 first=10 third=30
 panic: list index out of bounds: index 2, length 2
-  at third (trace.fable:2:5)
-  at summarize (trace.fable:6:27)
-  at <script> (trace.fable:10:9)
+  at third (trace.soc:2:5)
+  at summarize (trace.soc:6:27)
+  at <script> (trace.soc:10:9)
 ```
 
 Note the middle frame: the panic happened inside a string interpolation, and
 the trace points at the exact column of the `third(xs)` call. Builtins add
 no frames of their own — a lambda passed to `map` panics like this:
 
-```fable panics
+```soc panics
 let inverses = [4, 2, 0].map(|n| 100 / n);
 println(inverses);
 ```
 
 ```text
 panic: division by zero
-  at <lambda> (divide.fable:1:38)
-  at <script> (divide.fable:1:16)
+  at <lambda> (divide.soc:1:38)
+  at <script> (divide.soc:1:16)
 ```
 
 Deep recursion panics too (`panic: stack overflow`) rather than crashing;
@@ -353,7 +353,7 @@ function an accumulator, or reach for a loop.
 
 ## Performance
 
-Fable is a bytecode interpreter without a JIT; it's better to know where
+Socrates is a bytecode interpreter without a JIT; it's better to know where
 that ceiling is than to guess. The repo ships a micro-benchmark suite in
 `bench/` — one cost centre per file, each stating exactly what it measures
 in a `// Bench:` header — and `bench/run.sh` times every row against a
@@ -409,7 +409,7 @@ Some context for those numbers:
 For calibration rather than bragging: this is the performance class of
 non-JIT scripting-language interpreters — a couple of orders of magnitude
 from optimized native code, and enough to render the ray-traced scene in
-`examples/raytracer.fable` in about a second.
+`examples/raytracer.soc` in about a second.
 
 ## Where the code lives
 
@@ -423,7 +423,7 @@ read. Rough map, in pipeline order:
 | `src/check.rs` | type inference (local unification), name resolution, mutability |
 | `src/patterns.rs` | exhaustiveness and reachability (Maranget's usefulness algorithm) |
 | `src/compiler.rs` | AST → bytecode; the depth-tracked match compilation from this chapter |
-| `src/bytecode.rs` | the `Op` enum — every instruction you saw in `fable dis`, documented |
+| `src/bytecode.rs` | the `Op` enum — every instruction you saw in `socrates dis`, documented |
 | `src/vm.rs` | the dispatch loop, call frames, upvalues, GC checkpoints, stack traces |
 | `src/value.rs` | runtime values, heap objects, and the mark-sweep collector itself |
 | `src/natives.rs` | implementations of the ~250 builtin functions and methods |

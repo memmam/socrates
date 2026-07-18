@@ -1,0 +1,67 @@
+// zobrist — 64-bit position hashing for the threefold-repetition check
+// (v0.7: the bitwise operators arrived, so the hash is real bit-mixing
+// instead of a comma-joined string of cell codes).
+//
+// One key per (square, piece) pair plus one side-to-move key, filled from
+// a seeded xorshift64 stream. A position's hash is the xor of the keys of
+// its occupied squares; xor is its own inverse, so any single change to
+// the position flips the hash. The generator is written in Socrates itself —
+// pure `^`/`<<`/`ushr`, no multiplies, no additions — so the table (and
+// therefore the pinned game transcript) is stable across releases, unlike
+// `math.seed` streams.
+
+import board;
+
+// One step of Marsaglia's xorshift64 (shift triple 13/7/17). `<<` simply
+// discards bits pushed past the top, so no step here can overflow; the
+// right shift is the logical (zero-filling) `ushr` intrinsic, since `>>`
+// is arithmetic — the masked shift-then-mask construction this file once
+// carried lives in git history.
+pub fn step(s: Int) -> Int {
+    let mut x = s;
+    x = x ^ x << 13;
+    x = x ^ x.ushr(7);
+    x = x ^ x << 17;
+    x
+}
+
+// 257 keys: index (square * 4 + piece) for the 64 x 4 piece-square grid
+// (light squares never hold a piece, their keys just sit unused), and
+// keys[256] for "white to move".
+pub let keys: List[Int] = gen_keys();
+
+fn gen_keys() -> List[Int] {
+    let out: List[Int] = [];
+    let mut x = 88172645463325252; // Marsaglia's classic seed
+    for _ in 0..257 {
+        x = step(x);
+        out.push(x);
+    }
+    out
+}
+
+fn piece_index(p: Int) -> Int {
+    match p {
+        1 -> 0, // black man
+        2 -> 1, // black king
+        -1 -> 2, // white man
+        _ -> 3, // white king
+    }
+}
+
+// Hash of a position with `side` to move. Full scan of the 32 playable
+// squares — the game loop hashes once per ply, so there is no need to
+// maintain the hash incrementally through apply/undo.
+pub fn hash(b: board.Board, side: Int) -> Int {
+    let mut h = 0;
+    for sq in board.squares {
+        let p = b.at(sq);
+        if p != 0 {
+            h = h ^ keys[sq * 4 + piece_index(p)];
+        }
+    }
+    if side == board.white {
+        h = h ^ keys[256];
+    }
+    h
+}

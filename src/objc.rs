@@ -16,7 +16,7 @@
 //! SDK at all — so plain `objc_msgSend`, correctly `transmute`d per call
 //! shape, is the *only* path and there is no split to get wrong. This
 //! matches the release matrix (`aarch64-apple-darwin` is the only macOS
-//! target `fable build` staples for), so nothing is lost by declining
+//! target `socrates build` staples for), so nothing is lost by declining
 //! x86_64.
 //!
 //! **`objc_msgSend` dispatch**: Rust has no variadic FFI, so there is no

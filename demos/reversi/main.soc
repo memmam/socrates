@@ -1,0 +1,226 @@
+// reversi — Othello played against itself on Int bitboards. Both sides
+// are the same greedy engine: take the legal move that flips the most
+// discs, breaking ties toward the lowest square index (a1 = 0), so the
+// whole game is a pure function of the rules and fully deterministic —
+// the transcript below is pinned move for move.
+//
+//   ./target/release/socrates demos/reversi/main.soc
+
+import std.lists;
+import bits;
+import board;
+
+println("reversi self-play — greedy max-flips, lowest-square tie-break");
+println("X black, O white, + legal moves for the side to move");
+println("");
+
+let (b0, w0) = board.initial(); // no `mut` in tuple patterns — rebind below
+let mut black = b0;
+let mut white = w0;
+let mut black_to_move = true;
+let mut moves_made = 0;
+let mut passes = 0;
+let mut board_shown_at = 0;
+let flip_counts: List[Int] = [];
+
+println(board.render(black, white, board.legal_moves(black, white)));
+println("");
+
+while passes < 2 {
+    let own = if black_to_move { black } else { white };
+    let opp = if black_to_move { white } else { black };
+    let side = if black_to_move { "black" } else { "white" };
+    let mvs = board.legal_moves(own, opp);
+    if mvs == 0 {
+        println("     {side} passes");
+        passes += 1;
+        black_to_move = !black_to_move;
+        continue;
+    }
+    passes = 0;
+
+    // Candidates come out of the bitboard in ascending square order, and
+    // lists.max_by_key keeps the FIRST winner on ties — together that is
+    // the whole tie-break rule.
+    let cands = bits.squares(mvs).map(|sq| {
+        (sq, bits.popcount(board.flips(own, opp, bits.bit(sq))))
+    });
+    let (sq, fc) = lists.max_by_key(cands, |a| a.1).unwrap();
+
+    let (own2, opp2) = board.apply(own, opp, sq);
+    if black_to_move {
+        black = own2;
+        white = opp2;
+    } else {
+        white = own2;
+        black = opp2;
+    }
+    moves_made += 1;
+    flip_counts.push(fc);
+    black_to_move = !black_to_move;
+
+    let line = "{str(moves_made).pad_left(3, " ")}. {side} {board.square_name(sq)}";
+    println("{line}  flips {str(fc).pad_left(2, " ")}  score {bits.popcount(black)}-{bits.popcount(white)}");
+
+    if moves_made % 12 == 0 {
+        let next = if black_to_move {
+            board.legal_moves(black, white)
+        } else {
+            board.legal_moves(white, black)
+        };
+        println("");
+        println(board.render(black, white, next));
+        println("");
+        board_shown_at = moves_made;
+    }
+}
+
+if board_shown_at != moves_made {
+    println("");
+    println(board.render(black, white, 0));
+    println("");
+}
+
+let pb = bits.popcount(black);
+let pw = bits.popcount(white);
+let verdict = if pb > pw {
+    "black wins"
+} else if pw > pb { "white wins" } else { "draw" };
+println("final score:  black {pb}, white {pw} — {verdict}");
+println("flip totals:  {lists.sum(flip_counts)} discs over {moves_made} moves; best single move flipped {lists.max(flip_counts).unwrap()}");
+println("empty left:   {bits.popcount((black | white) ^ -1)}");
+
+// ---- pinned full-game transcript (regenerate by running this file) ----
+//? expect: reversi self-play — greedy max-flips, lowest-square tie-break
+//? expect: X black, O white, + legal moves for the side to move
+//? expect:
+//? expect:   8 . . . . . . . .
+//? expect:   7 . . . . . . . .
+//? expect:   6 . . . . + . . .
+//? expect:   5 . . . X O + . .
+//? expect:   4 . . + O X . . .
+//? expect:   3 . . . + . . . .
+//? expect:   2 . . . . . . . .
+//? expect:   1 . . . . . . . .
+//? expect:     a b c d e f g h
+//? expect:
+//? expect:   1. black d3  flips  1  score 4-1
+//? expect:   2. white c3  flips  1  score 3-3
+//? expect:   3. black b3  flips  1  score 5-2
+//? expect:   4. white b2  flips  1  score 4-4
+//? expect:   5. black b1  flips  1  score 6-3
+//? expect:   6. white e3  flips  2  score 4-6
+//? expect:   7. black f3  flips  4  score 9-2
+//? expect:   8. white a1  flips  2  score 7-5
+//? expect:   9. black c4  flips  1  score 9-4
+//? expect:  10. white g3  flips  3  score 6-8
+//? expect:  11. black h3  flips  5  score 12-3
+//? expect:  12. white e2  flips  2  score 10-6
+//? expect:
+//? expect:   8 . . . . . . . .
+//? expect:   7 . . . . . . . .
+//? expect:   6 . . . . . + . .
+//? expect:   5 . . . X O + . .
+//? expect:   4 . . X X O + . .
+//? expect:   3 . X X X O X X X
+//? expect:   2 . O . . O + . .
+//? expect:   1 O X . + . + . .
+//? expect:     a b c d e f g h
+//? expect:
+//? expect:  13. black f5  flips  2  score 13-4
+//? expect:  14. white a3  flips  3  score 10-8
+//? expect:  15. black e1  flips  2  score 13-6
+//? expect:  16. white d6  flips  2  score 11-9
+//? expect:  17. black c2  flips  2  score 14-7
+//? expect:  18. white d2  flips  2  score 12-10
+//? expect:  19. black a2  flips  4  score 17-6
+//? expect:  20. white c1  flips  2  score 15-9
+//? expect:  21. black d7  flips  4  score 20-5
+//? expect:  22. white g6  flips  4  score 16-10
+//? expect:  23. black d1  flips  1  score 18-9
+//? expect:  24. white c5  flips  5  score 13-15
+//? expect:
+//? expect:   8 . . . . . . . .
+//? expect:   7 . . . X . . . .
+//? expect:   6 . + + X + + O .
+//? expect:   5 . + O O O O . .
+//? expect:   4 + + O X O + . .
+//? expect:   3 O X O O X X X X
+//? expect:   2 X O O X X . . .
+//? expect:   1 O O O X X . . .
+//? expect:     a b c d e f g h
+//? expect:
+//? expect:  25. black e6  flips  4  score 18-11
+//? expect:  26. white f2  flips  4  score 14-16
+//? expect:  27. black g2  flips  5  score 20-11
+//? expect:  28. white e7  flips  4  score 16-16
+//? expect:  29. black e8  flips  5  score 22-11
+//? expect:  30. white f4  flips  4  score 18-16
+//? expect:  31. black f6  flips  5  score 24-11
+//? expect:  32. white h2  flips  6  score 18-18
+//? expect:  33. black f1  flips  4  score 23-14
+//? expect:  34. white g1  flips  5  score 18-20
+//? expect:  35. black h1  flips  2  score 21-18
+//? expect:  36. white b4  flips  5  score 16-24
+//? expect:
+//? expect:   8 . . . . X . . .
+//? expect:   7 . . + X X . . +
+//? expect:   6 . . + O X X O +
+//? expect:   5 . + O X O X . .
+//? expect:   4 + O O O O O + .
+//? expect:   3 O O O X O X O X
+//? expect:   2 X O X O X O X X
+//? expect:   1 O O O O O O O X
+//? expect:     a b c d e f g h
+//? expect:
+//? expect:  37. black c6  flips  4  score 21-20
+//? expect:  38. white c7  flips  6  score 15-27
+//? expect:  39. black b8  flips  5  score 21-22
+//? expect:  40. white f7  flips  6  score 15-29
+//? expect:  41. black g8  flips  5  score 21-24
+//? expect:  42. white d8  flips  4  score 17-29
+//? expect:  43. black g4  flips  5  score 23-24
+//? expect:  44. white h4  flips  6  score 17-31
+//? expect:  45. black b5  flips  6  score 24-25
+//? expect:  46. white c8  flips  7  score 17-33
+//? expect:  47. black b7  flips  4  score 22-29
+//? expect:  48. white b6  flips  5  score 17-35
+//? expect:
+//? expect:   8 . X O O X . X .
+//? expect:   7 . X O X X X + +
+//? expect:   6 + O O O O O O .
+//? expect:   5 + O O X X O + +
+//? expect:   4 + O O O O O O O
+//? expect:   3 O O O X O X O X
+//? expect:   2 X O O O X O X X
+//? expect:   1 O O O O O O O X
+//? expect:     a b c d e f g h
+//? expect:
+//? expect:  49. black g5  flips  4  score 22-31
+//? expect:  50. white h5  flips  7  score 15-39
+//? expect:  51. black a6  flips  6  score 22-33
+//? expect:  52. white f8  flips  5  score 17-39
+//? expect:  53. black g7  flips  5  score 23-34
+//? expect:  54. white h7  flips  5  score 18-40
+//? expect:  55. black h6  flips  4  score 23-36
+//? expect:  56. white a8  flips  3  score 20-40
+//? expect:  57. black a4  flips  2  score 23-38
+//? expect:  58. white a5  flips  6  score 17-45
+//? expect:  59. black h8  flips  2  score 20-43
+//? expect:  60. white a7  flips  1  score 19-45
+//? expect:
+//? expect:   8 O O O O O O X X
+//? expect:   7 O O O O O O X X
+//? expect:   6 O O O O X X X X
+//? expect:   5 O O O O O O X X
+//? expect:   4 O O X O O O X X
+//? expect:   3 O O O X O O X X
+//? expect:   2 O O O O O O X X
+//? expect:   1 O O O O O O O X
+//? expect:     a b c d e f g h
+//? expect:
+//? expect:      black passes
+//? expect:      white passes
+//? expect: final score:  black 19, white 45 — white wins
+//? expect: flip totals:  223 discs over 60 moves; best single move flipped 7
+//? expect: empty left:   0
