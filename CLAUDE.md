@@ -86,7 +86,14 @@ their place fastest.
   build.rs-emitted cfg names the binding; `monolithic_dispatch` is the
   first instance — vm.rs's dispatch-arm bodies outline into the compact
   loop everywhere except aarch64-linux, which measured the monolith
-  faster and inlines them back).
+  faster and inlines them back). And the search for that per-target
+  idiom can itself terminate at the uniform form: when every
+  finer-grained binding measures worse — probe evidence showing the
+  implicated piece is load-bearing elsewhere on the same target — the
+  uniform form stands as that target's measured-fastest, and the
+  residual row is recorded with the probe receipts in
+  `bench/RESULTS.md`, never waived silently (the superinstruction
+  wave's aarch64-macos for_range row is the first instance).
 - **This applies to whole backend implementations, not just algorithmic
   idioms** — but the trigger is the *platform* actually dropping the older
   path, not merely deprecating it. When a newer backend for the same
