@@ -27,7 +27,11 @@ independent demo authors, a ranked list of every wall they hit — worked
 through directly. And folded in before this release was ever published:
 the minification and consistency passes — the four-arch interleaved
 Bench A/B gate, the compact dispatch loop with per-target binding, the
-math namespace minified to what only it provides, and a consistency
+math namespace minified to what only it provides, a native `List.sum()`
+(bench_lists −55..−59% on every release architecture, `lists.sum` now
+its one-line wrapper), four VM superinstructions fused from a dynamic
+pair profile of 2.5 billion dispatches (dispatch-heavy rows −4..−12%
+across the matrix), and a consistency
 sweep that makes every claim in the tree (SPEC, ports, bench harness,
 core docs, demo style) match what CI actually enforces.
 
@@ -67,7 +71,7 @@ Highlights of v0.8 over v0.7 (full list in
   module, ergonomic `std.json` construction, `strings.Builder` ergonomics,
   and `socrates test --bless`.
 
-Everything observable is pinned: 311 golden spec tests, 135 executed book
+Everything observable is pinned: 313 golden spec tests, 135 executed book
 snippets, and 73 demo golden tests, the whole suite green under
 `SOCRATES_GC_STRESS=1` — and the graphics backends are pinned with real
 pixels, in CI, on plain runners (lavapipe for Vulkan, Xvfb for GL, macOS
