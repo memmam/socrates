@@ -182,6 +182,18 @@ its first A/A is the audit-batch matrix run that introduced it — and
 inherits the aarch64-macos label when macos-14 is actually removed
 (2026-11-02).
 
+**aarch64-macos-15's first A/A** (identical binaries both sides, the
+audit-batch-1 run that introduced the leg): macros dead flat (checkers
+−0.5%, lisp +0.5%) — consistent with macos-14's own macro behavior.
+Small rows showed the same per-job modulation signature macos-14 has,
+but *wider* on this first sample: map_ops −8.8%, bench_display +5.5%,
+bench_lists −6.4%, method_dispatch +5.0%, bench_join_heavy −3.2%,
+bench_env_maps −3.0% — every one an A/A mark (identical source both
+sides), so all of it is noise by construction, not a real macos-15
+cost. One sample is not enough to characterize the leg's noise
+envelope relative to macos-14's — this is the opening data point, not
+a conclusion. Accumulate on future matrix runs against this leg.
+
 Two instrument facts worth keeping: release builds are deterministic
 (bit-identical across checkouts) only when the checkout paths have
 equal length — embedded path lengths shift layout, which is why

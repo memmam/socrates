@@ -29,7 +29,12 @@ every such divergence.
   through `sed 's/^/\/\/? expect: /'` (strip trailing whitespace),
   append, re-run `socrates test`. Never hand-transcribe a transcript
   (`spectra`, `reversi`, `swarm`). Verify expected values against an
-  independent reference *before* pinning.
+  independent reference *before* pinning. For an existing pin that's
+  merely drifted — the line count of actual vs. expected already
+  agrees, only the values changed — `socrates test --bless` rewrites
+  the mismatched `//? expect:` lines in place; reach for the sed
+  pipeline only when generating a pin block from scratch or when the
+  line count itself needs to change.
 - **Deliberate panics get their own tiny file** — a panic ends the run,
   so nothing after it prints. Pin extra contract checks in the main file
   through `try(|| ...)` with the message as a normal expect line

@@ -248,8 +248,11 @@ Performance claims are only real if the interleaved cross-binary A/B
 reproduces them: `python3 bench/ab.py <base-tree> <head-tree>` locally
 (each side a full checkout with its own release binary; ab.py enforces
 per-rep and cross-side stdout checksums, so a wrong-answer "optimization"
-fails instead of winning), and the four-arch Bench A/B workflow — push the
-candidate as a `bench/<name>` branch — for the acceptance verdict, per the
+fails instead of winning — and warns if the two checkout paths are
+unequal length, since that alone shifts binary layout; use equal-length
+directory names, e.g. `base/` and `head/`), and the four-arch Bench A/B
+workflow — push the candidate as a `bench/<name>` branch — for the
+acceptance verdict, per the
 universality principle: flat-or-better on every tier-1 architecture.
 `bench/run.sh [N]` is single-binary sequential profiling convenience
 (where does one binary spend its time?), not the gate. Method and standing
@@ -467,7 +470,13 @@ numbers: `bench/RESULTS.md`.
     `claude/*`) performs the deletions when the change lands on main.
   - A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
-  - Never run bare `cargo fmt`.
+  - Never run bare `cargo fmt` — the tree has never been through it,
+    so `cargo fmt --check` diffs every `.rs` file, not a targeted few
+    (measured 2026-07-18: hundreds of hunks across the whole tree —
+    run `cargo fmt --check | grep -c '^Diff in'` for today's figure
+    rather than trusting a number written down here, since it drifts
+    as the tree grows; the point is that it's whole-tree, not the
+    exact count).
   - The model identifier appears in no pushed artifact — chat only
     (this restates the hosted-environment policy so the rule survives
     outside it).

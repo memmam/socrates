@@ -66,6 +66,11 @@ the bug in minutes via each implementation's `probe` mode.
 
 ## Ports
 
-| Port | Source | Status |
-|------|--------|--------|
-| [`icaa/`](icaa/) | [SkyeShark/icaa-antialiasing](https://github.com/SkyeShark/icaa-antialiasing) — ICAA, a novel single-frame post-process anti-aliasing (three.js TSL/WebGPU node), MIT | see `icaa/README.md` |
+This table lists every port under `ports/` — a port that isn't here is
+missing from the record, not from the tree; add the row in the same PR
+that adds the port.
+
+| Port | Source | Layer | Status |
+|------|--------|-------|--------|
+| [`icaa/`](icaa/) | [SkyeShark/icaa-antialiasing](https://github.com/SkyeShark/icaa-antialiasing) — ICAA, a novel single-frame post-process anti-aliasing (three.js TSL/WebGPU node), MIT | `jsl/` | see `icaa/README.md` |
+| [`claudewave/`](claudewave/) | [SkyeShark/claudewave](https://github.com/SkyeShark/claudewave) — the DSP core (`lib/`) of a vaporwave/citypop remix toolkit: synth voices, drums, tape/vinyl treatments, ambience, an 18-band channel vocoder, MIT | `pyl/` | see `claudewave/README.md` |

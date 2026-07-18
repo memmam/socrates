@@ -240,6 +240,18 @@ def main():
         if not os.path.exists(exe):
             sys.exit(f"{side} binary missing: {exe} (build both sides first)")
 
+    # Embedded checkout-path length shifts binary layout (see
+    # bench/RESULTS.md's instrument facts) — an unequal-length base/head
+    # pair is not wrong, but any resulting delta is confounded with a
+    # path-length effect, not just the code change under test.
+    if len(os.path.abspath(opts.base)) != len(os.path.abspath(opts.head)):
+        print(
+            f"warning: base ({opts.base!r}) and head ({opts.head!r}) "
+            "checkout paths differ in length — layout is not fair; "
+            "use equal-length directory names (e.g. base/ and head/)",
+            file=sys.stderr,
+        )
+
     filt = [t for t in opts.targets.split(",") if t]
     rows = []  # (name, base_s, head_s, delta_pct, note)
     for name, args, kind in targets_for(opts.base, opts.head, filt):
