@@ -94,6 +94,20 @@ their place fastest.
   residual row is recorded with the probe receipts in
   `bench/RESULTS.md`, never waived silently (the superinstruction
   wave's aarch64-macos for_range row is the first instance).
+- **A verdict needs ≥5 samples, no exception, before it is final** —
+  whether that's a macOS CI-matrix mark being convicted or dismissed,
+  or a local single-box probe's keep/drop call. (Raised 2026-07-18 from
+  a ≥3 macOS floor that carried a same-decision escape hatch down to
+  two samples; the escape hatch is what let a real mark get dismissed
+  on 1-of-2 — the W2 enum_match errata in `bench/RESULTS.md` is the
+  recorded instance — and no floor at all existed for local probes,
+  which had informally run on two samples every time. Fewer than 5
+  samples is an inconclusive result, not a negative one; it does not
+  license a DROP or a dismissal, only more sampling.) The full
+  protocol, case law, and the revalidation notes on verdicts that
+  predate this floor live in `bench/RESULTS.md` — this is the one
+  other file that states the number, per the intent-tracking
+  principle's scope-recording discipline.
 - **This applies to whole backend implementations, not just algorithmic
   idioms** — but the trigger is the *platform* actually dropping the older
   path, not merely deprecating it. When a newer backend for the same

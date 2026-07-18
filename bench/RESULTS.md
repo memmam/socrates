@@ -124,11 +124,13 @@ rows only):
 | aarch64-linux  | none                                | enum_match +4.5% (systematic, below) |
 
 (Errata, macOS lisp +5.1%: the dismissal rests on two samples — the
-mark appeared in one and was absent in the other — which is formally
+mark appeared in one and was absent in the other — which was formally
 below the ≥3-run majority this file's own macOS measurement protocol
-demands. It is retained as an observation, not an adjudicated verdict;
-no third sample was taken because H1 shipped on the strength of the
-other three architectures plus macOS's 18 reproduced improvements.)
+demanded at the time, and is further below the ≥5-run floor the
+protocol demands now (raised 2026-07-18). It is retained as an
+observation, not an adjudicated verdict; no additional sample was taken
+because H1 shipped on the strength of the other three architectures
+plus macOS's 18 reproduced improvements.)
 
 The robustness proof: re-applying the same variant removal on top of H1
 and judging against H1 itself (a `bench/BASE` probe) is flat on **all
@@ -164,23 +166,35 @@ per-job biased: an A/A run (identical trees both sides; a
 Compare-binaries step proved the two independent builds bit-identical)
 measures flat, and large deltas reproduce within ±1% across runs — yet
 small (≲6%) layout-dependent deltas flip sign between jobs on the same
-binary pair. Judge macOS marked rows by majority across ≥3 runs, never
-one sample. Case law from the superinstruction wave: a mark that holds
-direction at consistent magnitude across all three samples is convicted
-even on macOS (for_range +4.5/+4.5/+3.9 — beyond anything the
+binary pair. **Judge macOS marked rows by majority across ≥5 runs,
+never fewer — no exception.** (Raised from ≥3, 2026-07-18: the ≥3
+floor with a same-decision escape hatch down to two samples is what let
+the W2 enum_match dismissal below adjudicate on 1-of-2; the escape
+hatch is removed along with the floor increase.) Case law from the
+superinstruction wave: a mark that holds direction at consistent
+magnitude across all three samples it was actually convicted on is
+strong evidence (for_range +4.5/+4.5/+3.9 — beyond anything the
 modulation ever sustained; distinguish it from the modulation
-signature, the H1-era map_ops +6.2/+5.5 → −8.3 flip). And a probe A/B
-may conclude on two samples when its decision does not hinge on
-convicting any contested row — the no-GLC probe's verdict rested on the
-for_range recovery being sub-floor twice plus reproducible costs on the
-fusion's own rows, so a third sample could not have changed the
-outcome. This whole characterization is a property of the macos-14
-image bench.yml pins: re-run the A/A characterization whenever the
-macOS runner image changes. The aarch64-macos-15 leg (added 2026-07-18
-under the deprecated-is-not-discontinued rule) starts its own record —
-its first A/A is the audit-batch matrix run that introduced it — and
-inherits the aarch64-macos label when macos-14 is actually removed
-(2026-11-02).
+signature, the H1-era map_ops +6.2/+5.5 → −8.3 flip) but the floor at
+the time of that conviction was ≥3, one short of the current bar — see
+the revalidation note under H3, below. This whole characterization is a
+property of the macos-14 image bench.yml pins: re-run the A/A
+characterization whenever the macOS runner image changes. The
+aarch64-macos-15 leg (added 2026-07-18 under the deprecated-is-not-
+discontinued rule) starts its own record — its first A/A is the
+audit-batch matrix run that introduced it — and inherits the
+aarch64-macos label when macos-14 is actually removed (2026-11-02).
+
+**Local single-box probes (the H2/H3-style pre-matrix gate) carry the
+same ≥5-sample floor before any keep/drop call**, no exception for an
+apparently-clean or apparently-dead result — this closes the second
+half of the same gap: the floor above was written for the CI matrix
+only, but every local probe this project has run (W1a's local check,
+H2, H3, and the post-H1/H3 re-examination probes) used two samples
+informally, with no floor stated anywhere. Two samples is now
+insufficient for any keep/drop verdict, full stop; a probe that only
+gathered two samples before this rule lands has an inconclusive, not
+negative, result — see the revalidation note under H2, below.
 
 Two instrument facts worth keeping: release builds are deterministic
 (bit-identical across checkouts) only when the checkout paths have
@@ -214,6 +228,18 @@ one) dismissed both as layout/runner noise. The extra samples were
 obtained by pushing empty commits to the bench branch — the bot
 account's API calls to workflow_dispatch and re-run return 403, so
 "push again" is the sampling mechanism.
+
+(Errata, aarch64-macos enum_match +3.4%: this dismissal rested on
+1-of-2 samples — the mark appeared in sample 1 and was absent in sample
+2 — which was already below the ≥3-run majority the protocol demanded
+at the time, and is further below the ≥5-run floor the protocol demands
+now. Same template as the H1 lisp+5.1% errata above: retained as an
+observation, not an adjudicated verdict. No re-fire is queued — W2's
+merge rested on bench_json's win reproducing in 7 of 7 read job-samples
+across all four arches, not on this row, so the mis-adjudication did
+not change the outcome; it is recorded here because it is the concrete
+instance that motivated tightening the floor, not because the verdict
+is in doubt.)
 
 ## Epoch: the bench re-specification (consistency pass)
 
@@ -341,6 +367,19 @@ receipt that the binding remedy was tried, not skipped. Do not re-open
 without new evidence (a new fusion set, a toolchain change, or an
 M-series microarchitectural insight would qualify).
 
+(Revalidation note, 2026-07-18: this residual was convicted on 3
+samples (direction 3/3, magnitude 3.9–4.5%) under the ≥3-run floor in
+force at the time; the floor is now ≥5. Two backfill samples were
+fired on the still-live `bench/h3-superinstructions` branch to bring
+this to 5 without re-opening the merged decision — see the result
+folded in immediately below if present, or the pending note if not yet
+read. The no-GLC probe (two samples, cited above) is a mechanism
+diagnostic that fed this closed decision, not a live shippable claim in
+its own right; it is grandfathered rather than re-fired — re-running a
+probe whose only role was confirming *why* a shipped residual exists
+would spend CI time without being able to change anything now
+mergeable.)
+
 ## Negative results (measured, rejected — do not re-attempt without new evidence)
 
 - GC `next_gc` pacing `(live*2).max(4096)` is already the local optimum in
@@ -378,6 +417,17 @@ M-series microarchitectural insight would qualify).
   the full implementation (gauntlet-green, goldens byte-identical)
   is archived on branch `archive/h2-small-list` as the starting point.
   Sightings so far: none beyond bench_list_churn itself.
+  (Revalidation note, 2026-07-18: the local A/B behind this DROP used
+  two samples — checkers −0.2%/−0.1%, list_churn −7.3%/−7.8%, display
+  +8.2%/+4.5% — under the pre-floor informal practice; the local-probe
+  floor is now ≥5. Per the new-inconclusive-not-negative rule this
+  entry's data is short of the bar, though the direction (checkers
+  flat, list_churn/display both moving the same way twice) is
+  consistent enough that a fresh 5-sample local A/B is unlikely to
+  overturn the qualitative read. Not re-fired proactively — no code
+  changed since, and the watch mechanism already exists to catch a
+  reason to look again; a fresh probe is warranted if and when a
+  sighting is actually logged here, not preemptively.)
 
 ## Known headroom (identified, not yet taken)
 
