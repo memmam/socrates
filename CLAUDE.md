@@ -132,7 +132,11 @@ their place fastest.
   one whose purpose is implied silently drifts. Recorded rationale is
   evidence, not authority — it is correctable by outside intervention
   when a conclusion proves historically wrong, and superseding it means
-  recording the correction, not deleting the record. Standing instances:
+  recording the correction, not deleting the record. And record
+  decisions with their *scope* — what exactly was approved, no wider:
+  an overbroad memory of a narrow decision is how conventions drift
+  (the footer incident began as "trailers accepted in commits"
+  remembered as "footers accepted"). Standing instances:
   the bench files' `// Bench:` measurand headers and `bench/RESULTS.md`'s
   epoch bridge; the demos' deliberate-divergence comments; the ports'
   READMEs describing exactly what CI enforces; and RESULTS.md's
@@ -406,6 +410,32 @@ numbers: `bench/RESULTS.md`.
   their content, full stop — do not append, edit, or restyle any
   footer beyond what the tooling adds on its own. Commit-message
   trailers are a different channel and unaffected.
+- **Session mechanics — durable on purpose.** Rules that lived only in
+  session memory kept getting dropped between sessions (session ledgers
+  die with their containers), so they live here now; a session ledger
+  may carry working copies, but this list is the source. Where a rule
+  touches a hosted-tooling default, it is written to *compose with*
+  the default rather than fight it — fighting defaults is how the
+  triple-footer happened. The rules:
+  - Every git-mutating shell command opens
+    `cd <dir> && pwd && git branch --show-current` — the
+    wrong-checkout commits are the recorded incidents.
+  - If a session ever holds more than one clone of the repo
+    (post-rename re-registration is how it first happened), the
+    harness-served clone is pulled after every CLAUDE.md-touching
+    merge until the checkouts are consolidated.
+  - Branches are never deleted — merged, archival, and `bench/*`
+    branches all stay.
+  - A merge the user performs in the GitHub UI is a final outcome,
+    never something to re-adjudicate.
+  - Never run bare `cargo fmt`.
+  - The model identifier appears in no pushed artifact — chat only
+    (this restates the hosted-environment policy so the rule survives
+    outside it).
+  - Decision forks go to the user as plain-text lettered options, not
+    interactive question UI.
+  - Long CI waits are handled by scheduled self check-ins, never
+    polling loops.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,
