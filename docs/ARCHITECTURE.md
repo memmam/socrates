@@ -132,8 +132,29 @@ never move. Each chunk gets its own entry proto.
 
 ## Execution (`vm.rs`, `value.rs`, `natives.rs`)
 
-`Vm::run` is a plain `match`-dispatch loop over `Op`. Values are 16-byte
-tagged immediates (`Unit`/`Bool`/`Int`/`Float`/`Native`/`Obj(handle)`);
+`Vm::run` is a `match`-dispatch loop over `Op`, kept deliberately
+*compact*: frequent, small arms stay inline, while bulky or rare op
+bodies (`SetUpvalue`, `Closure`, `ToString`, `Concat`, `MakeMap`,
+`MakeRange`, `MakeStructEmpty`, `ForPrep`, `ForNext`) are outlined into
+methods marked `#[inline(never)]`, and `GetGlobal`'s
+uninitialized-global error construction sits behind a `#[cold]` factory.
+With `lto = true` and `codegen-units = 1`, a large `run()` amplified any
+edit anywhere into whole-program layout shifts and measurable dispatch
+swings (the codegen lottery — see `bench/RESULTS.md`, "The dispatch
+restructure"); outlining keeps the hot loop's machine code small and
+killed the effect. The exception is aarch64-linux, where the compact
+loop measured a reproducible enum_match cost: there a `build.rs`-emitted
+`monolithic_dispatch` cfg flips the same bodies to `#[inline(always)]`,
+folding the monolith back together — the op bodies live once in vm.rs,
+and each target binds its measured-fastest form. (`build.rs`'s only
+other output is macOS-specific: a `-Wl,-stack_size,0x20000000` link arg
+sizing the main thread's stack, since AppKit forces the interpreter onto
+the real main thread there; it is emitted as `cargo:rustc-link-arg-bins`
+so it composes with the `RUSTFLAGS` CI sets on macOS instead of being
+replaced by them.)
+
+Values are 16-byte tagged immediates
+(`Unit`/`Bool`/`Int`/`Float`/`Native`/`Obj(handle)`);
 compounds live on the heap behind `u32` handles into a slot vector with a
 free list. The checker guarantees operand types, so arithmetic dispatches on
 runtime tags without checks beyond the guaranteed-impossible branches
@@ -475,7 +496,9 @@ representable; the reads (`read_u64le`/`be`) reinterpret the 8 bytes as
 `wrapping_add`/`sub`/`mul` are direct `i64::wrapping_*` calls — deliberately
 64-bit only (Rust's own naming), since a 32-bit wrap is one mask away
 (`a.wrapping_mul(b) & 0xFFFFFFFF`) rather than a second intrinsic.
-`fft.magnitude` and `Range.any`/`all` (the latter short-circuiting, mirroring
+`fft.magnitude` (a native when v0.8 shipped; v0.9 moved it to
+`std/fft.fable`, pure Fable over the `fft` primitives) and `Range.any`/`all`
+(the latter short-circuiting, mirroring
 `ListAny`/`ListAll`) and `worker.try_recv` (a `TryRecvError`-to-nested-`Option`
 translation on the same `mpsc::Receiver` both `WorkerHandle::recv` and
 `WorkerCtx::rx` already wrap) are the same pattern again.
@@ -925,6 +948,92 @@ phase then flipped the win32 dispatch arms from `vulkan_gfx_todo`
 panics to forwards, completing the parity story: `window.create_vulkan`
 plus the full `gfx.*` surface behave identically on Linux and Windows
 because they are the same code.)
+
+## v0.9 additions
+
+**The four-arch Bench A/B instrument** (`bench/ab.py` +
+`.github/workflows/bench.yml`). `ab.py BASE_DIR HEAD_DIR` times two
+full checkouts — each side's release binary runs its *own* tree's bench
+and demo sources, so the comparison stays fair when sources differ
+between refs — interleaved A,B,A,B within one batch, minimum wall time
+per side as the estimator. It *enforces* correctness: every rep of a
+(target, side) pair must produce byte-identical stdout, and when a
+target's sources are byte-identical between the trees, base stdout must
+equal head stdout — a wrong-answer "optimization" fails the run instead
+of winning it. Added/removed targets are enumerated from the union of
+both trees and reported rather than silently skipped. `bench.yml` fans
+the script across one runner per tier-1 architecture
+(x86_64/aarch64-linux, x86_64-windows, aarch64-macos) on push of a
+`bench/<name>` branch, posting each delta table to the run summary; a
+Compare-binaries step `cmp`s the two builds and reports
+BIT-IDENTICAL/DIFFER, which is what lets an A/A or source-only run
+prove that measured deltas are noise (release builds are deterministic
+given equal-length checkout paths — hence `base/` and `head/`).
+
+**The compact dispatch loop with per-target binding** — the vm.rs /
+build.rs restructure described under Execution above: bulky or rare op
+bodies outlined behind `#[inline(never)]` to kill the codegen lottery,
+with the `build.rs`-emitted `monolithic_dispatch` cfg inlining them
+back on aarch64-linux, the one target where the monolith measured
+faster.
+
+**Surface minification.** `fft.magnitude` moved from a native to
+`std/fft.fable` (pure Fable over the `fft` primitives; `import
+std.fft;` keeps the `fft.magnitude(...)` spelling working). The `math`
+namespace dropped ten natives that were verbatim duplicates of
+`Int`/`Float` methods (`sqrt`/`floor`/`ceil`/`round`/`abs`/`abs_int`/
+`min`/`max`/`min_float`/`max_float`) — the methods are the primitives —
+and `Float.min`/`Float.max` were added to complete the method set;
+`math` keeps only what it alone provides (trig, logs, `exp`, `pow`,
+`fmod`, the PRNG, the constants).
+
+**`std.json` escape fast path.** The serializer's `escape()` scans
+first and returns a clean string (no `\` `"` `\n` `\t`) as-is instead
+of running four always-allocating `String.replace` passes — four
+allocations down to zero per string and per object key, byte-identical
+output; bench_json −4.5..−7.5% across the four-arch matrix.
+
+**The bench re-specification epoch.** Every `bench/*.fable` now opens
+with a `// Bench:` measurand header stating exactly what the row
+measures; counted `while` scaffolding loops became `for i in 0..N`
+range loops, except where the loop bookkeeping *is* the measurand
+(arith_loop's deliberate while-loop dispatch row, float_loop's escape
+loop, bitwise_masks' hand-rolled popcount workload — each header says
+so). bench_join_heavy was re-specified to actually bench joins
+(`strings.Builder.push_joined` + `List.join`), and a new
+`bench/for_range.fable` prices the fused ForNextRange range-literal
+loop — the modern counted-loop dispatch floor. The conversions are
+stdout-identical under one binary, but wall times legitimately moved
+(a range loop dispatches different ops than a while loop), so
+`bench/RESULTS.md` records the conversion commit's own matrix run —
+Compare-binaries: bit-identical on both sides — as the *epoch bridge*
+pricing the workload change per row per architecture; cross-epoch
+comparisons go through that table.
+
+**SPEC↔implementation closure.** `String.parse_hex()` now rejects a
+leading `+` (`"+ff"` → `None`), closing the one behavioral gap against
+SPEC's no-sign rule for hex parsing. LSP namespace completion gained
+the six v0.8 members it was missing (`worker.try_recv`,
+`gpu.run_spirv`/`gpu.backend`, `window.create_metal`/
+`window.create_vulkan`, `gfx.compile_program_spirv`), and the unit
+test now asserts the completion lists and the resolver agree in *both*
+directions — a namespace member can no longer be resolvable but
+un-completed, or completed but unresolvable, without a red test.
+
+**Ports: the oracle is enforced.** The upstream implementation is the
+only oracle, and CI now enforces what the docs claimed. claudewave's
+`compare_paw` applies a per-item expected-max residual table (29 items
+measured bit-identical in the reference environment; the three
+f64-floor items bounded at ~2e-16..4e-17; enforcement floors at 2e-15
+because the oracle's own numpy/libm output drifts by a few ulps across
+environments) — an item can no longer silently degrade under the old
+blanket 1e-9 gate. icaa CI compares all 90 debug views and runs a
+permanent deterministic adversarial battery
+(`ports/icaa/adversarial.fable`: 47 SplitMix64-drawn perturbation
+scenes — sub-threshold edges, thin lines, rings, noise fields,
+degenerate 1×1/8×1 resolutions — rendered by both implementations at
+both presets, 94 pixel-exact comparisons). 184 new cross-checks, all
+max_diff=0 on first run.
 
 ## Testing strategy
 

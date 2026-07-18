@@ -6,7 +6,7 @@ variable outlives its scope, or when the garbage collector actually runs —
 this is the tour. Everything here was produced by running the real tools.
 
 Fable compiles to bytecode and runs it on a stack-based virtual machine —
-about 21,000 lines of dependency-free Rust in `src/`. This chapter describes
+about 41,000 lines of dependency-free Rust in `src/`. This chapter describes
 it from the outside in; pointers into the source are at the end.
 
 ## The pipeline
@@ -240,8 +240,13 @@ referenced by handle.
 The collector is a classic **mark-and-sweep**: starting from the roots — the
 value stack, globals, call frames, open upvalue cells, constants, and a few
 explicitly registered temporaries — mark everything reachable, then free the
-rest. The first collection triggers at 256 live objects; each collection
-then sets the threshold to twice the survivor count (floor 256).
+rest. Pacing is one rule in `src/value.rs`: the first collection is offered
+once the heap holds 4,096 live objects, and each collection resets the
+threshold to twice the survivor count with that same floor —
+`(live * 2).max(4096)`. The floor is deliberate slack: every sweep walks the
+whole slot table, so a lower floor would make small working sets collect
+every few hundred allocations for no real memory back, while 4,096 slots of
+headroom costs a few hundred kilobytes at worst.
 
 The design question for any GC is *when is it safe to collect?* Fable's
 answer is a **checkpoint discipline**: allocating never collects. The VM
@@ -255,7 +260,7 @@ You can watch it work. `FABLE_GC_LOG=1` logs every collection to stderr:
 
 ```fable
 let mut survivors = [];
-for i in 0..1000 {
+for i in 0..10000 {
     let tmp = [i, i * 2, i * 3];   // becomes garbage each iteration
     if i % 250 == 0 {
         survivors.push(tmp);       // a few lists stay reachable
@@ -266,16 +271,17 @@ println(survivors.len());
 
 ```text
 $ FABLE_GC_LOG=1 fable gc.fable
-[gc] collected 252 of 256 objects (4 live, next at 256)
-[gc] collected 251 of 256 objects (5 live, next at 256)
-[gc] collected 250 of 256 objects (6 live, next at 256)
-4
+[gc] collected 4078 of 4096 objects (18 live, next at 4096)
+[gc] collected 4062 of 4096 objects (34 live, next at 4096)
+40
 ```
 
-Each pass of the loop allocates one throwaway list; roughly every 250
+Each pass of the loop allocates one throwaway list; roughly every 4,096
 iterations the heap hits its threshold and reclaims almost everything. The
-live count creeps up (4, 5, 6) as `survivors` accumulates lists the
-collector correctly refuses to touch.
+live count creeps up (18, then 34) as `survivors` accumulates lists the
+collector correctly refuses to touch — seventeen kept lists plus the
+`survivors` list itself at the first collection, thirty-three plus one at
+the second.
 
 `FABLE_GC_STRESS=1` turns *every* checkpoint into a collection — the
 harshest schedule possible. If any code path forgot to root a live object,
@@ -290,8 +296,8 @@ println(words.join(" "));
 
 ```text
 $ FABLE_GC_STRESS=1 FABLE_GC_LOG=1 fable stress.fable
-[gc] collected 0 of 5 objects (5 live, next at 256)
-[gc] collected 0 of 6 objects (6 live, next at 256)
+[gc] collected 0 of 5 objects (5 live, next at 4096)
+[gc] collected 0 of 6 objects (6 live, next at 4096)
 once upon a time
 ```
 
@@ -348,33 +354,57 @@ function an accumulator, or reach for a loop.
 ## Performance
 
 Fable is a bytecode interpreter without a JIT; it's better to know where
-that ceiling is than to guess. The repo ships a micro-benchmark suite; run
-it with a **release** build (a debug build is four to seven times slower and
-will mislead you). One run on the author's machine — expect jitter between
-runs and different absolute numbers on your hardware:
+that ceiling is than to guess. The repo ships a micro-benchmark suite in
+`bench/` — one cost centre per file, each stating exactly what it measures
+in a `// Bench:` header — and `bench/run.sh` times every row against a
+**release** build (a debug build is four to seven times slower and will
+mislead you). One run on the author's machine — expect jitter between runs
+and different absolute numbers on your hardware:
 
 ```text
 $ cargo build --release
-$ ./target/release/fable examples/benchmarks/bench.fable
-fib(25) recursive            13.61 ms   (result 75025)
-loop 1M adds                 34.46 ms   (result 499999500000)
-string building 20k           4.57 ms   (result 108889)
-list map/filter 100k         13.36 ms   (result 50000)
-map insert/get 50k           18.24 ms   (result 50000)
-closure churn 200k          131.98 ms   (result 100000)
-sort 30k                      5.76 ms   (result 30000)
+$ bench/run.sh 3
+== micro (best of 3)
+arith_loop               0.3953s
+bench_call_return        0.2695s
+bench_deque              0.2563s
+bench_display            0.1656s
+bench_env_maps           0.1040s
+bench_join_heavy         0.1822s
+bench_json               0.4837s
+bench_list_churn         0.3375s
+bench_lists              0.2767s
+bitwise_masks            0.2479s
+closure_churn            0.0732s
+enum_match               0.1737s
+float_loop               0.2184s
+for_range                0.1682s
+list_ops                 0.0888s
+map_ops                  0.1131s
+method_dispatch          0.0970s
+string_build             0.1424s
+string_interp            0.0697s
 ```
+
+(The script goes on to time the heavy demo programs the same way — the
+full checkers self-play game runs in about ten seconds, the Lisp
+interpreter's demo session in about a second and a half.)
 
 Some context for those numbers:
 
-- `fib(25)` makes about 243,000 function calls, so a call costs well under
-  a tenth of a microsecond — recursion is nothing to fear.
-- A million `for`-loop iterations accumulating a sum run in ~34 ms. Plain
-  `Int` and `Float` arithmetic never allocates.
-- The slowest line is honest about the costliest habit: `closure churn`
-  heap-allocates a fresh closure and upvalue cell 200,000 times and pays
-  for the garbage collections they trigger. Hoisting a closure out of a hot
-  loop is the easiest optimization in Fable.
+- `bench_call_return` makes 3.6 million allocation-free user-function
+  calls in ~0.27 s, so a call costs well under a tenth of a microsecond —
+  recursion is nothing to fear.
+- `for_range` runs four million `for i in 0..N` iterations in ~0.17 s
+  (~40 ns each): the range literal compiles to a single fused
+  loop instruction stepping two stack slots, measurably cheaper per
+  iteration than the hand-counted `while` shape `arith_loop` keeps for
+  comparison. Plain `Int` and `Float` arithmetic never allocates.
+- The slowest rows are honest about the costliest habits: `bench_json`
+  round-trips a ~27 KB document through parse and stringify 40 times, and
+  `bench_list_churn` runs 300,000 rounds of short-lived list and struct
+  allocation — allocation-heavy work tops the table, arithmetic sits at
+  the bottom.
 
 For calibration rather than bragging: this is the performance class of
 non-JIT scripting-language interpreters — a couple of orders of magnitude
@@ -396,7 +426,7 @@ read. Rough map, in pipeline order:
 | `src/bytecode.rs` | the `Op` enum — every instruction you saw in `fable dis`, documented |
 | `src/vm.rs` | the dispatch loop, call frames, upvalues, GC checkpoints, stack traces |
 | `src/value.rs` | runtime values, heap objects, and the mark-sweep collector itself |
-| `src/natives.rs` | implementations of the ~150 builtin functions and methods |
+| `src/natives.rs` | implementations of the ~250 builtin functions and methods |
 | `src/dis.rs` | the disassembler (it's 124 lines — a good first file) |
 
 `docs/ARCHITECTURE.md` covers the same ground as this chapter from a

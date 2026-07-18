@@ -27,10 +27,10 @@ println("total area: {total.to_fixed(2)}");
 Everything here — lexer, parser, unification-based type inference, Maranget
 exhaustiveness checking, bytecode compiler, stack VM, mark-and-sweep garbage
 collector, REPL, formatter, language server, and disassembler — lives in
-about 40,000 lines of dependency-free Rust in `src/`. It is pinned down by
-311 golden spec tests (every one a runnable Fable program), a book whose 136
-snippets execute in CI, and eighteen demo programs whose complete output is
-golden-tested. This image is Fable output too:
+about 41,000 lines of dependency-free Rust in `src/`. It is pinned down by
+311 golden spec tests (every one a runnable Fable program), a book 135 of
+whose snippets execute in CI, and eighteen demo programs whose complete
+output is golden-tested. This image is Fable output too:
 
 <p align="center">
   <img src="docs/assets/hero.png" width="720"
@@ -87,8 +87,9 @@ golden-tested. This image is Fable output too:
   Fable program on its own OS thread with its own heap, communicating over
   string channels — shared-nothing isolates with panic isolation. `recv`
   blocks; `try_recv` doesn't, for a parent polling several workers without
-  picking one to wait on. Plus a native `fft` namespace (with a `magnitude`
-  helper) and a `gpu` compute path with five native zero-dependency
+  picking one to wait on. Plus a native `fft` namespace (`std.fft` layers a
+  `magnitude` helper over it in pure Fable) and a `gpu` compute path with
+  five native zero-dependency
   backends (Metal, Vulkan, Direct3D 12, CUDA, OpenCL — MSL, SPIR-V,
   HLSL, and PTX kernels).
 - **Native graphics, three backends.** The `window` namespace opens real
@@ -147,19 +148,22 @@ golden-tested. This image is Fable output too:
 - **A real GC, stress-tested.** Tracing mark-and-sweep with checkpoint
   rooting. Run anything with `FABLE_GC_STRESS=1` to collect before *every*
   allocation — the entire test suite passes under it.
-- **An executable book.** All 136 runnable snippets in [`book/`](book/)
-  execute in CI — including the deliberate-error demos, verified to fail
-  the way the prose says they do.
-- **Seventeen golden-tested demos.** [`demos/`](demos/) holds a mini-Lisp, a
+- **An executable book.** 135 of the 136 ```` ```fable ```` snippets in
+  [`book/`](book/) execute in CI — including the deliberate-error demos,
+  verified to fail the way the prose says they do (the one exception is a
+  fragment fence-tagged `skip`).
+- **Eighteen golden-tested demos.** [`demos/`](demos/) holds a mini-Lisp, a
   spreadsheet with cycle detection, a regex engine, a dungeon generator, a
   static site generator, a CSV query language, checkers (a complete 106-ply
   self-play game, every move and node count pinned), an SVG plotter
   (the committed [spirograph](demos/plot/spirograph.svg) is its
   golden-tested output), a sudoku solver, wave-function collapse, a
   from-scratch PNG encoder, a chiptune WAV renderer, an FFT chord analyzer, a
-  worker-pool scheduler, an Othello bitboard engine, a Bloom filter, and a
-  parallel Mandelbrot — all deterministic, byte-exact, in CI, normal and
-  under GC stress. The house style they codify is in
+  worker-pool scheduler, an Othello bitboard engine, a Bloom filter, a
+  parallel Mandelbrot, and a spinning cube (`glcube`) whose golden frames
+  are byte-identical across OpenGL, Metal, and Vulkan — all deterministic,
+  byte-exact, in CI, normal and under GC stress. The house style they
+  codify is in
   [`demos/STYLE.md`](demos/STYLE.md).
 - **A field-tested design.** The demos are written with orders to report
   every papercut; independent authors hit the same walls, and the language
@@ -193,7 +197,10 @@ cargo build --release
   "select city, pop where continent == Asia order by pop desc limit 3"
 
 # Golden-test the spec suite and all eighteen demos with the built-in runner
-./target/release/fable test tests/spec demos
+# (glcube's three windowing mains need a live window — CI covers those)
+./target/release/fable test tests/spec
+shopt -s extglob
+./target/release/fable test demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable
 
 # Poke at the machinery
 ./target/release/fable dis examples/algorithms.fable

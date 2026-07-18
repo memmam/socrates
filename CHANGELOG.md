@@ -47,7 +47,8 @@ functionality, judged per-architecture. In progress:
   `String.replace` passes — the common case goes four allocations to
   zero per string and per object key. Byte-identical output;
   bench_json −6.9% in the local interleaved A/B (confirmed on the
-  four-arch matrix: −4.5..−7.5% across all tier-1 targets).
+  four-arch matrix: a win on every tier-1 target in both samples,
+  −3.1..−7.5%; `bench/RESULTS.md` holds the per-sample record).
 - **Consistency pass — SPEC↔implementation reconciliation**:
   `String.parse_hex()` now rejects a leading `+` (`"+ff"` → `None`),
   closing the one behavioral gap against SPEC's "no sign" rule; LSP
@@ -94,6 +95,22 @@ functionality, judged per-architecture. In progress:
   proven by the Compare-binaries step now upstreamed into bench.yml)
   prices exactly the workload change per row per arch, recorded in
   `bench/RESULTS.md`.
+- **Consistency pass — the core docs describe the current system**:
+  book ch10's GC chapter shows the real pacing policy
+  (`(live * 2).max(4096)` — the prose and both transcripts had
+  described a 256-object threshold retired in v0.4; the transcripts
+  are regenerated from real runs against an example that actually
+  collects); ARCHITECTURE gains the compact-dispatch description,
+  build.rs coverage, and a v0.9 section; CLAUDE.md's roadmap,
+  gauntlet, and merge-process wording reconciled to reality (the
+  shipped v0.8 backends are no longer "still to build", ab.py + the
+  four-arch workflow is the perf gate, `main` carries the required
+  "Test (stable)" check), plus a new engineering principle: every
+  consolidation or split records its intent — rationale is evidence,
+  not authority, correctable by outside intervention. Every cited
+  count re-measured: about 41,000 lines of Rust, ~250 natives, 135 of
+  136 book snippets execute (one `skip`), eighteen demos, nineteen
+  benches.
 
 ## v0.8.0 — native graphics and compute; the demo round's feature queue
 

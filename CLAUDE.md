@@ -107,6 +107,18 @@ their place fastest.
   not for carrying yesterday's compatibility weight up front. Older
   platforms broadly are still in scope long-term; the ordering is
   capability-justified breadth, not defensive breadth-first.
+- **When artifacts are consolidated or split, record the intent.** Any
+  time artifacts merge or one splits, write down what each resulting
+  artifact is *for*, how the pieces compose, and why the split or merge
+  happened — tracked intent is the drift-prevention mechanism: an
+  artifact whose purpose is written down can be checked against it, while
+  one whose purpose is implied silently drifts. Recorded rationale is
+  evidence, not authority — it is correctable by outside intervention
+  when a conclusion proves historically wrong, and superseding it means
+  recording the correction, not deleting the record. Standing instances:
+  the bench files' `// Bench:` measurand headers and `bench/RESULTS.md`'s
+  epoch bridge; the demos' deliberate-divergence comments; the ports'
+  READMEs describing exactly what CI enforces.
 
 ## Native graphics & compute roadmap (standing directive)
 
@@ -122,11 +134,11 @@ handle tables + enum dispatch in shared code, as `window/macos/` does in
 miniature). The `wgpu`/`pollster` dependency was **deleted the same day
 the coverage condition was met** (2026-07-17: Metal ✓, Vulkan ✓ compute +
 graphics, OpenCL ✓ with a CI-proven real dispatch) — every build of Fable
-is now zero-dependency. Still to build, in order: CUDA compute (PTX,
-dlopen libcuda; blind-dev, no CI hardware exists), DirectX
-(D3D12/DirectCompute via COM FFI; CI-provable on windows runners via
-WARP), the Win32 Vulkan window surface, and GL-compute if a concrete
-need appears. Settled decisions:
+is now zero-dependency. CUDA compute (`src/cu.rs`, PTX via dlopen'd
+libcuda), DirectX (`src/dx.rs`, D3D12/DirectCompute via COM FFI,
+WARP-proven on windows runners), and the Win32 Vulkan window surface
+(`src/window/win32/vulkan.rs`) all shipped in v0.8; the one item still to
+build is GL-compute, if a concrete need appears. Settled decisions:
 
 - **Sequencing:** finish the Metal arc first (PR5's graphics phases, then
   Metal *compute* reusing the same device/queue machinery), then Vulkan
@@ -162,9 +174,10 @@ need appears. Settled decisions:
   language change updates the spec in the same PR.
 - **Everything observable is golden-tested and byte-identical.** Every
   demo's full stdout is pinned (`demos/`), every ```fable block in `book/`
-  executes in CI, and the spec suite (`tests/spec/`, 311 tests) runs through
-  the same `fable test` path users get. A refactor that changes any pinned
-  output is wrong unless the output change is the point.
+  executes in CI except the rare fragment fence-tagged `skip` (one today —
+  135 of 136 execute), and the spec suite (`tests/spec/`, 311 tests) runs
+  through the same `fable test` path users get. A refactor that changes any
+  pinned output is wrong unless the output change is the point.
 - **GC-stress must stay green.** `FABLE_GC_STRESS=1` collects before every
   allocation; the whole suite (unit, spec, demos) passes under it. New
   natives that allocate must root correctly (see `temp_roots` in `vm.rs`).
@@ -185,12 +198,19 @@ shopt -s extglob
 ./target/release/fable test demos/!(glcube)/ demos/glcube/cube.fable demos/glcube/spec.fable  # 73, also with FABLE_GC_STRESS=1
 FABLE_PATH=ports ./target/release/fable test ports/pyl/spec.fable   # + ports/icaa/spec.fable
 ./target/release/fable build demos/csvql -o /tmp/csvql && (cd /tmp && ./csvql)  # `fable build` smoke
-bench/run.sh 3                                # perf A/B vs a pre-change binary
+python3 bench/ab.py <base-tree> <head-tree>   # local interleaved perf A/B
 ```
 
-Performance claims are only real if `bench/run.sh` reproduces them
-interleaved against a pre-change binary; see `bench/RESULTS.md` for method
-and the standing numbers.
+Performance claims are only real if the interleaved cross-binary A/B
+reproduces them: `python3 bench/ab.py <base-tree> <head-tree>` locally
+(each side a full checkout with its own release binary; ab.py enforces
+per-rep and cross-side stdout checksums, so a wrong-answer "optimization"
+fails instead of winning), and the four-arch Bench A/B workflow — push the
+candidate as a `bench/<name>` branch — for the acceptance verdict, per the
+universality principle: flat-or-better on every tier-1 architecture.
+`bench/run.sh [N]` is single-binary sequential profiling convenience
+(where does one binary spend its time?), not the gate. Method and standing
+numbers: `bench/RESULTS.md`.
 
 ## Where the detailed memory lives
 
@@ -200,15 +220,23 @@ and the standing numbers.
 - `docs/ARCHITECTURE.md` — implementation internals, module by module.
 - `docs/RELEASING-macOS.md` — one-time setup to turn on Developer ID signing +
   notarization for the macOS demo-zoo binaries (the six repo secrets).
-- `bench/RESULTS.md` — benchmark methodology + the efficiency-pass deltas.
+- `bench/RESULTS.md` — the bench method and instrument facts, the standing
+  numbers, the negative-results ledger (measured and rejected — do not
+  re-attempt without new evidence), the known-headroom list, and the epoch
+  bridge that keeps pre-/post-re-specification numbers comparable. No
+  other file holds any of these.
 - `demos/NOTES.md` — the field-test triage ledgers: every papercut demo
   authors hit, and whether it was fixed / documented / declined. The raw
   material for "what usage pulled in" in a release post.
 - `demos/STYLE.md` — best-practice house rules distilled from the demo
   rounds (golden discipline, determinism, bitwise, workers, std collections).
-- `ports/*/CONTRACT.md`, `ports/*/README.md` — the porting programme
-  (SkyeShark's ICAA in `jsl`; claudewave in `pyl`), including how each port
-  is cross-validated against its upstream.
+- `ports/README.md` (the programme and the `jsl` layer), `ports/pyl/CONTRACT.md`
+  (the `pyl` layer's contract), and the per-port `ports/icaa/README.md` /
+  `ports/claudewave/README.md` — the porting programme (SkyeShark's ICAA in
+  `jsl`; claudewave in `pyl`), each README describing exactly what CI
+  enforces when cross-validating that port against its upstream. (`jsl`
+  has no doc file of its own; it is documented in `ports/README.md` and by
+  its consumer, icaa.)
 - `book/` — the language book (a teaching resource, **not** a project diary;
   process/history belongs here in `CLAUDE.md` and the files above, never in
   the book).
@@ -299,8 +327,12 @@ and the standing numbers.
 
 ## Workflow conventions
 
-- Merge-on-green: CI is trusted; feature PRs are real (non-draft) with
-  auto-merge armed — drafts are reserved for *releases*. Feature work
+- Merge on green, by hand: feature PRs are real (non-draft) — drafts are
+  reserved for *releases* — and `main` carries a required status check,
+  "Test (stable)", so a red PR cannot merge. Merges are performed
+  manually after reading the decisive CI log, not by arming auto-merge;
+  a change that touches the interpreter or `bench/` is additionally
+  gated on a clean four-arch Bench A/B matrix verdict. Feature work
   happens on a dedicated branch off `main`.
 - Commit messages state what changed and (for perf) the measured delta.
 - The spec, the book's executable snippets, and the demos' pinned output are
