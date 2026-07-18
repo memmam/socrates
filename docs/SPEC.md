@@ -541,12 +541,13 @@ Fallible operations return `Result[_, String]` whose `Err` carries
 Namespaced (no import needed): `math.pi`, `math.e`,
 `math.sin/cos/tan/atan/atan2/log/log2/log10/exp` (Float; `log` is the
 **natural** logarithm), `math.pow(Float, Float)`,
-`math.fmod(Float, Float) -> Float` (IEEE remainder with the sign of the
-dividend — the `%` operator stays Int-only), `math.random() -> Float`
+`math.fmod(Float, Float) -> Float` (C `fmod` semantics: the
+truncated-division remainder, with the sign of the dividend — the `%`
+operator stays Int-only), `math.random() -> Float`
 (uniform [0, 1), xorshift PRNG), `math.rand_int(lo, hi) -> Int` (uniform in
 the **inclusive** range; panics if `lo > hi`), `math.seed(Int) -> Unit`.
 Rounding, `sqrt`, `abs`, and `min`/`max` are Int/Float **methods**
-(`x.sqrt()`, `x.abs()`, `a.min(b)`, `x.floor()`, ... — § Methods): the
+(`x.sqrt()`, `x.abs()`, `a.min(b)`, `x.floor()`, ... — § 8.5): the
 former `math.` spellings were verbatim duplicates and were dropped in v0.9
 (the method spellings are the primitives).
 
@@ -567,8 +568,8 @@ split-complex signals — a complex vector is a pair of equal-length
 
 The derived helper `magnitude(re, im)` — `sqrt(re[i]^2 + im[i]^2)` per
 bin — lives in `std.fft` (§ 7.1), which also wraps `rfft`/`ifft` so an
-importing file keeps the same spellings. (It was a native in the v0.8
-draft, computing `hypot` — which differs from `sqrt(re^2 + im^2)` in the
+importing file keeps the same spellings. (It was a native in v0.8,
+computing `hypot` — which differs from `sqrt(re^2 + im^2)` in the
 last ulp, a deviation from this definition; the move to Fable fixed it.)
 
 Any length `n >= 1` is supported in O(n log n): powers of two run an
@@ -617,9 +618,9 @@ Two more joined in v0.7:
 | `bytes(n)` | `fn(Int) -> Bytes` | zero-filled byte buffer (§ 8.4b) |
 | `bytes_of(xs)` | `fn(List[Int]) -> Bytes` | from byte values 0..255 |
 
-### 7.1 The standard library (v0.4; expanded in v0.7)
+### 7.1 The standard library (v0.4; expanded in v0.7-v0.9)
 
-Ten modules written in Fable ship inside the interpreter, imported like any
+Eleven modules written in Fable ship inside the interpreter, imported like any
 module (`import std.json;`, aliased with `as`). Everything below is `pub`;
 these modules follow the same visibility rules as user code.
 
@@ -635,7 +636,7 @@ these modules follow the same visibility rules as user code.
 | `std.deque` | `Deque[T]` (v0.7), a double-ended queue with amortized O(1) ends (two-stack representation; a pop on an empty side reverses the other side across). `new()`, `from_list(xs)` (copies); methods `push_front` / `push_back`, `pop_front` / `pop_back` / `front` / `back` (all `Option[T]`), `len`, `is_empty`, `to_list` (front to back) |
 | `std.lazy` | `Lazy[T]` (v0.8): deferred, memoized computation. `of(thunk: fn() -> T) -> Lazy[T]` wraps a zero-argument thunk that doesn't run until needed; methods `get() -> T` (computes and caches on the first call, free on every later call — on any reference, since structs are references) and `is_forced() -> Bool`. For a module-level table that's expensive to build and not always needed — a plain top-level `let` already builds once at import (eagerly); `Lazy` defers that to first use. |
 | `std.glm` | Vector/matrix/quaternion math (v0.8), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Fable, no native code. |
-| `std.fft` | FFT helpers (moved from the native namespace in the minification pass): `magnitude(re, im)` (`sqrt(re[i]^2 + im[i]^2)` per bin, exactly as written — the panic on length mismatch matches the old native's message byte for byte), plus one-line `rfft`/`ifft` wrappers so an importing file keeps the `fft.` spellings (an imported module shadows the builtin namespace). `fft.fft` (complex pairs) is deliberately not re-exported — a module fn named `fft` would shadow the namespace in this module's own bodies; files that need it use the native namespace and skip this import. |
+| `std.fft` | FFT helpers (v0.9; moved from the native namespace in the minification pass): `magnitude(re, im)` (`sqrt(re[i]^2 + im[i]^2)` per bin, exactly as written — the panic on length mismatch matches the old native's message byte for byte), plus one-line `rfft`/`ifft` wrappers so an importing file keeps the `fft.` spellings (an imported module shadows the builtin namespace). `fft.fft` (complex pairs) is deliberately not re-exported — a module fn named `fft` would shadow the namespace in this module's own bodies; files that need it use the native namespace and skip this import. |
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
@@ -1278,9 +1279,8 @@ every `gfx.*` call operates against whichever window last called
 `make_current()`.
 
 `backend_name() -> String` (v0.8): `"opengl"`, `"metal"` (macOS,
-`create_metal`), or `"vulkan"` (Linux, `create_vulkan`) — see the macOS
-Metal and Linux Vulkan backend notes above (§ 7.3). On Windows, where only
-the OpenGL backend exists, this always returns `"opengl"`.
+`create_metal`), or `"vulkan"` (Linux and Windows, `create_vulkan`) — see
+the macOS Metal and Linux Vulkan backend notes above (§ 7.3).
 
 ### 8.5 Numeric methods
 

@@ -1718,9 +1718,15 @@ pub fn call_native(vm: &mut Vm, n: Native, argc: u8) -> Result<(), VmError> {
             // The raw 64-bit bit pattern, like the hex literal syntax and
             // `to_hex`'s output — no sign, so `n.to_hex().parse_hex() ==
             // Some(n)` round-trips for every Int, including negative ones.
-            match u64::from_str_radix(digits, 16) {
-                Ok(u) => make_some(vm, Value::Int(u as i64)),
-                Err(_) => make_none(vm),
+            // (`from_str_radix` alone would accept a leading `+`, which the
+            // spec's "no sign" rule forbids — reject it explicitly.)
+            if digits.starts_with('+') {
+                make_none(vm)
+            } else {
+                match u64::from_str_radix(digits, 16) {
+                    Ok(u) => make_some(vm, Value::Int(u as i64)),
+                    Err(_) => make_none(vm),
+                }
             }
         }
         StrToString => vm.native_arg(argc, 0),

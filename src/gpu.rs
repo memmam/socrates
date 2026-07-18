@@ -454,9 +454,11 @@ pub fn run(
 }
 
 /// One compute dispatch of a SPIR-V binary — `gpu.run`'s `Bytes`-shader
-/// sibling. Only the vulkan backend ingests SPIR-V today (OpenCL 2.1+ and
-/// GL 4.6 join it later, per CLAUDE.md's roadmap); every other build
-/// reports which entry point its backend actually wants.
+/// sibling. Two backends ingest SPIR-V, each in its own profile: vulkan
+/// takes GLCompute/Logical/GLSL450 modules (this function), opencl takes
+/// Kernel/Physical64 modules (its own `run_spirv` below) — the blobs are
+/// not interchangeable; every other build reports which entry point its
+/// backend actually wants.
 #[cfg(all(feature = "vulkan", any(target_os = "linux", target_os = "windows")))]
 pub fn run_spirv(
     spirv: &[u8],
@@ -613,9 +615,9 @@ pub fn run_spirv(
 
 // ---------------------------------------------------------------------------
 // Native OpenCL backend (Linux/Windows with --features opencl, when neither
-// vulkan nor cuda is also compiled in — the native precedence order is
-// metal > vulkan > cuda > opencl): raw dlopen FFI over src/cl.rs — the
-// SECOND SPIR-V consumer, and the one that forced the profile distinction:
+// vulkan, d3d12, nor cuda is also compiled in — the native precedence order
+// is metal > vulkan > d3d12 > cuda > opencl): raw dlopen FFI over src/cl.rs —
+// the SECOND SPIR-V consumer, and the one that forced the profile distinction:
 // SPIR-V is the lingua-franca *format*, but `clCreateProgramWithIL` ingests
 // only the OpenCL dialect (Kernel execution model, Physical64 addressing,
 // OpenCL memory model, buffers as CrossWorkgroup pointer kernel arguments),
