@@ -405,7 +405,29 @@ mergeable.)
 - Inline ≤2 upvals wins its micro but loses the dispatch-loop codegen
   lottery (+2.8% Ir elsewhere).
 - A fused compare-and-branch peephole: sound, but the same codegen lottery
-  swamps the saved dispatch.
+  swamps the saved dispatch. **Re-examined post-H1/H3 (2026-07-18), per
+  the reflexive-codification audit that flagged this entry's premise —
+  the dispatch codegen lottery — as killed on Linux/Windows by H1.**
+  New evidence, not a re-litigation of the old: a fresh implementation
+  (`EqJumpIfFalse`/`LtJumpIfFalse`/`LeJumpIfFalse`/`GtJumpIfFalse`/
+  `GeJumpIfFalse`, five fused ops, same jump-safety machinery H3 uses)
+  was built and measured on the current x86_64-linux post-H1/H3 tree, 5
+  local samples (the current floor): arith_loop +11.4..+13.2%,
+  float_loop +5.9..+6.8%, list_ops +3.9..+11.3%, bitwise_masks
+  +2.3..+5.5% (4/5 marked), string_build +2.8..+7.0% (4/5 marked) — a
+  clean, reproducible **regression**, not noise. The decisive fact:
+  `bitwise_masks` and `list_ops` have *zero* compare→branch pairs in
+  their bytecode (confirmed by the same dynamic pair-profiling method
+  H3 used) yet regress exactly as reproducibly as `arith_loop`, which
+  is 100% fusable — proving the cost is the five new `run()` match arms
+  shifting whole-function codegen layout, not a per-fusion-site cost.
+  This is H1's original mechanism in mirror image: H1 was triggered by
+  *removing* an arm; this shows *adding* arms revives an equivalent
+  layout sensitivity, post-H1. DROP reconfirmed, on new grounds, not
+  the old lottery premise — the fusion itself was never the problem in
+  either era; arm-count churn to `run()` is. Implementation archived on
+  branch `probe-cmp-branch` (never merges), same H2/h3-probe-no-glc
+  precedent.
 - Hottest-first arm reordering inside the compact `run()` (H1b): did not
   fix aarch64-linux's systematic enum_match cost (still +4.6%, plus a
   new map_ops +4.4% there) and broke x86_64-linux (enum_match −3.1% →
