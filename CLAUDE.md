@@ -3,22 +3,18 @@
 Socrates is a statically-typed, garbage-collected programming language with
 algebraic data types, exhaustive pattern matching, closures, and generics,
 implemented from scratch in Rust with **zero dependencies** — every build.
-This file is the working memory for the project: what Socrates is *for*, the
-invariants that must never break, the engineering principles that decide
-close calls, how to verify a change, where the detailed records live, and a
-terse release ledger to draw on when writing changelogs and release posts.
+This file is the working memory for the project: what Socrates is *for*,
+the invariants that must never break, the engineering principles that
+decide close calls, and how to verify a change — everything needed to
+operate a session and regenerate correctly if a container is refreshed or
+a model swaps. `HISTORY.md` holds the rest: the incidents that motivated a
+rule, the sagas behind a corrected decision, and the per-release ledger.
 
 ## What Socrates is for
 
-**The name** (recorded 2026-07-18, when the language was renamed from
-Fable): trademark pre-emption and namespace collisions — an established
-F#-to-JS compiler already holds "Fable". "Socrates" names the language's
-substrate role; "Timaeus" was considered and is reserved for the eventual
-top-of-stack agent; "Quine" was considered and rejected (an existing OSS
-graph database holds it). The `.soc` extension nods at the
-system-on-a-chip trajectory of the HDL roadmap. Git history preserves the
-old name; `bench/ab.py` and the Bench A/B workflow carry the permanent
-cross-name fallback that keeps pre-rename refs benchable.
+**The name:** Socrates, formerly Fable (full rationale in `HISTORY.md`).
+`bench/ab.py` and the Bench A/B workflow carry a permanent cross-name
+fallback that keeps pre-rename refs benchable.
 
 Socrates is an **AI-native language**: its design mirrors the way current
 frontier models reason, so an AI writes it fluently and uses it as a
@@ -71,8 +67,7 @@ their place fastest.
   macOS — the release matrix), not on one box: simplifying an idiom down
   to pure primitives can run better on one architecture and worse on
   another (I-cache geometry, indirect-branch cost, and code layout all
-  vote differently per arch — the dispatch-loop codegen lottery is the
-  recorded instance). A simplification is accepted only if the
+  vote differently per arch). A simplification is accepted only if the
   interleaved A/B (`bench/ab.py`, fanned per-arch by the Bench A/B
   workflow) shows flat-or-better on every architecture; where
   architectures disagree, scope **up**, not down — the primitive keeps
@@ -92,20 +87,11 @@ their place fastest.
   implicated piece is load-bearing elsewhere on the same target — the
   uniform form stands as that target's measured-fastest, and the
   residual row is recorded with the probe receipts in
-  `bench/RESULTS.md`, never waived silently (the superinstruction
-  wave's aarch64-macos for_range row is the first instance).
+  `bench/RESULTS.md`, never waived silently.
 - **A verdict needs ≥5 samples, no exception, before it is final** —
-  every CI-matrix leg (not macOS alone — widened 2026-07-18, since a
-  leg converging cleanly most of the time is not a reason to demand
-  less evidence of it when it does show a mark) and every local
-  single-box probe's keep/drop call. (Raised 2026-07-18 from a ≥3
-  macOS floor that carried a same-decision escape hatch down to two
-  samples; the escape hatch is what let a real mark get dismissed on
-  1-of-2 — the W2 enum_match errata in `bench/RESULTS.md` is the
-  recorded instance — and no floor at all existed for local probes,
-  which had informally run on two samples every time. Fewer than 5
-  samples is an inconclusive result, not a negative one; it does not
-  license a DROP or a dismissal, only more sampling.)
+  every CI-matrix leg and every local single-box probe's keep/drop call.
+  Fewer than 5 samples is an inconclusive result, not a negative one; it
+  does not license a DROP or a dismissal, only more sampling.
   **The floor is a floor, not a ceiling reached by counting: when 5
   samples don't converge, escalate the *kind* of evidence, not the
   count.** Wall-clock A/B on a shared runner has an irreducible noise
@@ -114,10 +100,7 @@ their place fastest.
   changes what's measured — a deterministic instrument immune to
   scheduler jitter (instruction/cache counts), or escalation to an
   entity outside the automated loop (the user) — not the sample count.
-  First instances: `bench/h3-probe-no-glc` (mechanism isolation,
-  recognized as this pattern after the fact) and
-  `bench/h1-binding-recheck` (the first deliberate instance). The full
-  protocol, case law, and the revalidation notes on verdicts that
+  The full protocol, case law, and revalidation notes on verdicts that
   predate this floor live in `bench/RESULTS.md` — this is the one
   other file that states the number, per the intent-tracking
   principle's scope-recording discipline.
@@ -127,15 +110,21 @@ their place fastest.
   (the next hypothesis, tested the same way) — bounded at four
   hypothesis-tests before a fifth candidate with none confirmed is
   itself the signal to take the other branch (escalate to the user).
-  A running scratchpad of each test's data feeds a slot-by-slot rule
-  (ground, differential, then a real reprobe-vs-switch choice each slot
-  after) for what to spend each probe or sample on — letting a
-  hypothesis be dropped *or* promoted early, on partial data — but only
-  for navigating between hypotheses faster, never for the underlying
+  A running scratchpad of each test's data feeds a slot-by-slot rule for
+  what to spend each probe or sample on: (1) first — ground; (2) second
+  — differential, never enough alone to confirm or reject; (3) third —
+  probe/sample for something else IFF that would give better insight
+  than reprobing the same condition, else reprobe/resample it; (4)
+  fourth — if compelled, test here (an early exit into the test
+  itself); otherwise the same choice as step 3, with the target
+  abandoned in step 3 eligible again; (5) fifth — decisive: test if
+  motivated, and either commit to the hypothesis and scope the idiom set
+  up, or change hypothesis, based on the accreted evidence. This lets a
+  hypothesis be dropped *or* promoted early on partial data, for
+  navigating between hypotheses faster — never for the underlying
   KEEP/DROP verdict itself, which still needs its own full ≥5 once a
-  hypothesis is confirmed. First instance: `bench/inline-upvals-x64-probe`
-  (PR #103's x86_64-linux `for_range` residual). Full protocol, spelled
-  out slot by slot, in `bench/RESULTS.md`.
+  hypothesis is confirmed. Full protocol, spelled out slot by slot, in
+  `bench/RESULTS.md`.
 - **This applies to whole backend implementations, not just algorithmic
   idioms** — but the trigger is the *platform* actually dropping the older
   path, not merely deprecating it. When a newer backend for the same
@@ -184,27 +173,21 @@ their place fastest.
   when a conclusion proves historically wrong, and superseding it means
   recording the correction, not deleting the record. And record
   decisions with their *scope* — what exactly was approved, no wider:
-  an overbroad memory of a narrow decision is how conventions drift
-  (the footer incident began as "trailers accepted in commits"
-  remembered as "footers accepted"). And codification itself is a
-  four-step act, not a sentence: a rule that gets codified (i) lands
-  in the repo file where it operationally binds, (ii) lands here with
-  its scope and first instance, (iii) is copied into the session's
-  working memory, and (iv) triggers an immediate consistency audit of
-  the existing tree and policies *against the new rule* — retroactive
-  application is part of codifying, because a forward-only rule leaves
-  its whole class dirty behind it. A 90-PR retroactive sweep (2026-07-18)
-  is the model for what step iv looks like at scale; the standing-watch
-  class, codified without step iv, left
-  the other negative-results entries unexamined — step iv, run late,
-  found two whose stated premise (the dispatch codegen lottery) H1 had
-  since killed. Standing instances:
-  the bench files' `// Bench:` measurand headers and `bench/RESULTS.md`'s
-  epoch bridge; the demos' deliberate-divergence comments; the ports'
-  READMEs describing exactly what CI enforces; and RESULTS.md's
-  standing-watch entries — a rejected change that keeps its re-open
-  condition attached to the record, so the correction path is itself
-  part of the memory rather than a fact someone must rediscover.
+  an overbroad memory of a narrow decision is how conventions drift. And
+  codification itself is a four-step act, not a sentence: a rule that
+  gets codified (i) lands in the repo file where it operationally binds,
+  (ii) lands here with its scope and first instance, (iii) is copied
+  into the session's working memory, and (iv) triggers an immediate
+  consistency audit of the existing tree and policies *against the new
+  rule* — retroactive application is part of codifying, because a
+  forward-only rule leaves its whole class dirty behind it. Standing
+  instances of tracked intent: the bench files' `// Bench:` measurand
+  headers and `bench/RESULTS.md`'s epoch bridge; the demos'
+  deliberate-divergence comments; the ports' READMEs describing exactly
+  what CI enforces; and RESULTS.md's standing-watch entries — a rejected
+  change that keeps its re-open condition attached to the record, so the
+  correction path is itself part of the memory rather than a fact
+  someone must rediscover.
   **The workaround-recording triple** is the content rule the
   four-step act doesn't cover on its own: any recorded manual rule or
   workaround states (i) the official mechanism it bypasses, (ii) the
@@ -222,22 +205,21 @@ their place fastest.
 ## Native graphics & compute roadmap (standing directive)
 
 **The wgpu deletion is DONE; the native build-out continues.** The
-standing goal (set 2026-07-17, and easy to lose because it spans many
-releases: re-read this before planning any graphics/compute work) is
-native, raw-FFI, zero-dependency backends for everything — OpenGL,
-OpenCL, CUDA, Vulkan, Metal, and DirectX — built over a
-maximally-performant, minimal-duplication shared graphics/compute core:
-the `window`/`gfx` pattern generalized (one backend-neutral Socrates-facing
-surface; thin per-API backends over dlopen/`objc_msgSend`/COM raw FFI;
-handle tables + enum dispatch in shared code, as `window/macos/` does in
-miniature). The `wgpu`/`pollster` dependency was **deleted the same day
-the coverage condition was met** (2026-07-17: Metal ✓, Vulkan ✓ compute +
-graphics, OpenCL ✓ with a CI-proven real dispatch) — every build of Socrates
-is now zero-dependency. CUDA compute (`src/cu.rs`, PTX via dlopen'd
-libcuda), DirectX (`src/dx.rs`, D3D12/DirectCompute via COM FFI,
-WARP-proven on windows runners), and the Win32 Vulkan window surface
-(`src/window/win32/vulkan.rs`) all shipped in v0.8; the one item still to
-build is GL-compute, if a concrete need appears. Settled decisions:
+standing goal (easy to lose because it spans many releases: re-read this
+before planning any graphics/compute work) is native, raw-FFI,
+zero-dependency backends for everything — OpenGL, OpenCL, CUDA, Vulkan,
+Metal, and DirectX — built over a maximally-performant,
+minimal-duplication shared graphics/compute core: the `window`/`gfx`
+pattern generalized (one backend-neutral Socrates-facing surface; thin
+per-API backends over dlopen/`objc_msgSend`/COM raw FFI; handle tables +
+enum dispatch in shared code, as `window/macos/` does in miniature).
+Metal, Vulkan (compute + graphics), OpenCL, CUDA compute (`src/cu.rs`),
+DirectX (`src/dx.rs`), and the Win32 Vulkan window surface
+(`src/window/win32/vulkan.rs`) have all shipped; `wgpu`/`pollster` were
+deleted once that coverage landed, so every build of Socrates is
+zero-dependency (see `HISTORY.md` for how the rollout sequenced). The
+one item still to build is GL-compute, if a concrete need appears.
+Settled decisions:
 
 - **Sequencing:** finish the Metal arc first (PR5's graphics phases, then
   Metal *compute* reusing the same device/queue machinery), then Vulkan
@@ -316,6 +298,10 @@ numbers: `bench/RESULTS.md`.
 
 ## Where the detailed memory lives
 
+- `HISTORY.md` — the historical half of this file: incident narratives,
+  sagas behind corrected decisions, and the per-release ledger. Read it
+  when a rule here points to it, when writing a release post, or when
+  auditing whether a rule still matches the incident that produced it.
 - `CHANGELOG.md` — per-release feature list (each release shipped as one PR).
 - `docs/SPEC.md` — the normative language reference (`(vN)` tags mark when a
   feature landed).
@@ -344,45 +330,23 @@ numbers: `bench/RESULTS.md`.
   has no doc file of its own; it is documented in `ports/README.md` and by
   its consumer, icaa.)
 - `book/` — the language book (a teaching resource, **not** a project diary;
-  process/history belongs here in `CLAUDE.md` and the files above, never in
-  the book).
+  process/history belongs here in `CLAUDE.md`/`HISTORY.md` and the files
+  above, never in the book).
 
-**Decided (PR #107, 2026-07-19; flipped to committed form 2026-07-19):**
-each of the four directories above also gets a nested per-directory
-`CLAUDE.md` stub (bare filename — nested `.claude/CLAUDE.md` is not a
-real discovery path; that's reserved for settings/skills/rules,
-confirmed against Claude Code's monorepo docs) that does nothing but
-`@`-import the file(s) already listed for it above. Purely so Claude
-Desktop's context-tracker "Memory files" panel lists `docs/SPEC.md` and
-friends as their own entries, lazily, the first time a session reads a
-file in that subdirectory. The `@`-import is not lazy about *content*
-— the stub force-loads the entire imported file(s) the moment it fires
-— a real, compounding cost, paid now by every clone and contributor
-rather than opt-in per checkout.
-
-That tradeoff is why this started life as `CLAUDE.local.md`
-(gitignored, personal, opt-in per checkout) rather than committed
-`CLAUDE.md` — the stated plan then was: get the mechanism stable on
-that lower-risk footing first, then phase it into the repo once proven.
-Roxy's later directive did exactly that: flip the four stubs from
-`CLAUDE.local.md` to `CLAUDE.md` and drop the `.gitignore` rule
-entirely, once the mechanism had run clean for a session. Recording the
-correction here rather than deleting the prior record, per "record
-decisions with their scope" above — the earlier PR #107 body text
-elsewhere in git history still describes the gitignored phase
-accurately for what it was at the time.
-
-Consequence, and the reason this is spelled out exactly rather than by
-example: reconstructing these stubs from a one-example-plus-inference
-description is exactly the kind of drift this file exists to prevent,
-so the four files are byte-exact here, not summarized — useful now for
-verifying the committed files match, and would matter again the moment
-any of them stopped being committed. Each stub's content is only the
-`@` line(s) below; the wrapping HTML-comment explaining *why* (visible
-with the Read tool, stripped from context otherwise — see "Block-level
-HTML comments" in Claude Code's memory docs) is optional decoration,
-not load-bearing, and can be omitted or reworded freely on
-reconstruction:
+Each of the four directories above (`docs/`, `bench/`, `demos/`, `ports/`)
+also gets a nested per-directory `CLAUDE.md` stub (bare filename — nested
+`.claude/CLAUDE.md` is not a real discovery path; that's reserved for
+settings/skills/rules) that does nothing but `@`-import the file(s)
+already listed for it above, so Claude Desktop's context-tracker "Memory
+files" panel lists `docs/SPEC.md` and friends as their own entries. The
+`@`-import is not lazy about *content* — the stub force-loads the entire
+imported file(s) the moment it fires, a real, compounding cost paid by
+every clone and contributor. The four stubs are committed, tracked
+files, byte-exact with the table below — reconstructing them from a
+one-example-plus-inference description is exactly the kind of drift this
+file exists to prevent. (`HISTORY.md` has the story of how this mechanism
+evolved — it started gitignored and opt-in before being proven and
+committed.)
 
 | File | Content |
 | --- | --- |
@@ -392,105 +356,6 @@ reconstruction:
 | `ports/CLAUDE.md` | `@README.md` / `@pyl/CONTRACT.md` / `@icaa/README.md` / `@claudewave/README.md` |
 
 (Each `/`-separated entry is its own line in the file, in that order.)
-
-## Release ledger (source material for release posts)
-
-- **v0.1** — the language: lexer, parser, unification inference with
-  generics, Maranget exhaustiveness, bytecode compiler, stack VM, mark-sweep
-  GC, REPL, formatter, disassembler, golden-test harness, spec, book.
-- **v0.2** — impl blocks (methods on user types), the `?` operator,
-  multi-file modules (`import`, diamond dedup, cycle detection), tail-call
-  optimization.
-- **v0.3** — `pub` visibility (private-by-default modules), operator methods
-  (`add`/`sub`/…), `SOCRATES_PATH` search path, `fs`/`os` namespaces.
-- **v0.4** — `socrates test` command, the embedded standard library
-  (json/flags/path/strings/iter, written in Socrates), `socrates lsp`, catchable
-  panics (`try`).
-- **v0.5** — REPL imports, LSP completion, the book became a CI test suite.
-- **v0.6 — the field-test release.** Ten demo programs written by ten
-  independent authors under orders to report every papercut; ten hit the
-  same dozen walls, and the release is those walls removed. One genuine RNG
-  bug their tests caught: `math.seed` set state to `seed | 1`, so adjacent
-  seeds `2k`/`2k+1` produced identical streams; fixed with SplitMix64
-  scrambling. Triage in `demos/NOTES.md`.
-- **v0.7 — the infrastructure release.** `Bytes` (packed buffers, binary
-  I/O, wire formats); native `fft` namespace (radix-2 + Bluestein, numpy
-  conventions, CI-cross-checked at 1e-9); OS-thread `worker` isolates with
-  string channels; Int bitwise operators (`& | ^ << >>`) plus intrinsics
-  (`count_ones`/`ushr`/`rotate_*`/`to_hex`) and Bytes readers/BE pushers;
-  feature-gated `gpu` compute (wgpu, first optional dep, default build stays
-  zero-dep); a std collections layer (`set`/`deque`/`lists`, `strings.Builder`);
-  a line-width-aware formatter. Two ports validated to numeric/pixel
-  equality (ICAA 18/18 pixel-exact; claudewave 32/32 battery, 29 bit-exact).
-  Then a measured efficiency pass (see `bench/RESULTS.md`): checkers −15%,
-  lisp −20%, string building −55%, map ops −37%, GC-stress suite −67% on the
-  heaviest demo — all with byte-identical golden output. Finally, distribution:
-  `socrates build` staples a program (modules, data files, worker `.soc`s) onto
-  the interpreter as an appended, dependency-free payload the binary reads from
-  its own tail at startup — a self-contained executable whose output is
-  byte-identical to the source run. Target-independent stapling (`--launcher`)
-  lets one host cross-build the whole **demo zoo**: all seventeen demos for
-  `x86_64`/`aarch64` Linux + Windows and Apple-Silicon macOS, shipped in the
-  release. macOS can't append (a payload past the Mach-O `__LINKEDIT` fails
-  `codesign` and arm64 won't run unsigned), so there the payload is linked in
-  as a `__DATA,__socrateszoo` section (`ld -sectcreate`; `socrates build
-  --payload-only` emits it; `read_self` parses the running image to read it
-  back) and ad-hoc signed. Developer ID signing + notarization are wired in
-  `release.yml`, dormant until the `MACOS_CERT_P12_BASE64` etc. secrets exist.
-- **v0.8 — native graphics and compute + the demo round's feature
-  queue.** The v0.7 demo round left a
-  ranked, deduplicated feature-request queue (`demos/NOTES.md`); this
-  release works through it directly rather than via a fresh round.
-  `if let`/`while let` (pure parser sugar, desugared fully to `match`/`while`
-  at parse time — the checker and compiler need no special cases); bitwise
-  compound assignment (`&= |= ^= <<= >>=`); hex/binary literals now express
-  the full 64-bit pattern (bit 63 included) plus `String.parse_hex()`;
-  `Bytes` 64-bit accessors (`push`/`read_u64le`/`be`); `Int.wrapping_add`/
-  `sub`/`mul`; `fft.magnitude`; `Range.any`/`all`; non-blocking
-  `worker.try_recv()`; `strings.Builder.is_empty`/`push_joined`;
-  `lists.min_by_key`/`max_by_key`; a new `std.lazy` module (`Lazy[T]`,
-  deferred/memoized computation); ergonomic `std.json` construction
-  (`obj`/`arr`/`jstr`/`num`/`int`/`bool`/`null`); and `socrates test --bless`,
-  which rewrites mismatched `//? expect:` lines in place when the
-  actual/expected count already agrees. One item (a counting-map helper)
-  declined — one demo, one-line workaround, `std` grows reluctantly. Four
-  items in the original queue turned out to already be shipped in v0.7's
-  own efficiency pass; `demos/NOTES.md` now says so.
-  **And, in the same release, the native graphics-and-compute
-  programme** — the standing roadmap directive executed end to end: `std.glm` (GLM-shaped
-  vector/matrix/quaternion math, pure Socrates) + `Bytes` f32 accessors; the
-  `window` namespace (OpenGL via X11/GLX, Win32/WGL, Cocoa/CGL raw FFI) and
-  the GL-shaped `gfx` draw-call surface; the Metal backend (additive,
-  windows + compute, MSL, interpreter moved to the macOS main thread); the
-  Vulkan backend (compute + windowing + full gfx on Linux/X11 AND Windows,
-  SPIR-V with in-house reflection, lavapipe-pixel-proven, everything past
-  the surface in one shared `window/vulkan.rs` core); glcube rendering
-  byte-identical golden frames on GL, Metal, and Vulkan; five native
-  compute backends (metal/MSL, vulkan/SPIR-V, opencl/SPIR-V via
-  clCreateProgramWithIL proven on Intel's CPU runtime, cuda/PTX
-  graceful-proven, d3d12/HLSL WARP-proven; precedence metal > vulkan >
-  d3d12 > cuda > opencl; two SPIR-V compute profiles in SPEC § 7.2); and
-  the wgpu/pollster deletion the moment coverage landed — `Cargo.toml` has
-  no `[dependencies]` section, `Cargo.lock` is 7 lines, CI asserts the
-  one-line `cargo tree` per feature set. Shared cores extracted at each
-  second consumer: `objc.rs`/`mtl.rs`, `vk.rs`, `window/vulkan.rs`
-  (−1212 lines; the lavapipe asserts prove the code Windows runs). Book
-  ch8 gained executable `std.glm` + `window`/`gfx` sections.
-  **And, folded in before the release was ever published** (the same way
-  an earlier mis-cut became this release's feature-queue half): the
-  minification pass (the four-arch Bench A/B gate; the compact dispatch
-  loop with the per-target `monolithic_dispatch` binding; `fft.magnitude`
-  moved to `std.fft`; the math namespace minified to what only it
-  provides; the `std.json` escape fast path; the demo adoption gap
-  closed; the `List.sum()` native with `lists.sum` as its one-line
-  wrapper; four VM superinstructions fusing the hottest operand-fetch
-  pairs, with jump-target-safe fusion after patching), the consistency
-  passes (SPEC↔implementation reconciliation,
-  ports validating exactly what CI enforces with 184 new cross-checks,
-  the bench harness enforcing its own claims, the core docs re-measured
-  against the current system, STYLE.md made normative with the demos
-  conforming), and the rename itself — Fable became Socrates, with the
-  rationale recorded atop this file and in the CHANGELOG.
 
 ## Workflow conventions
 
@@ -512,26 +377,25 @@ reconstruction:
   existing verdict without a re-run. Feature work happens on a
   dedicated branch off `main`.
 - Non-landing work is pushed for durability without a PR: a dropped
-  probe or a held wave lives on its pushed branch (`archive/h2-small-list` and
-  the W1a hold are the precedents). PRs are for changes meant to merge,
-  drafts for releases, archival branches for neither.
+  probe or a held wave lives on its own pushed branch rather than being
+  discarded or forced into a PR that was never going to merge. PRs are
+  for changes meant to merge, drafts for releases, archival branches for
+  neither.
 - Commit messages state what changed and (for perf) the measured delta,
   and end with the two attribution trailers (`Co-Authored-By` and the
   `Claude-Session` link) — the accepted channel for session
   attribution, and the *only* one.
 - The spec-suite count is stated in exactly five places — `README.md`
   (×2), this file (×2), and `.github/RELEASE_NOTES.md` — and a count
-  change updates all five in the same PR (the release draft that
-  shipped saying 311 while the suite stood at 313 is why this list
-  exists). The same discipline covers every other prose-stated count
-  — book snippets executed/total, the demo-golden count, the spelled-
-  out demo-program count — each with its own set of stating places.
-  `tools/check_counts.sh` (run in CI's Test job) is the enforcement:
-  it extracts every counted sentence by exact anchor and diffs it
-  against a fresh run, so drift fails loudly instead of shipping; a
-  sentence reworded without updating its anchor fails just as loudly
-  ("anchor matched nothing"), which is the intended fail-closed
-  behavior — re-anchor in the same PR that reworks the prose.
+  change updates all five in the same PR. The same discipline covers
+  every other prose-stated count — book snippets executed/total, the
+  demo-golden count, the spelled-out demo-program count — each with its
+  own set of stating places. `tools/check_counts.sh` (run in CI's Test
+  job) is the enforcement: it extracts every counted sentence by exact
+  anchor and diffs it against a fresh run, so drift fails loudly instead
+  of shipping; a sentence reworded without updating its anchor fails
+  just as loudly ("anchor matched nothing"), which is the intended
+  fail-closed behavior — re-anchor in the same PR that reworks the prose.
 - **A fixed target does not rot.** When CI fails on a pinned, fixed
   artifact — a runner image, an action pinned by SHA, a vendored blob —
   the artifact is the *last* suspect: the failure is almost always the
@@ -543,9 +407,6 @@ reconstruction:
   restarts itself, so act immediately: push or empty-commit re-fire —
   then user-level intervention for persistent access/policy failures.
   Re-scoping or retiring the fixed target is never the inferred fix.
-  First instance: the 2026-07-18 macos-14 job whose runner's DNS
-  failed resolving codeload mid-job after fetching from the same host
-  seconds earlier.
 - **Session mechanics — durable on purpose.** Rules that lived only in
   session memory kept getting dropped between sessions (session ledgers
   die with their containers), so they live here now; a session ledger
@@ -554,39 +415,32 @@ reconstruction:
   the default rather than fight it — fighting defaults is how the
   triple-footer happened. The rules:
   - Every git-mutating shell command opens
-    `cd <dir> && pwd && git branch --show-current` — the
-    wrong-checkout commits are the recorded incidents.
-  - If a session ever holds more than one clone of the repo
-    (post-rename re-registration is how it first happened), the
+    `cd <dir> && pwd && git branch --show-current`.
+  - If a session ever holds more than one clone of the repo, the
     harness-served clone is pulled after every CLAUDE.md-touching
     merge until the checkouts are consolidated.
   - Branches are deleted only in user-directed cleanups, never
-    unilaterally (the 2026-07-18 bulk cleanup is the precedent).
-    Before a cleanup, anything a standing record references moves to
-    an `archive/*` branch. The App's credentials can create refs but
-    not delete them, so deletions run through the release-by-PR
-    pattern: a user-directed PR edits `.github/CLEANUP_BRANCHES`, and
-    `cleanup.yml` (contents: write; refuses `main`, `archive/*`,
-    `claude/*`) performs the deletions when the change lands on main.
+    unilaterally. Before a cleanup, anything a standing record
+    references moves to an `archive/*` branch. The App's credentials
+    can create refs but not delete them, so deletions run through the
+    release-by-PR pattern: a user-directed PR edits
+    `.github/CLEANUP_BRANCHES`, and `cleanup.yml` (contents: write;
+    refuses `main`, `archive/*`, `claude/*`) performs the deletions
+    when the change lands on main.
   - A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
   - Never run bare `cargo fmt` — the tree has never been through it,
-    so `cargo fmt --check` diffs every `.rs` file, not a targeted few
-    (measured 2026-07-18: hundreds of hunks across the whole tree —
-    run `cargo fmt --check | grep -c '^Diff in'` for today's figure
-    rather than trusting a number written down here, since it drifts
-    as the tree grows; the point is that it's whole-tree, not the
-    exact count).
+    so `cargo fmt --check` diffs every `.rs` file, not a targeted few.
+    Run `cargo fmt --check | grep -c '^Diff in'` for the current figure
+    rather than trusting a number written down here, since it drifts as
+    the tree grows; the point is that it's whole-tree, not the exact
+    count.
   - The model identifier appears in no pushed artifact — chat only
     (this restates the hosted-environment policy so the rule survives
     outside it). This includes the commit-trailer `Co-Authored-By`
-    *name*, not just prose: "Claude Fable 5" is a model-identifier
-    variant and leaked into every commit trailer for a full session
-    before being caught (2026-07-18) — the existing wording didn't
-    name the trailer explicitly, so it didn't get checked against a
-    channel the rule already covered in principle. The trailer name
-    is plain `Claude`, nothing else, going forward; past commits are
-    not rewritten (history is not edited retroactively for this).
+    *name*, not just prose — the trailer name is plain `Claude`,
+    nothing else, going forward; past commits are not rewritten
+    retroactively for this.
   - Decision forks go to the user as plain-text lettered options, not
     interactive question UI.
   - Long CI waits are handled by scheduled self check-ins, never
@@ -594,27 +448,20 @@ reconstruction:
     available to a delegated subagent. A subagent briefed to push,
     wait on a bench/CI run, and continue has no independent wakeup of
     its own: told to just "wait," it ends its turn and stalls, needing
-    a manual resume every single time (the PR #103 x86_64-linux
-    investigation's agent did this twice in a row). The fix for that
-    case is the mirror image of this rule, not an exception to it: a
-    subagent waiting on a run polls *within its own turn*, a bounded
-    bash loop (`sleep` + a status check, capped at enough iterations to
-    cover one run), and only ends its turn once it has an actual result
-    or has exhausted the cap — never on a bare "standing by."
+    a manual resume every single time. The fix for that case is the
+    mirror image of this rule, not an exception to it: a subagent
+    waiting on a run polls *within its own turn*, a bounded bash loop
+    (`sleep` + a status check, capped at enough iterations to cover one
+    run), and only ends its turn once it has an actual result or has
+    exhausted the cap — never on a bare "standing by."
   - **A signal is a prompt to check, not a substitute for checking.**
     A task-notification, webhook event, or elapsed check-in interval
     means "go verify the actual state now" — not "the state is
-    whatever the signal implies." Recorded instance (2026-07-18): a
-    combined-status API call returned zero checks on a repo that
-    reports exclusively through the newer Checks API, and that empty
-    result was read as "still pending" rather than as a wrong-tool
-    warning sign — two PRs sat fully green while a scheduled check-in
-    was awaited instead of a direct look. The fix is procedural, not a
-    one-off: when a check comes back ambiguous, empty, or merely
-    "not yet," the next move is a *different, more direct* query
-    against the actual repo/CI state (the Checks API here, but the
-    general shape — go to the source of truth, don't wait on the
-    signal layer to resolve itself) — not another wait cycle.
+    whatever the signal implies." When a check comes back ambiguous,
+    empty, or merely "not yet," the next move is a *different, more
+    direct* query against the actual repo/CI state — go to the source
+    of truth, don't wait on the signal layer to resolve itself — not
+    another wait cycle.
   - **A wakeup firing is never a terminal, silent event.** Every
     scheduled check-in resolves in exactly one of two states, in
     order: (1) check whatever pending status it was armed for
@@ -623,16 +470,13 @@ reconstruction:
     dies silently between firings; (2) if nothing further is
     automatable (a decision needs the user, or the work is genuinely
     done), end the turn by saying so explicitly, never with just tool
-    calls and no wakeup and no closing status. Recorded instance
-    (2026-07-18): a check-in armed for in-flight bench-matrix samples
-    went quiet with the work unfinished and no follow-up wakeup armed
-    — the user had to notice the stall and ask.
+    calls and no wakeup and no closing status.
   - **Anything structural or behavioral about how memory itself is
-    configured** — CLAUDE.md/CLAUDE.local.md conventions, what gets
-    committed vs. gitignored, nested-stub patterns and their exact
-    content — lands here, byte-exact, the same session it's decided,
-    same as any other rule on this list. This is that rule applied to
-    itself: Claude Code's own auto-memory ("memories folder",
+    configured** — CLAUDE.md conventions, what gets committed,
+    nested-stub patterns and their exact content — lands here,
+    byte-exact, the same session it's decided, same as any other rule
+    on this list. This is that rule applied to itself: Claude Code's
+    own auto-memory ("memories folder",
     `~/.claude/projects/<project>/memory/`) is explicitly machine-local
     and does not survive a fresh container or a different session's
     checkout, and a scratchpad session ledger is even more ephemeral
@@ -640,9 +484,7 @@ reconstruction:
     *reconstruction* source, not a durable one, and reconstructing from
     a partial or ambiguous description (one example generalized by
     inference, say) is where drift creeps in between sessions or across
-    a model swap. PR #107's nested-`CLAUDE.local.md` saga (three rounds
-    of correction in one session before the mechanism and its exact
-    file contents were spelled out here) is the recorded instance.
+    a model swap.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,
