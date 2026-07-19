@@ -160,6 +160,20 @@ numbers: `bench/RESULTS.md`.
   discarded or forced into a PR that was never going to merge. PRs are
   for changes meant to merge, drafts for releases, archival branches for
   neither.
+- **Landing work gets cleaned up immediately, not batched (user-directed,
+  2026-07-19).** The steady state on origin is `main`, the single reused
+  `claude/*` worker branch, and the explicitly-permanent exceptions
+  (`archive/*`, the "never merges" probes) — nothing else lingers. As
+  soon as a branch's purpose is served — its PR merges, a
+  judgment-candidate `bench/<name>` run is judged, a probe's finding is
+  fully written up — queue it in `.github/CLEANUP_BRANCHES` and open the
+  cleanup PR right away, rather than letting it wait for the weekly
+  Routine's batch; the Routine is a backstop for anything missed, not
+  the primary path. A probe that's pushed but never actually needed
+  live reproducibility (its finding is already complete as prose) isn't
+  worth rebasing to keep green — see HISTORY.md's `h3-probe-no-glc`
+  incident for why fixing an old probe's CI is usually not the better
+  plan.
 - Commit messages state what changed and (for perf) the measured delta,
   and end with the two attribution trailers (`Co-Authored-By` and the
   `Claude-Session` link) — the accepted channel for session
@@ -228,10 +242,17 @@ numbers: `bench/RESULTS.md`.
         them.
      e. `cleanup.yml` itself follows the same propose-automated/
         merge-human split one level down: after deleting branches, it
-        opens its own small PR pruning their now-resolved entries from
-        `CLEANUP_BRANCHES` (a direct push to `main` doesn't work —
-        proven live 2026-07-19, `main`'s branch protection rejects it
-        outright) rather than pushing the trim directly.
+        pushes a `cleanup/prune-<run-id>` branch with their now-resolved
+        entries removed from `CLEANUP_BRANCHES`, rather than pushing the
+        trim directly (a direct push to `main` doesn't work — proven
+        live 2026-07-19, `main`'s branch protection rejects it
+        outright). Its own `gh pr create` on that branch reliably fails
+        — proven live 2026-07-19 on two separate runs — because this
+        repo doesn't allow GitHub Actions to create pull requests (a
+        distinct restriction from the ref-deletion 403 above, at the
+        repo-settings level rather than the App's credential scope): a
+        human or session opens the PR from the pushed branch by hand
+        every time, until that setting changes.
   4. A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
   5. Never run bare `cargo fmt` — the tree has never been through it,
