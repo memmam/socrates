@@ -332,6 +332,42 @@ numbers: `bench/RESULTS.md`.
   process/history belongs here in `CLAUDE.md` and the files above, never in
   the book).
 
+**Decided (PR #107, 2026-07-19):** each of the four directories above
+also gets a nested per-directory `CLAUDE.local.md` stub (bare filename
+— nested `.claude/CLAUDE.md` is not a real discovery path; that's
+reserved for settings/skills/rules, confirmed against Claude Code's
+monorepo docs) that does nothing but `@`-import the file(s) already
+listed for it above. Purely so Claude Desktop's context-tracker "Memory
+files" panel lists `docs/SPEC.md` and friends as their own entries,
+lazily, the first time a session reads a file in that subdirectory. The
+`@`-import is not lazy about *content* — the stub force-loads the
+entire imported file(s) the moment it fires — so this is
+`CLAUDE.local.md`, not `CLAUDE.md`: per `.gitignore`'s `CLAUDE.local.md`
+rule, gitignored and never committed, so the eager-load cost and the
+files themselves stay opt-in per checkout, never imposed on every clone
+or contributor.
+
+Consequence, and the reason this is spelled out exactly rather than by
+example: these stubs don't propagate through git — a fresh clone,
+container, or model swap won't have them. Reconstructing them from a
+one-example-plus-inference description is exactly the kind of drift
+this file exists to prevent (see "record decisions with their scope"
+above), so the four files are byte-exact here, not summarized. Each
+stub's content is only the `@` line(s) below; the wrapping HTML-comment
+explaining *why* (visible with the Read tool, stripped from context
+otherwise — see "Block-level HTML comments" in Claude Code's memory
+docs) is optional decoration, not load-bearing, and can be omitted or
+reworded freely on reconstruction:
+
+| File | Content |
+| --- | --- |
+| `docs/CLAUDE.local.md` | `@SPEC.md` / `@ARCHITECTURE.md` / `@RELEASING-macOS.md` |
+| `bench/CLAUDE.local.md` | `@RESULTS.md` |
+| `demos/CLAUDE.local.md` | `@NOTES.md` / `@STYLE.md` |
+| `ports/CLAUDE.local.md` | `@README.md` / `@pyl/CONTRACT.md` / `@icaa/README.md` / `@claudewave/README.md` |
+
+(Each `/`-separated entry is its own line in the file, in that order.)
+
 ## Release ledger (source material for release posts)
 
 - **v0.1** — the language: lexer, parser, unification inference with
@@ -530,6 +566,22 @@ numbers: `bench/RESULTS.md`.
     interactive question UI.
   - Long CI waits are handled by scheduled self check-ins, never
     polling loops.
+  - **Anything structural or behavioral about how memory itself is
+    configured** — CLAUDE.md/CLAUDE.local.md conventions, what gets
+    committed vs. gitignored, nested-stub patterns and their exact
+    content — lands here, byte-exact, the same session it's decided,
+    same as any other rule on this list. This is that rule applied to
+    itself: Claude Code's own auto-memory ("memories folder",
+    `~/.claude/projects/<project>/memory/`) is explicitly machine-local
+    and does not survive a fresh container or a different session's
+    checkout, and a scratchpad session ledger is even more ephemeral
+    (gone the moment its container is reclaimed) — either one is a
+    *reconstruction* source, not a durable one, and reconstructing from
+    a partial or ambiguous description (one example generalized by
+    inference, say) is where drift creeps in between sessions or across
+    a model swap. PR #107's nested-`CLAUDE.local.md` saga (three rounds
+    of correction in one session before the mechanism and its exact
+    file contents were spelled out here) is the recorded instance.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,
