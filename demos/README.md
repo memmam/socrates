@@ -28,7 +28,7 @@ SOCRATES_GC_STRESS=1 ./target/release/socrates test demos/!(glcube)/ demos/glcub
 | [`wfc/`](wfc/) | Wave-function collapse: learns tile adjacency from ASCII samples, generates new textures by entropy-driven constraint propagation. | The spec pins the *contract*, not just output: zero adjacency violations, same-seed determinism, and a provably impossible tile set that must exhaust its seed budget. |
 | [`parmandel/`](parmandel/) | The Mandelbrot set rendered by four worker isolates (v0.7), each band on its own OS thread in its own VM, streaming rows back over string channels. | The output pins exactly despite true parallelism: per-worker message order is FIFO and assembly drains band by band — determinism by protocol, not by luck. |
 | [`synthwave/`](synthwave/) | A chiptune track renderer: square + triangle + LFSR-noise voices with ADSR envelopes, two bars of 12/8 at 8000 Hz, packed into the committed, playable `track.wav` via the v0.7 Bytes LE pushers. | The tune proves itself twice: the rebuild must equal the committed WAV byte-for-byte (no `math.sin` in the signal path — phase accumulators and bitwise ops only), and `fft.rfft` must re-detect each probe note on its exact intended bin, 3rd harmonic as runner-up. |
-| [`png/`](png/) | A PNG encoder over `std.crc`/`std.png`'s from-scratch CRC-32/Adler-32/*stored*-deflate primitives, plus the demo's own 48x32 integer-math plasma — a fully valid PNG with no compression at all. | The committed `out.png` is pinned byte-identical to a fresh build via structural `Bytes ==`, the parser re-verifies every checksum in its own file, and the IEND chunk's CRC must equal the published constant `ae426082` — a number the program cannot invent. |
+| [`png/`](png/) | A PNG encoder over `std.crc`/`std.zlib`/`std.png`'s from-scratch CRC-32/Adler-32/*stored*-deflate primitives, plus the demo's own 48x32 integer-math plasma — a fully valid PNG with no compression at all. | The committed `out.png` is pinned byte-identical to a fresh build via structural `Bytes ==`, the parser re-verifies every checksum in its own file, and the IEND chunk's CRC must equal the published constant `ae426082` — a number the program cannot invent. |
 | [`bloom/`](bloom/) | A Bloom filter over `Bytes`: FNV-1a and a xorshift* mixer, hand-built from the v0.7 bitwise operators, double-hash a 500-word generated corpus into 512 bytes — then a `std.set` oracle grades every answer. | Zero false negatives and an exact pinned false-positive count (38/2000) landing on the textbook `(1-e^(-kn/m))^k`; a 32x32 multiply in 16-bit halves because Int overflow panics; the committed `filter.bin` regenerates byte-identically. |
 | [`spectra/`](spectra/) | A chord analyzer on `fft.rfft`: just-intonation chords synthesized onto exact integer bins, then re-identified from the spectrum alone — ASCII bar spectrograms, `max_by` + a set-marked top-k, and gcd-reduced ratios naming major/minor/fifth. | One-second windows make bin k exactly k Hz, so ~115 lines of spectral analysis pin exactly; Parseval, the `ifft(fft(x))` round trip, and a naive-DFT cross-check all hold at 1e-9 — Bluestein path included (n = 600 and 12). |
 | [`swarm/`](swarm/) | A worker-pool job scheduler: three isolates crunch Collatz and prime-count jobs from a `std.deque` queue over a `std.json` protocol — static assignment, dynamic feed-on-return balancing, and panic isolation. | A fragile worker's panic comes back as `Err` from `join` and its job JSON re-runs on a fresh isolate; the dynamic section pins only schedule-independent facts, so a smarter scheduler could drop in without re-pinning a line. |
@@ -68,11 +68,12 @@ README. Their issue reports — deduplicated, triaged, and answered — are in
 [`NOTES.md`](NOTES.md); the fixes they drove became v0.6, and the demos
 were then modernized to use what they'd asked for.
 
-The same process ran again for **v0.7**: seven new demos (`synthwave`,
-`png`, `bloom`, `spectra`, `swarm`, `reversi`, `parmandel`) built on the
+The same process ran again for **v0.7**: six new demos built on the
 infrastructure release (Bytes, FFT, workers, bitwise, the std collections)
-plus a modernization pass over all ten existing ones, seventeen authors
-and seventeen adversarial verifiers in all. That round's triage is in
+plus a modernization pass over all eleven existing ones, seventeen authors
+and seventeen adversarial verifiers in all. (Correction: that's actually
+seven new — `parmandel` included — and ten existing; see `NOTES.md`
+§ "The v0.7 round" for the detail.) That round's triage is in
 `NOTES.md` § "The v0.7 round", and its distilled house rules — best
 practices as designed to now — are [`STYLE.md`](STYLE.md).
 

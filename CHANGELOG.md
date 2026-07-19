@@ -4,80 +4,10 @@ Each release was shipped as one reviewed pull request. Golden spec tests pin
 every feature listed here, and `docs/SPEC.md` marks each with the version
 that introduced it.
 
-## Unreleased
-
-- **`std.wav`**, a new std module: RIFF/WAVE PCM audio
-  over `Bytes` — `encode(samples, sample_rate, channels)` (mono or
-  stereo, 16-bit, stereo interleaved). Encode only, deliberately no
-  decoder: nothing in the tree reads a WAV file back in as input, so a
-  decoder would be speculative surface, not the minimal implementation
-  the standard library holds itself to. Generalizes what used to be a
-  mono-only demo-local writer in `demos/synthwave/wav.soc` (now a
-  one-line wrapper over it, golden output unchanged) and backs
-  `ports/pyl/CONTRACT.md`'s "the Socrates side can also emit WAV
-  directly" with real, tested code: `pyl.audio` gained `write_wav`
-  (16-bit PCM, `[-1, 1]`-clamped and quantized by `round(x * 32767)`,
-  matching `paw2wav.py`'s existing convention) — verified by reading the
-  written header/sample bytes back directly, the same way
-  `demos/synthwave/checks.soc` verifies its own encoder, no decoder
-  needed. Also fixes a pre-existing gap found while touching the same
-  list: `std.fft` was registered for resolution but missing from the
-  completion/error-message name list since the wave that added it.
-- **`std.svg`, `std.markdown`, `std.crc`, `std.zlib`, `std.png`** —
-  five more std modules (seventeen now ship), applying the `std.wav`
-  lesson across the rest of the demo zoo: any demo that was, at its
-  core, a from-scratch encoder of a real, reusable file format had that
-  encoder promoted to `std`, split into independently reusable pieces,
-  while demo-specific domain logic (chart layout, site templating,
-  plasma rendering) stayed put. `std.svg` (from `demos/plot/svg.soc`)
-  and `std.markdown` (from `demos/mdsite/markdown.soc`) moved
-  **unchanged** — both were already fully generic. `std.crc` (CRC-32 +
-  Adler-32, from `demos/png/crc.soc`) also moved unchanged. `std.zlib`
-  (from `demos/png/zlib.soc`) renamed `deflate_stored`/`inflate_stored`
-  to `wrap`/`unwrap` (`Inflated` to `Unwrapped`): those verbs imply real
-  LZ77/Huffman compression, and none ever happens — every byte in comes
-  out unchanged, framed as a valid stream via RFC 1951's *stored*-block
-  trapdoor. Unlike `std.wav.decode`, `std.zlib.unwrap` keeps a real
-  consumer (the demo's own round-trip and corruption-drill goldens), so
-  it stays. `std.png` (from `demos/png/png.soc`) moved unchanged except
-  `encode` taking `block_size` as an explicit parameter instead of a
-  hardcoded module constant — the demo's own `2000` was a test-specific
-  choice (forcing a small image through the multi-block path), not a
-  std-level default. `demos/png/bits.soc` lost its
-  `push_u32be`/`read_u32be`/`read_u16le` wrappers (one-line
-  pass-throughs to the v0.7 `Bytes` natives already; the new std
-  modules call those directly), keeping only its own hex-formatting
-  presentation helpers. Every demo's golden output verified
-  byte-identical, with two necessary exceptions: `zlib.wrap`'s
-  block-size-range panic (unavoidably renamed, and unpinned by any
-  test), and `demos/mdsite/content/about.md`'s page text (which named
-  `markdown.soc` explicitly to a site visitor — corrected to
-  `std.markdown`, cascading into `main.soc`'s build-report numbers and
-  the committed `out/about.html`, both re-pinned/regenerated). Removing
-  5 files from the demo tree drops the golden demo-test count from 73
-  to 68 (each print-free module counted as its own test).
-- **Closures capturing ≤2 upvalues no longer heap-allocate a `Vec` for
-  them** — `Obj::Closure`'s upvalue storage is now `UpvalStorage`, an
-  inline-slots-or-spill representation (`Obj` size unchanged: the new
-  enum is the same 24 bytes as the `Vec` it replaces). Reopens and
-  reverses a standing negative result (`bench/RESULTS.md`'s "inline ≤2
-  upvals" entry, rejected pre-H1 on a codegen-lottery premise H1 later
-  killed). Four-arch matrix verdict, per the universality principle:
-  `closure_churn` −10% to −19% on x86_64-windows and aarch64-macos
-  (`InlineUpvals`); aarch64-linux and x86_64-linux keep plain
-  `Vec<Handle>` instead, each for its own measured reason (a build.rs
-  `upvals_vec_handle` cfg records both) — aarch64-linux because
-  `InlineUpvals` reproduced a broad Neoverse dispatch-loop-body-
-  complexity regression, x86_64-linux because a `for_range` residual
-  that touches no closures at all turned out to be a real
-  representation cost there too, confirmed by a dedicated hypothesis
-  test (`bench/inline-upvals-x64-probe`) rather than assumed. Full
-  write-up, with every sample, in `bench/RESULTS.md`.
-
 ## v0.8.0 — native graphics and compute; the demo round's feature queue
 
-One release, three workstreams (the third folded in before the release
-was ever published). First, the standing directive from
+One release, four workstreams (the third and fourth folded in before the
+release was ever published). First, the standing directive from
 `CLAUDE.md`'s roadmap: replace the one quarantined dependency (wgpu) with
 native raw-FFI backends for every graphics and compute API worth having,
 built over a maximally-performant, minimal-duplication shared core —
@@ -89,9 +19,10 @@ Second, the feature-request queue the v0.7 demo round left behind, worked
 through directly (the second sub-block below). Third, the minification
 and consistency passes — and, landing with them, the language's rename to
 Socrates — originally cut as an unreleased v0.9 and folded back into this
-never-published release (the final sub-block). 311 spec tests;
-eighteen demos (`glcube` joins the zoo) with every golden byte-identical
-throughout.
+never-published release (the third sub-block). Fourth, promoting six
+demo-local, from-scratch file-format encoders into `std` (the fourth
+sub-block). 313 spec tests; eighteen demos (`glcube` joins the zoo) with
+every golden byte-identical throughout.
 
 - **`std.glm`** — vector/matrix/quaternion math named and shaped after
   GLM (`vec3`, `perspective`, `look_at`, `proj.mul(view).mul(model)`),
@@ -201,11 +132,82 @@ round"); this release works through it directly:
   landed within v0.7's own efficiency pass; the queue predated that and
   was never updated to match.
 
+**The demo-to-std promotion.** Six std modules promoted out of
+demo-local code that turned out to be reusable file-format machinery,
+not demo-specific domain logic (seventeen std modules ship in total):
+
+- **`std.wav`** — RIFF/WAVE PCM audio over `Bytes`:
+  `encode(samples, sample_rate, channels)` (mono or stereo, 16-bit,
+  stereo interleaved). Encode only, deliberately no decoder: nothing in
+  the tree reads a WAV file back in as input, so a decoder would be
+  speculative surface, not the minimal implementation the standard
+  library holds itself to. Generalizes what used to be a mono-only
+  demo-local writer in `demos/synthwave/wav.soc` (now a one-line
+  wrapper over it, golden output unchanged) and backs
+  `ports/pyl/CONTRACT.md`'s "the Socrates side can also emit WAV
+  directly" with real, tested code: `pyl.audio` gained `write_wav`
+  (16-bit PCM, `[-1, 1]`-clamped and quantized by `round(x * 32767)`,
+  matching `paw2wav.py`'s existing convention) — verified by reading the
+  written header/sample bytes back directly, the same way
+  `demos/synthwave/checks.soc` verifies its own encoder, no decoder
+  needed. Also fixes a pre-existing gap found while touching the same
+  list: `std.fft` was registered for resolution but missing from the
+  completion/error-message name list since the wave that added it.
+- **`std.svg`, `std.markdown`, `std.crc`, `std.zlib`, `std.png`** —
+  five more, applying the `std.wav` lesson across the rest of the demo
+  zoo: any demo that was, at its core, a from-scratch encoder of a
+  real, reusable file format had that encoder promoted to `std`, split
+  into independently reusable pieces, while demo-specific domain logic
+  (chart layout, site templating, plasma rendering) stayed put.
+  `std.svg` (from `demos/plot/svg.soc`) and `std.markdown` (from
+  `demos/mdsite/markdown.soc`) moved **unchanged** — both were already
+  fully generic. `std.crc` (CRC-32 + Adler-32, from `demos/png/crc.soc`)
+  also moved unchanged. `std.zlib` (from `demos/png/zlib.soc`) renamed
+  `deflate_stored`/`inflate_stored` to `wrap`/`unwrap` (`Inflated` to
+  `Unwrapped`): those verbs imply real LZ77/Huffman compression, and
+  none ever happens — every byte in comes out unchanged, framed as a
+  valid stream via RFC 1951's *stored*-block trapdoor. Unlike
+  `std.wav.decode`, `std.zlib.unwrap` keeps a real consumer (the demo's
+  own round-trip and corruption-drill goldens), so it stays. `std.png`
+  (from `demos/png/png.soc`) moved unchanged except `encode` taking
+  `block_size` as an explicit parameter instead of a hardcoded module
+  constant — the demo's own `2000` was a test-specific choice (forcing
+  a small image through the multi-block path), not a std-level default.
+  `demos/png/bits.soc` lost its `push_u32be`/`read_u32be`/`read_u16le`
+  wrappers (one-line pass-throughs to the v0.7 `Bytes` natives already;
+  the new std modules call those directly), keeping only its own
+  hex-formatting presentation helpers. Every demo's golden output
+  verified byte-identical, with two necessary exceptions: `zlib.wrap`'s
+  block-size-range panic (unavoidably renamed, and unpinned by any
+  test), and `demos/mdsite/content/about.md`'s page text (which named
+  `markdown.soc` explicitly to a site visitor — corrected to
+  `std.markdown`, cascading into `main.soc`'s build-report numbers and
+  the committed `out/about.html`, both re-pinned/regenerated). Removing
+  5 files from the demo tree drops the golden demo-test count from 73
+  to 68 (each print-free module counted as its own test).
+
 **The minification and consistency passes.** The maximally performant set
 of minimal idioms that covers all functionality, judged per-architecture,
 then a consistency sweep aligning every claim in the tree with what CI
 actually enforces — and, landing with them, the rename:
 
+- **Closures capturing ≤2 upvalues no longer heap-allocate a `Vec` for
+  them** — `Obj::Closure`'s upvalue storage is now `UpvalStorage`, an
+  inline-slots-or-spill representation (`Obj` size unchanged: the new
+  enum is the same 24 bytes as the `Vec` it replaces). Reopens and
+  reverses a standing negative result (`bench/RESULTS.md`'s "inline ≤2
+  upvals" entry, rejected pre-H1 on a codegen-lottery premise H1 later
+  killed). Four-arch matrix verdict, per the universality principle:
+  `closure_churn` −10% to −19% on x86_64-windows and aarch64-macos
+  (`InlineUpvals`); aarch64-linux and x86_64-linux keep plain
+  `Vec<Handle>` instead, each for its own measured reason (a build.rs
+  `upvals_vec_handle` cfg records both) — aarch64-linux because
+  `InlineUpvals` reproduced a broad Neoverse dispatch-loop-body-
+  complexity regression, x86_64-linux because a `for_range` residual
+  that touches no closures at all turned out to be a real
+  representation cost there too, confirmed by a dedicated hypothesis
+  test (`bench/inline-upvals-x64-probe`) rather than assumed. Full
+  write-up, with every sample, in `bench/RESULTS.md`.
 - **`List.sum()` native + `lists.sum` as its wrapper**: the audit's
   keep-or-drop probe — only a native pass over the backing storage
   beats the std index loop, and it did: bench_lists **−55..−59% on all
@@ -418,12 +420,17 @@ actually enforces — and, landing with them, the rename:
   minimal wrapper over the native with the same name and byte-identical
   observable behavior (`reversi/bits.soc` remains the documented
   reference; the hand-rolled bodies live in git history).
-- The v0.7 demo round: seven new demos (`synthwave`, `png`, `bloom`,
-  `spectra`, `swarm`, `reversi`, `parmandel`) built on the new
-  infrastructure, all ten existing demos modernized to it, seventeen
-  writers plus seventeen adversarial verifiers. Best practices distilled into
+- The v0.7 demo round: six new demos (`synthwave`, `png`, `bloom`,
+  `spectra`, `swarm`, `reversi`) built on the new infrastructure, all
+  eleven existing demos modernized to it, seventeen writers plus
+  seventeen adversarial verifiers. Best practices distilled into
   `demos/STYLE.md`; the papercut triage is `demos/NOTES.md` § "The
-  v0.7 round".
+  v0.7 round". (Correction, 2026-07-19: the "six new" count omitted
+  `parmandel` — git history shows seven new demos and ten modernized,
+  seventeen either way; see `demos/NOTES.md`'s own correction note
+  under "The v0.7 round" for the detail. This entry is left as
+  originally shipped, per this project's own record-the-correction
+  convention.)
 - **Fixed (found by the round):** method calls and field access on
   module-qualified `pub let` members (`m.answer.to_float()`) no longer
   misresolve as enum paths; `worker.spawn` resolves relative files

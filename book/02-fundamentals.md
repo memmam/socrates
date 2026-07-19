@@ -150,8 +150,11 @@ println(y);
 ## Operators and precedence
 
 The operators are the usual suspects with the usual precedence: `*`, `/`, `%`
-bind tighter than `+` and `-`, which bind tighter than comparisons, which
-bind tighter than `&&` (short-circuit), which binds tighter than `||`:
+bind tighter than `+` and `-`, which bind tighter than the comparison
+operators, which bind tighter than `&&` (short-circuit), which binds
+tighter than `||`. The comparisons are actually two adjacent tiers, not
+one: `==`/`!=` are slightly looser than `<`/`<=`/`>`/`>=` — see below for
+why that split matters:
 
 ```soc
 println(1 + 2 * 3);
@@ -177,7 +180,10 @@ Integer division truncates toward zero, as `-7 / 2` shows. Equality (`==`,
 `!=`) is structural and requires both sides to have the same type.
 Comparisons do not chain: `1 < 2 < 3` is a parse error (`error[E0200]:
 comparison operators cannot be chained; use parentheses`) — write
-`1 < 2 && 2 < 3`.
+`1 < 2 && 2 < 3`. That ban applies within one tier only: mixing the two —
+`1 == 2 < 3` — parses fine by precedence, as `1 == (2 < 3)`, which is then
+a type error (`Bool` vs `Int`) rather than the chain error you might
+expect.
 
 `+` also concatenates strings (`"fab" + "le"` is `"fable"`), and the
 ordering operators compare strings lexicographically (`"apple" < "banana"`

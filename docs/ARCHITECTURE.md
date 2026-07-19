@@ -22,6 +22,13 @@ CompiledProgram: protos, constants, runtime type info
 execution
 ```
 
+Three small foundational modules underlie every stage above and have no
+box of their own: `source.rs` (the loaded-file + line/column lookup
+every `Span` resolves through), `token.rs` (the `TokenKind` `lexer.rs`
+produces and `parser.rs` consumes), and `diag.rs` (the diagnostic
+renderer behind every error and warning, in the format SPEC.md § 10
+documents).
+
 ## Lexing (`lexer.rs`)
 
 A hand-rolled scanner. The one interesting mechanism is **string
@@ -1038,7 +1045,11 @@ degenerate 1×1/8×1 resolutions — rendered by both implementations at
 both presets, 94 pixel-exact comparisons). 184 new cross-checks, all
 max_diff=0 on first run.
 
-## v0.9 additions (in progress)
+## v0.8 additions, continued: the demo-to-std promotion
+
+This work was originally cut as an unreleased v0.9 and folded back into
+v0.8 before that release was ever published (`CHANGELOG.md`'s v0.8.0
+entry has the full account) — it shipped, and isn't in progress.
 
 **`std.wav`** is a pure-Socrates module (no Rust beyond `stdlib.rs`'s
 embedded-module table gaining `std.wav`, the same one-line pattern

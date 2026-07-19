@@ -5,17 +5,40 @@
 # workflow itself after each run — a name doesn't stay listed once
 # it's gone, so a later unrelated branch reusing that name is never
 # silently swept up by a stale entry.
-# 2026-07-19 cleanup (user-directed): merged ancestors only, verified via
-# `git merge-base --is-ancestor <branch> main` before listing each one —
-# nothing here is lost by deleting the ref, main already carries the
-# content. Left untouched, pending adjudication (not merged; may be a
-# deliberately-preserved dropped probe or held wave per the
-# "non-landing work stays pushed" rule): bench/h1-binding-recheck,
-# bench/inline-upvals, bench/inline-upvals-x64-probe, probe-cmp-branch.
+# 2026-07-19 cleanup (user-directed), first pass: merged ancestors only,
+# verified via `git merge-base --is-ancestor <branch> main` before listing
+# each one — nothing here is lost by deleting the ref, main already
+# carries the content.
+#
+# 2026-07-19 cleanup (user-directed), second pass — full ahead-of-main
+# branch audit: `bench/inline-upvals` added below despite failing the
+# ancestor check (its history was squash/rebase-merged, so it is not
+# literally an ancestor of main) because its actual feature content was
+# verified present on main directly — `grep -n "InlineUpvals\|
+# UpvalStorage\|upvals_vec_handle" src/value.rs` and bench/RESULTS.md's
+# own "Inline upvalues" section confirm the mechanism and its per-target
+# binding are shipped and KEPT; the branch is a spent working copy, not a
+# preserved probe (bench/RESULTS.md's "never merges" language names three
+# *other* branches, not this one). `branch-cleanup-2026-07-19` and
+# `cleanup-prune-via-pr` are plain merged ancestors, added the normal way.
+#
+# Left untouched, pending adjudication (not merged; each is a
+# deliberately-preserved dropped probe per bench/RESULTS.md's own
+# "(never merges)" language, or a held wave per the "non-landing work
+# stays pushed" rule): bench/h1-binding-recheck,
+# bench/inline-upvals-x64-probe, probe-cmp-branch. Not listed here at
+# all — `claude/*` is a protected class the workflow refuses outright,
+# so a `claude/*` entry would never be actionable even if listed;
+# `claude/pr4-gfx-namespace`'s content is confirmed superseded by main's
+# `"gfx"` namespace (per `grep -n '"gfx"' src/builtins.rs`) but needs the
+# user's own manual deletion for that reason.
 audit-batch-1
 bench/audit-batch-1
 bench-sample-floor
+bench/inline-upvals
+branch-cleanup-2026-07-19
 check-not-loop
+cleanup-prune-via-pr
 compare-branch-record
 counts-and-workarounds
 docs-tier1-fixes

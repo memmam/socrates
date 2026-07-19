@@ -11,9 +11,15 @@ pull — see `ports/README.md`):
   `sys.modules['numpy'] = ...` etc.), producing ground-truth output.
 - `ports/pyl/*.soc` — the Socrates layer implementing the same subset.
 
-Where this contract and real numpy/scipy could disagree, CI (which can
-install the real packages) compares the shim against them; locally the
-shim is the executable contract. Parity between shim-run upstream code
+Where this contract and real scipy could disagree, CI (which can install
+the real package) compares the shim's `butter`/SOS output against
+`scipy.signal.butter(..., output='sos')` directly (the freeze-file check
+below). The `pyl.nd` array/reduction functions (`geomspace`, `linspace`,
+`cumsum`, `clip`, `take_lerp`, `gauss`, ...) have no equivalent real-numpy
+cross-check anywhere — CI only verifies the Socrates port against this
+shim, never the shim against real numpy — so for that surface, locally
+and in CI alike, the shim is the executable contract. Parity between
+shim-run upstream code
 and the Socrates port is judged **numerically**: arithmetic-only paths are
 expected bit-equal in f64; paths through libm transcendentals
 (sin/cos/exp/tanh/pow) get a documented allowance of max abs diff
@@ -109,8 +115,9 @@ is `{b0, b1, b2, a1, a2}` (a0 normalized to 1). Pinned algorithm:
    the SOS matrix of **every distinct design the ported files construct**
    (all `signal.butter` call sites across synths/drums/dsp/ambience/
    vocoder — enumerate them from the source, including the order-3
-   band-pass designs in `voice_whistle` and `render_crickets` and the
-   vocoder's per-band designs at its documented band edges) into
+   band-pass designs in `voice_whistle`, `render_crickets`, and
+   `voice_shaker`, and the vocoder's per-band designs at its documented
+   band edges) into
    `ports/claudewave/reference/sos_freeze.txt`, one line per section:
    `<design-id> b0 b1 b2 1 a1 a2` in shortest round-trip floats. The
    Socrates implementation must reproduce every frozen coefficient to
@@ -156,7 +163,7 @@ text format chosen for diffability. (The port initially surfaced a real
 language gap here — Socrates had no binary file I/O — which became v0.7's
 `Bytes` type. PAW remains the parity-comparison format, but the Socrates
 side can also emit WAV directly now, via `audio.write_wav` over the
-v0.9 `std.wav` module — see `docs/SPEC.md` § 7.1 — rather than only
+v0.8 `std.wav` module — see `docs/SPEC.md` § 7.1 — rather than only
 through the Python-side `paw2wav.py` tool below.)
 
 ```
@@ -180,5 +187,6 @@ in the script's per-item expected-max residual table (item name =
 reference environment, 2× the measured residual for the rest; the
 2e-15 floor tolerates the oracle's own few-ulp drift across
 numpy/libm environments) AND within the global 1e-9 outer bound. An
-item with no table row is a comparison error. Shapes must match
-exactly.
+item with no table row is a comparison error. Shapes and sample rates
+must match exactly (a mismatch on either is a hard comparison error,
+independent of the residual check).

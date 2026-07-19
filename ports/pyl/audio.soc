@@ -13,7 +13,7 @@
 // write/read round trip is bit-exact; PAW files from the Python side are
 // compared numerically, never textually. PAW remains the
 // parity-comparison format — but the Socrates side can also emit WAV
-// directly now, via `write_wav` below, built on the v0.9 `std.wav`
+// directly now, via `write_wav` below, built on the v0.8 `std.wav`
 // module (16-bit PCM; samples clamp to [-1, 1] and quantize by
 // `round(x * 32767)`, matching ports/claudewave/tools/paw2wav.py's
 // convention for listening). Encode only: nothing reads a WAV file back

@@ -120,7 +120,12 @@ numbers: `bench/RESULTS.md`.
 ## Workflow conventions
 
 - Merge on green, by hand: feature PRs are real (non-draft) — drafts are
-  reserved for *releases* — and `main` carries a required status check,
+  reserved for *releases*, which stay draft for a deliberate, long window
+  until manually published, unlike a feature PR's short-lived one. Several
+  hosted environments default to opening every PR as a draft regardless of
+  kind; where that default fires, un-draft the PR immediately after
+  creation rather than leaving it — a feature PR sitting in draft is a
+  standing bug, caught live 2026-07-19 on PR #119. `main` carries a required status check,
   "Test (stable)", so a red PR cannot merge. Merges are performed
   manually after reading the decisive CI log, never on a green
   conclusion alone — and which log is decisive is tiered by what the

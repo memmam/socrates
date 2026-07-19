@@ -1,8 +1,9 @@
 // wav.soc — RIFF/WAVE 16-bit mono PCM, encoded and decoded over Bytes.
 //
-// `encode` is a one-line mono wrapper over `std.wav.encode` (v0.9's
-// generalized, real-decoder-backed promotion of what used to be this
-// file's own hand-rolled RIFF writer — see std/wav.soc). The field
+// `encode` is a one-line mono wrapper over `std.wav.encode` (v0.8's
+// generalized promotion of what used to be this file's own hand-rolled
+// RIFF writer — see std/wav.soc; encode only, no decoder there either).
+// The field
 // readers below stay local: they're this demo's own byte-offset
 // pinning/verification tool for checks.soc's golden output, independent
 // of whoever produced the bytes.

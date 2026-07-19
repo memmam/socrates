@@ -51,7 +51,7 @@ done
 diff /tmp/cw/truth/chords.txt /tmp/cw/socrates/chords.txt
 ```
 
-Audio travels as PAW, the contract's difsocrates text format;
+Audio travels as PAW, the contract's diffable text format;
 `tools/paw2wav.py` converts to 16-bit WAV for listening. Battery item i
 seeks the shared stream cursor to offset i·100000 before rendering, so
 every item is independently reproducible on both sides;

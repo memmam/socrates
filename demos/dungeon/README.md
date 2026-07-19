@@ -1,6 +1,6 @@
 # dungeon — a procedural roguelike dungeon generator in Socrates
 
-A classic roguelike map pipeline in about 300 lines of Socrates: scatter random
+A classic roguelike map pipeline in about 390 lines of Socrates: scatter random
 non-overlapping rooms on a grid, chain them together with L-shaped corridors,
 drop the player `@` in the first room and the treasure `$` in the room
 farthest away, then let breadth-first search find the shortest route and draw

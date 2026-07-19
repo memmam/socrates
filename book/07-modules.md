@@ -101,6 +101,11 @@ println(counter.step());
 
 ```text
 error[E0339]: function `counter.step` is private
+  --> main.soc:2:17
+   |
+2 | println(counter.step());
+   |                 ^^^^ not exported by its module
+  note: add `pub` to `step` in the defining module
 ```
 
 The rule that makes this predictable: **naming a foreign item requires

@@ -75,7 +75,12 @@ evidence trail behind each.
 - **The footer incident.** How "record decisions with their scope" got
   its name: a narrow decision ("trailers accepted in commits") was later
   remembered as a broader one ("footers accepted"), which is how the
-  eventual triple-footer problem started.
+  eventual triple-footer problem started. Underneath that scope drift was
+  a moving target: different models, and even different runs of the same
+  model on different days, applied different footer policies of their
+  own, and the project kept writing rules that fought each one instead of
+  composing with it — the root cause CLAUDE.md's "compose with a
+  hosted-tooling default rather than fight it" rule now names directly.
 - **The 90-PR retroactive sweep (2026-07-18).** The model for what the
   four-step codification act's step (iv) — an immediate consistency audit
   against a newly-codified rule — looks like at scale. The standing-watch
@@ -253,7 +258,7 @@ directives; each of the following is the incident that produced one.
 - **The spec-count drift release.** A release draft once shipped saying
   311 golden spec tests while the suite actually stood at 313 — the
   reason `tools/check_counts.sh` exists and why the spec-suite count is
-  cross-checked in all five of its stating places on every CI run.
+  cross-checked in all six of its stating places on every CI run.
 - **The 2026-07-18 macos-14 DNS incident.** The first instance of "a
   fixed target does not rot": a macos-14 CI job's runner had its DNS
   fail resolving `codeload` mid-job, after fetching from the same host

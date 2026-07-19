@@ -1,6 +1,6 @@
 # wfc — a wave-function-collapse texture generator in Socrates
 
-The simple-tile wave-function-collapse algorithm in about 350 lines of
+The simple-tile wave-function-collapse algorithm in about 470 lines of
 Socrates. From one small hand-drawn ASCII sample the demo learns which tiles
 may sit next to which (and how often each tile occurs), then synthesises
 larger textures that obey the same local rules:
