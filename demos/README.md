@@ -1,14 +1,17 @@
 # The Socrates demos
 
-Seventeen programs, each a self-contained showcase of the language doing real
+Eighteen programs, each a self-contained showcase of the language doing real
 work. Every demo is deterministic, pins its complete output with golden
 `//?` directives, and passes under GC stress:
 
 ```sh
 cargo build --release
 ./target/release/socrates demos/lisp/main.soc      # run one
-./target/release/socrates test demos                 # golden-test all seventeen
-SOCRATES_GC_STRESS=1 ./target/release/socrates test demos
+# glcube's three mains need a live GL/Metal/Vulkan window (CI runs them in
+# the windowing jobs); everything else, cube.soc/spec.soc included:
+shopt -s extglob
+./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc
+SOCRATES_GC_STRESS=1 ./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc
 ```
 
 | Demo | What it does | Worth seeing |
@@ -19,7 +22,7 @@ SOCRATES_GC_STRESS=1 ./target/release/socrates test demos
 | [`dungeon/`](dungeon/) | A seeded roguelike dungeon generator: rooms, L-corridors, BFS shortest path drawn onto the ASCII map, plus a flood-fill certificate that every carved tile is reachable. | Modernized for v0.7 with the old pins as proof: `std.deque` frontier, bit-packed visited flags (a spec test crosses bit 63 and a word boundary on purpose), shift-OR 3x3 dilation in the renderer — and the maps came out byte-identical. |
 | [`mdsite/`](mdsite/) | A static site generator: markdown → templated HTML site, three sample pages, build report with a regeneration check. | All string assembly on `strings.Builder` (v0.7); `std.set` guards slug collisions; `fs.read_bytes` + structural `Bytes` `==` pins the committed `out/` byte-for-byte against a fresh build. |
 | [`csvql/`](csvql/) | A query language over CSV: `select country, count, min city, max city group by country order by count desc`. | Group-by buckets keyed by enum values in a Map (structural hashing + insertion order = deterministic reports); v0.7 `min`/`max` aggregate any column — `std.lists.min_by`/`max_by` over `Val.cmp` orders text cells too — and the report renders through one `strings.Builder`. Every malformed query degrades to one tidy error line. |
-| [`checkers/`](checkers/) | Full English draughts (forced captures, multi-jumps, kings) with a negamax alpha-beta engine; draws detected via 64-bit Zobrist hashes in `std.set`s. | A complete 106-ply self-play game — every move, eval, and node count pinned as ~200 golden lines — replayed byte-identically after the v0.7 rewrite: xorshift64 keys built from raw `^`/`<<`/`>>`, threefold repetition called by a two-set `insert` gate. |
+| [`checkers/`](checkers/) | Full English draughts (forced captures, multi-jumps, kings) with a negamax alpha-beta engine; draws detected via 64-bit Zobrist hashes in `std.set`s. | A complete 106-ply self-play game — every move, eval, and node count pinned as ~200 golden lines — replayed byte-identically after the v0.7 rewrite: xorshift64 keys built from `^`/`<<`/`ushr` (logical, not `>>`, which would smear the sign bit), threefold repetition called by a two-set `insert` gate. |
 | [`plot/`](plot/) | A function plotter: SVG line charts with 1/2/5 nice ticks and collision-dodged labels, a 75-stroke spirograph, and a two-tone `fft.rfft` magnitude spectrum as a stem chart, plus terminal sparklines. | Regenerates all three committed SVGs byte-for-byte — and *pins that claim* as golden lines (`fs.read_bytes` + structural `Bytes` equality). Every document is assembled through one `strings.Builder`. |
 | [`sudoku/`](sudoku/) | Naked-singles propagation + most-constrained-cell backtracking over three classic puzzles (including Inkala's "hardest"), with candidate sets as 9-bit Int masks (v0.7 bitwise). | Set algebra as arithmetic: candidates are `(row \| col \| box) ^ 511`, naked singles are `popcount(mask) == 1`, guesses peel the mask lowest-bit-first. Byte-identical solve narrative to the list version at ~2x the speed; the independent verifier still catches a deliberately corrupted board. |
 | [`wfc/`](wfc/) | Wave-function collapse: learns tile adjacency from ASCII samples, generates new textures by entropy-driven constraint propagation. | The spec pins the *contract*, not just output: zero adjacency violations, same-seed determinism, and a provably impossible tile set that must exhaust its seed budget. |
@@ -29,7 +32,8 @@ SOCRATES_GC_STRESS=1 ./target/release/socrates test demos
 | [`bloom/`](bloom/) | A Bloom filter over `Bytes`: FNV-1a and a xorshift* mixer, hand-built from the v0.7 bitwise operators, double-hash a 500-word generated corpus into 512 bytes — then a `std.set` oracle grades every answer. | Zero false negatives and an exact pinned false-positive count (38/2000) landing on the textbook `(1-e^(-kn/m))^k`; a 32x32 multiply in 16-bit halves because Int overflow panics; the committed `filter.bin` regenerates byte-identically. |
 | [`spectra/`](spectra/) | A chord analyzer on `fft.rfft`: just-intonation chords synthesized onto exact integer bins, then re-identified from the spectrum alone — ASCII bar spectrograms, `max_by` + a set-marked top-k, and gcd-reduced ratios naming major/minor/fifth. | One-second windows make bin k exactly k Hz, so ~115 lines of spectral analysis pin exactly; Parseval, the `ifft(fft(x))` round trip, and a naive-DFT cross-check all hold at 1e-9 — Bluestein path included (n = 600 and 12). |
 | [`swarm/`](swarm/) | A worker-pool job scheduler: three isolates crunch Collatz and prime-count jobs from a `std.deque` queue over a `std.json` protocol — static assignment, dynamic feed-on-return balancing, and panic isolation. | A fragile worker's panic comes back as `Err` from `join` and its job JSON re-runs on a fresh isolate; the dynamic section pins only schedule-independent facts, so a smarter scheduler could drop in without re-pinning a line. |
-| [`reversi/`](reversi/) | Othello on two Int bitboards: shift-and-propagate move generation in 8 masked directions, flood-and-confirm flips, SWAR popcount, and a complete greedy self-play game pinned move for move. | Every classic bit trick had to be re-derived for signed-64-with-panicking-overflow — `bits.soc` documents each trap (`>>` is arithmetic; `x & -x` panics on bit 63). The move generator is proven by pinned perft(1..6) = 4/12/56/244/1396/8200. |
+| [`reversi/`](reversi/) | Othello on two Int bitboards: shift-and-propagate move generation in 8 masked directions, flood-and-confirm flips, `count_ones` popcount, and a complete greedy self-play game pinned move for move. | Every classic bit trick had to be re-derived for signed-64-with-panicking-overflow — `bits.soc` documents each trap (`>>` is arithmetic; `x & -x` panics on bit 63). The move generator is proven by pinned perft(1..6) = 4/12/56/244/1396/8200. |
+| [`glcube/`](glcube/) | A unit cube spinning about its vertical axis, rendered through the `gfx.*` draw-call surface on the `window` namespace, with the MVP matrix built from `std.glm`'s `Mat4` — the same geometry and shader logic run three times over, against OpenGL, Metal, and Vulkan. | Pixel spot-checks, not framebuffer hashes: two frames read back one solid-color pixel each (front face at rest, left face after a quarter turn), so the golden pins hold regardless of driver-level antialiasing. `main_metal.soc` and `main_vulkan.soc` reuse `cube.soc` unchanged and pin **byte-identical** output to `main.soc` — the same program rendering the same pixels on three graphics APIs. Needs a live GL/Metal/Vulkan window; `cube.soc`/`spec.soc` need none. |
 
 ## The demo zoo — download and run
 

@@ -92,7 +92,8 @@ cargo build --release
 # the windowing jobs); everything else, cube.soc/spec.soc included:
 shopt -s extglob
 ./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc  # 73, also with SOCRATES_GC_STRESS=1
-SOCRATES_PATH=ports ./target/release/socrates test ports/pyl/spec.soc   # + ports/icaa/spec.soc
+SOCRATES_PATH=ports ./target/release/socrates test ports/pyl/spec.soc
+SOCRATES_PATH=ports ./target/release/socrates test ports/icaa/spec.soc
 ./target/release/socrates build demos/csvql -o /tmp/csvql && (cd /tmp && ./csvql)  # `socrates build` smoke
 python3 bench/ab.py <base-tree> <head-tree>   # local interleaved perf A/B
 ```
@@ -140,13 +141,14 @@ numbers: `bench/RESULTS.md`.
   and end with the two attribution trailers (`Co-Authored-By` and the
   `Claude-Session` link) — the accepted channel for session
   attribution, and the *only* one.
-- The spec-suite count is stated in exactly five places — `README.md`
+- The spec-suite count is stated in exactly six places — `README.md`
   (×2), `CLAUDE.md` (×1, the gauntlet), `PROJECT.md` (×1, the
-  invariants), and `.github/RELEASE_NOTES.md` (×1) — and a count
-  change updates all five in the same PR. The same discipline covers
-  every other prose-stated count — book snippets executed/total, the
-  demo-golden count, the spelled-out demo-program count — each with its
-  own set of stating places. `tools/check_counts.sh` (run in CI's Test
+  invariants), `.github/RELEASE_NOTES.md` (×1), and
+  `book/11-toolchain.md` (×1) — and a count change updates all six in
+  the same PR. The same discipline covers every other prose-stated
+  count — book snippets executed/total, the demo-golden count, the
+  spelled-out demo-program count — each with its own set of stating
+  places. `tools/check_counts.sh` (run in CI's Test
   job) is the enforcement: it extracts every counted sentence by exact
   anchor and diffs it against a fresh run, so drift fails loudly instead
   of shipping; a sentence reworded without updating its anchor fails

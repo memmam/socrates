@@ -24,7 +24,7 @@ println([1, 2][5]);           //? panic: index 5, length 2
 Run it with `socrates test file.soc`, and `socrates test dir/` walks a directory
 recursively. A file with no directives passes by running silently, so a
 whole example directory can be a test suite. The exit code is 1 on any
-failure, so it drops into CI unchanged — Socrates's own spec suite (311 tests)
+failure, so it drops into CI unchanged — Socrates's own spec suite (313 tests)
 and this book's snippets both run through this exact path.
 
 When a value changes but the print statements around it don't — after a

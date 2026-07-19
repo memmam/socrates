@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Prose counts vs. the live suite.
 #
-# The count-bearing sentences — the five spec-count places CLAUDE.md's
+# The count-bearing sentences — the six spec-count places CLAUDE.md's
 # workflow conventions enumerate (README ×2, CLAUDE.md ×1, PROJECT.md ×1,
-# RELEASE_NOTES.md ×1), the book executed-of-total claim, the demo-suite
-# count, and the spelled-out demo-program count — are each extracted by
-# an exact anchor below and compared against the live totals. A release
-# draft once shipped saying 311 while the suite stood at 313; this
-# script turns that class of drift into a red X (CI runs it in the Test
-# job; the gauntlet runs it locally).
+# RELEASE_NOTES.md ×1, book/11-toolchain.md ×1), the book
+# executed-of-total claim, the demo-suite count, and the spelled-out
+# demo-program count — are each extracted by an exact anchor below and
+# compared against the live totals. A release draft once shipped saying
+# 311 while the suite stood at 313 (and book/11-toolchain.md drifted to
+# the same wrong number, silently, since it wasn't yet one of the
+# enforced places); this script turns that class of drift into a red X
+# (CI runs it in the Test job; the gauntlet runs it locally).
 #
 # The anchors are deliberately exact: rewording a counted sentence makes
 # its extraction come back empty and fail loudly — re-anchor it here in
@@ -54,6 +56,8 @@ check "CLAUDE gauntlet '# N'" "$live_spec" \
   "$(sed -n 's/.*socrates test tests\/spec *# \([0-9]\{1,\}\)$/\1/p' CLAUDE.md)"
 check "RELEASE_NOTES 'pinned: N golden spec tests'" "$live_spec" \
   "$(sed -n 's/.*pinned: \([0-9]\{1,\}\) golden spec tests.*/\1/p' .github/RELEASE_NOTES.md)"
+check "book/11-toolchain.md spec suite (N tests)" "$live_spec" \
+  "$(sed -n "s/.*own spec suite (\([0-9]\{1,\}\) tests).*/\1/p" book/11-toolchain.md)"
 
 # --- demo-suite count ------------------------------------------------
 check "CLAUDE gauntlet demos '# N, also with'" "$live_demo" \

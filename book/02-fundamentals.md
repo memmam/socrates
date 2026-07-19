@@ -178,7 +178,7 @@ Comparisons do not chain: `1 < 2 < 3` is a parse error (`error[E0200]:
 comparison operators cannot be chained; use parentheses`) — write
 `1 < 2 && 2 < 3`.
 
-`+` also concatenates strings (`"fab" + "le"` is `"socrates"`), and the
+`+` also concatenates strings (`"fab" + "le"` is `"fable"`), and the
 ordering operators compare strings lexicographically (`"apple" < "banana"`
 is `true`).
 

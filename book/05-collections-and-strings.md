@@ -239,8 +239,9 @@ println(ages.len());
 
 One wrinkle: the empty map is spelled `{:}`, not `{}`, because `{}`
 already means an empty block — `let m: Map[String, Int] = {};` is a type
-error (`expected Map[String, Int], found Unit`). And since `{:}` has no
-entries to infer types from, it needs an annotation or other context:
+error (`error[E0301]: \`{}\` is an empty block, not an empty map`, with a
+note pointing at `{:}`). And since `{:}` has no entries to infer types
+from, it needs an annotation or other context:
 
 ```soc errors
 let tally = {:};

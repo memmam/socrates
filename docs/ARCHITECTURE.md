@@ -526,7 +526,7 @@ untouched, leaving the original mismatch as a normal failure. `error:`/
 
 **`gfx`** is a backend-neutral OpenGL 3.3 core-profile draw-call namespace
 built on top of `window`'s per-platform `GlFns` function-pointer table
-(each of `x11/gl.rs`/`win32.rs`/`macos/gl.rs` already carries the full shader/
+(each of `x11/gl.rs`/`win32/gl.rs`/`macos/gl.rs` already carries the full shader/
 program/buffer/VAO/texture/uniform/draw-call table, resolved at `Window`
 creation time). Two design choices make this a thin layer rather than a
 new subsystem:

@@ -1,6 +1,6 @@
 <!--
 Stub only: no content of its own (see root CLAUDE.md's "Where the
-detailed memory lives" section for what each imported file holds).
+project's memory lives" section for what each imported file holds).
 Committed and tracked. Its purpose is purely to give this directory
 its own entry in Claude Code's nested-memory listing (the /memory
 command and Claude Desktop's context tracker), lazily loaded the first

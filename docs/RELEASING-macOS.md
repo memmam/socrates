@@ -65,14 +65,17 @@ repository secret**:
 
 ## 5. Cut the release
 
-**Actions → Release → Run workflow**, tag `v0.7.0`. The macOS leg now
-re-signs every zoo binary with Developer ID (hardened runtime + secure
-timestamp) and notarizes them in one `notarytool` submission. The run
-refreshes the existing `v0.7.0` draft's assets — then publish it from the
-Releases page.
+**Actions → Release → Run workflow**, with the tag currently in
+`.github/RELEASE_TAG` (or land a change to that file on `main`, which
+fires the same workflow — see the file's own header comment). The macOS
+leg now re-signs every zoo binary with Developer ID (hardened runtime +
+secure timestamp) and notarizes them in one `notarytool` submission. The
+run refreshes the existing draft's assets for that tag — then publish it
+from the Releases page.
 
-> If a *second* `v0.7.0` draft appears instead of the existing one being
-> updated, delete the older draft and keep the freshly-built one.
+> If a *second* draft for the same tag appears instead of the existing
+> one being updated, delete the older draft and keep the freshly-built
+> one.
 
 ## Notes
 
