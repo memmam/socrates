@@ -296,3 +296,30 @@ fs.write("{tmp}/pyl_trunc.paw", "PAW1\n8000 1 5\n1.0 2.0\n").unwrap();
 println(audio.read_paw("{tmp}/pyl_trunc.paw").is_err());     //? expect: true
 fs.write("{tmp}/pyl_badch.paw", "PAW1\n8000 3 1\n1.0 2.0 3.0\n").unwrap();
 println(audio.read_paw("{tmp}/pyl_badch.paw").is_err());     //? expect: true
+
+// ---- audio: WAV (std.wav, real binary emission) -----------------------------
+
+audio.write_wav(sig, 22050, "{tmp}/pyl_rt.wav").unwrap();
+let (wback, wbsr) = audio.read_wav("{tmp}/pyl_rt.wav").unwrap();
+println("{wbsr} {wback.ch} {wback.frames()}");                          //? expect: 22050 2 4
+// quantized to 16-bit PCM and back: exact for exact sixteenths, ~1/32767 elsewhere
+println(str(wback.data.map(|v| v.to_fixed(4))));
+//? expect: ["0.0000", "1.0000", "0.2500", "-0.1250", "-0.5000", "0.0000", "0.3333", "-1.0000"]
+
+audio.write_wav(mono, 8000, "{tmp}/pyl_rt_mono.wav").unwrap();
+let (wmb, wmsr) = audio.read_wav("{tmp}/pyl_rt_mono.wav").unwrap();
+println("{wmsr} {wmb.ch} {wmb.frames()} {wmb.max_abs_all() <= 1.0}");    //? expect: 8000 1 9 true
+
+// out-of-range samples clamp to full scale instead of overflowing
+let hot = nd.of([2.0, -2.0]);
+audio.write_wav(hot, 8000, "{tmp}/pyl_hot.wav").unwrap();
+let (hb, _) = audio.read_wav("{tmp}/pyl_hot.wav").unwrap();
+println(str(hb.data));                                                  //? expect: [1.0, -1.0]
+
+// error paths, mirroring the PAW ones above
+println(audio.write_wav(sig, 0, "{tmp}/pyl_bad.wav").is_err());         //? expect: true
+println(audio.write_wav(nd.Nd { ch: 3, data: [1.0] }, 8000, "{tmp}/pyl_bad.wav").is_err());
+//? expect: true
+println(audio.read_wav("{tmp}/pyl_missing.wav").is_err());              //? expect: true
+fs.write("{tmp}/pyl_garbage.wav", "not a wav file at all").unwrap();
+println(audio.read_wav("{tmp}/pyl_garbage.wav").is_err());              //? expect: true

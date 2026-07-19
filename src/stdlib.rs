@@ -16,6 +16,7 @@ pub fn std_module(key: &str) -> Option<&'static str> {
         "std.lazy" => include_str!("../std/lazy.soc"),
         "std.glm" => include_str!("../std/glm.soc"),
         "std.fft" => include_str!("../std/fft.soc"),
+        "std.wav" => include_str!("../std/wav.soc"),
         _ => return None,
     })
 }
@@ -24,6 +25,7 @@ pub fn std_module(key: &str) -> Option<&'static str> {
 pub fn std_module_names() -> Vec<&'static str> {
     vec![
         "std.deque",
+        "std.fft",
         "std.flags",
         "std.glm",
         "std.iter",
@@ -33,5 +35,6 @@ pub fn std_module_names() -> Vec<&'static str> {
         "std.path",
         "std.set",
         "std.strings",
+        "std.wav",
     ]
 }

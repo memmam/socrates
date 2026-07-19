@@ -6,6 +6,20 @@ that introduced it.
 
 ## Unreleased
 
+- **`std.wav`**, a new std module (twelve now ship): RIFF/WAVE PCM audio
+  over `Bytes` — `encode(samples, sample_rate, channels)` (mono or
+  stereo, 16-bit, stereo interleaved) and a real `decode` that validates
+  the format (RIFF/WAVE/fmt tags, codec, bit depth) instead of trusting
+  fixed byte offsets. Generalizes what used to be a mono-only,
+  encode-only, demo-local writer in `demos/synthwave/wav.soc` (now a
+  one-line wrapper over it, golden output unchanged) and backs
+  `ports/pyl/CONTRACT.md`'s "the Socrates side can also emit WAV
+  directly" with real, tested code: `pyl.audio` gained
+  `write_wav`/`read_wav` (16-bit PCM, `[-1, 1]`-clamped and quantized by
+  `round(x * 32767)`, matching `paw2wav.py`'s existing convention). Also
+  fixes a pre-existing gap found while touching the same list:
+  `std.fft` was registered for resolution but missing from the
+  completion/error-message name list since the wave that added it.
 - **Closures capturing ≤2 upvalues no longer heap-allocate a `Vec` for
   them** — `Obj::Closure`'s upvalue storage is now `UpvalStorage`, an
   inline-slots-or-spill representation (`Obj` size unchanged: the new

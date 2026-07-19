@@ -618,9 +618,9 @@ Two more joined in v0.7:
 | `bytes(n)` | `fn(Int) -> Bytes` | zero-filled byte buffer (§ 8.4b) |
 | `bytes_of(xs)` | `fn(List[Int]) -> Bytes` | from byte values 0..255 |
 
-### 7.1 The standard library (v0.4; expanded in v0.7-v0.8)
+### 7.1 The standard library (v0.4; expanded in v0.7-v0.9)
 
-Eleven modules written in Socrates ship inside the interpreter, imported like any
+Twelve modules written in Socrates ship inside the interpreter, imported like any
 module (`import std.json;`, aliased with `as`). Everything below is `pub`;
 these modules follow the same visibility rules as user code.
 
@@ -637,6 +637,7 @@ these modules follow the same visibility rules as user code.
 | `std.lazy` | `Lazy[T]` (v0.8): deferred, memoized computation. `of(thunk: fn() -> T) -> Lazy[T]` wraps a zero-argument thunk that doesn't run until needed; methods `get() -> T` (computes and caches on the first call, free on every later call — on any reference, since structs are references) and `is_forced() -> Bool`. For a module-level table that's expensive to build and not always needed — a plain top-level `let` already builds once at import (eagerly); `Lazy` defers that to first use. |
 | `std.glm` | Vector/matrix/quaternion math (v0.8), named and shaped after GLM: `Vec2`/`Vec3`/`Vec4` (constructors `vec2`/`vec3`/`vec4`; operator methods `add`/`sub`/`neg`; `mul(self, k: Float)`/`div(self, k: Float)` are **scalar** — the one `mul`/`div` slot a type gets (§ 5.1) goes to scaling, matching this spec's own worked example; `dot`, `length`, `length_sq`, `normalize`, `lerp`, and `cross` on `Vec3`); `Mat4` (column-major, `c0`..`c3`; constructors `mat4_identity`, `translation`, `scaling`, `rotation_x`/`y`/`z`, `rotation_axis` (Rodrigues', axis normalized internally), `perspective`/`ortho`/`look_at` (right-handed, OpenGL NDC z in `[-1, 1]`); methods `mul(self, o: Mat4)` (composition — chain as `proj.mul(view).mul(model)`), `mul_vec4(self, v: Vec4)` (the transform apply, named since `mul`'s operator slot is taken by composition), `transpose`); `Quat` (constructors `quat`, `quat_identity`, `from_axis_angle`; methods `mul` (composition), `conjugate`, `normalize`, `length`, `to_mat4`, `slerp` — computed via `atan2`/`sqrt` since `math` has no `acos`). Pure Socrates, no native code. |
 | `std.fft` | FFT helpers (v0.8; moved from the native namespace in the minification pass): `magnitude(re, im)` (`sqrt(re[i]^2 + im[i]^2)` per bin, exactly as written — the panic on length mismatch matches the old native's message byte for byte), plus one-line `rfft`/`ifft` wrappers so an importing file keeps the `fft.` spellings (an imported module shadows the builtin namespace). `fft.fft` (complex pairs) is deliberately not re-exported — a module fn named `fft` would shadow the namespace in this module's own bodies; files that need it use the native namespace and skip this import. |
+| `std.wav` | RIFF/WAVE PCM audio over `Bytes` (v0.9): `encode(samples, sample_rate, channels) -> Bytes` (16-bit signed PCM; mono or stereo, stereo samples interleaved left/right) and `decode(b) -> Result[(List[Int], Int, Int), String]` (the inverse — samples, sample_rate, channels — validating the RIFF/WAVE/fmt tags, codec, and bit depth rather than trusting fixed offsets; `Err` on anything else, including the canonical-only restriction that the fmt chunk must be the plain 16-byte PCM form immediately followed by the data chunk, no extra chunks in between). `encode` panics on a channel count other than 1 or 2 (a caller contract violation, not a data-dependent failure). Generalizes what was previously a mono-only, encode-only, demo-local writer in `demos/synthwave`. |
 
 ### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
 
