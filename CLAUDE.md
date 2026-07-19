@@ -332,23 +332,23 @@ numbers: `bench/RESULTS.md`.
   process/history belongs here in `CLAUDE.md` and the files above, never in
   the book).
 
-**Proposed, not yet decided (PR #107, 2026-07-19):** a nested
-per-directory `CLAUDE.md` stub (bare filename, e.g. `bench/CLAUDE.md` —
-nested `.claude/CLAUDE.md` is not a real discovery path; that's reserved
-for settings/skills/rules, confirmed against Claude Code's monorepo
-docs) for each of the four directories above, purely so Claude
-Desktop's context-tracker "Memory files" panel would list
-`docs/SPEC.md` and friends as their own entries. Open concern raised
-before merging: the `@`-import inside such a stub is not lazy about
-*content* — the instant any file in that subdirectory is read, the stub
-force-loads the *entire* imported file(s) into context, every session,
-for every contributor, indefinitely. That is a real, compounding token
-cost paid on every future touch of `docs/`, `bench/`, `demos/`, or
-`ports/`, against a cosmetic listing improvement in one UI panel — the
-underlying files were never actually hidden from Claude; this only
-changes what a tracker panel displays. Resolve this note (either strike
-it once merged with the tradeoff accepted, or replace it with a
-workaround-recording-triple entry if declined) once PR #107 lands.
+**Decided (PR #107, 2026-07-19):** each of the four directories above
+also gets a nested per-directory `CLAUDE.local.md` stub (bare filename
+— nested `.claude/CLAUDE.md` is not a real discovery path; that's
+reserved for settings/skills/rules, confirmed against Claude Code's
+monorepo docs) that does nothing but `@`-import the file(s) listed for
+it here, e.g. `bench/CLAUDE.local.md` containing `@RESULTS.md`. Purely
+so Claude Desktop's context-tracker "Memory files" panel lists
+`docs/SPEC.md` and friends as their own entries, lazily, the first time
+a session reads a file in that subdirectory. The `@`-import is not lazy
+about *content* — the stub force-loads the entire imported file(s) the
+moment it fires — so this is `CLAUDE.local.md`, not `CLAUDE.md`: per
+`.gitignore`'s `CLAUDE.local.md` rule, gitignored and never committed,
+so the eager-load cost and the files themselves stay opt-in per
+checkout, never imposed on every clone or contributor. Consequence:
+these stubs don't propagate through git — a fresh clone or container
+won't have them until someone recreates them locally, following the
+pattern above.
 
 ## Release ledger (source material for release posts)
 

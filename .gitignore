@@ -3,6 +3,10 @@ scratch/
 *.ppm
 # Session-local agent state (settings, isolated worktrees) — never commit.
 .claude/
+# Personal, per-checkout CLAUDE.local.md files (root or nested in any
+# subdirectory) — Claude Code's own sanctioned local-memory mechanism.
+# Never committed, never visible on GitHub, by design.
+CLAUDE.local.md
 __pycache__/
 # The book's `fs` example (08-stdlib.md) writes here when its snippet runs
 # from the repo root (tests/book_snippets.rs's run_in_dir doesn't chdir).
