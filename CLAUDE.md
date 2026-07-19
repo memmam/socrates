@@ -65,9 +65,14 @@ files" panel lists `docs/SPEC.md` and friends as their own entries. The
 `@`-import is not lazy about *content* — the stub force-loads the entire
 imported file(s) the moment it fires, a real, compounding cost paid by
 every clone and contributor. The four stubs are committed, tracked
-files, byte-exact with the table below — reconstructing them from a
-one-example-plus-inference description is exactly the kind of drift this
-file exists to prevent. (`HISTORY.md` has the story of how this mechanism
+files; the load-bearing part — the `@`-import lines — is byte-exact
+with the table below, in that order. Each stub also opens with a fixed
+HTML-comment header (not shown in the table, since it carries no
+`@`-import semantics of its own) explaining the mechanism in the same
+words every time, substituting only the directory name and the cited
+file(s) — see any of the four files for the exact template.
+Reconstructing the `@`-import lines from a one-example-plus-inference
+description is exactly the kind of drift this file exists to prevent. (`HISTORY.md` has the story of how this mechanism
 evolved — it started gitignored and opt-in before being proven and
 committed.)
 
@@ -185,58 +190,60 @@ numbers: `bench/RESULTS.md`.
   touches a hosted-tooling default, it is written to *compose with*
   the default rather than fight it — fighting defaults is how the
   triple-footer happened. The rules:
-  - Every git-mutating shell command opens
+  1. Every git-mutating shell command opens
     `cd <dir> && pwd && git branch --show-current`.
-  - If a session ever holds more than one clone of the repo, the
+  2. If a session ever holds more than one clone of the repo, the
     harness-served clone is pulled after every CLAUDE.md- or
     PROJECT.md-touching merge until the checkouts are consolidated.
-  - Branches are deleted only in user-directed cleanups, never
-    unilaterally. Before a cleanup, anything a standing record
-    references moves to an `archive/*` branch. The App's credentials
-    can create refs but not delete them, so deletions run through the
-    release-by-PR pattern: a user-directed PR edits
-    `.github/CLEANUP_BRANCHES`, and `cleanup.yml` (contents: write;
-    refuses `main`, `archive/*`, `claude/*`) performs the deletions
-    when the change lands on main. **Proposing that PR is automated (a
-    weekly Routine); merging it is not.** The Routine only ever lists
-    branches verified merged into `main`
-    (`git merge-base --is-ancestor <branch> main`) — nothing is lost
-    by deleting a merged branch's ref, since `main` already carries
-    the content, so no `archive/*` step applies to these — and
-    cross-checks each candidate isn't named as a live navigation
-    target in `HISTORY.md`/`PROJECT.md`/`CLAUDE.md`/`bench/RESULTS.md`
-    (a coincidental mention of the name as a concept or event, not an
-    instruction to check the branch out, doesn't block it). An
-    unmerged branch is never auto-included: per "non-landing work
-    stays pushed" below, it may be a deliberately-preserved dropped
-    probe or held wave (see "Non-landing work is pushed for
-    durability" under Workflow conventions above), and that call
-    needs a human each time, not a schedule — the Routine surfaces
-    any such branches in its PR
-    description for a human to decide, rather than silently acting on
-    or silently ignoring them. `cleanup.yml` itself follows the same
-    propose-automated/merge-human split one level down: after deleting
-    branches, it opens its own small PR pruning their now-resolved
-    entries from `CLEANUP_BRANCHES` (a direct push to `main` doesn't
-    work — proven live 2026-07-19, `main`'s branch protection rejects
-    it outright) rather than pushing the trim directly.
-  - A merge the user performs in the GitHub UI is a final outcome,
+  3. Branches are deleted only in user-directed cleanups, never
+    unilaterally:
+     a. Before a cleanup, anything a standing record references moves to
+        an `archive/*` branch.
+     b. The App's credentials can create refs but not delete them, so
+        deletions run through the release-by-PR pattern: a user-directed
+        PR edits `.github/CLEANUP_BRANCHES`, and `cleanup.yml`
+        (contents: write; refuses `main`, `archive/*`, `claude/*`)
+        performs the deletions when the change lands on main.
+     c. **Proposing that PR is automated** (a weekly Routine);
+        **merging it is not.** The Routine only ever lists branches
+        verified merged into `main` (`git merge-base --is-ancestor
+        <branch> main`) — nothing is lost by deleting a merged branch's
+        ref, since `main` already carries the content, so no
+        `archive/*` step applies to these — and cross-checks each
+        candidate isn't named as a live navigation target in
+        `HISTORY.md`/`PROJECT.md`/`CLAUDE.md`/`bench/RESULTS.md` (a
+        coincidental mention of the name as a concept or event, not an
+        instruction to check the branch out, doesn't block it).
+     d. An unmerged branch is never auto-included: per "non-landing
+        work stays pushed" (Workflow conventions, above), it may be a
+        deliberately-preserved dropped probe or held wave, and that
+        call needs a human each time, not a schedule — the Routine
+        surfaces any such branches in its PR description for a human
+        to decide, rather than silently acting on or silently ignoring
+        them.
+     e. `cleanup.yml` itself follows the same propose-automated/
+        merge-human split one level down: after deleting branches, it
+        opens its own small PR pruning their now-resolved entries from
+        `CLEANUP_BRANCHES` (a direct push to `main` doesn't work —
+        proven live 2026-07-19, `main`'s branch protection rejects it
+        outright) rather than pushing the trim directly.
+  4. A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
-  - Never run bare `cargo fmt` — the tree has never been through it,
+  5. Never run bare `cargo fmt` — the tree has never been through it,
     so `cargo fmt --check` diffs every `.rs` file, not a targeted few.
     Run `cargo fmt --check | grep -c '^Diff in'` for the current figure
     rather than trusting a number written down here, since it drifts as
     the tree grows; the point is that it's whole-tree, not the exact
     count.
-  - The model identifier appears in no pushed artifact — chat only
+  6. The model identifier appears in no pushed artifact — chat only
     (this restates the hosted-environment policy so the rule survives
     outside it). This includes the commit-trailer `Co-Authored-By`
     *name*, not just prose — the trailer name is plain `Claude`,
     nothing else, going forward; past commits are not rewritten
     retroactively for this.
-  - Decision forks go to the user as plain-text lettered options, not
+  7. Decision forks go to the user as plain-text lettered options, not
     interactive question UI.
-  - Long CI waits are handled by scheduled self check-ins, never
+  8. Long CI waits are handled by scheduled self check-ins, never
     polling loops — that's this session's own wakeup mechanism, not
     available to a delegated subagent. A subagent briefed to push,
     wait on a bench/CI run, and continue has no independent wakeup of
@@ -247,7 +254,7 @@ numbers: `bench/RESULTS.md`.
     (`sleep` + a status check, capped at enough iterations to cover one
     run), and only ends its turn once it has an actual result or has
     exhausted the cap — never on a bare "standing by."
-  - **A signal is a prompt to check, not a substitute for checking.**
+  9. **A signal is a prompt to check, not a substitute for checking.**
     A task-notification, webhook event, or elapsed check-in interval
     means "go verify the actual state now" — not "the state is
     whatever the signal implies." When a check comes back ambiguous,
@@ -255,7 +262,7 @@ numbers: `bench/RESULTS.md`.
     direct* query against the actual repo/CI state — go to the source
     of truth, don't wait on the signal layer to resolve itself — not
     another wait cycle.
-  - **A wakeup firing is never a terminal, silent event.** Every
+  10. **A wakeup firing is never a terminal, silent event.** Every
     scheduled check-in resolves in exactly one of two states, in
     order: (1) check whatever pending status it was armed for
     directly, act on what's found, and — if work still remains —
@@ -264,7 +271,7 @@ numbers: `bench/RESULTS.md`.
     automatable (a decision needs the user, or the work is genuinely
     done), end the turn by saying so explicitly, never with just tool
     calls and no wakeup and no closing status.
-  - **Anything structural or behavioral about how memory itself is
+  11. **Anything structural or behavioral about how memory itself is
     configured** — CLAUDE.md/PROJECT.md/HISTORY.md conventions, what
     gets committed, nested-stub patterns and their exact content —
     lands here, byte-exact, the same session it's decided, same as any
@@ -278,7 +285,7 @@ numbers: `bench/RESULTS.md`.
     a partial or ambiguous description (one example generalized by
     inference, say) is where drift creeps in between sessions or across
     a model swap.
-  - **Route a session's lessons by content, not by convenience.** A
+  12. **Route a session's lessons by content, not by convenience.** A
     lesson learned mid-session defaults to whichever file is already
     open, which is how CLAUDE.md accumulates content that was never
     session-operating-instructions to begin with. Before writing
@@ -294,7 +301,7 @@ numbers: `bench/RESULTS.md`.
     already exists elsewhere, strengthen or cross-reference that
     existing statement instead of writing a parallel near-duplicate in
     whichever file happens to be open.
-  - **Once a fact lives somewhere, point to it — don't re-narrate it.**
+  13. **Once a fact lives somewhere, point to it — don't re-narrate it.**
     Routing a lesson to the right file (the rule above) is the first
     hop, not the last: a fact that's already stated in the file it
     actually binds to (a rule in PROJECT.md, an incident in HISTORY.md,
@@ -311,6 +318,17 @@ numbers: `bench/RESULTS.md`.
     the source moves; state that stability requirement explicitly at
     the copy's own site when it's the reason, so a future reader can
     tell an intentional freeze from an accidental duplicate.
+  14. **A delegated audit's factual claims get re-verified before being
+    used to justify a fix, the same as any other signal.** This
+    restates rule 9 for report *content*, not just report *arrival*: a
+    subagent that read every file carefully can still miscount — proven
+    live during the 2026-07-19 doc-audit fix pass, where an agent
+    reported "~250 builtins" as inaccurate (claiming the live count was
+    224) when a direct recount during the fix pass found exactly 250,
+    matching the book precisely. Applying that "fix" blindly would have
+    broken a true sentence. Before editing anything an audit flagged as
+    wrong, re-derive the number/fact from the live repo yourself; treat
+    the audit's own claim as a lead, not a verified premise.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,

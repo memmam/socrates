@@ -201,7 +201,8 @@ println(calls);
 **Vector and matrix math.** `std.glm` is 3D math named and shaped after
 the GLM library — `vec3`, `perspective`, `look_at` — so graphics code
 reads like graphics code everywhere else. `Vec2`/`Vec3`/`Vec4` carry the
-operators plus `dot`, `cross`, `length`, `normalize`, and `lerp`; `Mat4`
+operators plus `dot` and `length`; `normalize` and `lerp` are `Vec2`/`Vec3`
+only (not `Vec4`), and `cross` is `Vec3`-only; `Mat4`
 is column-major with the full constructor set (`translation`, `scaling`,
 `rotation_*`, `perspective`, `ortho`, `look_at`), composed with `mul` and
 applied with `mul_vec4`; `Quat` adds `from_axis_angle`, `slerp`, and

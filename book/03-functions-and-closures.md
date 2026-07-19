@@ -413,7 +413,11 @@ panic: stack overflow
 ```
 
 (The runtime prints 64 frames before summarizing the rest; the middle is
-elided here.) Like any panic, this exits with code 70.
+elided here.) Like any panic, this exits with code 70. The 4,096-frame cap
+is configurable via the `SOCRATES_MAX_DEPTH` environment variable (floor
+64) for recursive workloads whose depth is genuinely data-dependent rather
+than a bug — see § 11 of the spec for the native-callback caveat of a very
+large cap.
 
 The limit only applies to calls with work left pending — here every frame
 holds an unfinished `+`. A call in *tail position* reuses the current frame
@@ -468,3 +472,9 @@ else — lambdas that infer from context, closures that share and outlive their
 scopes, and generics that keep higher-order code typed without call-site
 annotations. Next up: the compound types — lists, maps, tuples, structs — and
 the pattern matching that makes enums shine.
+
+---
+
+Previous: [Fundamentals](02-fundamentals.md) ·
+Next: [Structs, Enums, and Methods](04-data.md) ·
+[Back to the index](README.md)

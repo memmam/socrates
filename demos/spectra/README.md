@@ -31,8 +31,9 @@ length 600) the demo pins:
 `checks.soc` additionally cross-validates `fft.fft` against a naive
 O(n²) DFT at `n = 12` (the Bluestein path), pins exact tiny transforms,
 and unit-tests gcd/ratio/top-k/spectrogram on hand-built data.
-`guardrails.soc` pins the fft argument contracts (mismatched lengths,
-empty input) — one via `try()`, one as a real `//? panic:`.
+`guardrails.soc` pins the fft argument contracts: two empty/mismatched-input
+cases caught via `try()`, and one — `fft.ifft` on an empty spectrum — a
+real `//? panic:` that ends the program.
 
 ## Run it
 

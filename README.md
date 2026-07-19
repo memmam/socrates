@@ -80,8 +80,10 @@ output is golden-tested. This image is Socrates output too:
   compound assignment `&= |= ^= <<= >>=`) and Int intrinsics (`count_ones`,
   `ushr`, `to_hex`, `wrapping_add`/`sub`/`mul`, …), plus a `Bytes` buffer
   with little- and big-endian pushers and readers up to 64 bits for
-  building wire formats, files, and checksums by hand — the `png` and
-  `synthwave` demos write real PNG and WAV. Hex/binary literals name the
+  building wire formats, files, and checksums by hand — `std.png`,
+  `std.crc`, and `std.wav` (built this way, then promoted out of the
+  `png` and `synthwave` demos that originated them) write real PNG and
+  WAV. Hex/binary literals name the
   full 64-bit bit pattern, so `0x8080808080808080` is as writable as `1`.
 - **Parallelism as a first-class citizen.** `worker.spawn` runs a whole
   Socrates program on its own OS thread with its own heap, communicating over

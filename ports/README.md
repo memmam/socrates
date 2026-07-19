@@ -50,19 +50,26 @@ sRGB curve coefficients, luma weights) are copied digit-for-digit.
 
 ### The validation pattern
 
-Every port ships with its **receipts**:
+Every port ships with its **receipts**, though the concrete form varies by
+source ecosystem (compare `icaa/README.md`'s JS reference + `probe` mode
+against `claudewave/README.md`'s Python shim + PAW comparison — each port's
+own README is the authority on its specific receipts):
 
-1. A **plain-JS CPU reference** (`<port>/reference/*.mjs`, node, zero
-   dependencies) — an independent transliteration of the same source.
+1. An **independent reference implementation**, standard-library-only in
+   the source's own language — a zero-dependency plain-JS transliteration
+   for a JS/TSL source (icaa), or the *unmodified* upstream source running
+   against a stdlib-only shim of its dependencies for a Python source
+   (claudewave) — producing ground truth to compare against.
 2. A deterministic **input suite** generated in Socrates.
-3. A pixel/value **diff harness** proving the Socrates port and the JS
-   reference agree exactly (or to a documented, justified last-bit
-   tolerance) across the whole suite.
+3. A value **diff harness** proving the Socrates port and the reference
+   agree exactly (or to a documented, justified last-bit tolerance) across
+   the whole suite.
 4. Golden `socrates test` directives pinning the port's behavior in CI.
 
 Two independent translations of one source that agree exactly are strong
 evidence both are faithful; where they disagree, the divergence localizes
-the bug in minutes via each implementation's `probe` mode.
+the bug — icaa's own debugging tool for this is its `probe` mode, tracing
+every intermediate for one output pixel across both implementations.
 
 ## Ports
 

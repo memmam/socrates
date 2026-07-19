@@ -22,8 +22,11 @@ println([1, 2][5]);           //? panic: index 5, length 2
 ```
 
 Run it with `socrates test file.soc`, and `socrates test dir/` walks a directory
-recursively. A file with no directives passes by running silently, so a
-whole example directory can be a test suite. The exit code is 1 on any
+recursively. A file with no directives passes only if it runs to completion
+with *no output at all* — any `print`/`println` without a matching
+directive is a failure — so a directory of silent library modules can be a
+test suite for free, but a directory of ordinary example programs usually
+can't without directives added. The exit code is 1 on any
 failure, so it drops into CI unchanged — Socrates's own spec suite (313 tests)
 and this book's snippets both run through this exact path.
 

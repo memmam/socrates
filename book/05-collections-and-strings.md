@@ -2,8 +2,8 @@
 
 Socrates ships four workhorse containers — `List[T]`, `Map[K, V]`, tuples, and
 `Range` — plus a well-stocked string toolbox. This chapter tours all of
-them. Every snippet is a complete program, and every output block is real
-output.
+them. Every snippet is a complete program, executed for real against the
+interpreter in CI (see `book/README.md` for exactly what's checked).
 
 ## Lists
 
@@ -666,3 +666,9 @@ text is the wrong shape. Between the containers and the `Option`-returning
 methods everywhere, most day-to-day Socrates is a transformation pipeline
 ending in a pattern match — and those `Option`s and `Result`s are the
 subject of the next chapter.
+
+---
+
+Previous: [Structs, Enums, and Methods](04-data.md) ·
+Next: [Error Handling](06-error-handling.md) ·
+[Back to the index](README.md)

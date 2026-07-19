@@ -663,9 +663,12 @@ platform and scores devices — SPIR-V support advertised in
 `CL_DEVICE_IL_VERSION` first, GPU over CPU second — so a machine with
 both a vendor GPU driver and pocl picks the GPU, and a pocl-only CI
 runner still resolves. The native precedence order is metal > vulkan >
-opencl; when `vulkan` and `opencl` are both compiled in, `cl.rs`
-is not even built (the `lib.rs` gate carries `not(feature = "vulkan")`),
-keeping the dispatch maze honest at compile time. The battery is
+d3d12 > cuda > opencl (the fuller statement is in the CUDA section
+below); when any higher-precedence backend is compiled in alongside it,
+`cl.rs` is not even built (the `lib.rs` gate carries `not(feature =
+"vulkan")`, `not(feature = "cuda")`, and `not(all(feature = "d3d12",
+target_os = "windows"))`), keeping the dispatch maze honest at compile
+time. The battery is
 `docs/assets/opencl_compute.soc` — the doubling kernel hand-assembled
 in the OpenCL profile (`GlobalInvocationId` as the `Input` builtin
 variable, `OpPtrAccessChain` with `Aligned` loads/stores), hard-asserting
@@ -965,7 +968,7 @@ both trees and reported rather than silently skipped. `bench.yml` fans
 the script across one runner per tier-1 architecture
 (x86_64/aarch64-linux, x86_64-windows, aarch64-macos) on push of a
 `bench/<name>` branch, posting each delta table to the run summary; a
-Compare-binaries step `cmp`s the two builds and reports
+"Compare binaries" step `cmp`s the two builds and reports
 BIT-IDENTICAL/DIFFER, which is what lets an A/A or source-only run
 prove that measured deltas are noise (release builds are deterministic
 given equal-length checkout paths — hence `base/` and `head/`).
@@ -1006,7 +1009,7 @@ loop — the modern counted-loop dispatch floor. The conversions are
 stdout-identical under one binary, but wall times legitimately moved
 (a range loop dispatches different ops than a while loop), so
 `bench/RESULTS.md` records the conversion commit's own matrix run —
-Compare-binaries: bit-identical on both sides — as the *epoch bridge*
+"Compare binaries": bit-identical on both sides — as the *epoch bridge*
 pricing the workload change per row per architecture; cross-epoch
 comparisons go through that table.
 

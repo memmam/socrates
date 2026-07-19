@@ -67,8 +67,9 @@ println((-2.9).to_int());
 -2
 ```
 
-A `Float` always displays with a decimal point or exponent (`5.0`, not `5`),
-so you can tell the types apart in output.
+A finite `Float` always displays with a decimal point or exponent (`5.0`,
+not `5`), so you can tell the types apart in output — `inf`, `-inf`, and
+`nan` (see below) display as those words instead.
 
 ## `let` and `let mut`
 
@@ -552,3 +553,9 @@ You can now read and write straight-line Socrates: typed values with no silent
 conversions, immutable-by-default bindings, expression-based control flow,
 and a strict top-to-bottom execution model. Next up: functions and closures,
 then modeling data with structs, enums, and pattern matching.
+
+---
+
+Previous: [Getting Started](01-getting-started.md) ·
+Next: [Functions and Closures](03-functions-and-closures.md) ·
+[Back to the index](README.md)

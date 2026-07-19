@@ -126,14 +126,18 @@ jobs:
         run: |
           mkdir -p /tmp/icaa-scenes
           SOCRATES_PATH=ports ./target/release/socrates ports/icaa/scenes.soc /tmp/icaa-scenes > /dev/null
+          count=0
           for scene in /tmp/icaa-scenes/*.ppm; do
             name=$(basename "$scene" .ppm)
             for preset in quality fast; do
               node ports/icaa/reference/icaa-cpu.mjs "$scene" "/tmp/icaa-scenes/${name}_${preset}_js.ppm" "$preset"
               SOCRATES_PATH=ports ./target/release/socrates ports/icaa/main.soc "$scene" "/tmp/icaa-scenes/${name}_${preset}_fb.ppm" "$preset"
               node ports/icaa/reference/compare.mjs "/tmp/icaa-scenes/${name}_${preset}_js.ppm" "/tmp/icaa-scenes/${name}_${preset}_fb.ppm"
+              count=$((count+1))
             done
           done
+          echo "scene battery comparisons: $count"
+          test "$count" -eq 18
       - name: ICAA debug-view cross-validation (Socrates vs JS reference)
         # All five debug views (1=confidence 2=coverage 3=distance
         # 4=orientation 5=rms) on every base scene at both presets:

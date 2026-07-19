@@ -2,7 +2,10 @@
 
 A guided tour of the Socrates programming language, organized by topic. Every
 code snippet in these chapters is executed against the real interpreter in
-CI before it is published; the output shown is real output.
+CI before it is published: a snippet carrying a `//?` directive has its
+printed output checked byte-for-byte, and every other snippet is checked to
+compile and run (or fail to compile, or panic, per its fence tag) without
+error — see `tests/book_snippets.rs`.
 
 1. [Getting Started](01-getting-started.md) — building, running, the CLI,
    the REPL, and how to read a Socrates error message.

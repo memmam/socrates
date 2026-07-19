@@ -108,7 +108,8 @@ from source on anything Rust supports), then:
 ```sh
 socrates examples/mandelbrot.soc
 socrates demos/checkers/main.soc      # watch it play itself
-socrates test tests/spec demos          # run the whole golden suite
+shopt -s extglob
+socrates test tests/spec demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc   # run the whole golden suite (glcube's other mains need a live GL/Metal/Vulkan window)
 socrates build demos/lisp -o lisp && ./lisp   # or make your own standalone binary
 socrates repl
 ```

@@ -90,10 +90,12 @@ five-plus orders of magnitude under the 1e-9 outer bound:
 
 ## Scope notes
 
-- Ported: everything in the six files above. Out of scope (declared in
-  the port contract): upstream `analysis.py`, `viz.py`, `ace_step.py`,
-  and the two `dsp.py` functions that need `soundfile` /
-  `scipy.signal.resample` — `load_stereo` and `resample_rate`.
+- Ported: everything in the six files above. Out of scope: upstream
+  `analysis.py`, `viz.py`, `ace_step.py`, and the two `dsp.py` functions
+  that need `soundfile` / `scipy.signal.resample` — `load_stereo` and
+  `resample_rate` (`ports/pyl/CONTRACT.md` pins the numerical contract for
+  what's ported; it does not itself enumerate what's excluded — this list
+  is the authority on scope).
 - Socrates has no default arguments: call sites pass the upstream defaults
   explicitly (each function's doc comment records them). Tuple
   parameters (`noise_band`, `chirp_freq_band`) are flattened to two

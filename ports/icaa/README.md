@@ -63,9 +63,12 @@ comparison is `reference/compare.mjs`'s `max_diff=0` gate over every
   down to slope 0.02, thin lines, rings, discs, noise fields, gratings,
   ramps, bars, and degenerate 1×1/8×1-class images — each rendered by
   both implementations at both presets (47 × 2).
-- **Identity off-edge by construction**: flat fields, sub-threshold ramps,
-  and checkerboards pass through byte-identical (pinned in `spec.soc`,
-  the "ICAA port golden tests" step).
+- **Identity off-edge by construction**: flat fields and sub-threshold
+  ramps pass through byte-identical (pinned in `spec.soc`, the "ICAA port
+  golden tests" step). The scene battery's checkerboard is a *near*-identity
+  case instead (`scenes.soc`'s own comment: "low coherence: ICAA ~identity")
+  — it is cross-validated against the JS reference like every other scene,
+  not pinned as an exact identity.
 
 History, from the port's development (measured then, not re-run by CI):
 the fast preset was bit-identical f64 at every probe intermediate; the

@@ -1,7 +1,9 @@
 # pyl — the Python-to-Socrates translation layer: numerical contract
 
 This file pins the semantics that BOTH implementations of the claudewave
-port must follow exactly:
+port must follow exactly (claudewave is `pyl`'s only port so far; a second
+`pyl` port would grow this contract, the same way `jsl`'s modules grow by
+pull — see `ports/README.md`):
 
 - `ports/claudewave/reference/pynp.py` — a **stdlib-only Python** shim
   implementing the numpy/scipy.signal subset below. The upstream
