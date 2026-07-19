@@ -280,18 +280,45 @@ a wider unfocused dig. Bounded at four hypothesis-tests total — a fifth
 candidate with none confirmed is itself the signal to take the sixth
 probe's other branch (escalate to the user) rather than keep guessing.
 Keep a scratchpad of each test's data as it accumulates, not only at
-the end: it cuts both ways — a hypothesis whose early samples already
-contradict its prediction is droppable before its own ≥5-sample floor
-completes, and one whose early samples already strongly support it is
-promotable to the next round early too. Either direction is about
-*navigating between* hypotheses faster with partial data, never about
-calling the underlying performance question's own KEEP/DROP verdict on
-fewer than the floor — that still needs its full ≥5 once a hypothesis
-is confirmed and formalized. First instance: `bench/inline-upvals-x64-
-probe`, testing whether PR #103's x86_64-linux `for_range` residual is
-the representation choice itself vs. an incidental layout-shift
-artifact (see the per-target binding note above for the outcome once
-read).
+the end — not just *whether* to drop or promote a hypothesis early on
+partial data, but a slot-by-slot rule for what to spend each probe or
+sample on, at either scale (the ≤4-hypothesis ladder, or the ≥5-sample
+floor within one hypothesis):
+
+1. **Ground.** The first reading of whatever's currently under test. No
+   comparison exists yet.
+2. **Differential.** The second reading of the same target gives a
+   trend, but two points never confirm or reject anything on their own
+   — matches "fewer than 5 is inconclusive" above.
+3. **The first real choice, no early exit.** Reprobe/resample the
+   current target, or spend the slot on a different one (a different
+   hypothesis, a different kind of evidence) *only if* that different
+   target would yield more insight right now than another reading of
+   the current one. Don't default to resampling from inertia — weigh
+   the two options each time.
+4. **The same choice, but an early exit is now allowed.** If the
+   accreted evidence already compels a decision, decide here rather
+   than waiting for the last slot. Otherwise, the slot-3 choice applies
+   again — reprobe or switch, whichever yields more insight — and a
+   target abandoned at slot 3 is eligible for reconsideration here;
+   switching away from something once doesn't permanently disqualify
+   it from later slots.
+5. **The decisive slot.** Decide if the accreted evidence motivates
+   it — commit to the hypothesis (scope the idiom set *up*, uptake the
+   change) or change hypothesis entirely, based on what's accumulated.
+   Not yet motivated even here: the floor is a floor, not a ceiling —
+   the sixth probe above still governs (escalate the kind of evidence,
+   or the user), not a mechanical 6th reading.
+
+The same five-step logic governs the hypothesis ladder one slot
+shorter, since its own bound is 4, not 5: ground, differential, the
+slot-3 choice, then the decisive slot (commit-and-scope-up, or the next
+hypothesis) — there is no separate "early exit allowed" slot distinct
+from the decisive one at that scale. First instance:
+`bench/inline-upvals-x64-probe`, testing whether PR #103's x86_64-linux
+`for_range` residual is the representation choice itself vs. an
+incidental layout-shift artifact (see the per-target binding note
+above for the outcome once read).
 
 **aarch64-macos-15's first A/A** (identical binaries both sides, the
 audit-batch-1 run that introduced the leg): macros dead flat (checkers

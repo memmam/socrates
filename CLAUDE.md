@@ -127,12 +127,15 @@ their place fastest.
   (the next hypothesis, tested the same way) — bounded at four
   hypothesis-tests before a fifth candidate with none confirmed is
   itself the signal to take the other branch (escalate to the user).
-  A running scratchpad of each test's data lets a hypothesis be dropped
-  *or* promoted early, on partial data — but only for navigating
-  between hypotheses faster, never for the underlying KEEP/DROP verdict
-  itself, which still needs its own full ≥5 once a hypothesis is
-  confirmed. First instance: `bench/inline-upvals-x64-probe` (PR #103's
-  x86_64-linux `for_range` residual). Full protocol in `bench/RESULTS.md`.
+  A running scratchpad of each test's data feeds a slot-by-slot rule
+  (ground, differential, then a real reprobe-vs-switch choice each slot
+  after) for what to spend each probe or sample on — letting a
+  hypothesis be dropped *or* promoted early, on partial data — but only
+  for navigating between hypotheses faster, never for the underlying
+  KEEP/DROP verdict itself, which still needs its own full ≥5 once a
+  hypothesis is confirmed. First instance: `bench/inline-upvals-x64-probe`
+  (PR #103's x86_64-linux `for_range` residual). Full protocol, spelled
+  out slot by slot, in `bench/RESULTS.md`.
 - **This applies to whole backend implementations, not just algorithmic
   idioms** — but the trigger is the *platform* actually dropping the older
   path, not merely deprecating it. When a newer backend for the same
