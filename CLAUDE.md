@@ -544,7 +544,17 @@ numbers: `bench/RESULTS.md`.
   - Decision forks go to the user as plain-text lettered options, not
     interactive question UI.
   - Long CI waits are handled by scheduled self check-ins, never
-    polling loops.
+    polling loops — that's this session's own wakeup mechanism, not
+    available to a delegated subagent. A subagent briefed to push,
+    wait on a bench/CI run, and continue has no independent wakeup of
+    its own: told to just "wait," it ends its turn and stalls, needing
+    a manual resume every single time (the PR #103 x86_64-linux
+    investigation's agent did this twice in a row). The fix for that
+    case is the mirror image of this rule, not an exception to it: a
+    subagent waiting on a run polls *within its own turn*, a bounded
+    bash loop (`sleep` + a status check, capped at enough iterations to
+    cover one run), and only ends its turn once it has an actual result
+    or has exhausted the cap — never on a bare "standing by."
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,
