@@ -165,6 +165,38 @@ cfg flips them to `#[inline(always)]` and folds the monolith back
 together. Non-aarch64-linux binaries are unchanged by the cfg
 machinery; aarch64-linux is judged on the matrix like everything else.
 
+(Revalidation note, 2026-07-19: re-verified at the current ≥5-sample
+floor via `bench/h1-binding-recheck` — a probe, never merges — whose
+build.rs forces `monolithic_dispatch` OFF on aarch64-linux only,
+judged against `bench/BASE` = main with the binding on. 5 valid
+samples across all four tier-1 architectures (commits 79df5da1,
+1507453c, adbe60e5, 726e172e, d5f25eae, in that order):
+
+| row              | aarch64-linux (head=OFF vs main=ON) | x86_64-linux | x86_64-windows | aarch64-macos |
+|------------------|--------------------------------------|--------------|----------------|---------------|
+| enum_match       | +5.4/+5.2/+5.3/+5.2/+4.9 (5/5 ⚠)     | +7.0/+3.7/-0.0/+0.3/-0.1 (2/5 ⚠, no consistent direction) | -0.0/+4.0/+0.6/+0.2/-0.9 (1/5 ⚠) | +0.4/+0.2/+0.2/+2.3/+0.2 (0/5 ⚠) |
+| closure_churn    | +4.1/+4.0/+4.0/+3.7/+3.7 (5/5 ⚠)     | flat (5/5)   | flat (5/5)     | flat (5/5)    |
+| bench_list_churn | +3.4/+3.3/+3.4/+3.1/+3.5 (5/5 ⚠)     | flat (one s1 mark, +5.0) | flat (one s5 mark, -3.2) | flat (5/5) |
+
+Forcing the compact loop back onto aarch64-linux reproduces, tight and
+in every one of 5 samples, the cost the binding exists to erase:
+enum_match +4.9..+5.4%, closure_churn +3.7..+4.1%, bench_list_churn
++3.1..+3.5% — a systematic Neoverse cost, not a placement roll,
+matching (and slightly exceeding) H1's original +4.5% reading. The
+other three architectures show no such pattern: at most one or two
+isolated single-sample marks apiece, on different rows each time, no
+row reproducing adversely across samples — ordinary per-job noise, not
+a `monolithic_dispatch` effect, since the probe's build.rs diff is
+inert on those targets (the emitted cfg is unchanged there).
+x86_64-linux's own scattered enum_match marks (2 of 5 samples,
+magnitude +3.7..+7.0%, no consistent direction) are the
+already-documented rodata lottery noted earlier in this section, not a
+new finding. Confirmed, unchanged: aarch64-linux still needs
+`monolithic_dispatch` on, exactly as built. This closes the reopening
+recorded under "The floor is uniform across every leg," below —
+`bench/h1-binding-recheck` never merges (probe only, no code change)
+and needs no further sampling.)
+
 **macOS measurement protocol.** macos-14 runners are precise but
 per-job biased: an A/A run (identical trees both sides; a
 Compare-binaries step proved the two independent builds bit-identical)
@@ -212,7 +244,7 @@ per-target binding built to erase it, which was verified clean on
 exactly *one* matrix sample. `bench/h1-binding-recheck` (never merges)
 re-measures the binding's own effect — forced off vs `bench/BASE` =
 main with the binding on — at 5 samples on aarch64-linux; see the
-per-target binding note above for the outcome once read.
+per-target binding note above — confirmed, unchanged.
 
 **The sixth probe: when 5 samples don't resolve, escalate the
 *kind* of evidence, not the count.** The floor exists to stop premature
