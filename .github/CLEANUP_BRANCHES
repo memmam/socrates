@@ -45,26 +45,3 @@
 # served its purpose isn't worth the churn — its finding is complete in
 # bench/RESULTS.md's H3 section ("no-GLC probe") — so it's queued for
 # deletion here instead of being kept as a fourth reproducible probe.
-audit-batch-1
-bench/audit-batch-1
-bench-sample-floor
-bench/h3-probe-no-glc
-bench/inline-upvals
-branch-cleanup-2026-07-19
-check-not-loop
-cleanup-prune-via-pr
-compare-branch-record
-counts-and-workarounds
-docs-tier1-fixes
-flip-memory-stubs-to-claude-md
-h1-binding-recheck-verdict
-hypothesis-test-ladder
-inline-upvals-implementation
-item9-records-batch
-memory-dedup
-memory-split
-project-split
-remove-footer-policy
-rotating-greeting
-sixth-probe-doctrine
-wire-nested-memory-stubs
