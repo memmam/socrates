@@ -9,14 +9,20 @@ introduced it, and `CLAUDE.md` keeps the release ledger.
 - **Closures capturing ≤2 upvalues no longer heap-allocate a `Vec` for
   them** — `Obj::Closure`'s upvalue storage is now `UpvalStorage`, an
   inline-slots-or-spill representation (`Obj` size unchanged: the new
-  enum is the same 24 bytes as the `Vec` it replaces). This reopens and
+  enum is the same 24 bytes as the `Vec` it replaces). Reopens and
   reverses a standing negative result (`bench/RESULTS.md`'s "inline ≤2
   upvals" entry, rejected pre-H1 on a codegen-lottery premise H1 later
-  killed). Local single-box evidence is strong (closure_churn −15.6%
-  to −18.3% across all 7 samples gathered); shipped for four-arch
-  matrix judgment (`bench/inline-upvals`) per the universality
-  principle before this bullet's verdict — or this section's fate — is
-  final.
+  killed). Four-arch matrix verdict, per the universality principle:
+  `closure_churn` −10% to −19% on x86_64-windows and aarch64-macos
+  (`InlineUpvals`); aarch64-linux and x86_64-linux keep plain
+  `Vec<Handle>` instead, each for its own measured reason (a build.rs
+  `upvals_vec_handle` cfg records both) — aarch64-linux because
+  `InlineUpvals` reproduced a broad Neoverse dispatch-loop-body-
+  complexity regression, x86_64-linux because a `for_range` residual
+  that touches no closures at all turned out to be a real
+  representation cost there too, confirmed by a dedicated hypothesis
+  test (`bench/inline-upvals-x64-probe`) rather than assumed. Full
+  write-up, with every sample, in `bench/RESULTS.md`.
 
 ## v0.8.0 — native graphics and compute; the demo round's feature queue
 
