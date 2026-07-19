@@ -267,6 +267,32 @@ own contribution rather than re-running the aggregate H3-vs-main A/B a
 4th and 5th time) was already this pattern before it had a name;
 `bench/h1-binding-recheck` (above) is the second, deliberate instance.
 
+**The hypothesis-test ladder — the sixth probe's deterministic-
+instrument branch, spelled out.** The bar to leave passive measurement
+for an active test: a finding reproducing across two probes. From
+there, the loop is hypothesis → test → verdict, not hypothesis → wider
+dig: a probe built to confirm or refute one specific, falsifiable
+prediction, not a fishing expedition. Two outcomes per test —
+*confirmed*: commit to the hypothesis and scope the idiom set *up* to
+cover the newly-understood case, per the universality principle above;
+*refuted*: form the next hypothesis and test that one specifically, not
+a wider unfocused dig. Bounded at four hypothesis-tests total — a fifth
+candidate with none confirmed is itself the signal to take the sixth
+probe's other branch (escalate to the user) rather than keep guessing.
+Keep a scratchpad of each test's data as it accumulates, not only at
+the end: it cuts both ways — a hypothesis whose early samples already
+contradict its prediction is droppable before its own ≥5-sample floor
+completes, and one whose early samples already strongly support it is
+promotable to the next round early too. Either direction is about
+*navigating between* hypotheses faster with partial data, never about
+calling the underlying performance question's own KEEP/DROP verdict on
+fewer than the floor — that still needs its full ≥5 once a hypothesis
+is confirmed and formalized. First instance: `bench/inline-upvals-x64-
+probe`, testing whether PR #103's x86_64-linux `for_range` residual is
+the representation choice itself vs. an incidental layout-shift
+artifact (see the per-target binding note above for the outcome once
+read).
+
 **aarch64-macos-15's first A/A** (identical binaries both sides, the
 audit-batch-1 run that introduced the leg): macros dead flat (checkers
 −0.5%, lisp +0.5%) — consistent with macos-14's own macro behavior.

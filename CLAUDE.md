@@ -121,6 +121,18 @@ their place fastest.
   predate this floor live in `bench/RESULTS.md` — this is the one
   other file that states the number, per the intent-tracking
   principle's scope-recording discipline.
+  **The deterministic-instrument branch is itself a ladder, not one
+  shot:** hypothesis → a test built to confirm or refute it
+  specifically → confirmed (commit, scope the idiom set up) or refuted
+  (the next hypothesis, tested the same way) — bounded at four
+  hypothesis-tests before a fifth candidate with none confirmed is
+  itself the signal to take the other branch (escalate to the user).
+  A running scratchpad of each test's data lets a hypothesis be dropped
+  *or* promoted early, on partial data — but only for navigating
+  between hypotheses faster, never for the underlying KEEP/DROP verdict
+  itself, which still needs its own full ≥5 once a hypothesis is
+  confirmed. First instance: `bench/inline-upvals-x64-probe` (PR #103's
+  x86_64-linux `for_range` residual). Full protocol in `bench/RESULTS.md`.
 - **This applies to whole backend implementations, not just algorithmic
   idioms** — but the trigger is the *platform* actually dropping the older
   path, not merely deprecating it. When a newer backend for the same
