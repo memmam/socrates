@@ -13,7 +13,7 @@
 // checked against the committed artifact byte-for-byte before being
 // rewritten (Bytes equality is structural, v0.7).
 
-import svg;
+import std.svg;
 import chart;
 import std.lists;
 import std.fft;

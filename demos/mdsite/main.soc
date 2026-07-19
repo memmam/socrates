@@ -7,7 +7,7 @@
 // generated from the page list), writes the results to out/, and prints
 // a build report.
 
-import markdown as md;
+import std.markdown as md;
 import site;
 import std.path;
 import std.set;
@@ -97,8 +97,8 @@ if let Err(e) = build() {
 //? expect:   source           title               words  bytes
 //? expect:   ------           -----               -----  -----
 //? expect:   index.md         Welcome to mdsite     140   2618
-//? expect:   about.md         About                 139   2774
+//? expect:   about.md         About                 139   2764
 //? expect:   hello-socrates.md Hello, Socrates       178   2990
 //? expect:
-//? expect:   wrote 3 pages, 8382 bytes of HTML
+//? expect:   wrote 3 pages, 8372 bytes of HTML
 //? expect:   3/3 pages byte-identical to the committed out/

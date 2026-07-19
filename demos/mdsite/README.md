@@ -1,10 +1,11 @@
 # mdsite — a static site generator written in Socrates
 
 A small, complete static site generator: it reads Markdown pages from
-`content/`, converts them to HTML with a hand-written line-based
-converter, wraps each page in a shared template whose navigation bar is
-generated from the page list, writes the finished site to `out/`, and
-prints a build report. About 500 lines of Socrates across four files.
+`content/`, converts them to HTML with the standard library's
+`std.markdown` converter, wraps each page in a shared template whose
+navigation bar is generated from the page list, writes the finished
+site to `out/`, and prints a build report. About 260 lines of
+demo-local Socrates across three files, on top of `std.markdown`.
 
 ## Run it
 
@@ -27,10 +28,10 @@ mdsite: building 3 pages  content/ -> out/
   source           title               words  bytes
   ------           -----               -----  -----
   index.md         Welcome to mdsite     140   2618
-  about.md         About                 139   2774
+  about.md         About                 139   2764
   hello-socrates.md Hello, Socrates       178   2990
 
-  wrote 3 pages, 8382 bytes of HTML
+  wrote 3 pages, 8372 bytes of HTML
   3/3 pages byte-identical to the committed out/
 ```
 
@@ -47,7 +48,7 @@ And an excerpt of the HTML it produces (`out/about.html`):
 <main>
 <h1>About</h1>
 <ul>
-  <li><code>markdown.soc</code> — a line-based Markdown-to-HTML converter</li>
+  <li><code>site.soc</code> — the page model, the HTML template, and the nav builder</li>
   ...
 </ul>
 <p>... text like 2 &lt; 3, AT&amp;T, and &lt;em&gt;this fake tag&lt;/em&gt; ...</p>
@@ -81,8 +82,10 @@ And an excerpt of the HTML it produces (`out/about.html`):
 
 Files:
 
-- `markdown.soc` — escaping, the inline-span scanner, the block-level
-  state machine (`to_html`), and `first_heading` for titles
+- [`std.markdown`](../../std/markdown.soc) — escaping, the inline-span
+  scanner, the block-level state machine (`to_html`), and
+  `first_heading` for titles — promoted from this demo's own
+  `markdown.soc`, unchanged (it was already site-agnostic)
 - `site.soc` — the `Page` struct, nav builder, HTML shell, and CSS
 - `main.soc` — the driver and build report; its full output is pinned
   by `//? expect:` directives

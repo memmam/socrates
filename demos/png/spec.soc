@@ -6,9 +6,9 @@
 //   ./target/release/socrates test demos/png
 
 import bits;
-import crc;
-import zlib;
-import png;
+import std.crc;
+import std.zlib;
+import std.png;
 import image;
 
 // -- CRC-32: table entries and published vectors ------------------------------
@@ -38,30 +38,30 @@ println(bits.to_hex(0xdeadbeef, 8));
 println(bits.to_hex(0xFFFFFFFF, 8));
 println(bits.to_hex(255, 2));
 let be = bytes(0);
-bits.push_u32be(be, 0x0a0b0c0d);
-println("u32be bytes {be.to_list()} read back {bits.to_hex(bits.read_u32be(be, 0), 8)}");
-println("u16le {bits.read_u16le(bytes_of([0x20, 0x12]), 0)}");
+be.push_u32be(0x0a0b0c0d);
+println("u32be bytes {be.to_list()} read back {bits.to_hex(be.read_u32be(0), 8)}");
+println("u16le {bytes_of([0x20, 0x12]).read_u16le(0)}");
 
 // -- zlib stored blocks: exact framing -----------------------------------------------
 
 // "hello" in one stored block: header 78 01, then [final=1][LEN][~LEN],
 // the five raw bytes, and the big-endian Adler-32.
-println(bits.dump(zlib.deflate_stored("hello".to_bytes(), 65535)));
+println(bits.dump(zlib.wrap("hello".to_bytes(), 65535)));
 
 // The empty stream still needs one (empty, final) stored block.
-println(bits.dump(zlib.deflate_stored(bytes(0), 100)));
+println(bits.dump(zlib.wrap(bytes(0), 100)));
 
 // A 5-byte payload through 2-byte blocks: 2 + 2 + 1, roundtripped.
-let z = zlib.deflate_stored(bytes_of([10, 20, 30, 40, 50]), 2);
-match zlib.inflate_stored(z) {
+let z = zlib.wrap(bytes_of([10, 20, 30, 40, 50]), 2);
+match zlib.unwrap(z) {
     Ok(inf) -> println("5 bytes via 2-byte blocks: {inf.blocks} blocks, adler_ok={inf.adler_ok}, roundtrip={inf.data.to_list()}"),
     Err(e) -> println("unexpected: {e}"),
 }
 
 // Tampering with a LEN byte must be caught by NLEN.
-let bad = zlib.deflate_stored("hello".to_bytes(), 65535);
+let bad = zlib.wrap("hello".to_bytes(), 65535);
 bad.set(3, bad.get(3) ^ 1);
-match zlib.inflate_stored(bad) {
+match zlib.unwrap(bad) {
     Ok(_) -> println("tampered LEN accepted?!"),
     Err(e) -> println("tampered LEN: {e}"),
 }
@@ -84,7 +84,7 @@ println("isqrt(2^62) = {image.isqrt(1 << 62)} (2^31 = {1 << 31})");
 
 // Four solid pixels: red, green, blue, white.
 let quad = bytes_of([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255]);
-let tiny = png.encode(2, 2, quad);
+let tiny = png.encode(2, 2, quad, 2000);
 println("2x2 png: {tiny.len()} bytes");
 let ok = png.parse(tiny).unwrap();
 println("2x2 parse: {ok.width}x{ok.height}, crcs {ok.chunks.all(|c| c.crc_ok)}, adler {ok.adler_ok}, pixels match {ok.pixels == quad}");

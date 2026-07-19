@@ -1,4 +1,4 @@
-// markdown — a line-based Markdown-to-HTML converter.
+// std.markdown — a line-based Markdown-to-HTML converter.
 //
 // Block level: headings (#..######), paragraphs, unordered lists, and
 // fenced code blocks. Inline level: **bold**, *italic*, `code`, and

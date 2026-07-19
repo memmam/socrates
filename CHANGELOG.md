@@ -6,7 +6,7 @@ that introduced it.
 
 ## Unreleased
 
-- **`std.wav`**, a new std module (twelve now ship): RIFF/WAVE PCM audio
+- **`std.wav`**, a new std module: RIFF/WAVE PCM audio
   over `Bytes` — `encode(samples, sample_rate, channels)` (mono or
   stereo, 16-bit, stereo interleaved). Encode only, deliberately no
   decoder: nothing in the tree reads a WAV file back in as input, so a
@@ -23,6 +23,39 @@ that introduced it.
   needed. Also fixes a pre-existing gap found while touching the same
   list: `std.fft` was registered for resolution but missing from the
   completion/error-message name list since the wave that added it.
+- **`std.svg`, `std.markdown`, `std.crc`, `std.zlib`, `std.png`** —
+  five more std modules (seventeen now ship), applying the `std.wav`
+  lesson across the rest of the demo zoo: any demo that was, at its
+  core, a from-scratch encoder of a real, reusable file format had that
+  encoder promoted to `std`, split into independently reusable pieces,
+  while demo-specific domain logic (chart layout, site templating,
+  plasma rendering) stayed put. `std.svg` (from `demos/plot/svg.soc`)
+  and `std.markdown` (from `demos/mdsite/markdown.soc`) moved
+  **unchanged** — both were already fully generic. `std.crc` (CRC-32 +
+  Adler-32, from `demos/png/crc.soc`) also moved unchanged. `std.zlib`
+  (from `demos/png/zlib.soc`) renamed `deflate_stored`/`inflate_stored`
+  to `wrap`/`unwrap` (`Inflated` to `Unwrapped`): those verbs imply real
+  LZ77/Huffman compression, and none ever happens — every byte in comes
+  out unchanged, framed as a valid stream via RFC 1951's *stored*-block
+  trapdoor. Unlike `std.wav.decode`, `std.zlib.unwrap` keeps a real
+  consumer (the demo's own round-trip and corruption-drill goldens), so
+  it stays. `std.png` (from `demos/png/png.soc`) moved unchanged except
+  `encode` taking `block_size` as an explicit parameter instead of a
+  hardcoded module constant — the demo's own `2000` was a test-specific
+  choice (forcing a small image through the multi-block path), not a
+  std-level default. `demos/png/bits.soc` lost its
+  `push_u32be`/`read_u32be`/`read_u16le` wrappers (one-line
+  pass-throughs to the v0.7 `Bytes` natives already; the new std
+  modules call those directly), keeping only its own hex-formatting
+  presentation helpers. Every demo's golden output verified
+  byte-identical, with two necessary exceptions: `zlib.wrap`'s
+  block-size-range panic (unavoidably renamed, and unpinned by any
+  test), and `demos/mdsite/content/about.md`'s page text (which named
+  `markdown.soc` explicitly to a site visitor — corrected to
+  `std.markdown`, cascading into `main.soc`'s build-report numbers and
+  the committed `out/about.html`, both re-pinned/regenerated). Removing
+  5 files from the demo tree drops the golden demo-test count from 73
+  to 68 (each print-free module counted as its own test).
 - **Closures capturing ≤2 upvalues no longer heap-allocate a `Vec` for
   them** — `Obj::Closure`'s upvalue storage is now `UpvalStorage`, an
   inline-slots-or-spill representation (`Obj` size unchanged: the new

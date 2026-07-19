@@ -1,18 +1,13 @@
-// png — the container format: signature, chunks, encoder, and a parser
-// that re-verifies everything the encoder claims.
+// std.png — the container format: signature, chunks, encoder, and a
+// parser that re-verifies everything the encoder claims.
 //
 // A PNG is the 8-byte signature followed by chunks; each chunk is
 // [length u32be] [4-byte type] [data] [CRC-32 of type+data, u32be].
 // With 8-bit RGB, filter 0 on every scanline, and stored deflate blocks
-// (zlib.soc), the whole format needs no compression at all.
+// (std.zlib), the whole format needs no compression at all.
 
-import bits;
-import crc;
-import zlib;
-
-// Stored-block payload cap for IDAT. 65535 is the format's limit; 2000
-// forces this demo's 4640-byte image through the multi-block path.
-pub let idat_block_size = 2000;
+import std.crc;
+import std.zlib;
 
 pub fn signature() -> Bytes {
     bytes_of([137, 80, 78, 71, 13, 10, 26, 10])
@@ -25,14 +20,16 @@ pub fn chunk(name: String, data: Bytes) -> Bytes {
     }
     let body = name.to_bytes().concat(data); // CRC covers type + data
     let mut out = bytes(0);
-    bits.push_u32be(out, data.len());
+    out.push_u32be(data.len());
     out = out.concat(body);
-    bits.push_u32be(out, crc.crc32(body));
+    out.push_u32be(crc.crc32(body));
     out
 }
 
-// Encode a w*h raster of packed RGB bytes (3 per pixel) as a complete PNG.
-pub fn encode(w: Int, h: Int, pixels: Bytes) -> Bytes {
+// Encode a w*h raster of packed RGB bytes (3 per pixel) as a complete
+// PNG. block_size caps each IDAT stored block (1..=65535, std.zlib's
+// own limit) — smaller values mean more, smaller blocks.
+pub fn encode(w: Int, h: Int, pixels: Bytes, block_size: Int) -> Bytes {
     if pixels.len() != w * h * 3 {
         panic("encode: want {w * h * 3} pixel bytes, got {pixels.len()}");
     }
@@ -40,8 +37,8 @@ pub fn encode(w: Int, h: Int, pixels: Bytes) -> Bytes {
     // IHDR: dimensions, bit depth 8, color type 2 (truecolor RGB),
     // compression 0, filter method 0, no interlace.
     let ihdr = bytes(0);
-    bits.push_u32be(ihdr, w);
-    bits.push_u32be(ihdr, h);
+    ihdr.push_u32be(w);
+    ihdr.push_u32be(h);
     for v in [8, 2, 0, 0, 0] {
         ihdr.push(v);
     }
@@ -54,7 +51,7 @@ pub fn encode(w: Int, h: Int, pixels: Bytes) -> Bytes {
     }
 
     signature().concat(chunk("IHDR", ihdr))
-        .concat(chunk("IDAT", zlib.deflate_stored(raw, idat_block_size)))
+        .concat(chunk("IDAT", zlib.wrap(raw, block_size)))
         .concat(chunk("IEND", bytes(0)))
 }
 
@@ -99,13 +96,13 @@ pub fn parse(file: Bytes) -> Result[Parsed, String] {
         if pos + 12 > file.len() {
             return Err("truncated chunk header at {pos}");
         }
-        let length = bits.read_u32be(file, pos);
+        let length = file.read_u32be(pos);
         if pos + 12 + length > file.len() {
             return Err("chunk at {pos} runs past end of file");
         }
         let name = file.slice(pos + 4, pos + 8).utf8()?;
         let body = file.slice(pos + 4, pos + 8 + length);
-        let stored = bits.read_u32be(file, pos + 8 + length);
+        let stored = file.read_u32be(pos + 8 + length);
         let data = file.slice(pos + 8, pos + 8 + length);
         chunks.push(Chunk { name, length, crc: stored, crc_ok: stored == crc.crc32(body), data });
         if name == "IDAT" {
@@ -124,16 +121,16 @@ pub fn parse(file: Bytes) -> Result[Parsed, String] {
         return Err("missing IEND");
     }
     let ihdr = chunks[0].data;
-    let w = bits.read_u32be(ihdr, 0);
-    let h = bits.read_u32be(ihdr, 4);
+    let w = ihdr.read_u32be(0);
+    let h = ihdr.read_u32be(4);
     let depth = ihdr.get(8);
     let color = ihdr.get(9);
     if depth != 8 || color != 2 {
         return Err("unsupported format: bit depth {depth}, color type {color}");
     }
 
-    let inflated = zlib.inflate_stored(idat)?;
-    let raw = inflated.data;
+    let unwrapped = zlib.unwrap(idat)?;
+    let raw = unwrapped.data;
     if raw.len() != h * (1 + w * 3) {
         return Err("want {h * (1 + w * 3)} scanline bytes, got {raw.len()}");
     }
@@ -152,8 +149,8 @@ pub fn parse(file: Bytes) -> Result[Parsed, String] {
         bit_depth: depth,
         color_type: color,
         chunks,
-        idat_blocks: inflated.blocks,
-        adler_ok: inflated.adler_ok,
+        idat_blocks: unwrapped.blocks,
+        adler_ok: unwrapped.adler_ok,
         raw_len: raw.len(),
         pixels,
     })

@@ -1072,6 +1072,64 @@ decoder needed (`ports/pyl/spec.soc`). PAW remains the actual
 parity-comparison format between the two implementations; WAV is for
 listening.
 
+**`std.svg`, `std.markdown`, `std.crc`, `std.zlib`, `std.png`** apply
+the same std.wav lesson across the rest of the demo zoo: any demo
+that was, at its core, a from-scratch encoder of a real, generically
+reusable file format had that encoder promoted to `std`, split into
+whatever pieces make each piece independently reusable, while the
+demo's own domain logic (chart layout, site templating, plasma
+rendering) stays put. All five moved with the demo's own goldens
+verified byte-identical before and after.
+
+- `std.svg` (from `demos/plot/svg.soc`) and `std.markdown` (from
+  `demos/mdsite/markdown.soc`) moved **unchanged** — both were already
+  fully generic, with zero plot- or site-specific code in them, so the
+  promotion is a pure relocation. `plot/chart.soc`/`checks.soc`/
+  `main.soc` and `mdsite/site.soc`/`main.soc`/`spec.soc` just import
+  `std.svg`/`std.markdown` in place of the old file-relative import.
+- `std.crc` (CRC-32 + Adler-32) moved unchanged from `demos/png/crc.soc`
+  — a second, independent consumer of a general-purpose checksum pair,
+  not `std.png`-specific.
+- `std.zlib` moved from `demos/png/zlib.soc`, with one deliberate
+  rename: `deflate_stored`/`inflate_stored` became `wrap`/`unwrap`
+  (`Inflated` became `Unwrapped`) because `deflate`/`inflate` imply
+  real LZ77/Huffman compression, and none ever happens here — every
+  byte in comes out unchanged, just framed as a valid RFC 1950/1951
+  stream via the *stored*-block trapdoor. The demo's own decode-side
+  consumer (its round-trip and corruption-drill golden tests, `STYLE.md`
+  §3) is what justifies keeping `unwrap` at all — unlike `std.wav`,
+  this isn't speculative surface.
+- `std.png` moved from `demos/png/png.soc`, unchanged except `encode`
+  gaining an explicit `block_size` parameter: the demo's own module
+  constant (`2000`, chosen specifically to force its 4640-byte test
+  image through the multi-block path) was a demo-specific test choice,
+  not a sensible std-level default, so it became a caller-supplied
+  argument instead — `demos/png/main.soc`/`spec.soc` now pass `2000`
+  explicitly at their call sites, preserving byte-identical output.
+- `demos/png/bits.soc` lost its `push_u32be`/`read_u32be`/`read_u16le`
+  wrappers — each was a literal one-line pass-through to the v0.7
+  `Bytes` natives already, so `std.zlib`/`std.png` call the natives
+  directly instead of re-wrapping them; `bits.soc` now holds only the
+  demo's own hex-formatting presentation helpers (`to_hex`/`dump`),
+  which stay local for the same reason `std.wav`'s field-reader helpers
+  did — single consumer, presentation only, not format logic.
+- Every promoted module's error/panic message text is byte-identical
+  to what the demo had (no added module-name prefixes), specifically to
+  avoid re-pinning goldens that weren't part of the actual ask; the one
+  exception is `zlib.wrap`'s block-size-range panic, unavoidably
+  renamed from `deflate_stored:` since that function name no longer
+  exists, and unpinned by any golden test.
+- `demos/mdsite/content/about.md` describes the demo's own module
+  layout to a site visitor and named `markdown.soc` explicitly — now
+  corrected to name `std.markdown`, which changed `about.html`'s byte
+  count and cascaded into `main.soc`'s pinned build-report numbers and
+  the committed `out/about.html` artifact, all re-pinned/regenerated
+  together.
+- Removing 5 files from the demo tree dropped the golden demo-test
+  count from 73 to 68 (each print-free `.soc` module counted as its own
+  silently-passing test per `docs/SPEC.md` § 10) — updated everywhere
+  `tools/check_counts.sh` tracks it.
+
 ## Testing strategy
 
 - Unit tests per module (lexer shapes, parser precedence, checker

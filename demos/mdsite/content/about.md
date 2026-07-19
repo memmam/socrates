@@ -2,9 +2,9 @@
 
 mdsite is a demo program for **Socrates**, a statically-typed,
 garbage-collected scripting language. The generator is a few hundred
-lines of Socrates, split into three modules:
+lines of Socrates, built on the standard library's `std.markdown`
+converter plus two demo-local modules:
 
-- `markdown.soc` — a line-based Markdown-to-HTML converter
 - `site.soc` — the page model, the HTML template, and the nav builder
 - `main.soc` — the driver: reads `content/`, writes `out/`, prints a report
 

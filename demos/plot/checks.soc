@@ -3,7 +3,7 @@
 //
 //   ./target/release/socrates test demos/plot
 
-import svg;
+import std.svg;
 import chart;
 import std.lists;
 

@@ -1,7 +1,9 @@
-// bits — the demo's bit-twiddling toolbox: hex formatting and the
-// big-endian u32 accessors PNG needs, now thin wrappers over the v0.7
-// natives (`Int.to_hex`, `push_u32be` / `read_u32be` / `read_u16le`).
-// The shift-and-or bodies these wrapped live in git history.
+// bits — the demo's own hex-formatting helpers for main.soc/spec.soc's
+// printed output. The big-endian u32 / little-endian u16 accessors this
+// used to also wrap were literal one-line pass-throughs to the v0.7
+// Bytes natives (`push_u32be`/`read_u32be`/`read_u16le`) — std.png and
+// std.zlib call those directly now, so the indirection is gone rather
+// than moved.
 //
 // Everything here works on Int values treated as unsigned 32-bit words:
 // keep values in 0..2^32-1.
@@ -19,19 +21,4 @@ pub fn dump(b: Bytes) -> String {
         parts.push(to_hex(b.get(i), 2));
     }
     parts.join(" ")
-}
-
-// Append v (0..2^32-1) big-endian — PNG lengths and CRCs are network order.
-pub fn push_u32be(b: Bytes, v: Int) {
-    b.push_u32be(v);
-}
-
-// Read a big-endian u32 starting at off (panics if out of bounds).
-pub fn read_u32be(b: Bytes, off: Int) -> Int {
-    b.read_u32be(off)
-}
-
-// Read a little-endian u16 starting at off — deflate's stored-block LEN/NLEN.
-pub fn read_u16le(b: Bytes, off: Int) -> Int {
-    b.read_u16le(off)
 }

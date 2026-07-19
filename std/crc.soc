@@ -1,4 +1,4 @@
-// crc — the two checksums a PNG needs, from scratch.
+// std.crc — CRC-32 and Adler-32, from scratch.
 //
 // CRC-32 (ISO 3309 / ITU-T V.42, the one PNG and zip use): reflected,
 // polynomial 0xEDB88320, table-driven. The 256-entry table is built the
@@ -28,7 +28,7 @@ fn make_table() -> List[Int] {
 
 let table = make_table();
 
-// Spot-check access for the spec without handing out the mutable list.
+// Spot-check access for tests without handing out the mutable list.
 pub fn table_entry(i: Int) -> Int {
     table[i]
 }

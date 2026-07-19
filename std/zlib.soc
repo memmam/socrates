@@ -1,23 +1,30 @@
-// zlib — an RFC 1950 stream around RFC 1951 *stored* (uncompressed)
-// deflate blocks. Stored blocks are the trapdoor in the spec: a fully
-// valid zlib stream with zero compression machinery — two header bytes,
-// then per block a 3-bit header rounded to a byte, LEN, ~LEN, the raw
-// bytes, and finally the Adler-32 of the uncompressed data.
+// std.zlib — an RFC 1950 stream wrapping raw bytes in an RFC 1951
+// *stored* (uncompressed) deflate block. Stored blocks are the trapdoor
+// in the deflate spec: a fully valid zlib stream with zero compression
+// machinery — two header bytes, then per block a 3-bit header rounded to
+// a byte, LEN, ~LEN, the raw bytes, and finally the Adler-32 of the
+// uncompressed data.
+//
+// Named `wrap`/`unwrap`, not `deflate`/`inflate`: those verbs imply real
+// LZ77/Huffman compression happens, and it deliberately never does here
+// — every byte in goes out unchanged, just framed as a valid stream. This
+// is not a general zlib/deflate codec (no Huffman-coded blocks, ever);
+// it is exactly as much of the format as a stored-blocks-only producer
+// and consumer need.
 
-import bits;
-import crc;
+import std.crc;
 
-// What inflate_stored recovered, plus what it saw on the way.
-pub struct Inflated {
-    data: Bytes, // the uncompressed payload
+// What `unwrap` recovered, plus what it saw on the way.
+pub struct Unwrapped {
+    data: Bytes, // the original payload
     blocks: Int, // how many stored blocks the stream held
     adler_ok: Bool, // trailer matched a recomputed Adler-32
 }
 
 // Wrap raw in a zlib stream of stored blocks of at most block_size bytes.
-pub fn deflate_stored(raw: Bytes, block_size: Int) -> Bytes {
+pub fn wrap(raw: Bytes, block_size: Int) -> Bytes {
     if block_size < 1 || block_size > 65535 {
-        panic("deflate_stored: block_size {block_size} not in 1..=65535");
+        panic("zlib.wrap: block_size {block_size} not in 1..=65535");
     }
     let mut out = bytes(0);
     // CMF 0x78: CM=8 (deflate), CINFO=7. FLG 0x01 makes (CMF<<8|FLG) a
@@ -39,13 +46,13 @@ pub fn deflate_stored(raw: Bytes, block_size: Int) -> Bytes {
             break;
         }
     }
-    bits.push_u32be(out, crc.adler32(raw)); // trailer is big-endian
+    out.push_u32be(crc.adler32(raw)); // trailer is big-endian
     out
 }
 
-// Undo deflate_stored: walk the blocks, stitch the payload back together,
-// and recompute the Adler-32 against the trailer.
-pub fn inflate_stored(z: Bytes) -> Result[Inflated, String] {
+// Undo wrap: walk the blocks, stitch the payload back together, and
+// recompute the Adler-32 against the trailer.
+pub fn unwrap(z: Bytes) -> Result[Unwrapped, String] {
     if z.len() < 11 {
         return Err("zlib: stream too short ({z.len()} bytes)");
     }
@@ -71,8 +78,8 @@ pub fn inflate_stored(z: Bytes) -> Result[Inflated, String] {
         if header >> 1 & 3 != 0 {
             return Err("zlib: block type {header >> 1 & 3} is not stored");
         }
-        let len = bits.read_u16le(z, pos + 1);
-        let nlen = bits.read_u16le(z, pos + 3);
+        let len = z.read_u16le(pos + 1);
+        let nlen = z.read_u16le(pos + 3);
         if len ^ nlen != 0xFFFF {
             return Err("zlib: LEN/NLEN mismatch in block {blocks}");
         }
@@ -89,6 +96,6 @@ pub fn inflate_stored(z: Bytes) -> Result[Inflated, String] {
     if pos + 4 != z.len() {
         return Err("zlib: {z.len() - pos - 4} trailing bytes after adler");
     }
-    let adler_ok = bits.read_u32be(z, pos) == crc.adler32(data);
-    Ok(Inflated { data, blocks, adler_ok })
+    let adler_ok = z.read_u32be(pos) == crc.adler32(data);
+    Ok(Unwrapped { data, blocks, adler_ok })
 }

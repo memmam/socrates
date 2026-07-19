@@ -31,7 +31,7 @@ byte-for-byte" is a golden line, not a promise.
 
 | File          | What it is                                                        |
 |---------------|-------------------------------------------------------------------|
-| `svg.soc`   | a tiny SVG builder: a `Doc` accumulates elements in a `strings.Builder`, `render()` builds once |
+| [`std.svg`](../../std/svg.soc) | a tiny SVG builder: a `Doc` accumulates elements in a `strings.Builder`, `render()` builds once — promoted from this demo's own `svg.soc`, unchanged (it was already plot-agnostic) |
 | `chart.soc` | series sampling, the `Frame` transform, nice ticks, the line-chart and stem-chart renderers, sparklines |
 | `main.soc`  | the three series, the spirograph, the rfft spectrum, CLI glue, and the golden `//? expect:` output |
 | `checks.soc`| unit-style golden tests against the modules' public API           |

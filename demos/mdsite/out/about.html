@@ -30,9 +30,8 @@
 <header><span class="brand">mdsite</span><nav><a href="index.html">Home</a> <a class="here" href="about.html">About</a> <a href="hello-socrates.html">Hello, Socrates</a></nav></header>
 <main>
 <h1>About</h1>
-<p>mdsite is a demo program for <strong>Socrates</strong>, a statically-typed, garbage-collected scripting language. The generator is a few hundred lines of Socrates, split into three modules:</p>
+<p>mdsite is a demo program for <strong>Socrates</strong>, a statically-typed, garbage-collected scripting language. The generator is a few hundred lines of Socrates, built on the standard library's <code>std.markdown</code> converter plus two demo-local modules:</p>
 <ul>
-  <li><code>markdown.soc</code> — a line-based Markdown-to-HTML converter</li>
   <li><code>site.soc</code> — the page model, the HTML template, and the nav builder</li>
   <li><code>main.soc</code> — the driver: reads <code>content/</code>, writes <code>out/</code>, prints a report</li>
 </ul>

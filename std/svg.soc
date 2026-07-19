@@ -1,4 +1,4 @@
-// svg.soc — a tiny SVG document builder.
+// std.svg — a tiny SVG document builder.
 //
 // A Doc accumulates element strings and renders them as one standalone
 // <svg> file. Everything is plain string building: Socrates's interpolation

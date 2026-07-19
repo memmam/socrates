@@ -91,7 +91,7 @@ cargo build --release
 # glcube's three mains need a live GL/Metal/Vulkan window (CI runs them in
 # the windowing jobs); everything else, cube.soc/spec.soc included:
 shopt -s extglob
-./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc  # 73, also with SOCRATES_GC_STRESS=1
+./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc  # 68, also with SOCRATES_GC_STRESS=1
 SOCRATES_PATH=ports ./target/release/socrates test ports/pyl/spec.soc
 SOCRATES_PATH=ports ./target/release/socrates test ports/icaa/spec.soc
 ./target/release/socrates build demos/csvql -o /tmp/csvql && (cd /tmp && ./csvql)  # `socrates build` smoke

@@ -15,11 +15,11 @@ fully spec-conformant PNG possible with nothing but framing.
 
 | File | What it holds |
 |------|---------------|
-| `bits.soc` | hex formatting (`to_hex`, `dump`) and big-endian u32 / little-endian u16 accessors — thin wrappers over the v0.7 natives (`Int.to_hex`, `push_u32be`/`read_u32be`/`read_u16le`); the shift-and-or bodies live in git history |
-| `crc.soc` | CRC-32 (reflected, poly `0xEDB88320`, 256-entry table built with eight shift-xor steps per byte) and Adler-32 |
-| `zlib.soc` | RFC 1950 stream of RFC 1951 stored blocks: `deflate_stored` and its adversary `inflate_stored`, which re-checks header, LEN/NLEN, and the Adler trailer |
+| `bits.soc` | hex formatting only now (`to_hex`, `dump`) — the big-endian u32 / little-endian u16 accessors this used to also wrap were one-line pass-throughs to the v0.7 Bytes natives, so `std.png`/`std.zlib` (below) call those directly instead |
+| [`std.crc`](../../std/crc.soc) | CRC-32 (reflected, poly `0xEDB88320`, 256-entry table built with eight shift-xor steps per byte) and Adler-32 — promoted from this demo's own `crc.soc`, unchanged |
+| [`std.zlib`](../../std/zlib.soc) | an RFC 1950 stream wrapping raw bytes in an RFC 1951 *stored* block: `wrap` and its adversary `unwrap`, which re-checks header, LEN/NLEN, and the Adler trailer — promoted from this demo's own `zlib.soc`, renamed from `deflate_stored`/`inflate_stored` since no compression ever actually happens |
 | `image.soc` | a 48x32 plasma in pure integer math — the sine is Bhaskara I's rational approximation, so the pixels (and therefore the PNG bytes) are identical on every machine |
-| `png.soc` | chunk framing, the encoder (IHDR / IDAT / IEND), and a parser that recomputes every checksum in the file |
+| [`std.png`](../../std/png.soc) | chunk framing, the encoder (IHDR / IDAT / IEND), and a parser that recomputes every checksum in the file — promoted from this demo's own `png.soc`, unchanged except `encode` taking its stored-block size as an explicit parameter instead of a hardcoded module constant |
 | `main.soc` | renders, encodes, writes `out.png`, re-reads it, and re-verifies everything |
 | `spec.soc` | component tests: published CRC/Adler vectors, exact stored-block framing bytes, a corrupted-file drill |
 

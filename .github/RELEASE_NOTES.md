@@ -72,7 +72,7 @@ Highlights of v0.8 over v0.7 (full list in
   and `socrates test --bless`.
 
 Everything observable is pinned: 313 golden spec tests, 135 executed book
-snippets, and 73 demo golden tests, the whole suite green under
+snippets, and 68 demo golden tests, the whole suite green under
 `SOCRATES_GC_STRESS=1` — and the graphics backends are pinned with real
 pixels, in CI, on plain runners (lavapipe for Vulkan, Xvfb for GL, macOS
 runners for Metal, WARP for D3D12 compute).

@@ -1,6 +1,6 @@
 // site — the page model, the shared HTML template, and the nav builder.
 
-import markdown as md;
+import std.markdown as md;
 import std.strings;
 
 // One built page. Struct values have reference semantics, so pages can

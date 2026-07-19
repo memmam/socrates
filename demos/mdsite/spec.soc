@@ -2,7 +2,7 @@
 //
 //   ./target/release/socrates test demos/mdsite
 
-import markdown as md;
+import std.markdown as md;
 
 // ---- paragraphs ----
 println(md.to_html("plain text")); //? expect: <p>plain text</p>

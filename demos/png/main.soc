@@ -10,9 +10,8 @@
 //   ./target/release/socrates demos/png/main.soc [out_dir]
 
 import bits;
-import crc;
-import zlib;
-import png;
+import std.crc;
+import std.png;
 import image;
 
 let out_dir = os.args().first().unwrap_or("demos/png");
@@ -23,7 +22,7 @@ let out_path = "{out_dir}/out.png";
 let w = 48;
 let h = 32;
 let pixels = image.plasma(w, h);
-let file = png.encode(w, h, pixels);
+let file = png.encode(w, h, pixels, 2000);
 
 println("png — a from-scratch PNG encoder (CRC-32 + Adler-32 + stored-block zlib)");
 println("");

@@ -3,7 +3,7 @@
 // renderer and a stem-chart (spectrum) renderer on top of svg.Doc, and a
 // terminal sparkline.
 
-import svg;
+import std.svg;
 import std.lists;
 
 // --- series ---------------------------------------------------------------
