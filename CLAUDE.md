@@ -214,7 +214,12 @@ numbers: `bench/RESULTS.md`.
     needs a human each time, not a schedule — the Routine surfaces
     any such branches in its PR
     description for a human to decide, rather than silently acting on
-    or silently ignoring them.
+    or silently ignoring them. `cleanup.yml` itself follows the same
+    propose-automated/merge-human split one level down: after deleting
+    branches, it opens its own small PR pruning their now-resolved
+    entries from `CLEANUP_BRANCHES` (a direct push to `main` doesn't
+    work — proven live 2026-07-19, `main`'s branch protection rejects
+    it outright) rather than pushing the trim directly.
   - A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
   - Never run bare `cargo fmt` — the tree has never been through it,

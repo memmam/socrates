@@ -153,6 +153,20 @@ directives; each of the following is the incident that produced one.
   human, matching "non-landing work stays pushed." That merged/unmerged
   split, not "is it referenced," is what a weekly Routine can safely
   run unattended — proposing the PR, never merging it.
+- **The self-prune direct-push, proven wrong the same day.** Roxy's
+  same PR review also caught that a resolved branch name left in
+  `CLEANUP_BRANCHES` is a hazard once an unrelated future branch
+  reuses it — the fix pushed a self-pruning step straight to `main`,
+  flagged in its own comment as unproven against this repo's actual
+  branch-protection rules. The first real cleanup run (PR #116's
+  merge) proved it wrong immediately: 19 branches deleted cleanly, then
+  a hard `GH013` rejection ("changes must be made through a pull
+  request", "Test (stable)" required) on the prune push itself — caught
+  in the run log, not silently. Fixed same-day to open a small PR for
+  the prune instead, same pattern as the sweep itself: propose
+  automated, merge human, except here the merge is a formality since
+  the diff can only ever remove lines the run independently confirmed
+  resolved.
 - **The whole-tree `cargo fmt` measurement (2026-07-18):** running
   `cargo fmt --check | grep -c '^Diff in'` on this tree found hundreds
   of hunks across the whole codebase, confirming the tree has never
