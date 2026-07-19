@@ -13,10 +13,11 @@
 // write/read round trip is bit-exact; PAW files from the Python side are
 // compared numerically, never textually. PAW remains the
 // parity-comparison format — but the Socrates side can also emit WAV
-// directly now, via `write_wav`/`read_wav` below, built on the v0.8
-// `std.wav` module (16-bit PCM; samples clamp to [-1, 1] and quantize by
-// `round(x * 32767)`, the inverse of `read_wav`'s `/ 32767.0`, matching
-// ports/claudewave/tools/paw2wav.py's convention for listening).
+// directly now, via `write_wav` below, built on the v0.9 `std.wav`
+// module (16-bit PCM; samples clamp to [-1, 1] and quantize by
+// `round(x * 32767)`, matching ports/claudewave/tools/paw2wav.py's
+// convention for listening). Encode only: nothing reads a WAV file back
+// in as input anywhere in this tree.
 // The mapping:
 //
 //   Python (shim)                      Socrates
@@ -87,7 +88,7 @@ pub fn read_paw(path: String) -> Result[(nd.Nd, Int), String] {
 
 // Write `x` as a 16-bit PCM WAV file (mono or stereo, matching `x.ch`).
 // Samples clamp to [-1, 1] and quantize by round(x * 32767) — see the
-// header comment for why that convention, and `read_wav` for the inverse.
+// header comment for why that convention.
 pub fn write_wav(x: nd.Nd, sr: Int, path: String) -> Result[Unit, String] {
     if sr <= 0 { return Err("{path}: bad sample rate {sr}"); }
     if x.ch != 1 && x.ch != 2 { return Err("{path}: bad channel count {x.ch}"); }
@@ -96,14 +97,4 @@ pub fn write_wav(x: nd.Nd, sr: Int, path: String) -> Result[Unit, String] {
         samples.push((v.max(-1.0).min(1.0) * 32767.0).round().to_int());
     }
     fs.write_bytes(path, wav.encode(samples, sr, x.ch))
-}
-
-pub fn read_wav(path: String) -> Result[(nd.Nd, Int), String] {
-    let raw = fs.read_bytes(path)?;
-    let (samples, sr, ch) = wav.decode(raw)?;
-    let data = [];
-    for s in samples {
-        data.push(s.to_float() / 32767.0);
-    }
-    Ok((nd.Nd { ch, data }, sr))
 }

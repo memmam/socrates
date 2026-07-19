@@ -1,19 +1,11 @@
-// std.wav — RIFF/WAVE PCM audio, encoded and decoded over Bytes.
+// std.wav — RIFF/WAVE PCM audio encoding over Bytes.
 //
 // 16-bit signed PCM, mono or stereo; stereo samples are interleaved
 // (left, right, left, right, ...), matching pyl.nd's own interleaved
 // convention for stereo data. Generalizes demos/synthwave's original
-// demo-local encoder (mono only, no decoder) to arbitrary channel
-// count and adds a real decoder that validates the format instead of
-// trusting fixed byte offsets.
-//
-// `decode` only accepts the canonical 44-byte layout `encode` itself
-// produces (a 16-byte PCM fmt chunk immediately followed by the data
-// chunk, no extra chunks in between) — real-world WAV files can carry
-// LIST/INFO chunks or an extended fmt chunk that this deliberately
-// does not parse; round-tripping this module's own output, or any
-// other minimal-header PCM WAV, works, but it is not a general WAV
-// reader.
+// demo-local encoder (mono only) to arbitrary channel count. Encode
+// only: nothing in the tree reads a WAV file back in as input, so
+// there is no decoder here — add one if and when something needs it.
 
 pub fn encode(samples: List[Int], sample_rate: Int, channels: Int) -> Bytes {
     if channels != 1 && channels != 2 {
@@ -39,51 +31,4 @@ pub fn encode(samples: List[Int], sample_rate: Int, channels: Int) -> Bytes {
         b.push_i16le(s);
     }
     b
-}
-
-// Decode a WAV built by `encode` (or any other minimal-header 16-bit
-// PCM WAV with no extra chunks). Returns (samples, sample_rate, channels).
-pub fn decode(b: Bytes) -> Result[(List[Int], Int, Int), String] {
-    if b.len() < 44 {
-        return Err("wav.decode: too short for a WAV header ({b.len()} bytes)");
-    }
-    if b.slice(0, 4).utf8().unwrap_or("") != "RIFF" {
-        return Err("wav.decode: missing RIFF tag");
-    }
-    if b.slice(8, 12).utf8().unwrap_or("") != "WAVE" {
-        return Err("wav.decode: missing WAVE tag");
-    }
-    if b.slice(12, 16).utf8().unwrap_or("") != "fmt " {
-        return Err("wav.decode: missing fmt chunk");
-    }
-    let fmt_size = b.read_u32le(16);
-    if fmt_size != 16 {
-        return Err("wav.decode: unsupported fmt chunk size {fmt_size} (only the canonical 16-byte PCM fmt chunk is supported)");
-    }
-    let codec = b.read_u16le(20);
-    if codec != 1 {
-        return Err("wav.decode: unsupported codec {codec} (only integer PCM is supported)");
-    }
-    let channels = b.read_u16le(22);
-    if channels != 1 && channels != 2 {
-        return Err("wav.decode: unsupported channel count {channels}");
-    }
-    let sample_rate = b.read_u32le(24);
-    let bits = b.read_u16le(34);
-    if bits != 16 {
-        return Err("wav.decode: unsupported bit depth {bits} (only 16-bit is supported)");
-    }
-    if b.slice(36, 40).utf8().unwrap_or("") != "data" {
-        return Err("wav.decode: missing data chunk right after fmt (extra chunks aren't supported)");
-    }
-    let data_len = b.read_u32le(40);
-    if 44 + data_len > b.len() {
-        return Err("wav.decode: data chunk ({data_len} bytes) overruns the file");
-    }
-    let n = data_len / 2;
-    let samples = [];
-    for i in 0..n {
-        samples.push(b.read_i16le(44 + i * 2));
-    }
-    Ok((samples, sample_rate, channels))
 }

@@ -244,7 +244,7 @@ clip space in `w`.
 Rounding out the set: `std.flags` is deliberately rigid CLI parsing
 (`flag`, `value`, `value_or`, `positionals`), `std.path` handles the
 textual path chores (`join`, `base_name`, `dir_name`, `ext`, `strip_ext`),
-and `std.wav` encodes and decodes RIFF/WAVE PCM audio over `Bytes`
+and `std.wav` encodes RIFF/WAVE PCM audio over `Bytes`
 (mono or stereo, 16-bit — `demos/synthwave` builds one this way).
 The full method inventories live in the [spec](../docs/SPEC.md); the point
 of the standard library is that all of it is Socrates you can read, and none of

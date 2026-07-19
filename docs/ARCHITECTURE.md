@@ -1040,20 +1040,20 @@ max_diff=0 on first run.
 **`std.wav`** is a pure-Socrates module (no Rust beyond `stdlib.rs`'s
 embedded-module table gaining `std.wav`, the same one-line pattern
 `std.lazy` followed) generalizing what used to be `demos/synthwave`'s
-own hand-rolled, mono-only, encode-only RIFF/WAVE writer: `encode`
-takes an explicit channel count (mono or stereo, interleaved samples
-for stereo, matching `pyl.nd`'s own convention) instead of hardcoding
-one, and a real `decode` was added alongside it — validating the RIFF/
-WAVE/fmt tags, codec, and bit depth instead of trusting fixed byte
-offsets the way the demo's old field-reader helpers did. `stdlib.rs`
-also gained a real bug fix while this list was being edited: `std.fft`
-had been wired into `std_module` (the resolver) but never into
-`std_module_names` (the completion/error-message list) since the wave
-that added it — `import std.fft;` always worked, but a typo'd `std.`
-import's "did you mean" list silently never offered it. Both `std.wav`
-and the `std.fft` fix landed in the same edit, since fixing the second
-required touching the exact function the first one's addition touches
-anyway.
+own hand-rolled, mono-only RIFF/WAVE writer: `encode` takes an explicit
+channel count (mono or stereo, interleaved samples for stereo, matching
+`pyl.nd`'s own convention) instead of hardcoding one. Encode only —
+deliberately no `decode`: nothing in the tree reads a WAV file back in
+as input, and per the "std grows reluctantly" rule (`demos/NOTES.md`),
+a decoder with no real consumer is speculative surface, not a minimal
+implementation. `stdlib.rs` also gained a real bug fix while this list
+was being edited: `std.fft` had been wired into `std_module` (the
+resolver) but never into `std_module_names` (the completion/
+error-message list) since the wave that added it — `import std.fft;`
+always worked, but a typo'd `std.` import's "did you mean" list
+silently never offered it. Both `std.wav` and the `std.fft` fix landed
+in the same edit, since fixing the second required touching the exact
+function the first one's addition touches anyway.
 
 `demos/synthwave/wav.soc`'s `encode` is now a one-line wrapper over
 `std.wav.encode(samples, sample_rate, 1)` — the demo's own field-reader
@@ -1061,14 +1061,16 @@ helpers (`tag_at`/`u16_at`/`u32_at`/`i16_at`) stay, since they're the
 demo's own byte-offset verification tool for `checks.soc`'s golden
 output, independent of whoever produced the bytes; the golden output is
 byte-identical to before the delegation. `ports/pyl/audio.soc` gained
-`write_wav`/`read_wav` over `std.wav`, so the port's own claim that
-"the Socrates side can also emit WAV directly" is backed by a real,
-tested code path rather than an aspirational parenthetical: samples
-clamp to `[-1, 1]` and quantize by `round(x * 32767)` (the inverse of
-`read_wav`'s `/ 32767.0`), matching
+`write_wav` over `std.wav`, so the port's own claim that "the Socrates
+side can also emit WAV directly" is backed by a real, tested code path
+rather than an aspirational parenthetical: samples clamp to `[-1, 1]`
+and quantize by `round(x * 32767)`, matching
 `ports/claudewave/tools/paw2wav.py`'s existing convention for
-listening to a PAW file. PAW remains the actual parity-comparison
-format between the two implementations; WAV is for listening.
+listening to a PAW file. Verified the same way `checks.soc` verifies
+`demos/synthwave`'s encoder — direct header/sample byte reads, no
+decoder needed (`ports/pyl/spec.soc`). PAW remains the actual
+parity-comparison format between the two implementations; WAV is for
+listening.
 
 ## Testing strategy
 

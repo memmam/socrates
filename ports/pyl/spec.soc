@@ -298,28 +298,36 @@ fs.write("{tmp}/pyl_badch.paw", "PAW1\n8000 3 1\n1.0 2.0 3.0\n").unwrap();
 println(audio.read_paw("{tmp}/pyl_badch.paw").is_err());     //? expect: true
 
 // ---- audio: WAV (std.wav, real binary emission) -----------------------------
+//
+// No wav.decode exists (std grows reluctantly — nothing reads a WAV
+// back in as input anywhere in this tree), so these check the written
+// bytes directly, the same way demos/synthwave/checks.soc pins its own
+// encoder's output: raw header fields and raw sample bytes.
 
 audio.write_wav(sig, 22050, "{tmp}/pyl_rt.wav").unwrap();
-let (wback, wbsr) = audio.read_wav("{tmp}/pyl_rt.wav").unwrap();
-println("{wbsr} {wback.ch} {wback.frames()}");                          //? expect: 22050 2 4
-// quantized to 16-bit PCM and back: exact for exact sixteenths, ~1/32767 elsewhere
-println(str(wback.data.map(|v| v.to_fixed(4))));
-//? expect: ["0.0000", "1.0000", "0.2500", "-0.1250", "-0.5000", "0.0000", "0.3333", "-1.0000"]
+let wb = fs.read_bytes("{tmp}/pyl_rt.wav").unwrap();
+println("{wb.slice(0, 4).utf8().unwrap()} {wb.read_u32le(4)} {wb.slice(8, 12).utf8().unwrap()}");
+//? expect: RIFF 52 WAVE
+println("{wb.slice(12, 16).utf8().unwrap()} codec={wb.read_u16le(20)} ch={wb.read_u16le(22)} sr={wb.read_u32le(24)}");
+//? expect: fmt  codec=1 ch=2 sr=22050
+println("{wb.slice(36, 40).utf8().unwrap()} {wb.read_u32le(40)}");
+//? expect: data 16
+// sig's interleaved floats, quantized by round(x * 32767) and clamped
+println(str((0..8).map(|i| wb.read_i16le(44 + i * 2))));
+//? expect: [0, 32767, 8192, -4096, -16384, 0, 10922, -32767]
 
 audio.write_wav(mono, 8000, "{tmp}/pyl_rt_mono.wav").unwrap();
-let (wmb, wmsr) = audio.read_wav("{tmp}/pyl_rt_mono.wav").unwrap();
-println("{wmsr} {wmb.ch} {wmb.frames()} {wmb.max_abs_all() <= 1.0}");    //? expect: 8000 1 9 true
+let wmb = fs.read_bytes("{tmp}/pyl_rt_mono.wav").unwrap();
+println("ch={wmb.read_u16le(22)} sr={wmb.read_u32le(24)} data_len={wmb.read_u32le(40)}");
+//? expect: ch=1 sr=8000 data_len=18
 
 // out-of-range samples clamp to full scale instead of overflowing
 let hot = nd.of([2.0, -2.0]);
 audio.write_wav(hot, 8000, "{tmp}/pyl_hot.wav").unwrap();
-let (hb, _) = audio.read_wav("{tmp}/pyl_hot.wav").unwrap();
-println(str(hb.data));                                                  //? expect: [1.0, -1.0]
+let whb = fs.read_bytes("{tmp}/pyl_hot.wav").unwrap();
+println(str([whb.read_i16le(44), whb.read_i16le(46)]));                 //? expect: [32767, -32767]
 
 // error paths, mirroring the PAW ones above
 println(audio.write_wav(sig, 0, "{tmp}/pyl_bad.wav").is_err());         //? expect: true
 println(audio.write_wav(nd.Nd { ch: 3, data: [1.0] }, 8000, "{tmp}/pyl_bad.wav").is_err());
 //? expect: true
-println(audio.read_wav("{tmp}/pyl_missing.wav").is_err());              //? expect: true
-fs.write("{tmp}/pyl_garbage.wav", "not a wav file at all").unwrap();
-println(audio.read_wav("{tmp}/pyl_garbage.wav").is_err());              //? expect: true
