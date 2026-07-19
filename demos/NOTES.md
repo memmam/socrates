@@ -269,7 +269,7 @@ precedent, finally applied), `spreadsheet` and `mdsite` adopted
 `push_joined` (`mdsite`'s document-level `block()` join, missed in that
 wave, followed in the consistency pass below — the claim was fully true
 at the time; that `block()` join has since moved with the rest of
-`mdsite/markdown.soc` into `std.markdown`, v0.9, so the code demonstrating
+`mdsite/markdown.soc` into `std.markdown`, v0.8, so the code demonstrating
 it now lives in `std/markdown.soc` rather than the demo itself), `swarm`
 adopted the `std.json` constructors that were
 added *for it* (`json.int`/`jstr`/`obj`), `regex` reads its bitmap words

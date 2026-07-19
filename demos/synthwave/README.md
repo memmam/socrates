@@ -2,8 +2,9 @@
 
 Three voices — a square-wave lead, a triangle bass, and a drum kit made of
 one 9-bit LFSR — render two bars of 12/8 at 8000 Hz into 16-bit PCM. The
-samples are packed into a real RIFF/WAVE file with the v0.7 `Bytes`
-little-endian pushers, and the result is `track.wav`: 3.0 seconds of
+samples are packed into a real RIFF/WAVE file via `std.wav` (built on
+the v0.7 `Bytes` little-endian pushers), and the result is `track.wav`:
+3.0 seconds of
 playable chiptune, committed in this directory.
 
 The demo then proves its own output twice:
@@ -41,7 +42,8 @@ Then play `demos/synthwave/track.wav` in anything that plays WAV.
 | File               | What it is                                                              |
 |--------------------|-------------------------------------------------------------------------|
 | `synth.soc`      | oscillators, the LFSR noise source, the ADSR envelope, part/drum renderers, PCM quantization |
-| `wav.soc`        | RIFF/WAVE encode (LE pushers) and field decode (the matching LE readers) |
+| `wav.soc`        | `encode` is a one-line mono wrapper over `std.wav.encode`; the field decode below (the matching LE readers) stays local as this demo's own byte-offset verification tool |
+| [`std.wav`](../../std/wav.soc) | RIFF/WAVE PCM encode over `Bytes`'s LE pushers (mono or stereo) — promoted from this demo's own `wav.soc`, which used to also hold the encoder |
 | `main.soc`       | the track, the sheet printer, the WAV round-trip, and the FFT self-check |
 | `checks.soc`     | unit-style goldens: oscillator tables, envelope points, LFSR period 511, quantizer clamps, header fields |
 | `guardrails.soc` | pins the panic when a sample is pushed out of i16 range                 |

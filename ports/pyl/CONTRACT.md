@@ -156,7 +156,7 @@ text format chosen for diffability. (The port initially surfaced a real
 language gap here — Socrates had no binary file I/O — which became v0.7's
 `Bytes` type. PAW remains the parity-comparison format, but the Socrates
 side can also emit WAV directly now, via `audio.write_wav` over the
-v0.9 `std.wav` module — see `docs/SPEC.md` § 7.1 — rather than only
+v0.8 `std.wav` module — see `docs/SPEC.md` § 7.1 — rather than only
 through the Python-side `paw2wav.py` tool below.)
 
 ```
