@@ -9,14 +9,14 @@ that decide close calls, the native graphics/compute roadmap, and the
 invariants that must never break. `CLAUDE.md` holds session-operating
 instructions only (the file map, the verification gauntlet, git/PR/session
 workflow) and explicitly says to check this file wherever an operating
-step needs it. `HISTORY.md` holds the incident narratives and the
-per-release ledger behind the rules in both files.
+step needs it. `HISTORY.md` holds the incident narratives behind the
+rules in both files; `CHANGELOG.md` holds the per-release account.
 
 ## What Socrates is for
 
-**The name:** Socrates, formerly Fable (full rationale in `HISTORY.md`).
-`bench/ab.py` and the Bench A/B workflow carry a permanent cross-name
-fallback that keeps pre-rename refs benchable.
+**The name:** Socrates, formerly Fable (full rationale in `CHANGELOG.md`'s
+v0.8.0 entry, "Renamed"). `bench/ab.py` and the Bench A/B workflow carry
+a permanent cross-name fallback that keeps pre-rename refs benchable.
 
 Socrates is an **AI-native language**: its design mirrors the way current
 frontier models reason, so an AI writes it fluently and uses it as a

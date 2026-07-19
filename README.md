@@ -326,7 +326,7 @@ ports/            transpilation layers + ports (jsl: ICAA; pyl: claudewave)
 bench/            the benchmark harness and results
 CLAUDE.md         session-operating instructions: workflow, gauntlet, git/PR
 PROJECT.md        what Socrates is for, engineering principles, invariants
-HISTORY.md        incident history and the per-release ledger
+HISTORY.md        incident history behind CLAUDE.md/PROJECT.md's rules
 ```
 
 ## Testing

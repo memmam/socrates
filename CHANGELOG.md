@@ -1,8 +1,8 @@
 # Changelog
 
 Each release was shipped as one reviewed pull request. Golden spec tests pin
-every feature listed here; `docs/SPEC.md` marks each with the version that
-introduced it, and `CLAUDE.md` keeps the release ledger.
+every feature listed here, and `docs/SPEC.md` marks each with the version
+that introduced it.
 
 ## Unreleased
 

@@ -6,130 +6,41 @@ kept lean on purpose: what's needed to operate a session, follow the
 engineering principles as meant, and regenerate correctly if a
 container is refreshed or a model swaps. This file is where the
 *historical* half of that content lives instead — the incidents that
-motivated a rule, the sagas behind a corrected decision, and the
-per-release ledger. Nothing here is required to operate correctly today;
-it's the evidence trail for anyone who wants to know why a rule reads
-the way it does, or material for writing a release post.
+motivated a rule and the sagas behind a corrected decision. Nothing
+here is required to operate correctly today; it's the evidence trail
+for anyone who wants to know why a rule reads the way it does. The
+per-release account itself — feature lists, benchmark deltas, the
+concrete mechanism detail — lives in `CHANGELOG.md`, not here.
 
 Read `CLAUDE.md` and `PROJECT.md` first. Come here when a rule's own
-text points here, or when writing a release post, or when auditing
-whether a rule still matches the incident that produced it.
+text points here, or when auditing whether a rule still matches the
+incident that produced it — or `CHANGELOG.md` when what you need is
+the per-release account instead.
 
 ## The rename: Fable → Socrates
 
-Recorded 2026-07-18. Trademark pre-emption and namespace collisions —
-an established F#-to-JS compiler already holds "Fable". "Socrates"
-names the language's substrate role; "Timaeus" was considered and is
-reserved for the eventual top-of-stack agent; "Quine" was considered
-and rejected (an existing OSS graph database holds it). The `.soc`
-extension nods at the system-on-a-chip trajectory of the HDL roadmap.
-Git history preserves the old name; `bench/ab.py` and the Bench A/B
-workflow carry a permanent cross-name fallback that keeps pre-rename
-refs benchable (that fallback is the one operationally-relevant fact,
-and it's stated in `PROJECT.md` itself).
+Recorded 2026-07-18. The full rationale — trademark pre-emption, the
+candidate names considered ("Timaeus" reserved for the eventual
+top-of-stack agent, "Quine" rejected since an existing OSS graph
+database holds it), and the `.soc` extension's nod to the HDL
+roadmap's system-on-a-chip trajectory — is in `CHANGELOG.md`'s v0.8.0
+entry ("Renamed"), alongside the concrete rename touchpoints (binary
+and package name, env vars, the Mach-O payload section) that aren't
+repeated here. The one fact that's operationally relevant today —
+`bench/ab.py` and the Bench A/B workflow's permanent cross-name
+fallback, keeping pre-rename refs benchable — is stated in `PROJECT.md`
+itself.
 
 ## Release ledger
 
-Per-release account of what shipped, in order. Source material for
-release posts and changelog entries; `CHANGELOG.md` is the terser,
-per-PR-mapped sibling of this list.
-
-- **v0.1** — the language: lexer, parser, unification inference with
-  generics, Maranget exhaustiveness, bytecode compiler, stack VM, mark-sweep
-  GC, REPL, formatter, disassembler, golden-test harness, spec, book.
-- **v0.2** — impl blocks (methods on user types), the `?` operator,
-  multi-file modules (`import`, diamond dedup, cycle detection), tail-call
-  optimization.
-- **v0.3** — `pub` visibility (private-by-default modules), operator methods
-  (`add`/`sub`/…), `SOCRATES_PATH` search path, `fs`/`os` namespaces.
-- **v0.4** — `socrates test` command, the embedded standard library
-  (json/flags/path/strings/iter, written in Socrates), `socrates lsp`, catchable
-  panics (`try`).
-- **v0.5** — REPL imports, LSP completion, the book became a CI test suite.
-- **v0.6 — the field-test release.** Ten demo programs written by ten
-  independent authors under orders to report every papercut; ten hit the
-  same dozen walls, and the release is those walls removed. One genuine RNG
-  bug their tests caught: `math.seed` set state to `seed | 1`, so adjacent
-  seeds `2k`/`2k+1` produced identical streams; fixed with SplitMix64
-  scrambling. Triage in `demos/NOTES.md`.
-- **v0.7 — the infrastructure release.** `Bytes` (packed buffers, binary
-  I/O, wire formats); native `fft` namespace (radix-2 + Bluestein, numpy
-  conventions, CI-cross-checked at 1e-9); OS-thread `worker` isolates with
-  string channels; Int bitwise operators (`& | ^ << >>`) plus intrinsics
-  (`count_ones`/`ushr`/`rotate_*`/`to_hex`) and Bytes readers/BE pushers;
-  feature-gated `gpu` compute (wgpu, first optional dep, default build stays
-  zero-dep); a std collections layer (`set`/`deque`/`lists`, `strings.Builder`);
-  a line-width-aware formatter. Two ports validated to numeric/pixel
-  equality (ICAA 18/18 pixel-exact; claudewave 32/32 battery, 29 bit-exact).
-  Then a measured efficiency pass (see `bench/RESULTS.md`): checkers −15%,
-  lisp −20%, string building −55%, map ops −37%, GC-stress suite −67% on the
-  heaviest demo — all with byte-identical golden output. Finally, distribution:
-  `socrates build` staples a program (modules, data files, worker `.soc`s) onto
-  the interpreter as an appended, dependency-free payload the binary reads from
-  its own tail at startup — a self-contained executable whose output is
-  byte-identical to the source run. Target-independent stapling (`--launcher`)
-  lets one host cross-build the whole **demo zoo**: all seventeen demos for
-  `x86_64`/`aarch64` Linux + Windows and Apple-Silicon macOS, shipped in the
-  release. macOS can't append (a payload past the Mach-O `__LINKEDIT` fails
-  `codesign` and arm64 won't run unsigned), so there the payload is linked in
-  as a `__DATA,__socrateszoo` section (`ld -sectcreate`; `socrates build
-  --payload-only` emits it; `read_self` parses the running image to read it
-  back) and ad-hoc signed. Developer ID signing + notarization are wired in
-  `release.yml`, dormant until the `MACOS_CERT_P12_BASE64` etc. secrets exist.
-- **v0.8 — native graphics and compute + the demo round's feature
-  queue.** The v0.7 demo round left a
-  ranked, deduplicated feature-request queue (`demos/NOTES.md`); this
-  release works through it directly rather than via a fresh round.
-  `if let`/`while let` (pure parser sugar, desugared fully to `match`/`while`
-  at parse time — the checker and compiler need no special cases); bitwise
-  compound assignment (`&= |= ^= <<= >>=`); hex/binary literals now express
-  the full 64-bit pattern (bit 63 included) plus `String.parse_hex()`;
-  `Bytes` 64-bit accessors (`push`/`read_u64le`/`be`); `Int.wrapping_add`/
-  `sub`/`mul`; `fft.magnitude`; `Range.any`/`all`; non-blocking
-  `worker.try_recv()`; `strings.Builder.is_empty`/`push_joined`;
-  `lists.min_by_key`/`max_by_key`; a new `std.lazy` module (`Lazy[T]`,
-  deferred/memoized computation); ergonomic `std.json` construction
-  (`obj`/`arr`/`jstr`/`num`/`int`/`bool`/`null`); and `socrates test --bless`,
-  which rewrites mismatched `//? expect:` lines in place when the
-  actual/expected count already agrees. One item (a counting-map helper)
-  declined — one demo, one-line workaround, `std` grows reluctantly. Four
-  items in the original queue turned out to already be shipped in v0.7's
-  own efficiency pass; `demos/NOTES.md` now says so.
-  **And, in the same release, the native graphics-and-compute
-  programme** — the standing roadmap directive executed end to end: `std.glm` (GLM-shaped
-  vector/matrix/quaternion math, pure Socrates) + `Bytes` f32 accessors; the
-  `window` namespace (OpenGL via X11/GLX, Win32/WGL, Cocoa/CGL raw FFI) and
-  the GL-shaped `gfx` draw-call surface; the Metal backend (additive,
-  windows + compute, MSL, interpreter moved to the macOS main thread); the
-  Vulkan backend (compute + windowing + full gfx on Linux/X11 AND Windows,
-  SPIR-V with in-house reflection, lavapipe-pixel-proven, everything past
-  the surface in one shared `window/vulkan.rs` core); glcube rendering
-  byte-identical golden frames on GL, Metal, and Vulkan; five native
-  compute backends (metal/MSL, vulkan/SPIR-V, opencl/SPIR-V via
-  clCreateProgramWithIL proven on Intel's CPU runtime, cuda/PTX
-  graceful-proven, d3d12/HLSL WARP-proven; precedence metal > vulkan >
-  d3d12 > cuda > opencl; two SPIR-V compute profiles in SPEC § 7.2); and
-  the wgpu/pollster deletion the moment coverage landed — `Cargo.toml` has
-  no `[dependencies]` section, `Cargo.lock` is 7 lines, CI asserts the
-  one-line `cargo tree` per feature set. Shared cores extracted at each
-  second consumer: `objc.rs`/`mtl.rs`, `vk.rs`, `window/vulkan.rs`
-  (−1212 lines; the lavapipe asserts prove the code Windows runs). Book
-  ch8 gained executable `std.glm` + `window`/`gfx` sections.
-  **And, folded in before the release was ever published** (the same way
-  an earlier mis-cut became this release's feature-queue half): the
-  minification pass (the four-arch Bench A/B gate; the compact dispatch
-  loop with the per-target `monolithic_dispatch` binding; `fft.magnitude`
-  moved to `std.fft`; the math namespace minified to what only it
-  provides; the `std.json` escape fast path; the demo adoption gap
-  closed; the `List.sum()` native with `lists.sum` as its one-line
-  wrapper; four VM superinstructions fusing the hottest operand-fetch
-  pairs, with jump-target-safe fusion after patching), the consistency
-  passes (SPEC↔implementation reconciliation,
-  ports validating exactly what CI enforces with 184 new cross-checks,
-  the bench harness enforcing its own claims, the core docs re-measured
-  against the current system, STYLE.md made normative with the demos
-  conforming), and the rename itself — Fable became Socrates, with the
-  rationale recorded above and in the CHANGELOG.
+The v0.1–v0.8 release-by-release account used to live here in full.
+Once `CHANGELOG.md` carried the richer per-release account for every
+one of those releases — feature lists, benchmark deltas, the concrete
+mechanism detail, all of it exceeding what was written here — keeping
+a second, terser copy in this file just duplicated it without adding
+anything, so this section now points there instead of restating it:
+`CHANGELOG.md` is the source material for release posts going forward,
+not this list.
 
 ## Engineering-principle incidents
 
@@ -175,13 +86,11 @@ evidence trail behind each.
 ## Native graphics & compute rollout timeline
 
 The standing roadmap directive in `PROJECT.md` describes what's still
-open (GL-compute) and the settled sequencing/SPIR-V decisions. This is
-the historical account of how the rest of it actually landed.
-
-Sequencing as it happened: the Metal arc first (graphics phases, then
-Metal compute reusing the same device/queue machinery), then Vulkan
-(compute, then graphics), then OpenCL, CUDA, and DirectX — shared cores
-extracted at each second-of-its-kind backend, not guessed up front.
+open (GL-compute) and the settled sequencing/SPIR-V decisions; it
+landed exactly as sequenced there (Metal, then Vulkan, then
+OpenCL/CUDA/DirectX — see PROJECT.md's own "Sequencing" bullet rather
+than restating it here). What PROJECT.md's roadmap doesn't date is
+when the coverage condition was actually met:
 
 The `wgpu`/`pollster` dependency (v0.7's one optional dependency, behind
 a `gpu` feature) was deleted the same day the coverage condition was

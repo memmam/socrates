@@ -9,7 +9,8 @@ what Socrates is *for*, the engineering principles that decide close
 calls, the native graphics/compute roadmap, and the invariants that must
 never break — check it before any engineering-judgment call, and before
 touching anything the invariants guard. `HISTORY.md` holds the incident
-narratives and the per-release ledger behind the rules in both files.
+narratives behind the rules in both files; `CHANGELOG.md` holds the
+per-release account.
 
 ## Where the project's memory lives
 
@@ -17,11 +18,14 @@ narratives and the per-release ledger behind the rules in both files.
   native graphics/compute roadmap, and the invariants. Check it before an
   engineering-judgment call, before a change that might touch an
   invariant, or before touching the graphics/compute roadmap.
-- `HISTORY.md` — the incident narratives, sagas behind corrected
-  decisions, and the per-release ledger behind this file and PROJECT.md.
-  Check it when a rule points here, when writing a release post, or when
-  auditing whether a rule still matches the incident that produced it.
-- `CHANGELOG.md` — per-release feature list (each release shipped as one PR).
+- `HISTORY.md` — the incident narratives and sagas behind corrected
+  decisions behind this file and PROJECT.md. Check it when a rule
+  points here, or when auditing whether a rule still matches the
+  incident that produced it.
+- `CHANGELOG.md` — the per-release account: feature lists, benchmark
+  deltas, and mechanism detail (each release shipped as one PR). Check
+  it for release-post material or the full story behind any rename or
+  shipped feature a rule only mentions in passing.
 - `docs/SPEC.md` — the normative language reference (`(vN)` tags mark when a
   feature landed).
 - `docs/ARCHITECTURE.md` — implementation internals, module by module.
@@ -49,8 +53,8 @@ narratives and the per-release ledger behind the rules in both files.
   has no doc file of its own; it is documented in `ports/README.md` and by
   its consumer, icaa.)
 - `book/` — the language book (a teaching resource, **not** a project diary;
-  process/history belongs in `CLAUDE.md`, `PROJECT.md`, or `HISTORY.md`,
-  never in the book).
+  process/history belongs in `CLAUDE.md`, `PROJECT.md`, `HISTORY.md`, or
+  `CHANGELOG.md`, never in the book).
 
 Each of the four directories above (`docs/`, `bench/`, `demos/`, `ports/`)
 also gets a nested per-directory `CLAUDE.md` stub (bare filename — nested
