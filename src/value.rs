@@ -45,40 +45,49 @@ pub enum Upval {
 /// `Map(FMap)` already sets for `size_of::<Obj>() == 64`.
 pub const UPVAL_INLINE_CAP: usize = 2;
 
-/// Per-target binding (bench/RESULTS.md, "Inline upvalues"; same
-/// `monolithic_dispatch` cfg build.rs already emits for aarch64-linux's
-/// dispatch-loop binding — one predicate, one place recording which
-/// targets bind which form). `InlineUpvals` measured a broad, tight,
-/// reproducible regression on aarch64-linux specifically (enum_match
-/// +4.6..+4.9%, for_range +4.9..+5.1%, bench_call_return +4.4..+5.2%,
-/// png +3.2..+5.0%, all four marks across every sample, plus a
-/// sub-threshold positive tilt on nearly every other row) alongside the
-/// real closure_churn win — the same inlined-op-body-complexity
-/// sensitivity `monolithic_dispatch` exists to route around, since
-/// `GetUpvalue`/`SetUpvalue`/`Closure` are all inlined into the monolith
-/// on that target. aarch64-linux keeps the plain `Vec<Handle>`; every
-/// other target gets `InlineUpvals`. All call sites go through
-/// `UpvalStorage::new()`/`with_capacity()`/`.push()`/`.as_slice()`,
-/// which resolve to `Vec<Handle>`'s own inherent methods of the same
-/// names under the aarch64-linux alias, so no call site branches on
-/// the cfg.
-#[cfg(not(monolithic_dispatch))]
+/// Per-target binding (bench/RESULTS.md, "Inline upvalues"), on its own
+/// `upvals_vec_handle` cfg — build.rs emits this one specifically for
+/// the `UpvalStorage` representation decision, deliberately *not*
+/// reusing `monolithic_dispatch` (that predicate is vm.rs's own,
+/// separate dispatch-loop-arm-inlining binding; see build.rs for why
+/// folding this into it would be wrong even though aarch64-linux's
+/// answer under both happens to be the same `Vec` form). `InlineUpvals`
+/// measured a broad, tight, reproducible regression on aarch64-linux
+/// (enum_match +4.6..+4.9%, for_range +4.9..+5.1%, bench_call_return
+/// +4.4..+5.2%, png +3.2..+5.0%, all four marks across every sample,
+/// plus a sub-threshold positive tilt on nearly every other row) —
+/// the same inlined-op-body-complexity sensitivity `monolithic_dispatch`
+/// exists to route around there, since `GetUpvalue`/`SetUpvalue`/
+/// `Closure` are all inlined into the monolith on that target — AND,
+/// independently, on x86_64-linux (`for_range`, which touches no
+/// closures/upvalues at all, marked +2.8..+9.1% across the original
+/// discovery's 5 samples; confirmed a real representation cost, not an
+/// incidental layout-shift artifact, by the `bench/inline-upvals-x64-
+/// probe` hypothesis test: forcing `Vec<Handle>` there reversed the
+/// mark at the current >=5-sample floor, -5.8/-5.8/-1.0/-5.7/-6.0%,
+/// direction 5/5). Both Linux targets keep the plain `Vec<Handle>`;
+/// x86_64-windows and aarch64-macos get `InlineUpvals`. All call sites
+/// go through `UpvalStorage::new()`/`with_capacity()`/`.push()`/
+/// `.as_slice()`, which resolve to `Vec<Handle>`'s own inherent methods
+/// of the same names under the `Vec<Handle>` alias, so no call site
+/// branches on the cfg.
+#[cfg(not(upvals_vec_handle))]
 pub type UpvalStorage = InlineUpvals;
-#[cfg(monolithic_dispatch)]
+#[cfg(upvals_vec_handle)]
 pub type UpvalStorage = Vec<Handle>;
 
 /// See `UPVAL_INLINE_CAP` and `UpvalStorage`. All reads go through
 /// `as_slice()`, which is what keeps the two representations observably
 /// identical (GC marking, `GetUpvalue`/`SetUpvalue` indexing,
 /// closure-chain capture).
-#[cfg(not(monolithic_dispatch))]
+#[cfg(not(upvals_vec_handle))]
 #[derive(Debug, Clone)]
 pub enum InlineUpvals {
     Inline { len: u8, slots: [Handle; UPVAL_INLINE_CAP] },
     Many(Vec<Handle>),
 }
 
-#[cfg(not(monolithic_dispatch))]
+#[cfg(not(upvals_vec_handle))]
 impl InlineUpvals {
     #[inline]
     pub fn new() -> InlineUpvals {
@@ -130,7 +139,7 @@ impl InlineUpvals {
     }
 }
 
-#[cfg(not(monolithic_dispatch))]
+#[cfg(not(upvals_vec_handle))]
 impl Default for InlineUpvals {
     fn default() -> InlineUpvals {
         InlineUpvals::new()

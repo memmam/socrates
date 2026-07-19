@@ -36,5 +36,38 @@ fn main() {
         println!("cargo:rustc-cfg=monolithic_dispatch");
     }
     println!("cargo:rustc-check-cfg=cfg(monolithic_dispatch)");
+
+    // Second, distinctly-named instance of the same per-target-binding
+    // pattern (bench/RESULTS.md, "Inline upvalues"): `Obj::Closure`'s
+    // `UpvalStorage` binds plain `Vec<Handle>` on aarch64-linux AND
+    // x86_64-linux, `InlineUpvals` everywhere else. Deliberately a
+    // *separate* cfg from `monolithic_dispatch` above, not a reuse of it,
+    // even though aarch64-linux's answer happens to be the same `Vec`
+    // form under both: `monolithic_dispatch` is specifically about
+    // vm.rs's dispatch-loop arm-body inlining (aarch64-linux's Neoverse
+    // cost when GetUpvalue/SetUpvalue/Closure outline), a mechanism
+    // x86_64-linux does not share -- x86_64-linux keeps the compact
+    // outlined dispatch loop. Folding x86_64-linux into
+    // `monolithic_dispatch` would silently also flip vm.rs's dispatch
+    // arms to inline-always there, an unrelated and untested change.
+    // aarch64-linux's `UpvalStorage` binding rides both cfgs for its own
+    // two separate reasons (dispatch-loop-body-complexity, unchanged
+    // since cf4f8630); x86_64-linux's is new here: bench/inline-upvals's
+    // four-arch matrix showed `for_range` (which touches no
+    // closures/upvalues at all) marked +2.8..+9.1% on x86_64-linux only,
+    // 4/5 samples over the noise floor, direction 5/5 -- and the
+    // `bench/inline-upvals-x64-probe` hypothesis-test (never merges)
+    // confirmed it's the representation itself, not an incidental
+    // layout-shift artifact: forcing `Vec<Handle>` on x86_64-linux alone
+    // reversed the mark at the current >=5-sample floor (-5.8/-5.8/-1.0/
+    // -5.7/-6.0%, direction 5/5, marked 4/5 -- the mirror image of the
+    // original discovery's own noise profile).
+    if (target.starts_with("x86_64") && target.contains("linux"))
+        || (target.starts_with("aarch64") && target.contains("linux"))
+    {
+        println!("cargo:rustc-cfg=upvals_vec_handle");
+    }
+    println!("cargo:rustc-check-cfg=cfg(upvals_vec_handle)");
+
     println!("cargo:rerun-if-changed=build.rs");
 }
