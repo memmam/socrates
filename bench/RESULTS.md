@@ -168,9 +168,18 @@ machinery; aarch64-linux is judged on the matrix like everything else.
 (Revalidation note, 2026-07-19: re-verified at the current ≥5-sample
 floor via `bench/h1-binding-recheck` — a probe, never merges — whose
 build.rs forces `monolithic_dispatch` OFF on aarch64-linux only,
-judged against `bench/BASE` = main with the binding on. 5 valid
-samples across all four tier-1 architectures (commits 79df5da1,
-1507453c, adbe60e5, 726e172e, d5f25eae, in that order):
+judged against `bench/BASE` = main with the binding on. The branch
+carries 8 commits, not 5: the initial push (`79df5da1`) plus 7
+empty-commit resamples. Three of those (`183e305`, `1cae75d`,
+`c63db13` — "resample 2/5" through "4/5") were pushed within the same
+few seconds of each other and their CI runs were cancelled before
+producing any data — not discarded for a data-quality reason, they
+simply never ran to completion. The other four resamples
+(`1507453c` "5/5", `adbe60e5` "6", `726e172e` "7", `d5f25eae` "8/5
+(final)" — the renumbering across the gap is this branch's own paper
+trail of the cancellations) completed normally, giving 5 valid samples
+total across all four tier-1 architectures: 79df5da1, 1507453c,
+adbe60e5, 726e172e, d5f25eae, in that order:
 
 | row              | aarch64-linux (head=OFF vs main=ON) | x86_64-linux | x86_64-windows | aarch64-macos |
 |------------------|--------------------------------------|--------------|----------------|---------------|
@@ -506,15 +515,31 @@ M-series microarchitectural insight would qualify).
 (Revalidation note, 2026-07-18: this residual was convicted on 3
 samples (direction 3/3, magnitude 3.9–4.5%) under the ≥3-run floor in
 force at the time; the floor is now ≥5. Two backfill samples were
-fired on the still-live `bench/h3-superinstructions` branch to bring
-this to 5 without re-opening the merged decision — see the result
-folded in immediately below if present, or the pending note if not yet
-read. The no-GLC probe (two samples, cited above) is a mechanism
-diagnostic that fed this closed decision, not a live shippable claim in
-its own right; it is grandfathered rather than re-fired — re-running a
-probe whose only role was confirming *why* a shipped residual exists
-would spend CI time without being able to change anything now
-mergeable.)
+planned on the then-still-live `bench/h3-superinstructions` branch to
+bring this to 5 without re-opening the merged decision.
+
+Update, 2026-07-19: that backfill never happened. `bench/
+h3-superinstructions` was merged as PR #89 and deleted along with it —
+it no longer exists — and its commit history at merge time
+(`64dbdc3`/`dca2128`/`6c5e993`/`4bb1a5b`) carries no resample commits
+beyond the original 3 samples this residual was convicted on. The
+promise went unfulfilled, not merely undocumented; this residual's own
+data is still exactly the 3 samples above, short of the current ≥5
+bar. Per the new-inconclusive-not-negative rule, it is retained as an
+observation, not an adjudicated verdict — same template as the H1
+macOS lisp+5.1% errata above. This does not reopen the Conclusion
+above, though: that decision doesn't rest on this residual's precise
+sample count, it rests on the no-GLC probe's independent finding that
+disabling the one implicated fusion recovers less than half the
+residual while reproducibly regressing four other rows — evidence that
+holds regardless of how many samples convicted the residual itself.
+Not re-fired proactively, matching this file's own precedent for the
+analogous small-list DROP gap below: no code has changed in the
+relevant mechanism since, and a fresh 5-sample run is unlikely to
+overturn an already-tight 3-for-3 directional read. The no-GLC probe
+(two samples, cited above) remains a mechanism diagnostic that fed this
+decision, not a live shippable claim in its own right; it stays
+grandfathered rather than re-fired for the same reason.)
 
 ## Inline upvalues: a reopened negative result, KEPT with a two-target binding
 
@@ -585,8 +610,9 @@ x86_64-linux rides only the new one; x86_64-windows and aarch64-macos
 keep `InlineUpvals`.
 
 **Fresh four-arch matrix on the formalized binding, 5 samples vs main
-(run 29671924853 onward), confirms flat-or-better on literally every
-row, every architecture:**
+(run 29671924853 onward), confirms flat-or-better on every row, every
+architecture, with one flagged single-sample exception addressed
+immediately below:**
 
 `for_range` (the row that mattered):
 
@@ -682,7 +708,7 @@ history for the full slot-by-slot record.
   representation branch). Dropped per the pre-registered gate.
   **Standing watch (user-directed, 2026-07-18) — this entry is softer
   than its neighbors: track the signal, don't just refrain.** The
-  mechanism is proven (that reproducible list_churn −7%); only the
+  mechanism measured real (that reproducible list_churn −7%); only the
   workload was wrong. Whenever a new bench, demo, port, or
   implementation type shows churn-bound list behavior — allocation
   cost that a small-list representation would erase, the shape
