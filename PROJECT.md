@@ -223,8 +223,15 @@ their place fastest.
   algorithm or format must actually do what that name implies — if it
   isn't literally what the name says (a "deflate" that never runs
   LZ77/Huffman, say), rename it to what it actually is or coin a name
-  that doesn't collide, rather than let the name overclaim. First
-  instances of all three: the `std.wav` decode-trim, the six-module
+  that doesn't collide, rather than let the name overclaim. The same
+  rule runs forward, not just backward: before deliberately changing
+  what a named function or module does, rename it first, rather than
+  let the old name start meaning something different under running
+  programs' feet — and if any caller genuinely depends on conformance
+  to the *original* named spec, not just the name, that conformance
+  needs its own explicit, correct implementation, never a hope that the
+  renamed or evolving one eventually gets there. First instances of all
+  three: the `std.wav` decode-trim, the six-module
   demo→std promotion wave, and `zlib.deflate_stored`/`inflate_stored` →
   `wrap`/`unwrap` — `HISTORY.md` has the story.
 

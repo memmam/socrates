@@ -259,6 +259,23 @@ numbers: `bench/RESULTS.md`.
     already exists elsewhere, strengthen or cross-reference that
     existing statement instead of writing a parallel near-duplicate in
     whichever file happens to be open.
+  - **Once a fact lives somewhere, point to it — don't re-narrate it.**
+    Routing a lesson to the right file (the rule above) is the first
+    hop, not the last: a fact that's already stated in the file it
+    actually binds to (a rule in PROJECT.md, an incident in HISTORY.md,
+    a release detail in CHANGELOG.md, a spec detail in `docs/SPEC.md`)
+    gets a fixed reference from anywhere else that needs it, not a
+    second prose copy that can silently drift out of sync with the
+    first — HISTORY.md's own "Release ledger" section (pointing at
+    CHANGELOG.md instead of restating the release-by-release account it
+    used to carry in full) is the standing model. Duplicate only when a
+    *stable, frozen* copy is the actual requirement — a golden-pinned
+    value, a benchmark's `// Bench:` epoch bridge, a contract freeze
+    file like `ports/pyl/CONTRACT.md`'s `sos_freeze.txt` — where the
+    whole point of the copy is that it must *not* track the source if
+    the source moves; state that stability requirement explicitly at
+    the copy's own site when it's the reason, so a future reader can
+    tell an intentional freeze from an accidental duplicate.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,

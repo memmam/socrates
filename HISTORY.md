@@ -101,7 +101,12 @@ evidence trail behind each.
   LZ77/Huffman compression, so the `deflate`/`inflate` names overclaimed.
   Renamed to `wrap`/`unwrap` (and `Inflated` to `Unwrapped`), rationale
   recorded in the module's own header comment — the first instance of "a
-  name is a claim" as a project-wide principle.
+  name is a claim" as a project-wide principle. No forward instance
+  exists yet (nothing has been deliberately changed out from under an
+  existing name since) — the forward half of the rule (rename before
+  drifting further, and give spec-correctness-dependent callers their
+  own real implementation rather than an evolving name) is preventive,
+  recorded ahead of its first occasion on purpose.
 
 ## Native graphics & compute rollout timeline
 
@@ -207,6 +212,16 @@ directives; each of the following is the incident that produced one.
   hypothetical one. Produced the "route by content, not by convenience"
   rule; this entry is its own first instance, the rule that motivated
   writing it down being the one now on record.
+- **The redundancy-cascade follow-up (2026-07-19).** Roxy's check
+  immediately after the entry above asked whether the routing rule went
+  far enough — whether facts, once routed to PROJECT.md/HISTORY.md,
+  then cascade correctly into CHANGELOG.md and the actual docs, with
+  redundancy replaced by fixed references except where a frozen copy is
+  the real requirement. It hadn't: only the first hop (session lesson →
+  which file) had been written down, not the second (established fact →
+  point, don't re-narrate). Produced "once a fact lives somewhere,
+  point to it," grounded in the Release ledger section's own existing
+  practice rather than a new invented example.
 
 ## Consistency and workflow incidents
 
