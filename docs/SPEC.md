@@ -662,7 +662,7 @@ Windows path, then the vendor GPU path, then OpenCL, which commonly
 resolves to a CPU implementation). The original **wgpu** path (WGSL
 shaders behind a `gpu` cargo feature — v0.7's one quarantined
 dependency) was **removed in v0.8** when this native coverage landed,
-per `CLAUDE.md`'s roadmap: every build of Socrates is now zero-dependency
+per `PROJECT.md`'s roadmap: every build of Socrates is now zero-dependency
 (CI asserts `cargo tree` is a single line for the default and for every
 feature set). The namespace itself always exists — programs using it
 typecheck and run in every build; without a backend the members degrade
@@ -726,7 +726,7 @@ exercised without GPU hardware.
 
 **The SPIR-V ABI (the native OpenCL backend, v0.8)** is the same contract
 through the same entry point — but SPIR-V is the roadmap's lingua-franca
-*format* (`CLAUDE.md`), and compute kernels come in two **profiles** the
+*format* (`PROJECT.md`), and compute kernels come in two **profiles** the
 format does not paper over. A Vulkan-profile module declares a
 `GLCompute` entry point under `Logical` addressing and the `GLSL450`
 memory model, with buffers as descriptor-set storage buffers; an
@@ -872,7 +872,7 @@ AppKit's default close path guarantees without a delegate.
 `window.create_metal` opens a Metal-backed window as a **sibling** to
 `create`'s OpenGL/CGL path (`src/window/macos/gl.rs`) — additive, never a
 replacement, per this project's standing exception for Metal on macOS (see
-`CLAUDE.md`'s engineering principles): both backends compile into the same
+`PROJECT.md`'s engineering principles): both backends compile into the same
 binary under `--features gl,metal`, quarantined behind their own `metal`
 cargo feature with the same zero-Cargo-dependency shape `gl` already has,
 and a program picks per-window which one it wants by calling `create` or

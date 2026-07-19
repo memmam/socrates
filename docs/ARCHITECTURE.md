@@ -578,7 +578,7 @@ matching `window`'s own methods — two fixed messages depending on cause
 (`gl` feature off at compile time, checked via `cfg!` — vs. no window
 having called `make_current()` yet).
 
-**Metal backend (macOS, additive alongside OpenGL/CGL).** CLAUDE.md carves
+**Metal backend (macOS, additive alongside OpenGL/CGL).** PROJECT.md carves
 out a standing exception to the "newer backend supersedes the older one"
 rule for Metal on macOS: it ships **additive**, never replacing
 `window/macos/gl.rs`'s existing OpenGL/CGL path, unless (or until) Apple
@@ -590,7 +590,7 @@ to a system framework), independently toggleable and combinable, so
 **The macOS shared core (`src/objc.rs`, `src/mtl.rs`).** When the `gpu`
 namespace's native Metal compute path became the *second* consumer of the
 Objective-C dispatch machinery, that machinery graduated out of
-`window/macos/shared.rs` into crate-level modules, per CLAUDE.md's
+`window/macos/shared.rs` into crate-level modules, per PROJECT.md's
 shared-core rule (extract at real duplication, never guess up front):
 `objc.rs` holds the runtime types, `objc_msgSend`
 transmute-per-shape wrappers, class/selector lookup, and the RAII
@@ -614,7 +614,7 @@ buffer is explicitly zeroed before the dispatch (`newBufferWithLength:`
 guarantees nothing) so all backends agree on bytes the kernel never
 wrote; command-buffer `error` is checked after `waitUntilCompleted`.
 This backend's landing (with Vulkan and OpenCL after it) is what
-retired wgpu — CLAUDE.md's native-backends-first rule, completed in
+retired wgpu — PROJECT.md's native-backends-first rule, completed in
 v0.8. `gpu.backend()` (`"metal"`/`"vulkan"`/`"opencl"`/`"none"`) is the
 dialect escape hatch, the compute analog of `win.backend_name()`.
 

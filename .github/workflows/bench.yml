@@ -1,6 +1,6 @@
 name: Bench A/B
 
-# The universal-performance gate for interpreter/idiom changes (CLAUDE.md's
+# The universal-performance gate for interpreter/idiom changes (PROJECT.md's
 # universality principle): an interleaved A/B between two refs, run on one
 # runner per tier-1 architecture. A simplification is accepted only if no
 # architecture regresses beyond the noise floor — "fast on the dev box" is

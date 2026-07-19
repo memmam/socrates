@@ -69,7 +69,7 @@ jobs:
           # Stays on macos-14 until its actual 2026-11-02 removal:
           # release binaries built on the older image carry the
           # broadest macOS compatibility (deprecated != discontinued;
-          # CLAUDE.md platform-scoping rule). Switch on the removal
+          # PROJECT.md platform-scoping rule). Switch on the removal
           # date, not before.
           - os: macos-14
             target: aarch64-apple-darwin

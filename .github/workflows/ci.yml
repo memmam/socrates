@@ -6,11 +6,11 @@ name: CI
 # regardless of which files changed. A change that looks docs-only can
 # still need the full suite: tools/check_counts.sh's prose-count
 # assertions and the book/port cross-checks all read live program
-# output, so a README or CLAUDE.md edit that drifts a stated count is
-# exactly the kind of "doesn't touch source" change this job exists to
-# catch. Scoping triggers by path would need a second, narrower
-# judgment call about which files are truly inert — not worth it next
-# to a ~few-minute-overhead full run on every push.
+# output, so a README, CLAUDE.md, or PROJECT.md edit that drifts a
+# stated count is exactly the kind of "doesn't touch source" change
+# this job exists to catch. Scoping triggers by path would need a
+# second, narrower judgment call about which files are truly inert —
+# not worth it next to a ~few-minute-overhead full run on every push.
 on:
   push:
     branches: [main]
@@ -291,7 +291,7 @@ jobs:
     # macos-14 is deprecated upstream (brownouts since 2026-07-06,
     # removal 2026-11-02). Deprecated is not discontinued: both images
     # run until 14 is actually removed — brownouts expand coverage,
-    # they never early-retire it (CLAUDE.md platform-scoping rule).
+    # they never early-retire it (PROJECT.md platform-scoping rule).
     # Drop the macos-14 row on the removal date.
     strategy:
       fail-fast: false
@@ -312,7 +312,7 @@ jobs:
         run: cargo test --features gl
 
   gl-macos-metal:
-    # Metal ships additive alongside OpenGL/CGL on macOS -- CLAUDE.md's
+    # Metal ships additive alongside OpenGL/CGL on macOS -- PROJECT.md's
     # standing exception to the "newer backend supersedes the older one"
     # rule. This job is the actual proof of that coexistence, not just of
     # compilation: `--features gl,metal` together on real Apple Silicon
