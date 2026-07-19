@@ -66,7 +66,9 @@ their place fastest.
   Every such change stays byte-identical in observable behavior.
 - **Universality gates minification.** "Most performant" is judged across
   every tier-1 target (x86_64 + aarch64 Linux, x86_64 Windows, aarch64
-  macOS — the release matrix), not on one box: simplifying an idiom down
+  macOS — the four-arch bench matrix; the release matrix adds a fifth,
+  aarch64 Windows, which the bench workflow doesn't cover), not on one
+  box: simplifying an idiom down
   to pure primitives can run better on one architecture and worse on
   another (I-cache geometry, indirect-branch cost, and code layout all
   vote differently per arch). A simplification is accepted only if the

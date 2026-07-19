@@ -258,7 +258,7 @@ directives; each of the following is the incident that produced one.
 - **The spec-count drift release.** A release draft once shipped saying
   311 golden spec tests while the suite actually stood at 313 — the
   reason `tools/check_counts.sh` exists and why the spec-suite count is
-  cross-checked in all five of its stating places on every CI run.
+  cross-checked in all six of its stating places on every CI run.
 - **The 2026-07-18 macos-14 DNS incident.** The first instance of "a
   fixed target does not rot": a macos-14 CI job's runner had its DNS
   fail resolving `codeload` mid-job, after fetching from the same host

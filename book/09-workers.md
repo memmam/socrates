@@ -172,11 +172,9 @@ match gpu.run(shader, input, 16, 4, 1, 1) {
 
 `docs/assets/metal_compute.soc`, `vulkan_compute.soc`,
 `opencl_compute.soc`, `cuda_compute.soc`, and `d3d12_compute.soc`
-are the runnable versions, one per backend. Socrates
-once took its single Cargo dependency here (wgpu, quarantined behind a
-`gpu` feature); the native backends replaced it, and today every build of
-Socrates — any feature set — is the same zero-dependency language the rest
-of this book describes.
+are the runnable versions, one per backend — every build of Socrates, any
+feature set, is the same zero-dependency language the rest of this book
+describes.
 
 ---
 

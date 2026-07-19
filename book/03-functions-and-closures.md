@@ -310,7 +310,7 @@ println(tock());
 `tick` and `tock` count independently — separate calls, separate `n`s. A
 closure with private mutable state is the lightest kind of object Socrates
 offers — for named fields and methods, pair a struct with an `impl` block
-(chapters 4 and 7).
+(chapter 4).
 
 ## Generic functions
 

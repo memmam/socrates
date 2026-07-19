@@ -483,6 +483,16 @@ arch. x86_64-linux's favorable-only spread on dispatch rows that run
 (enum_match −7.3% etc.) was the rodata lottery rolling the good
 direction and is not credited to the change.
 
+(Revalidation note, 2026-07-19: this verdict rests on 1 CI sample per
+arch plus 2 local samples, short of the ≥5-sample floor this file holds
+every other verdict to. Per the new-inconclusive-not-negative rule this
+is retained as an observation, not formally re-adjudicated — the
+magnitude here (−55..−59%, reproduced identically across every sample
+taken) is far enough above shared-box noise that a fresh 5-sample run
+is unlikely to overturn the qualitative read, matching this file's own
+precedent for not re-firing an already-tight directional result. Not
+re-fired proactively: no code has changed in `List.sum()` since.)
+
 ## H3: superinstructions — and the macOS for_range residual
 
 Four fused ops chosen from a dynamic pair profile over ~2.5B dispatches
@@ -713,7 +723,17 @@ history for the full slot-by-slot record.
   the old lottery premise — the fusion itself was never the problem in
   either era; arm-count churn to `run()` is. Implementation archived on
   branch `probe-cmp-branch` (never merges), same H2/h3-probe-no-glc
-  precedent.
+  precedent. **Scope note: measured on x86_64-linux only** — the other
+  three architectures were not run, so this DROP rests on one arch's
+  data, unlike this file's other four-arch verdicts. H1 itself
+  establishes that this class of layout regression scatters
+  *differently* per architecture, so x86_64-linux's result doesn't
+  predict the others', and the per-target-binding remedy this file
+  reaches for elsewhere (`monolithic_dispatch`, `upvals_vec_handle`)
+  was neither tried nor ruled out here. Standing watch: a four-arch
+  matrix run would either confirm the drop everywhere or surface a
+  per-target split like inline-upvalues'; not re-fired proactively
+  since no code has changed in `run()`'s arm layout since.
 - Hottest-first arm reordering inside the compact `run()` (H1b): did not
   fix aarch64-linux's systematic enum_match cost (still +4.6%, plus a
   new map_ops +4.4% there) and broke x86_64-linux (enum_match −3.1% →

@@ -11,9 +11,15 @@ pull — see `ports/README.md`):
   `sys.modules['numpy'] = ...` etc.), producing ground-truth output.
 - `ports/pyl/*.soc` — the Socrates layer implementing the same subset.
 
-Where this contract and real numpy/scipy could disagree, CI (which can
-install the real packages) compares the shim against them; locally the
-shim is the executable contract. Parity between shim-run upstream code
+Where this contract and real scipy could disagree, CI (which can install
+the real package) compares the shim's `butter`/SOS output against
+`scipy.signal.butter(..., output='sos')` directly (the freeze-file check
+below). The `pyl.nd` array/reduction functions (`geomspace`, `linspace`,
+`cumsum`, `clip`, `take_lerp`, `gauss`, ...) have no equivalent real-numpy
+cross-check anywhere — CI only verifies the Socrates port against this
+shim, never the shim against real numpy — so for that surface, locally
+and in CI alike, the shim is the executable contract. Parity between
+shim-run upstream code
 and the Socrates port is judged **numerically**: arithmetic-only paths are
 expected bit-equal in f64; paths through libm transcendentals
 (sin/cos/exp/tanh/pow) get a documented allowance of max abs diff
