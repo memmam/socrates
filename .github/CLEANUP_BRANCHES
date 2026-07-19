@@ -32,3 +32,16 @@
 # `claude/pr4-gfx-namespace`'s content is confirmed superseded by main's
 # `"gfx"` namespace (per `grep -n '"gfx"' src/builtins.rs`) but needs the
 # user's own manual deletion for that reason.
+#
+# 2026-07-19 cleanup (user-directed), third pass: `bench/h3-probe-no-glc`
+# was a genuine local-only "never merges" probe (its own commit message
+# says so) that had simply never been pushed, unlike its three siblings
+# above. Pushed today to give it the same reproducible-on-origin
+# treatment — and the identical commit immediately failed the Bench A/B
+# workflow, having succeeded on the same tree back on 2026-07-18: not a
+# bug in the probe, but harness-version skew (bench/ab.py,
+# tools/check_counts.sh, and the whole bench re-specification epoch have
+# moved on ~102 commits since). Rebasing a probe that already fully
+# served its purpose isn't worth the churn — its finding is complete in
+# bench/RESULTS.md's H3 section ("no-GLC probe") — so it's queued for
+# deletion here instead of being kept as a fourth reproducible probe.

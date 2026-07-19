@@ -288,3 +288,21 @@ directives; each of the following is the incident that produced one.
   Produced "when a PR's scope expands past what its description
   promised, say so in a comment" — the description is a claim like any
   other, and claims go stale silently unless something corrects them.
+- **The `h3-probe-no-glc` incident (2026-07-19).** A genuine local-only
+  "never merges" probe (`bench/RESULTS.md`'s own H3 section names it,
+  its commit message says so) had simply never been pushed, unlike its
+  three siblings. Pushed to origin to give it the same reproducible
+  treatment — and the identical commit, which had succeeded when it was
+  last live on 2026-07-18, immediately failed the Bench A/B workflow.
+  Not a bug in the probe: ~102 commits of harness drift since (`bench/
+  ab.py`, `tools/check_counts.sh`, the bench re-specification epoch)
+  meant the old tree could no longer run against the current workflow.
+  Its finding was already complete as prose, so rebasing it to chase a
+  green run wasn't worth the churn — queued for deletion instead of
+  kept as a fourth live probe. The same investigation surfaced a
+  separate, previously-undiscovered gap: `cleanup.yml`'s own
+  self-pruning PR creation reliably fails, because this repo doesn't
+  allow GitHub Actions to create pull requests — a distinct restriction
+  from the already-known ref-deletion 403, caught only because two
+  pushed `cleanup/prune-*` branches from the PR #119 and #120 runs had
+  no PR to show for them.
