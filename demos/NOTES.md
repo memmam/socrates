@@ -132,12 +132,29 @@ diff itself. Confirmed findings, all fixed in the same release:
 
 ## The v0.7 round
 
-The process re-ran against **v0.7** (the infrastructure release): seven new
-demos (`synthwave`, `png`, `bloom`, `spectra`, `swarm`, `reversi`,
-`parmandel`) exercising Bytes/FFT/workers/bitwise/std-collections, plus a
-modernization pass over all ten existing demos — seventeen independent
+The process re-ran against **v0.7** (the infrastructure release): six new
+demos exercising Bytes/FFT/workers/bitwise/std-collections, plus a
+modernization pass over all eleven existing demos — seventeen independent
 authors, seventeen adversarial verifiers, every demo green under GC stress
 before integration. Distilled best practices: [`STYLE.md`](STYLE.md).
+
+(Correction, 2026-07-19: "six new... eleven existing" undercounts by one
+on both sides. `git log --follow --diff-filter=A` against each
+`demos/*/` directory shows the v0.6 field test shipped exactly ten
+demos (not eleven), and the v0.7 round's actual new demos were
+`synthwave`, `png`, `bloom`, `spectra`, `swarm`, `reversi`, **and
+`parmandel`** — seven, not six; `parmandel` was first-committed at the
+same v0.7.0 tag as the other six but never named in this round's own
+prose anywhere it appears (this file, CHANGELOG.md, STYLE.md,
+`demos/README.md`). Total demos touched in the round is unchanged at
+seventeen either way (7 new + 10 existing = 17 = 6 + 11), which is why
+this went unnoticed for so long — every "seventeen" count downstream
+of this sentence stayed correct even though the six/eleven breakdown
+feeding it was wrong. The original sentence above is left as shipped;
+this note is the correction, not a replacement for it — CHANGELOG.md's
+matching v0.7.0 entry and STYLE.md's opening line carry the same
+original-preserved-plus-noted-correction treatment, both pointing back
+here for the detail rather than repeating it.)
 
 ### Bugs — fixed in-round
 

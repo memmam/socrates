@@ -68,11 +68,12 @@ README. Their issue reports — deduplicated, triaged, and answered — are in
 [`NOTES.md`](NOTES.md); the fixes they drove became v0.6, and the demos
 were then modernized to use what they'd asked for.
 
-The same process ran again for **v0.7**: seven new demos (`synthwave`,
-`png`, `bloom`, `spectra`, `swarm`, `reversi`, `parmandel`) built on the
+The same process ran again for **v0.7**: six new demos built on the
 infrastructure release (Bytes, FFT, workers, bitwise, the std collections)
-plus a modernization pass over all ten existing ones, seventeen authors
-and seventeen adversarial verifiers in all. That round's triage is in
+plus a modernization pass over all eleven existing ones, seventeen authors
+and seventeen adversarial verifiers in all. (Correction: that's actually
+seven new — `parmandel` included — and ten existing; see `NOTES.md`
+§ "The v0.7 round" for the detail.) That round's triage is in
 `NOTES.md` § "The v0.7 round", and its distilled house rules — best
 practices as designed to now — are [`STYLE.md`](STYLE.md).
 
