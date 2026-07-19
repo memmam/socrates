@@ -176,13 +176,17 @@ their place fastest.
   recording the correction, not deleting the record. And record
   decisions with their *scope* — what exactly was approved, no wider:
   an overbroad memory of a narrow decision is how conventions drift. And
-  codification itself is a four-step act, not a sentence: a rule that
-  gets codified (i) lands in the repo file where it operationally binds,
-  (ii) lands here with its scope and first instance, (iii) is copied
-  into the session's working memory, and (iv) triggers an immediate
-  consistency audit of the existing tree and policies *against the new
-  rule* — retroactive application is part of codifying, because a
-  forward-only rule leaves its whole class dirty behind it. Standing
+  codification itself is a four-step act, not a sentence — a rule that
+  gets codified:
+  1. lands in the repo file where it operationally binds;
+  2. lands here with its scope and first instance;
+  3. is copied into the session's working memory;
+  4. triggers an immediate consistency audit of the existing tree and
+     policies *against the new rule* — retroactive application is part
+     of codifying, because a forward-only rule leaves its whole class
+     dirty behind it.
+
+  Standing
   instances of tracked intent: the bench files' `// Bench:` measurand
   headers and `bench/RESULTS.md`'s epoch bridge; the demos'
   deliberate-divergence comments; the ports' READMEs describing exactly

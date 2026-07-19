@@ -58,9 +58,16 @@ strongest possible signal. Those walls became **v0.6**.
 
 - **Bitwise operators** (sudoku wanted 9-bit candidate masks). One demo,
   one use case, and Bool tables carried it fine. The `<<` diagnostic keeps
-  the door marked. Waiting for more pull.
+  the door marked. Waiting for more pull. (The pull arrived: `&
+  | ^ << >>` shipped in v0.7 — see CHANGELOG.md's v0.7.0 entry — and by
+  the v0.7 round nine of the then-seventeen demos used them; this entry
+  is kept as the historical record of why the v0.6 decision was "not
+  yet," not as a currently-accurate status.)
 - **Multi-line / raw string literals** (mdsite generated HTML with twenty
-  `push` calls; every literal `{` in CSS needs `\{`). Real friction, but a
+  `push` calls, in its v0.6 shape — since rewritten around
+  `strings.Builder`, so that exact figure is no longer reproducible
+  against current code, but the friction it illustrates is unchanged:
+  every literal `{` in CSS needs `\{`). Real friction, but a
   design decision with interpolation interactions — deferred whole, not
   half-designed.
 - **A line-width-aware formatter.** The single most-reported *tooling*
@@ -125,9 +132,10 @@ diff itself. Confirmed findings, all fixed in the same release:
 
 ## The v0.7 round
 
-The process re-ran against **v0.7** (the infrastructure release): six new
-demos exercising Bytes/FFT/workers/bitwise/std-collections, plus a
-modernization pass over all eleven existing demos — seventeen independent
+The process re-ran against **v0.7** (the infrastructure release): seven new
+demos (`synthwave`, `png`, `bloom`, `spectra`, `swarm`, `reversi`,
+`parmandel`) exercising Bytes/FFT/workers/bitwise/std-collections, plus a
+modernization pass over all ten existing demos — seventeen independent
 authors, seventeen adversarial verifiers, every demo green under GC stress
 before integration. Distilled best practices: [`STYLE.md`](STYLE.md).
 
@@ -239,8 +247,11 @@ throughout: `bloom`'s 16-bit-halves `mul32` became
 for), `checkers`' masked-shift `lshr` became `x.ushr(k)` (the reversi
 precedent, finally applied), `spreadsheet` and `mdsite` adopted
 `push_joined` (`mdsite`'s document-level `block()` join, missed in that
-wave, followed in the consistency pass below — the claim is now fully
-true), `swarm` adopted the `std.json` constructors that were
+wave, followed in the consistency pass below — the claim was fully true
+at the time; that `block()` join has since moved with the rest of
+`mdsite/markdown.soc` into `std.markdown`, v0.9, so the code demonstrating
+it now lives in `std/markdown.soc` rather than the demo itself), `swarm`
+adopted the `std.json` constructors that were
 added *for it* (`json.int`/`jstr`/`obj`), `regex` reads its bitmap words
 in one `read_u64le`, and the four Int-key comparator sites (`reversi`,
 `swarm`, `bloom`, `dungeon`) moved to `max_by_key`. The lesson for

@@ -418,10 +418,10 @@ actually enforces — and, landing with them, the rename:
   minimal wrapper over the native with the same name and byte-identical
   observable behavior (`reversi/bits.soc` remains the documented
   reference; the hand-rolled bodies live in git history).
-- The v0.7 demo round: six new demos (`synthwave`, `png`, `bloom`,
-  `spectra`, `swarm`, `reversi`) built on the new infrastructure, all
-  eleven existing demos modernized to it, seventeen writers plus
-  seventeen adversarial verifiers. Best practices distilled into
+- The v0.7 demo round: seven new demos (`synthwave`, `png`, `bloom`,
+  `spectra`, `swarm`, `reversi`, `parmandel`) built on the new
+  infrastructure, all ten existing demos modernized to it, seventeen
+  writers plus seventeen adversarial verifiers. Best practices distilled into
   `demos/STYLE.md`; the papercut triage is `demos/NOTES.md` § "The
   v0.7 round".
 - **Fixed (found by the round):** method calls and field access on

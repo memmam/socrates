@@ -162,7 +162,7 @@ fn support(cands: Int, r: rules.Rules, d: Int) -> Int {
     let mut m = 0;
     for s in 0..r.tiles.len() {
         if cands >> s & 1 == 1 {
-            m |= r.allow[s * 4 + d]; // r.mask(s, d), inlined: this loop is hot
+            m |= r.allow[s * 4 + d]; // STYLE.md R4: diverges from calling r.mask(s, d) — inlined because this loop is hot
         }
     }
     m

@@ -28,7 +28,10 @@ distribution outside the App Store.
 ## 2. Export it as a `.p12`
 
 - **Keychain Access → My Certificates**, find `Developer ID Application: NAME
-  (TEAMID)`, right-click → **Export…** → `.p12`, and set an export password.
+  (TEAMID)`, right-click → **Export…** → `.p12`, and save it as
+  `DeveloperID.p12` (Keychain Access defaults to the certificate's own
+  display name — rename it to match the command below) with an export
+  password set.
 - Grab the exact identity string (you'll need it for `MACOS_SIGN_IDENTITY`):
   ```sh
   security find-identity -v -p codesigning

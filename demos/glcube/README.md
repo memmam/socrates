@@ -47,8 +47,12 @@ From the repo root:
 cargo build --release --features gl
 Xvfb :98 -screen 0 1024x768x24 &
 DISPLAY=:98 ./target/release/socrates demos/glcube/main.soc   # render
-DISPLAY=:98 ./target/release/socrates test demos/glcube          # golden tests
+DISPLAY=:98 ./target/release/socrates test demos/glcube/main.soc demos/glcube/cube.soc demos/glcube/spec.soc  # golden tests
 ```
+
+(Named files, not the bare directory: `main_metal.soc`/`main_vulkan.soc`
+need `--features metal`/`--features vulkan` respectively — the same
+scoping the `gl` CI job uses.)
 
 ## The Metal twin: `main_metal.soc`
 

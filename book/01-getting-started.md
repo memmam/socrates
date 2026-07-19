@@ -113,8 +113,8 @@ Errors, if any, print in the diagnostic format described below, and the exit
 code tells scripts what happened.
 
 **`socrates fmt`** prints the canonically formatted source; add `-w` (or
-`--write`) *after the filename* to rewrite the file in place. Given this
-crime scene:
+`--write`) anywhere on the command line to rewrite the file in place. Given
+this crime scene:
 
 ```soc
 fn   square( n:Int )->Int { n*n }
@@ -365,8 +365,9 @@ count — floor 4,096 — so it doubles its way up as `rows` accumulates.)
 
 **`SOCRATES_GC_STRESS=1`** forces a collection before *every* allocation. It
 exists to flush out rooting bugs in the runtime itself — if a program works
-normally but breaks under stress mode, that's a Socrates bug, and the whole
-test suite runs under it. It makes allocation-heavy programs dramatically
+normally but breaks under stress mode, that's a Socrates bug. CI runs the
+golden spec suite under it on every push (and the demos, in the gauntlet).
+It makes allocation-heavy programs dramatically
 slower; there is no reason to use it day to day, but it's reassuring that
 you can.
 
@@ -383,3 +384,8 @@ your own types, multi-file modules, the `?` operator, and tail-call
 optimization — the following chapters cover each — but there are still no
 traits and no package manager. What the language does include, it checks
 thoroughly at compile time, as the diagnostics above suggest.
+
+---
+
+Next: [Fundamentals](02-fundamentals.md) ·
+[Back to the index](README.md)

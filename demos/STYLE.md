@@ -1,6 +1,6 @@
 # Socrates demo style — best practices as designed to now
 
-Distilled from the v0.7 demo round: seventeen programs (six new, eleven
+Distilled from the v0.7 demo round: seventeen programs (seven new, ten
 modernized), each written by an independent author under field-test
 orders, each adversarially verified. Where a rule cites a demo, that
 demo is the reference implementation of the rule. The papercut ledger
@@ -26,8 +26,9 @@ every such divergence.
   published perft values 4/12/56/244/1396/8200 before anything else was
   pinned (`reversi`).
 - **Generate long pin blocks mechanically.** Run the program, pipe
-  through `sed 's/^/\/\/? expect: /'` (strip trailing whitespace),
-  append, re-run `socrates test`. Never hand-transcribe a transcript
+  through `sed 's/^/\/\/? expect: /'`, append, re-run `socrates test`
+  (golden comparison already ignores trailing whitespace on both
+  sides, so the sed pipeline needn't strip it). Never hand-transcribe a transcript
   (`spectra`, `reversi`, `swarm`). Verify expected values against an
   independent reference *before* pinning. For an existing pin that's
   merely drifted — the line count of actual vs. expected already
@@ -93,10 +94,10 @@ every such divergence.
 
 - Precedence is Rust's: most bitboard/checksum expressions read
   paren-free (`x >> n & mask`, `acc | run & empty`, `x & m != 0`,
-  `table[(c ^ b) & 255] ^ c >> 8`) — but `& | ^` bind *looser* than
-  `+ -`, so `(v & 0x7f) + top` needs its parens. `socrates fmt` strips
-  merely-clarifying parens, so precedence knowledge is not optional;
-  comment intent instead.
+  `table[(c ^ b) & 255] ^ c >> 8` — `std.crc`, moved from `png`) — but
+  `& | ^` bind *looser* than `+ -`, so `(v & 0x7f) + top` needs its
+  parens. `socrates fmt` strips merely-clarifying parens, so precedence
+  knowledge is not optional; comment intent instead.
 - **`>>` is arithmetic.** Any value that can carry bit 63 goes through
   the `Int.ushr(n)` intrinsic (logical shift, `>>`'s panic contract).
   Never hand-build the mask — the textbook `(1 << 64 - n) - 1` panics
@@ -131,12 +132,13 @@ every such divergence.
 - **The worker main loop** is `while let Some(msg) = worker.recv() {
   ... }` (v0.8 sugar; it desugars at parse time to exactly the old
   `let msg = match worker.recv() { Some(m) -> m, None -> break };`
-  form). Support both an explicit quit message and `None`-means-quit so
-  workers never hang regardless of how the parent leaves.
+  form, `swarm/crunch_worker.soc`). Support both an explicit quit
+  message and `None`-means-quit so workers never hang regardless of how
+  the parent leaves.
 - **Workers never `println`.** All output flows through the channel and
   the parent prints in protocol order. Helper files guard everything
   behind `if worker.is_worker() { ... }` so standalone harness runs are
-  silent.
+  silent (`swarm/crunch_worker.soc`, `parmandel/row_worker.soc`).
 - **Panic isolation is a feature to demo, not just tolerate:** `join()`
   returns the panic message verbatim, `send` returns false on the dead
   handle, and jobs-as-messages makes "respawn and resend" a three-line
@@ -169,7 +171,7 @@ every such divergence.
   through the computation — structs are references, so children copy a
   pointer. Never construct a Set/Map constant inside a hot function
   (`lisp`; module-level `let table = make_table();` builds once at
-  import for module-private tables, `png`).
+  import for module-private tables, `std.crc`, moved from `png`).
 
 ## 7. Formatter-aware authoring
 

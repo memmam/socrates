@@ -8,7 +8,7 @@ deterministically: fixed depth, first-best tie-breaking, no randomness, so
 every run produces the identical game (which the golden tests pin, node
 counts and all).
 
-About 500 lines of Socrates in five files:
+About 880 lines of Socrates in five files:
 
 | File | What it does |
 |------|--------------|
@@ -23,7 +23,7 @@ About 500 lines of Socrates in five files:
 From the repository root:
 
 ```sh
-./target/release/socrates demos/checkers/main.soc   # play the game (~15 s)
+./target/release/socrates demos/checkers/main.soc   # play the game (roughly 10-15 s, hardware-dependent)
 ./target/release/socrates test demos/checkers         # golden tests (all five files)
 ```
 

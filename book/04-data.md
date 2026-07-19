@@ -451,7 +451,7 @@ Here `first` is an `Int` — the `None` arm never yields a value because it
 exits `summarize` entirely. This idiom is the workhorse of Socrates error
 handling when the failure case needs its own logic; when it would just be
 `return`, the `?` operator (chapter 6) says the same thing in one character.
-`examples/json.soc` uses both. (Assignment stays statement-only: an arm
+`examples/json.soc` uses the `?` form throughout. (Assignment stays statement-only: an arm
 that assigns still needs a block body, `Some(v) -> { x = v; }`, and the
 error message says so.)
 
@@ -620,5 +620,12 @@ You can now define your own types — structs (named fields, mutable,
 reference semantics) and enums (immutable tagged choices), both generic —
 give them methods and operators, and take them apart with patterns checked
 for exhaustiveness and reachability. The failure cases you modeled with
-`Option` and `Result` get their own toolkit next: combinators, the `?`
-operator, and catchable panics.
+`Option` and `Result` get their own toolkit in chapter 6: combinators, the
+`?` operator, and catchable panics — after a stop in chapter 5 for the
+collection and string types those toolkits lean on.
+
+---
+
+Previous: [Functions and Closures](03-functions-and-closures.md) ·
+Next: [Collections, Strings, and Bytes](05-collections-and-strings.md) ·
+[Back to the index](README.md)

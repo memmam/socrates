@@ -75,7 +75,11 @@ SipHash, borrow-based string/list natives, `strings.Builder` re-backed by a
 `Bytes` buffer, `std.json` over UTF-8 bytes).
 
 Final numbers, complete tree vs the pre-pass binary, interleaved best-of-3
-on the reference container:
+on the reference container (the Method section's "quiet box"; this pass
+predates the best-of-4+ floor the Method section above now states, and is
+not re-run retroactively — see that section's own note that a claimed win
+must beat shared-box noise or be backed by instruction/allocation counts,
+which the sheer size of these deltas satisfies regardless):
 
 | target                       | pre-pass | final  | delta      |
 |------------------------------|---------:|-------:|-----------:|
@@ -143,6 +147,17 @@ and judging against H1 itself (a `bench/BASE` probe) is flat on **all
 four** architectures — Linux and Windows in single runs, macOS by
 multi-sample majority. The dispatch-arm lottery is dead; surface
 minification is unblocked.
+
+(Revalidation note, 2026-07-19: Linux and Windows were judged here on a
+single run apiece, short of the ≥5-sample floor this file now holds
+every local probe to. Per the new-inconclusive-not-negative rule, this
+is retained as an observation, not an adjudicated verdict — same
+template as the H1 macOS lisp+5.1% errata and the H3 for_range residual
+elsewhere in this file. Not re-fired proactively: H1's own per-target
+table above already shows the same flat-on-Linux/Windows,
+majority-flat-on-macOS shape with more samples per architecture, so a
+fresh single-purpose re-run of this specific probe is unlikely to
+overturn the qualitative read.)
 
 (Refinement, PR #82: "dead" is scoped to dispatch-arm changes. A
 data-section shift alone -- six `&'static str` completion entries plus
@@ -236,8 +251,10 @@ aarch64-macos label when macos-14 is actually removed (2026-11-02).
 same ≥5-sample floor before any keep/drop call**, no exception for an
 apparently-clean or apparently-dead result — this closes the second
 half of the same gap: the floor above was written for the CI matrix
-only, but every local probe this project has run (W1a's local check,
-H2, H3, and the post-H1/H3 re-examination probes) used two samples
+only, but every local probe this project has run (W1a's local check —
+a held wave with no results entry of its own; see HISTORY.md's
+"archive/h2-small-list and the W1a hold" — plus H2, H3, and the
+post-H1/H3 re-examination probes) used two samples
 informally, with no floor stated anywhere. Two samples is now
 insufficient for any keep/drop verdict, full stop; a probe that only
 gathered two samples before this rule lands has an inconclusive, not
@@ -376,17 +393,19 @@ obtained by pushing empty commits to the bench branch — the bot
 account's API calls to workflow_dispatch and re-run return 403, so
 "push again" is the sampling mechanism.
 
-(Errata, aarch64-macos enum_match +3.4%: this dismissal rested on
-1-of-2 samples — the mark appeared in sample 1 and was absent in sample
-2 — which was already below the ≥3-run majority the protocol demanded
-at the time, and is further below the ≥5-run floor the protocol demands
-now. Same template as the H1 lisp+5.1% errata above: retained as an
-observation, not an adjudicated verdict. No re-fire is queued — W2's
-merge rested on bench_json's win reproducing in 7 of 7 read job-samples
-across all four arches, not on this row, so the mis-adjudication did
-not change the outcome; it is recorded here because it is the concrete
-instance that motivated tightening the floor, not because the verdict
-is in doubt.)
+(Errata, both adverse marks: each dismissal rested on 1-of-2 samples —
+the mark appeared in sample 1 and was absent in sample 2, for both
+x86_64-windows bench_join_heavy +4.4% and aarch64-macos enum_match
++3.4% — which was already below the ≥3-run majority the protocol
+demanded at the time, and is further below the ≥5-run floor the
+protocol demands now. Same template as the H1 lisp+5.1% errata above:
+both are retained as observations, not adjudicated verdicts. No
+re-fire is queued — W2's merge rested on bench_json's win reproducing
+in 7 of 7 read job-samples across all four arches, not on either row,
+so the mis-adjudication did not change the outcome; it is recorded
+here because aarch64-macos's mark is the concrete instance that
+motivated tightening the floor, not because either verdict is in
+doubt.)
 
 ## Epoch: the bench re-specification (consistency pass)
 
@@ -523,8 +542,10 @@ bring this to 5 without re-opening the merged decision.
 Update, 2026-07-19: that backfill never happened. `bench/
 h3-superinstructions` was merged as PR #89 and deleted along with it —
 it no longer exists — and its commit history at merge time
-(`64dbdc3`/`dca2128`/`6c5e993`/`4bb1a5b`) carries no resample commits
-beyond the original 3 samples this residual was convicted on. The
+(`64dbdc3`/`dca2128`/`6c5e993`/`4bb1a5b` — four commits total,
+implementation and documentation together, not one per sample) carries
+no resample commits beyond the original 3 samples this residual was
+convicted on. The
 promise went unfulfilled, not merely undocumented; this residual's own
 data is still exactly the 3 samples above, short of the current ≥5
 bar. Per the new-inconclusive-not-negative rule, it is retained as an

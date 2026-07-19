@@ -80,8 +80,10 @@ summary: all 56 checks passed
 v0.7 additions: all 31 checks passed
 
 grep /WARN|\d+ms/ sample.txt
+   ...
    3: 2026-07-14 09:12:09 WARN  slow request GET /search 200 1450ms
                           ^^^^                               ^^^^^^
+   ...
       7 of 10 lines match
 ```
 

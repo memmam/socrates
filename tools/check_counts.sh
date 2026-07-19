@@ -92,6 +92,8 @@ if [ -n "$word" ]; then
   # that states the demo-program count updates the two numbers here.
   check "README lines saying '$word'" 4 "$(grep -ci "$word" README.md)"
   check "RELEASE_NOTES lines saying '$word'" 1 "$(grep -ci "$word" .github/RELEASE_NOTES.md)"
+  check "demos/README 'N programs'" "$word" \
+    "$(sed -n 's/^\([A-Za-z-]*\) programs,.*/\1/p' demos/README.md | tr '[:upper:]' '[:lower:]')"
 fi
 
 exit "$fail"

@@ -267,6 +267,17 @@ directives; each of the following is the incident that produced one.
   said "Tiers 2-4 from the audit are being worked in a follow-up," then
   Tier 2, Tier 3, and Tier 4 all landed as further commits on this same
   PR instead — with nothing said about it anywhere but the commit log.
+- **The ~250-builtins false positive (2026-07-19).** A full-tree
+  Markdown audit's book/10-under-the-hood.md finding claimed the live
+  `Native` enum held 224 variants against the book's stated "~250,"
+  flagging an overclaim. Before editing, the fix pass re-derived the
+  count directly from `src/builtins.rs` (a brace-matched scan of the
+  enum body) and got exactly 250 — matching the book precisely, not the
+  audit's own number. No edit was made; the audit's claim, not the
+  book, was wrong. This is the concrete incident behind CLAUDE.md's
+  session-mechanics rule that a delegated audit's factual claims are
+  re-verified against the live repo before being used to justify a fix,
+  never taken as already-verified.
   Roxy caught it mid-merge-attempt: the added commits had been left to
   speak for themselves, and the description sat there actively wrong.
   Produced "when a PR's scope expands past what its description
