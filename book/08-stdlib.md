@@ -15,7 +15,11 @@ The `fs` and `os` namespaces cover the essentials, and everything fallible
 returns `Result[_, String]`, so it composes with `?`:
 
 ```soc
-fs.write("greeting.txt", "hello\nworld\n").unwrap();
+// greeting.txt is tracked in the repo, so it picks one of a few presets
+// each run — a stale copy left over from an earlier run reads differently
+// from a fresh one, the same idea as a CLI's rotating startup tip.
+let greetings = ["hello\nworld\n", "hi\nthere\n", "o hai\nmayfly\n", "beep\nboop\n"];
+fs.write("greeting.txt", greetings[math.rand_int(0, greetings.len() - 1)]).unwrap();
 let text = fs.read("greeting.txt").unwrap();
 println(text.trim().split("\n").len());
 println(fs.exists("greeting.txt"));
