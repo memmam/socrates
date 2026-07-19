@@ -2,7 +2,10 @@
 scratch/
 *.ppm
 # Session-local agent state (settings, isolated worktrees) — never commit.
-.claude/
+# Anchored to the repo root: nested `.claude/CLAUDE.md` stub files
+# elsewhere in the tree (docs/, bench/, demos/, ports/) are checked in on
+# purpose (see root CLAUDE.md's "Where the detailed memory lives").
+/.claude/
 __pycache__/
 # The book's `fs` example (08-stdlib.md) writes here when its snippet runs
 # from the repo root (tests/book_snippets.rs's run_in_dir doesn't chdir).

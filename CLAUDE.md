@@ -332,6 +332,19 @@ numbers: `bench/RESULTS.md`.
   process/history belongs here in `CLAUDE.md` and the files above, never in
   the book).
 
+Each of the four directories above that carries its own detailed-memory
+file (`docs/`, `bench/`, `demos/`, `ports/`) also carries a nested
+`.claude/CLAUDE.md` stub that `@`-imports exactly the file(s) listed for
+it here — no content of its own, just wiring. Claude Code's nested-memory
+mechanism (`/memory`, and Desktop's context-tracker "Memory files" panel)
+only lists CLAUDE.md files it discovers, not `@`-imports (those stay
+inlined into whatever CLAUDE.md references them); a bare content file
+under a subdirectory never gets its own tracked-memory entry on its own.
+The stub is what gives `docs/SPEC.md` and friends a distinct entry
+there, lazily, the first time Claude reads a file in that subdirectory
+in a session — this list stays the single source of truth for what each
+file is *for*; the stub is purely mechanical.
+
 ## Release ledger (source material for release posts)
 
 - **v0.1** — the language: lexer, parser, unification inference with
