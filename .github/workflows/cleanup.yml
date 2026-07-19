@@ -11,6 +11,21 @@ name: Branch cleanup
 # records). Guards: main, archive/*, and claude/* are never deleted,
 # ever; absent branches are skipped; per-branch failures are reported,
 # not fatal.
+#
+# After each run, resolved entries (deleted this run, or already
+# absent) are pruned from CLEANUP_BRANCHES and the trim is pushed
+# straight back to main ([skip ci], so this doesn't chain into another
+# Test run or, via its own path trigger, another cleanup run once
+# there's nothing left to prune). A resolved name left in the file is
+# a real hazard, not just clutter: once some unrelated future branch
+# reuses that name, the *next* cleanup run would delete it on sight,
+# with nobody having reviewed that specific deletion. Comments, failed
+# entries, and protected lines are left in place. First instance of
+# this self-prune: 2026-07-19 (see HISTORY.md) — the direct push to
+# main is unproven against this repo's actual branch-protection rules;
+# if it silently fails, the symptom is entries just piling up the way
+# they did before this existed, not a hazard, so check the workflow's
+# own run log after the first real cleanup if the file isn't shrinking.
 on:
   push:
     branches: [main]
@@ -35,22 +50,48 @@ jobs:
         run: |
           set -u
           deleted=0; skipped=0; failed=0
-          while IFS= read -r b || [ -n "$b" ]; do
-            b="$(echo "$b" | tr -d '[:space:]')"
+          # A full snapshot of live heads, checked by exact line match below --
+          # not `git ls-remote --heads origin "$b"` per-branch, which pattern-
+          # matches loosely enough that a bare name can false-positive against
+          # an unrelated nested ref (e.g. "h2-small-list" against
+          # "archive/h2-small-list"), reporting a branch present when it isn't.
+          live="$(git ls-remote --heads origin | awk '{sub("refs/heads/", "", $2); print $2}')"
+          tmpfile="$(mktemp)"
+          while IFS= read -r line || [ -n "$line" ]; do
+            b="$(printf '%s' "$line" | tr -d '[:space:]')"
             case "$b" in
-              ''|'#'*) continue ;;
+              ''|'#'*)
+                printf '%s\n' "$line" >> "$tmpfile"; continue ;;
               main|archive/*|claude/*)
-                echo "PROTECTED, refusing: $b"; skipped=$((skipped+1)); continue ;;
+                echo "PROTECTED, refusing: $b"; skipped=$((skipped+1))
+                printf '%s\n' "$line" >> "$tmpfile"; continue ;;
             esac
-            if git ls-remote --exit-code --heads origin "$b" > /dev/null 2>&1; then
+            if printf '%s\n' "$live" | grep -qxF "$b"; then
               if git push origin --delete "$b"; then
                 echo "deleted: $b"; deleted=$((deleted+1))
               else
                 echo "FAILED: $b"; failed=$((failed+1))
+                printf '%s\n' "$line" >> "$tmpfile"
               fi
             else
               echo "absent, skipping: $b"; skipped=$((skipped+1))
             fi
           done < .github/CLEANUP_BRANCHES
           echo "== cleanup: $deleted deleted, $skipped skipped, $failed failed =="
+
+          if ! cmp -s "$tmpfile" .github/CLEANUP_BRANCHES; then
+            cp "$tmpfile" .github/CLEANUP_BRANCHES
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/CLEANUP_BRANCHES
+            git commit -m "Prune resolved entries from CLEANUP_BRANCHES [skip ci]
+
+          Removes branch names that were just deleted or found already
+          absent this run, so a name doesn't sit here as a hazard for
+          whatever unrelated branch reuses it later. Failed entries,
+          comments, and protected lines are left in place."
+            git push origin HEAD:main || echo "prune-commit push failed (entries will just carry over to the next run)"
+          fi
+          rm -f "$tmpfile"
+
           [ "$failed" -eq 0 ]
