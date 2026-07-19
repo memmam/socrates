@@ -347,39 +347,49 @@ numbers: `bench/RESULTS.md`.
   process/history belongs here in `CLAUDE.md` and the files above, never in
   the book).
 
-**Decided (PR #107, 2026-07-19):** each of the four directories above
-also gets a nested per-directory `CLAUDE.local.md` stub (bare filename
-— nested `.claude/CLAUDE.md` is not a real discovery path; that's
-reserved for settings/skills/rules, confirmed against Claude Code's
-monorepo docs) that does nothing but `@`-import the file(s) already
-listed for it above. Purely so Claude Desktop's context-tracker "Memory
-files" panel lists `docs/SPEC.md` and friends as their own entries,
-lazily, the first time a session reads a file in that subdirectory. The
-`@`-import is not lazy about *content* — the stub force-loads the
-entire imported file(s) the moment it fires — so this is
-`CLAUDE.local.md`, not `CLAUDE.md`: per `.gitignore`'s `CLAUDE.local.md`
-rule, gitignored and never committed, so the eager-load cost and the
-files themselves stay opt-in per checkout, never imposed on every clone
-or contributor.
+**Decided (PR #107, 2026-07-19; flipped to committed form 2026-07-19):**
+each of the four directories above also gets a nested per-directory
+`CLAUDE.md` stub (bare filename — nested `.claude/CLAUDE.md` is not a
+real discovery path; that's reserved for settings/skills/rules,
+confirmed against Claude Code's monorepo docs) that does nothing but
+`@`-import the file(s) already listed for it above. Purely so Claude
+Desktop's context-tracker "Memory files" panel lists `docs/SPEC.md` and
+friends as their own entries, lazily, the first time a session reads a
+file in that subdirectory. The `@`-import is not lazy about *content*
+— the stub force-loads the entire imported file(s) the moment it fires
+— a real, compounding cost, paid now by every clone and contributor
+rather than opt-in per checkout.
+
+That tradeoff is why this started life as `CLAUDE.local.md`
+(gitignored, personal, opt-in per checkout) rather than committed
+`CLAUDE.md` — the stated plan then was: get the mechanism stable on
+that lower-risk footing first, then phase it into the repo once proven.
+Roxy's later directive did exactly that: flip the four stubs from
+`CLAUDE.local.md` to `CLAUDE.md` and drop the `.gitignore` rule
+entirely, once the mechanism had run clean for a session. Recording the
+correction here rather than deleting the prior record, per "record
+decisions with their scope" above — the earlier PR #107 body text
+elsewhere in git history still describes the gitignored phase
+accurately for what it was at the time.
 
 Consequence, and the reason this is spelled out exactly rather than by
-example: these stubs don't propagate through git — a fresh clone,
-container, or model swap won't have them. Reconstructing them from a
-one-example-plus-inference description is exactly the kind of drift
-this file exists to prevent (see "record decisions with their scope"
-above), so the four files are byte-exact here, not summarized. Each
-stub's content is only the `@` line(s) below; the wrapping HTML-comment
-explaining *why* (visible with the Read tool, stripped from context
-otherwise — see "Block-level HTML comments" in Claude Code's memory
-docs) is optional decoration, not load-bearing, and can be omitted or
-reworded freely on reconstruction:
+example: reconstructing these stubs from a one-example-plus-inference
+description is exactly the kind of drift this file exists to prevent,
+so the four files are byte-exact here, not summarized — useful now for
+verifying the committed files match, and would matter again the moment
+any of them stopped being committed. Each stub's content is only the
+`@` line(s) below; the wrapping HTML-comment explaining *why* (visible
+with the Read tool, stripped from context otherwise — see "Block-level
+HTML comments" in Claude Code's memory docs) is optional decoration,
+not load-bearing, and can be omitted or reworded freely on
+reconstruction:
 
 | File | Content |
 | --- | --- |
-| `docs/CLAUDE.local.md` | `@SPEC.md` / `@ARCHITECTURE.md` / `@RELEASING-macOS.md` |
-| `bench/CLAUDE.local.md` | `@RESULTS.md` |
-| `demos/CLAUDE.local.md` | `@NOTES.md` / `@STYLE.md` |
-| `ports/CLAUDE.local.md` | `@README.md` / `@pyl/CONTRACT.md` / `@icaa/README.md` / `@claudewave/README.md` |
+| `docs/CLAUDE.md` | `@SPEC.md` / `@ARCHITECTURE.md` / `@RELEASING-macOS.md` |
+| `bench/CLAUDE.md` | `@RESULTS.md` |
+| `demos/CLAUDE.md` | `@NOTES.md` / `@STYLE.md` |
+| `ports/CLAUDE.md` | `@README.md` / `@pyl/CONTRACT.md` / `@icaa/README.md` / `@claudewave/README.md` |
 
 (Each `/`-separated entry is its own line in the file, in that order.)
 
