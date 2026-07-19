@@ -200,7 +200,7 @@ fresh demo round. Four items in it were already stale by the time it was
 written: `count_ones`/`leading_zeros`/`trailing_zeros`, `ushr`,
 `rotate_left`/`rotate_right`, `to_hex`, and the Bytes BE pushers/readers +
 `push_bytes`/`push_str` bulk append all landed within v0.7 itself (its late
-efficiency pass pulled them forward — CLAUDE.md's v0.7 ledger has them, this
+efficiency pass pulled them forward — HISTORY.md's v0.7 ledger has them, this
 file's queue didn't get updated to match). Confirmed present before
 starting v0.8, not re-done.
 

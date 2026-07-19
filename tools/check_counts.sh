@@ -2,8 +2,8 @@
 # Prose counts vs. the live suite.
 #
 # The count-bearing sentences — the five spec-count places CLAUDE.md's
-# workflow conventions enumerate (README ×2, CLAUDE.md ×2,
-# RELEASE_NOTES.md), the book executed-of-total claim, the demo-suite
+# workflow conventions enumerate (README ×2, CLAUDE.md ×1, PROJECT.md ×1,
+# RELEASE_NOTES.md ×1), the book executed-of-total claim, the demo-suite
 # count, and the spelled-out demo-program count — are each extracted by
 # an exact anchor below and compared against the live totals. A release
 # draft once shipped saying 311 while the suite stood at 313; this
@@ -48,8 +48,8 @@ check "README 'N golden spec tests'" "$live_spec" \
   "$(sed -n 's/^\([0-9]\{1,\}\) golden spec tests.*/\1/p' README.md)"
 check "README 'own N-test suite'" "$live_spec" \
   "$(sed -n 's/.*own \([0-9]\{1,\}\)-test suite.*/\1/p' README.md)"
-check "CLAUDE 'tests/spec/, N tests'" "$live_spec" \
-  "$(sed -n 's/.*`tests\/spec\/`, \([0-9]\{1,\}\) tests.*/\1/p' CLAUDE.md)"
+check "PROJECT 'tests/spec/, N tests'" "$live_spec" \
+  "$(sed -n 's/.*`tests\/spec\/`, \([0-9]\{1,\}\) tests.*/\1/p' PROJECT.md)"
 check "CLAUDE gauntlet '# N'" "$live_spec" \
   "$(sed -n 's/.*socrates test tests\/spec *# \([0-9]\{1,\}\)$/\1/p' CLAUDE.md)"
 check "RELEASE_NOTES 'pinned: N golden spec tests'" "$live_spec" \
@@ -68,10 +68,10 @@ check "README 'executable book: N of the M' (executed)" "$live_book_exec" \
   "$(sed -n 's/.*\*\*An executable book\.\*\* \([0-9]\{1,\}\) of the [0-9]\{1,\}.*/\1/p' README.md)"
 check "README 'executable book: N of the M' (total)" "$live_book_total" \
   "$(sed -n 's/.*\*\*An executable book\.\*\* [0-9]\{1,\} of the \([0-9]\{1,\}\).*/\1/p' README.md)"
-check "CLAUDE 'N of M execute' (executed)" "$live_book_exec" \
-  "$(sed -n 's/^ *\([0-9]\{1,\}\) of [0-9]\{1,\} execute.*/\1/p' CLAUDE.md)"
-check "CLAUDE 'N of M execute' (total)" "$live_book_total" \
-  "$(sed -n 's/^ *[0-9]\{1,\} of \([0-9]\{1,\}\) execute.*/\1/p' CLAUDE.md)"
+check "PROJECT 'N of M execute' (executed)" "$live_book_exec" \
+  "$(sed -n 's/^ *\([0-9]\{1,\}\) of [0-9]\{1,\} execute.*/\1/p' PROJECT.md)"
+check "PROJECT 'N of M execute' (total)" "$live_book_total" \
+  "$(sed -n 's/^ *[0-9]\{1,\} of \([0-9]\{1,\}\) execute.*/\1/p' PROJECT.md)"
 check "RELEASE_NOTES 'N executed book'" "$live_book_exec" \
   "$(sed -n 's/.*, \([0-9]\{1,\}\) executed book.*/\1/p' .github/RELEASE_NOTES.md)"
 

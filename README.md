@@ -324,7 +324,9 @@ demos/            eighteen field-test programs (lisp, checkers, sudoku,
                   png, synthwave, reversi, swarm, ...) + STYLE.md, NOTES.md
 ports/            transpilation layers + ports (jsl: ICAA; pyl: claudewave)
 bench/            the benchmark harness and results
-CLAUDE.md         project memory: purpose, invariants, release ledger
+CLAUDE.md         session-operating instructions: workflow, gauntlet, git/PR
+PROJECT.md        what Socrates is for, engineering principles, invariants
+HISTORY.md        incident history and the per-release ledger
 ```
 
 ## Testing
@@ -363,7 +365,7 @@ on all three, five native compute backends, `std.glm`, and the deletion of
 the one optional dependency, leaving every build zero-dependency (v0.8).
 Features are pulled in by real use, not pushed by a roadmap; the per-release
 detail is in [`CHANGELOG.md`](CHANGELOG.md), and the project's purpose and
-invariants in [`CLAUDE.md`](CLAUDE.md).
+invariants in [`PROJECT.md`](PROJECT.md).
 
 What remains out of scope — full traits, per-field visibility, a package
 manager, a debugger — stays out until real programs demand it; a language

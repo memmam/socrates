@@ -1,17 +1,19 @@
 # Socrates — project history
 
-`CLAUDE.md` is kept lean on purpose: what's needed to operate a session,
-follow the engineering principles as meant, and regenerate correctly if
-a container is refreshed or a model swaps. This file is where the
+`CLAUDE.md` (session-operating instructions) and `PROJECT.md` (what
+Socrates is for, its engineering principles, and its invariants) are
+kept lean on purpose: what's needed to operate a session, follow the
+engineering principles as meant, and regenerate correctly if a
+container is refreshed or a model swaps. This file is where the
 *historical* half of that content lives instead — the incidents that
 motivated a rule, the sagas behind a corrected decision, and the
 per-release ledger. Nothing here is required to operate correctly today;
 it's the evidence trail for anyone who wants to know why a rule reads
 the way it does, or material for writing a release post.
 
-Read `CLAUDE.md` first. Come here when a rule's own text points here,
-or when writing a release post, or when auditing whether a rule still
-matches the incident that produced it.
+Read `CLAUDE.md` and `PROJECT.md` first. Come here when a rule's own
+text points here, or when writing a release post, or when auditing
+whether a rule still matches the incident that produced it.
 
 ## The rename: Fable → Socrates
 
@@ -24,7 +26,7 @@ extension nods at the system-on-a-chip trajectory of the HDL roadmap.
 Git history preserves the old name; `bench/ab.py` and the Bench A/B
 workflow carry a permanent cross-name fallback that keeps pre-rename
 refs benchable (that fallback is the one operationally-relevant fact,
-and it's stated in `CLAUDE.md` itself).
+and it's stated in `PROJECT.md` itself).
 
 ## Release ledger
 
@@ -131,7 +133,7 @@ per-PR-mapped sibling of this list.
 
 ## Engineering-principle incidents
 
-The rules these motivated are stated plainly in `CLAUDE.md`; this is the
+The rules these motivated are stated plainly in `PROJECT.md`; this is the
 evidence trail behind each.
 
 - **The dispatch-loop codegen lottery.** The recorded instance behind
@@ -172,7 +174,7 @@ evidence trail behind each.
 
 ## Native graphics & compute rollout timeline
 
-The standing roadmap directive in `CLAUDE.md` describes what's still
+The standing roadmap directive in `PROJECT.md` describes what's still
 open (GL-compute) and the settled sequencing/SPIR-V decisions. This is
 the historical account of how the rest of it actually landed.
 
@@ -201,7 +203,7 @@ directives; each of the following is the incident that produced one.
 - **Multi-clone confusion.** Post-rename re-registration is how a
   session first ended up holding more than one clone of the repo at
   once, motivating the "pull the harness-served clone after every
-  CLAUDE.md-touching merge" rule.
+  CLAUDE.md- or PROJECT.md-touching merge" rule.
 - **The 2026-07-18 bulk branch cleanup** is the precedent for "branches
   are deleted only in user-directed cleanups, never unilaterally," and
   for moving anything a standing record references to `archive/*`

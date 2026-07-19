@@ -45,7 +45,7 @@ its sources move with each ref). The **Bench A/B workflow**
 `bench/<name>` branch)
 fans the same script across one runner per tier-1 architecture —
 x86_64-linux, aarch64-linux, x86_64-windows, aarch64-macos — and posts
-each delta table to the run summary. The acceptance rule is CLAUDE.md's
+each delta table to the run summary. The acceptance rule is PROJECT.md's
 universality principle: flat-or-better everywhere, or the idiom keeps
 its primitive.
 
@@ -156,7 +156,7 @@ accordingly.)
 reproduced three times across *two different arm layouts* (H1 and the
 rejected hottest-first reorder), so it is a systematic cost of the
 compact loop on Neoverse, not a placement roll — that bench executes no
-outlined op. Per the CLAUDE.md rule, an irreconcilable per-target
+outlined op. Per the PROJECT.md rule, an irreconcilable per-target
 disagreement is never accepted as a tradeoff: the op bodies live once
 in vm.rs, and an attribute pair binds each target to its
 measured-fastest form — `#[inline(never)]` (compact loop) everywhere
@@ -563,7 +563,7 @@ lottery") artifact class:
   `bench/inline-upvals`'s own tip for single-variable isolation.
   Gathered the full ≥5-sample floor via the hypothesis-test ladder's
   slot protocol (ground, differential, then reprobe-vs-switch each
-  slot after — see CLAUDE.md and the sixth-probe-doctrine paragraph
+  slot after — see PROJECT.md and the sixth-probe-doctrine paragraph
   above): x86_64-linux `for_range` **−5.8% / −5.8% / −1.0% / −5.7% /
   −6.0%**, direction 5/5 favorable (reverting to `Vec<Handle>` reverses
   the regression every time), marked 4/5 — the mirror image of the
@@ -631,7 +631,7 @@ reason; x86_64-windows and aarch64-macos on `InlineUpvals`) are
 confirmed at the current ≥5-sample floor, on both the probe that
 isolated the hypothesis and the fresh matrix that verified the
 formalized binding. First instance of the hypothesis-test ladder
-(CLAUDE.md, under the ≥5-sample-floor bullet) reaching a CONFIRMED
+(PROJECT.md, under the ≥5-sample-floor bullet) reaching a CONFIRMED
 verdict end to end — see `bench/inline-upvals-x64-probe`'s commit
 history for the full slot-by-slot record.
 

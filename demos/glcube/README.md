@@ -10,7 +10,7 @@ a single pixel read-back.
 
 ## Why pixel spot-checks, not a framebuffer hash
 
-CLAUDE.md's own convention: GL rendering (like seeded randomness) is
+PROJECT.md's own convention: GL rendering (like seeded randomness) is
 **stable only within a release, not across** — driver, GPU, and even
 software-rasterizer versions can shift antialiasing and sub-pixel
 rounding at triangle edges. Hashing the whole framebuffer would pin all of
