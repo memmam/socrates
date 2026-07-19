@@ -429,7 +429,7 @@ read. Rough map, in pipeline order:
 | `src/vm.rs` | the dispatch loop, call frames, upvalues, GC checkpoints, stack traces |
 | `src/value.rs` | runtime values, heap objects, and the mark-sweep collector itself |
 | `src/natives.rs` | implementations of the ~250 builtin functions and methods |
-| `src/dis.rs` | the disassembler (it's 124 lines — a good first file) |
+| `src/dis.rs` | the disassembler (it's 142 lines — a good first file) |
 
 `docs/ARCHITECTURE.md` covers the same ground as this chapter from a
 maintainer's perspective, with the design rationale spelled out.

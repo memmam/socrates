@@ -203,6 +203,30 @@ their place fastest.
   returning 403 for the bot account; re-check on any App permission
   change). A workaround recorded without the triple is exactly the
   gap the reflexive codification audit exists to catch.
+- **`std` surface is earned, never speculative, and named for what it
+  actually does.** `std` grows reluctantly — the rule `demos/NOTES.md`
+  established across the v0.6/v0.7 rounds, restated here as project-wide
+  rather than demos-local: a module ships only the operations a real
+  caller needs right now, not the operations that would make it feel
+  complete. A decode/round-trip/reverse of an encode-only need, with no
+  consumer beyond its own test, is speculative surface — cut it, don't
+  keep it "for symmetry." The same reluctance runs backward, not just
+  forward: a demo that has become strictly a self-contained format/file
+  generator, with no demo-specific logic left in it, is a promotion
+  candidate the moment an audit notices it, not something grandfathered
+  because it already shipped — split it into the smallest reusable
+  pieces rather than moving it wholesale, and turn any call-site-specific
+  tuning it hardcoded (a block size, a buffer constant) into an explicit
+  parameter rather than a std-level default, so the promotion changes
+  nothing about what any existing caller produces. And a name is a
+  claim: a std/public function or module named after a well-known
+  algorithm or format must actually do what that name implies — if it
+  isn't literally what the name says (a "deflate" that never runs
+  LZ77/Huffman, say), rename it to what it actually is or coin a name
+  that doesn't collide, rather than let the name overclaim. First
+  instances of all three: the `std.wav` decode-trim, the six-module
+  demo→std promotion wave, and `zlib.deflate_stored`/`inflate_stored` →
+  `wrap`/`unwrap` — `HISTORY.md` has the story.
 
 ## Native graphics & compute roadmap (standing directive)
 

@@ -243,6 +243,22 @@ numbers: `bench/RESULTS.md`.
     a partial or ambiguous description (one example generalized by
     inference, say) is where drift creeps in between sessions or across
     a model swap.
+  - **Route a session's lessons by content, not by convenience.** A
+    lesson learned mid-session defaults to whichever file is already
+    open, which is how CLAUDE.md accumulates content that was never
+    session-operating-instructions to begin with. Before writing
+    anything down, ask which of the files in "Where the project's
+    memory lives" the content is actually *about* — an engineering
+    principle or a rubric that decides close calls goes to PROJECT.md,
+    the incident/narrative behind it goes to HISTORY.md, a per-release
+    fact goes to CHANGELOG.md, a demo house rule goes to demos/STYLE.md
+    (or its ledger in demos/NOTES.md) — then apply PROJECT.md's own
+    four-step codification act to land it there, not here, unless the
+    content genuinely is about session mechanics itself (the rule
+    directly above this one). When a lesson reinforces a rule that
+    already exists elsewhere, strengthen or cross-reference that
+    existing statement instead of writing a parallel near-duplicate in
+    whichever file happens to be open.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,

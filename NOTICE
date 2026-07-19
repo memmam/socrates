@@ -48,3 +48,9 @@ ports/icaa/ is a Socrates-language port of ICAA (Isoline-Coverage
 Anti-Aliasing) from https://github.com/SkyeShark/icaa-antialiasing,
 Copyright (c) 2026 ICAA contributors, used under the MIT License. The
 original license text accompanies the port at ports/icaa/LICENSE-upstream.
+
+https://github.com/SkyeShark/claudewave and
+https://github.com/ayghri/i-have-adhd were also drawn on more generally
+over the course of this project's development — informing language and
+spec expansion and demo production across the project as a whole, not
+limited to any one port or demo.

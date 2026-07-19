@@ -105,8 +105,8 @@ prevent with a `match`.
 ## What panics, and what you see
 
 A panic is a runtime error that unwinds the stack and aborts with exit code
-70, a message, and a trace. The built-in operations that panic all do so on
-conditions a program can usually check for first:
+70, a message, and a trace. Most are conditions a program can usually check
+for first:
 
 - indexing a list, string, or `Bytes` out of bounds, or a map with a
   missing key via `[]` (use `get`, which returns an `Option`);
@@ -114,6 +114,10 @@ conditions a program can usually check for first:
 - integer division or modulo by zero, and integer overflow;
 - an explicit `panic("message")`, or `assert` / `assert_eq` failing;
 - a shift count outside `0..=63`.
+
+One is a resource limit instead of a checkable condition: non-tail
+recursion deep enough to exhaust the stack (the caught-stack-overflow
+example above shows the VM surviving one via `try`).
 
 ```soc panics
 let xs = [10, 20, 30];

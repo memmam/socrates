@@ -644,7 +644,7 @@ these modules follow the same visibility rules as user code.
 | `std.zlib` | An RFC 1950 stream wrapping raw bytes in an RFC 1951 **stored** (uncompressed) deflate block (v0.9): `wrap(raw, block_size) -> Bytes`, `unwrap(z) -> Result[Unwrapped, String]` (`Unwrapped { data, blocks, adler_ok }`). Named `wrap`/`unwrap`, not `deflate`/`inflate`: those verbs imply real LZ77/Huffman compression, which never happens here — every byte in comes out unchanged, just framed as a valid stream. Not a general zlib/deflate codec (no Huffman-coded blocks, ever) — promoted unchanged in behavior from `demos/png/zlib.soc`'s `deflate_stored`/`inflate_stored`, renamed for accuracy. |
 | `std.png` | The PNG container format (v0.9): `signature() -> Bytes`, `chunk(name, data) -> Bytes`, `encode(w, h, pixels, block_size) -> Bytes` (8-bit RGB, filter 0, `std.zlib`-stored IDAT — no compression), `parse(file) -> Result[Parsed, String]` (re-verifies every checksum). Promoted from `demos/png/png.soc`, unchanged except `encode` taking `block_size` as an explicit parameter instead of a hardcoded module constant (the constant was a demo-specific choice, not a std-level default). |
 
-### 7.2 The gpu namespace (v0.7, experimental, feature-gated)
+### 7.2 The gpu namespace (v0.7; native backends added v0.8, feature-gated)
 
 The `gpu` namespace dispatches compute shaders. It has five backends,
 all **native and zero-dependency** (since v0.8): **Metal** (MSL kernels;
@@ -661,11 +661,14 @@ Linux/Windows; no CUDA toolkit involved, the driver JITs the PTX), and
 **Direct3D 12** (HLSL kernels via `gpu.run`, compiled at dispatch time
 by the OS's own `d3dcompiler_47.dll`; COM-vtable FFI over runtime-loaded
 system DLLs, behind the `d3d12` feature on Windows — where WARP, the
-OS's software adapter, guarantees a device on every machine). Where
-several are compiled in, the precedence is vulkan > d3d12 > cuda >
-opencl (the CI-proven universal path first, then the always-has-a-device
-Windows path, then the vendor GPU path, then OpenCL, which commonly
-resolves to a CPU implementation). The original **wgpu** path (WGSL
+OS's software adapter, guarantees a device on every machine). Metal's
+platform gate (Apple Silicon macOS only) never overlaps with the other
+four's (Linux/Windows only), so metal is simply the active backend
+whenever it's compiled in. Among vulkan/d3d12/cuda/opencl, where several
+are compiled in, the precedence is vulkan > d3d12 > cuda > opencl (the
+CI-proven universal path first, then the always-has-a-device Windows
+path, then the vendor GPU path, then OpenCL, which commonly resolves to
+a CPU implementation). The original **wgpu** path (WGSL
 shaders behind a `gpu` cargo feature — v0.7's one quarantined
 dependency) was **removed in v0.8** when this native coverage landed,
 per `PROJECT.md`'s roadmap: every build of Socrates is now zero-dependency
@@ -680,7 +683,7 @@ gracefully as described below.
 | `gpu.adapter_info()` | `fn() -> String` | `"<name> (<backend>)"`, `"no adapter"`, or `"gpu support not compiled in"`. Never empty |
 | `gpu.run(src, input, out_len, wx, wy, wz)` | `fn(String, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | one compute dispatch of source-text `src` — MSL on the metal backend, PTX on the cuda backend, HLSL on the d3d12 backend (the ABIs below). The binary backends (vulkan, opencl) `Err` redirecting to `gpu.run_spirv`. Without a backend: `Err("gpu support not compiled in (build with --features metal on Apple Silicon macOS, --features d3d12 on Windows, or --features vulkan, cuda, or opencl on Linux/Windows)")` |
 | `gpu.run_spirv(spirv, input, out_len, wx, wy, wz)` | `fn(Bytes, Bytes, Int, Int, Int, Int) -> Result[Bytes, String]` | (v0.8) `gpu.run`'s `Bytes`-shader sibling — SPIR-V is a binary format, so the blob rides the buffer type (a sibling, not an overload: Socrates has neither default parameters nor overloading). Ingested natively by the vulkan and opencl backends — each in its own SPIR-V *profile* (the two ABI paragraphs below; the blobs are not interchangeable); other backends `Err` naming the entry point they want |
-| `gpu.backend()` | `fn() -> String` | (v0.8) `"metal"`, `"vulkan"`, `"d3d12"`, `"cuda"`, `"opencl"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (vulkan > d3d12 > cuda > opencl). The `gpu` analog of `win.backend_name()`: branch on it to pick the kernel dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
+| `gpu.backend()` | `fn() -> String` | (v0.8) `"metal"`, `"vulkan"`, `"d3d12"`, `"cuda"`, `"opencl"`, or `"none"` — which implementation the `gpu` namespace dispatches to in this build (metal, when compiled in, is always active; among the rest, vulkan > d3d12 > cuda > opencl — see the precedence note above). The `gpu` analog of `win.backend_name()`: branch on it to pick the kernel dialect and entry point — and, for `gpu.run_spirv`, the SPIR-V profile |
 
 Every failure is an `Err` value, never a panic: bad arguments, no adapter,
 shader compile/validation errors (their messages pass through), device loss.
@@ -1270,9 +1273,14 @@ OS/GPU resource: a `Window` that is garbage-collected without an explicit
 `close()` runs, so a program that opens and discards many windows in a loop
 actually reclaims them as it goes.
 
-`key_down(String) -> Bool` (is the named key currently held down; names are
-X11 keysym names — lowercase letters like `"w"`, `"a"`; an unrecognized name
-returns `false` rather than erroring), `mouse_pos() -> (Float, Float)` (last
+`key_down(String) -> Bool` (is the named key currently held down; the common
+single-character and named-key spellings — lowercase letters like `"w"`,
+`"a"`, plus names like `"space"`/`"escape"`/arrow keys — work the same on
+every backend, but the underlying name space is backend-specific: X11 keysym
+names on Linux, a small hand-written table on Windows, and
+`NSEvent.charactersIgnoringModifiers` text on macOS — see the per-backend
+notes above (§ 7.3); an unrecognized name returns `false` rather than
+erroring), `mouse_pos() -> (Float, Float)` (last
 known pointer position within the window, updated by `poll()`; `(0.0, 0.0)`
 before the first pointer motion), `width() -> Int` / `height() -> Int`
 (current window size in pixels, updated by `poll()` on a resize),

@@ -122,8 +122,8 @@ synthesized land on the frequencies it intended.
 Reading a spectrum almost always means magnitude, not raw re/im — a
 signal alternating every other sample puts all its energy in one bin.
 The `magnitude` helper lives in `std.fft` (pure Socrates — it is the
-`sqrt(re²+im²)` one-liner, packaged), which also wraps `rfft` so the
-`fft.` spellings survive the import:
+`sqrt(re²+im²)` one-liner, packaged), which also wraps `rfft`/`ifft` so
+the `fft.` spellings survive the import:
 
 ```soc
 import std.fft;
