@@ -18,8 +18,8 @@ per-release account.
   native graphics/compute roadmap, and the invariants. Check it before an
   engineering-judgment call, before a change that might touch an
   invariant, or before touching the graphics/compute roadmap.
-- `HISTORY.md` — the incident narratives and sagas behind corrected
-  decisions behind this file and PROJECT.md. Check it when a rule
+- `HISTORY.md` — the incident narratives and sagas behind the rules and
+  corrected decisions in this file and PROJECT.md. Check it when a rule
   points here, or when auditing whether a rule still matches the
   incident that produced it.
 - `CHANGELOG.md` — the per-release account: feature lists, benchmark

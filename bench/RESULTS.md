@@ -103,7 +103,9 @@ turned it into −21% on checkers before the pass shipped.
 
 ## The dispatch restructure (H1) and the four-arch gate
 
-The "run() is a codegen lottery" headroom item is resolved. The trigger
+The "run() is a codegen lottery" headroom item is resolved for
+dispatch-arm changes (the rodata/data-section sub-case remains live on
+x86_64-linux — see the Refinement note below). The trigger
 was the minification pass's first wave (moving `fft.magnitude` to std):
 removing one mid-enum `Native` variant — no semantic change — swung
 dispatch-heavy targets ±5–14% on one box and scattered *different*

@@ -48,7 +48,7 @@ sampling with half-texel centers, three.js r178 sRGB constants, Rec. 601
 luma, f64 everywhere, source expression order preserved — no algebraic
 simplification).
 
-Enforced by CI on every push (the `Test` job's ICAA steps — each
+Enforced by CI on every push (the `Test (stable)` job's ICAA steps — each
 comparison is `reference/compare.mjs`'s `max_diff=0` gate over every
 8-bit RGB component):
 

@@ -31,8 +31,8 @@ Hello, Socrates!
 
 Parameter annotations are not optional. Inference works everywhere else, but
 a named function's signature is its contract, and Socrates insists you write it
-down — `fn double(x) -> Int` is a parse error: ``error[E0200]: expected `:`
-(parameter types are required)``.
+down — `fn double(x) -> Int` is a parse error: `` error[E0200]: expected `:`
+(parameter types are required), found `)` ``.
 
 ## The return type defaults to `Unit`
 

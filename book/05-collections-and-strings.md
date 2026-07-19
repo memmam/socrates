@@ -330,6 +330,11 @@ The one exclusion: values containing functions can't be keys (there is no
 sensible equality for closures). The compiler rejects it when the key type
 is written out, and the runtime panics if one sneaks in through a generic.
 
+One behavioral caveat, not an exclusion: map keys are hashed at insertion,
+so mutating a list, map, or struct after using it as a key strands the
+entry — it still counts toward `len()` and appears in `keys()`, but no
+lookup can reach it. Don't mutate values used as keys.
+
 ## Ranges
 
 You met `a..b` (half-open) and `a..=b` (inclusive) as `for`-loop fodder in

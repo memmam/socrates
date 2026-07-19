@@ -1,7 +1,7 @@
 # mini-lisp — a Lisp interpreter written in Socrates
 
 A small, classic tree-walking Lisp: an s-expression reader, an evaluator
-with lexical closures, and a handful of builtins — about 450 lines of
+with lexical closures, and a handful of builtins — about 585 lines of
 Socrates. The demo runs six sample Lisp programs from `programs/*.lisp`,
 printing each program's source and every top-level result.
 

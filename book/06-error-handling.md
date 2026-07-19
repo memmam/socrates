@@ -113,7 +113,10 @@ for first:
 - `unwrap()` / `unwrap_err()` on the wrong variant;
 - integer division or modulo by zero, and integer overflow;
 - an explicit `panic("message")`, or `assert` / `assert_eq` failing;
-- a shift count outside `0..=63`.
+- a shift count outside `0..=63`;
+- `Float.to_int()` on NaN or a value outside `Int`'s range;
+- a negative exponent to `Int.pow()`;
+- comparing (`==`) values whose map nesting exceeds 64 levels.
 
 One is a resource limit instead of a checkable condition: non-tail
 recursion deep enough to exhaust the stack (the caught-stack-overflow

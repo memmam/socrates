@@ -254,8 +254,9 @@ zero-dependency (see `HISTORY.md` for how the rollout sequenced). The
 one item still to build is GL-compute, if a concrete need appears.
 Settled decisions:
 
-- **Sequencing:** finish the Metal arc first (PR5's graphics phases, then
-  Metal *compute* reusing the same device/queue machinery), then Vulkan
+- **Sequencing:** finish the Metal arc first (the Metal window/gfx
+  surface's phased rollout, then Metal *compute* reusing the same
+  device/queue machinery), then Vulkan
   (compute, then graphics), then OpenCL / CUDA / DirectX. The shared core
   is extracted as each second-of-its-kind backend lands — abstractions
   shaped by real duplication, not guessed up front.

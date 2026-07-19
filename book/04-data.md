@@ -159,7 +159,7 @@ failed: cannot divide 10 by zero
 
 Both types also carry combinator methods (`unwrap_or`, `map`, `and_then`,
 and friends) for when a full `match` is more ceremony than you need; the
-standard library chapter covers them.
+error-handling chapter covers them.
 
 ## The pattern language
 
