@@ -591,6 +591,32 @@ reworded freely on reconstruction:
     bash loop (`sleep` + a status check, capped at enough iterations to
     cover one run), and only ends its turn once it has an actual result
     or has exhausted the cap — never on a bare "standing by."
+  - **A signal is a prompt to check, not a substitute for checking.**
+    A task-notification, webhook event, or elapsed check-in interval
+    means "go verify the actual state now" — not "the state is
+    whatever the signal implies." Recorded instance (2026-07-18): a
+    combined-status API call returned zero checks on a repo that
+    reports exclusively through the newer Checks API, and that empty
+    result was read as "still pending" rather than as a wrong-tool
+    warning sign — two PRs sat fully green while a scheduled check-in
+    was awaited instead of a direct look. The fix is procedural, not a
+    one-off: when a check comes back ambiguous, empty, or merely
+    "not yet," the next move is a *different, more direct* query
+    against the actual repo/CI state (the Checks API here, but the
+    general shape — go to the source of truth, don't wait on the
+    signal layer to resolve itself) — not another wait cycle.
+  - **A wakeup firing is never a terminal, silent event.** Every
+    scheduled check-in resolves in exactly one of two states, in
+    order: (1) check whatever pending status it was armed for
+    directly, act on what's found, and — if work still remains —
+    schedule the next wakeup before the turn ends, so the loop never
+    dies silently between firings; (2) if nothing further is
+    automatable (a decision needs the user, or the work is genuinely
+    done), end the turn by saying so explicitly, never with just tool
+    calls and no wakeup and no closing status. Recorded instance
+    (2026-07-18): a check-in armed for in-flight bench-matrix samples
+    went quiet with the work unfinished and no follow-up wakeup armed
+    — the user had to notice the stall and ask.
   - **Anything structural or behavioral about how memory itself is
     configured** — CLAUDE.md/CLAUDE.local.md conventions, what gets
     committed vs. gitignored, nested-stub patterns and their exact
