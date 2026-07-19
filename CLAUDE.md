@@ -197,7 +197,24 @@ numbers: `bench/RESULTS.md`.
     release-by-PR pattern: a user-directed PR edits
     `.github/CLEANUP_BRANCHES`, and `cleanup.yml` (contents: write;
     refuses `main`, `archive/*`, `claude/*`) performs the deletions
-    when the change lands on main.
+    when the change lands on main. **Proposing that PR is automated (a
+    weekly Routine); merging it is not.** The Routine only ever lists
+    branches verified merged into `main`
+    (`git merge-base --is-ancestor <branch> main`) — nothing is lost
+    by deleting a merged branch's ref, since `main` already carries
+    the content, so no `archive/*` step applies to these — and
+    cross-checks each candidate isn't named as a live navigation
+    target in `HISTORY.md`/`PROJECT.md`/`CLAUDE.md`/`bench/RESULTS.md`
+    (a coincidental mention of the name as a concept or event, not an
+    instruction to check the branch out, doesn't block it). An
+    unmerged branch is never auto-included: per "non-landing work
+    stays pushed" below, it may be a deliberately-preserved dropped
+    probe or held wave (see "Non-landing work is pushed for
+    durability" under Workflow conventions above), and that call
+    needs a human each time, not a schedule — the Routine surfaces
+    any such branches in its PR
+    description for a human to decide, rather than silently acting on
+    or silently ignoring them.
   - A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
   - Never run bare `cargo fmt` — the tree has never been through it,

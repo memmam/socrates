@@ -142,6 +142,17 @@ directives; each of the following is the incident that produced one.
   are deleted only in user-directed cleanups, never unilaterally," and
   for moving anything a standing record references to `archive/*`
   first.
+- **The 2026-07-19 cleanup and the weekly sweep it produced.** Roxy
+  asked for a cleanup and for cleanups to become automated going
+  forward. Nineteen merged branches (PR #116) were the first instance
+  of the merged-only test — `git merge-base --is-ancestor` before
+  listing, so the `archive/*` step never applies (main already carries
+  a merged branch's content) — while four unmerged branches
+  (`bench/h1-binding-recheck`, `bench/inline-upvals`,
+  `bench/inline-upvals-x64-probe`, `probe-cmp-branch`) were left for a
+  human, matching "non-landing work stays pushed." That merged/unmerged
+  split, not "is it referenced," is what a weekly Routine can safely
+  run unattended — proposing the PR, never merging it.
 - **The whole-tree `cargo fmt` measurement (2026-07-18):** running
   `cargo fmt --check | grep -c '^Diff in'` on this tree found hundreds
   of hunks across the whole codebase, confirming the tree has never
