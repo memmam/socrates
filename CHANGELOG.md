@@ -249,11 +249,13 @@ actually enforces — and, landing with them, the rename:
   Side Effects* — the Plato/*Common Side Effects* overlap was a real
   factor in picking this name over the other legally-clear candidates,
   not a coincidence noticed after the fact. "Timaeus" was considered
-  and provisionally set aside for the eventual top-of-stack agent —
-  not locked in, and that agent may end up named, and living,
-  elsewhere entirely; Socrates' own claim on the name is what's
-  historical here, not a commitment about what gets built later or
-  where. The `.soc`
+  as a candidate too, itself an intentional reference — the Homestuck
+  chat-handle convention (two-word camelCase handles, e.g.
+  "timaeusTestified") is why the name was on the table at all — and
+  was provisionally set aside for the eventual top-of-stack agent: not
+  locked in, and that agent may end up named, and living, elsewhere
+  entirely; Socrates' own claim on the name is what's historical here,
+  not a commitment about what gets built later or where. The `.soc`
   extension nods at the system-on-a-chip trajectory of the HDL roadmap.
   Git history
   preserves the old name; `bench/ab.py` and the Bench A/B workflow keep a
