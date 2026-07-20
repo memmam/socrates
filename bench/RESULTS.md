@@ -715,7 +715,16 @@ history for the full slot-by-slot record.
   the dispatch codegen lottery — as killed on Linux/Windows by H1.**
   New evidence, not a re-litigation of the old: a fresh implementation
   (`EqJumpIfFalse`/`LtJumpIfFalse`/`LeJumpIfFalse`/`GtJumpIfFalse`/
-  `GeJumpIfFalse`, five fused ops, same jump-safety machinery H3 uses)
+  `GeJumpIfFalse`, five fused ops, same jump-safety machinery H3 uses —
+  each op computes its comparison and branches directly, popping both
+  operands without ever materializing the Bool on the stack, unlike the
+  unfused pair's separate compare-then-`JumpIfFalse`; the one compiler
+  subtlety worth keeping on record if this is ever rebuilt: the
+  fuse-time jump-offset remap needs a 2-old-slot base distance for
+  these five ops, not the 1-slot base every other fused/jump op uses,
+  because the offset was captured from a `JumpIfFalse` that sat one old
+  slot *after* the pair's own recorded index — getting that wrong
+  silently miscompiles jump targets rather than failing loudly)
   was built and measured on the current x86_64-linux post-H1/H3 tree, 5
   local samples (the current floor): arith_loop +11.4..+13.2%,
   float_loop +5.9..+6.8%, list_ops +3.9..+11.3%, bitwise_masks
@@ -730,9 +739,12 @@ history for the full slot-by-slot record.
   *removing* an arm; this shows *adding* arms revives an equivalent
   layout sensitivity, post-H1. DROP reconfirmed, on new grounds, not
   the old lottery premise — the fusion itself was never the problem in
-  either era; arm-count churn to `run()` is. Implementation archived on
-  branch `probe-cmp-branch` (never merges), same H2/h3-probe-no-glc
-  precedent. **Scope note: measured on x86_64-linux only** — the other
+  either era; arm-count churn to `run()` is. Full implementation detail
+  is above, not on a branch — `probe-cmp-branch` (never merges) is
+  retired per the branches-live-and-die-within-a-shot policy (2026-07-20,
+  CLAUDE.md session mechanics): a probe's job ends when its finding is
+  written up, not when someone later judges the ref safe to delete.
+  **Scope note: measured on x86_64-linux only** — the other
   three architectures were not run, so this DROP rests on one arch's
   data, unlike this file's other four-arch verdicts. H1 itself
   establishes that this class of layout regression scatters
@@ -748,10 +760,20 @@ history for the full slot-by-slot record.
   new map_ops +4.4% there) and broke x86_64-linux (enum_match −3.1% →
   +4.6%, bench_display +6.7%). Arm order on top of H1 is a pure dice
   roll; H1's source order stands.
-- An inline-small-list `Obj::List` representation (`ListInline { len,
+- An inline-small-list `Obj::List` representation (`ListInline { len: u8,
   slots: [Value; 3] }` as a second flattened variant — N=3 the largest
-  capacity keeping `Obj` at its existing 64 bytes, capacity-based spill
-  to the heap `Vec`). The mechanism works: bench_list_churn improved
+  capacity keeping `Obj` at its existing 64 bytes, chosen because 97.3%
+  of lists die at len ≤ 3 in the movegen-heavy instrumentation run.
+  Every list constructor goes through one `list_from_vec` entry point
+  that inlines by the source `Vec`'s *capacity*, not its length — a
+  native that pre-sizes before filling (map, filter, zip, entries — the
+  rooting discipline needs the list heap-resident while a user callback
+  runs) keeps its heap `Vec` rather than having a deliberately-sized
+  allocation thrown away and re-grown push by push. Every read (index,
+  iterate, equal, hash, display) goes through one `list_slice` view so
+  the two representations stay observably identical; a spilled list
+  never converts back to inline on shrink, by design — no thrash at the
+  boundary.) The mechanism works: bench_list_churn improved
   −7.3%/−7.8% across two interleaved samples. The *target* did not:
   checkers moved −0.2%/−0.1% — its 13.0M movegen allocations are real
   (measured: 96.9% of lists die at len ≤ 2) but tcache-cheap, so
@@ -767,8 +789,12 @@ history for the full slot-by-slot record.
   bench_list_churn rewards — append the sighting here, dated, with
   the row that showed it. Enough accumulated sightings across
   *different* cases pushes H2 back over the edge for a fresh look;
-  the full implementation (gauntlet-green, goldens byte-identical)
-  is archived on branch `archive/h2-small-list` as the starting point.
+  the full implementation detail needed to rebuild it is above, not on
+  a branch — `archive/h2-small-list` is retired per the
+  branches-live-and-die-within-a-shot policy (2026-07-20, CLAUDE.md
+  session mechanics), same as `probe-cmp-branch` above: a reopening
+  starts from this entry's own detail, not from checking out a ref that
+  was already 80+ commits stale before it went.
   Sightings so far: none beyond bench_list_churn itself.
   (Revalidation note, 2026-07-18: the local A/B behind this DROP used
   two samples — checkers −0.2%/−0.1%, list_churn −7.3%/−7.8%, display
