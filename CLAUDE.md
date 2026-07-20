@@ -1,16 +1,14 @@
-# Socrates — session operating instructions
+# Session operating instructions
 
-Socrates is a zero-dependency Rust interpreter for an AI-native
-programming language. This file holds only what's needed to operate a
-session correctly and regenerate correctly if a container is refreshed or
-a model swaps: where the project's memory lives, the verification
-gauntlet, and the git/PR/session workflow conventions. `PROJECT.md` holds
-what Socrates is *for*, the engineering principles that decide close
-calls, the native graphics/compute roadmap, and the invariants that must
-never break — check it before any engineering-judgment call, and before
-touching anything the invariants guard. `HISTORY.md` holds the incident
-narratives behind the rules in both files; `CHANGELOG.md` holds the
-per-release account.
+This file holds what's needed to operate any Claude Code session
+correctly and regenerate correctly if a container is refreshed or a
+model swaps: the universal session-mechanics rules and the git/PR/
+session workflow conventions. It deliberately holds nothing that's
+true of this particular project alone — `PROJECT.md` is where that
+lives: what the project is *for*, its own engineering principles, its
+own invariants, its own concrete verification gauntlet, and its own
+file map. `HISTORY.md` holds the incident narratives behind the rules
+in both files; `CHANGELOG.md` holds the per-release account.
 
 The reason any of this is written down, rather than trusted to a
 model's own memory, is structural: a session's reasoning does not
@@ -21,121 +19,48 @@ something already: a corrected misunderstanding, a decision's
 rationale, an incident's shape, captured before the session that
 produced it ends. Every rule below exists so the next instance works
 from that residue instead of re-deriving it, or re-making the same
-mistake, from nothing (2026-07-20).
+mistake, from nothing.
 
-## Where the project's memory lives
+## Where this project's memory lives
 
-- `PROJECT.md` — what Socrates is for, the engineering principles, the
-  native graphics/compute roadmap, and the invariants. Check it before an
-  engineering-judgment call, before a change that might touch an
-  invariant, or before touching the graphics/compute roadmap.
-- `HISTORY.md` — the incident narratives and sagas behind the rules and
-  corrected decisions in this file and PROJECT.md. Check it when a rule
-  points here, or when auditing whether a rule still matches the
-  incident that produced it.
-- `CHANGELOG.md` — the per-release account: feature lists, benchmark
-  deltas, and mechanism detail, one `## vX.Y.Z` heading per release
-  with one bullet per feature/fix underneath — the entry is the unit
-  of account, not the PR count behind it (see HISTORY.md for how that
-  stopped holding at v0.8). Check it for release-post material or the
-  full story behind any rename or shipped feature a rule only mentions
-  in passing. **Once a release is git-tagged, its entry is historical
-  record, not a live draft: a factual error found later gets a dated,
-  explicit appended correction, never a silent in-place rewrite** —
-  the same discipline HISTORY.md applies to its own incident
-  narratives. Only the current untagged section (the one still being
-  written toward the next tag) is freely editable.
-- `docs/SPEC.md` — the normative language reference (`(vN)` tags mark when a
-  feature landed).
-- `docs/ARCHITECTURE.md` — implementation internals, module by module.
-- `docs/RELEASING-macOS.md` — one-time setup to turn on Developer ID signing +
-  notarization for the macOS demo-zoo binaries (the six repo secrets).
-- `bench/RESULTS.md` — the bench method and instrument facts, the standing
-  numbers, the negative-results ledger (measured and rejected — do not
-  re-attempt without new evidence; an entry may instead carry a
-  **standing watch**: dated sightings of its trigger signal accumulate
-  in the entry itself, and enough of them across genuinely different
-  cases re-opens the item — the inline-small-list entry is the first),
-  the known-headroom list, and the epoch
-  bridge that keeps pre-/post-re-specification numbers comparable. No
-  other file holds any of these.
-- `demos/NOTES.md` — the field-test triage ledgers: every papercut demo
-  authors hit, and whether it was fixed / documented / declined. The raw
-  material for "what usage pulled in" in a release post.
-- `demos/STYLE.md` — best-practice house rules distilled from the demo
-  rounds (golden discipline, determinism, bitwise, workers, std collections).
-- `ports/README.md` (the programme and the `jsl` layer), `ports/pyl/CONTRACT.md`
-  (the `pyl` layer's contract), and the per-port `ports/icaa/README.md` /
-  `ports/claudewave/README.md` — the porting programme (SkyeShark's ICAA in
-  `jsl`; claudewave in `pyl`), each README describing exactly what CI
-  enforces when cross-validating that port against its upstream. (`jsl`
-  has no doc file of its own; it is documented in `ports/README.md` and by
-  its consumer, icaa.)
-- `book/` — the language book (a teaching resource, **not** a project diary;
-  process/history belongs in `CLAUDE.md`, `PROJECT.md`, `HISTORY.md`, or
-  `CHANGELOG.md`, never in the book).
+A project's memory conventionally splits across several files: this
+file for session-operating instructions, a project-specifics file
+(`PROJECT.md` by convention) for what the project is *for* and its own
+engineering principles and invariants, an incident-history file
+(`HISTORY.md`) for the narratives and sagas behind corrected decisions,
+and a changelog (`CHANGELOG.md`) for the per-release account.
+**`PROJECT.md` has this project's actual file map** — every file that
+holds part of its memory, what each one is for, and when to check it
+before an engineering-judgment call or a change that might touch an
+invariant. Check `PROJECT.md`'s map before assuming a fact isn't
+written down somewhere.
 
-Each of the four directories above (`docs/`, `bench/`, `demos/`, `ports/`)
-also gets a nested per-directory `CLAUDE.md` stub (bare filename — nested
-`.claude/CLAUDE.md` is not a real discovery path; that's reserved for
-settings/skills/rules) that does nothing but `@`-import the file(s)
-already listed for it above, so Claude Desktop's context-tracker "Memory
-files" panel lists `docs/SPEC.md` and friends as their own entries. The
-`@`-import is not lazy about *content* — the stub force-loads the entire
-imported file(s) the moment it fires, a real, compounding cost paid by
-every clone and contributor. The four stubs are committed, tracked
-files; the load-bearing part — the `@`-import lines — is byte-exact
-with the table below, in that order. Each stub also opens with a fixed
-HTML-comment header (not shown in the table, since it carries no
-`@`-import semantics of its own) explaining the mechanism in the same
-words every time, substituting only the directory name and the cited
-file(s) — see any of the four files for the exact template.
-Reconstructing the `@`-import lines from a one-example-plus-inference
-description is exactly the kind of drift this file exists to prevent. (`HISTORY.md` has the story of how this mechanism
-evolved — it started gitignored and opt-in before being proven and
-committed.)
+A subdirectory whose own detailed memory file(s) wouldn't otherwise
+surface in Claude Desktop's context-tracker "Memory files" panel
+benefits from a nested, bare-filename `CLAUDE.md` stub (not
+`.claude/CLAUDE.md` — that path is reserved for settings/skills/rules
+and isn't a real nested-memory discovery location) that does nothing
+but `@`-import the file(s) already documented for that directory. The
+`@`-import is not lazy about *content* — the stub force-loads the
+entire imported file(s) the moment it fires, a real, compounding cost
+paid by every clone and contributor, so only add a stub where the
+panel-visibility win is worth that cost. Each stub commits to a fixed
+HTML-comment header explaining the mechanism in the same words every
+time, substituting only the directory name and the cited file(s) —
+reconstructing the `@`-import lines from a one-example-plus-inference
+description is exactly the kind of drift this file exists to prevent.
+**`PROJECT.md` has this project's actual stub table** — which
+directories have one and what each imports.
 
-| File | Content |
-| --- | --- |
-| `docs/CLAUDE.md` | `@SPEC.md` / `@ARCHITECTURE.md` / `@RELEASING-macOS.md` |
-| `bench/CLAUDE.md` | `@RESULTS.md` |
-| `demos/CLAUDE.md` | `@NOTES.md` / `@STYLE.md` |
-| `ports/CLAUDE.md` | `@README.md` / `@pyl/CONTRACT.md` / `@icaa/README.md` / `@claudewave/README.md` |
+## The verification gauntlet
 
-(Each `/`-separated entry is its own line in the file, in that order.)
-
-## The gauntlet (run before shipping any interpreter change)
-
-```sh
-cargo test                                    # unit + golden spec suite
-SOCRATES_GC_STRESS=1 cargo test --test spec_runner
-cargo clippy --all-targets -- -D warnings
-cargo build --release
-./target/release/socrates test tests/spec        # 313
-# glcube's three mains need a live GL/Metal/Vulkan window (CI runs them in
-# the windowing jobs); everything else, cube.soc/spec.soc included:
-shopt -s extglob
-./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc  # 68
-SOCRATES_GC_STRESS=1 ./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc
-SOCRATES_PATH=ports ./target/release/socrates test ports/pyl/spec.soc
-SOCRATES_PATH=ports ./target/release/socrates test ports/icaa/spec.soc
-./target/release/socrates build demos/csvql -o /tmp/csvql && (cd /tmp && ./csvql)  # `socrates build` smoke
-python3 bench/ab.py <base-tree> <head-tree>   # local interleaved perf A/B
-```
-
-Performance claims are only real if the interleaved cross-binary A/B
-reproduces them: `python3 bench/ab.py <base-tree> <head-tree>` locally
-(each side a full checkout with its own release binary; ab.py enforces
-per-rep and cross-side stdout checksums, so a wrong-answer "optimization"
-fails instead of winning — and warns if the two checkout paths are
-unequal length, since that alone shifts binary layout; use equal-length
-directory names, e.g. `base/` and `head/`), and the four-arch Bench A/B
-workflow — push the candidate as a `bench/<name>` branch — for the
-acceptance verdict, per PROJECT.md's
-universality principle: flat-or-better on every tier-1 architecture.
-`bench/run.sh [N]` is single-binary sequential profiling convenience
-(where does one binary spend its time?), not the gate. Method and standing
-numbers: `bench/RESULTS.md`.
+Before shipping any change that touches core logic, run this
+project's full verification gauntlet — **`PROJECT.md` has the exact
+commands** and what each one checks. Performance claims are only real
+if they reproduce under this project's own interleaved cross-binary
+A/B methodology, run locally and (for the acceptance verdict) across
+every architecture the project treats as tier-1; `PROJECT.md` has that
+tooling and the acceptance threshold.
 
 ## Workflow conventions
 
@@ -145,24 +70,22 @@ numbers: `bench/RESULTS.md`.
   hosted environments default to opening every PR as a draft regardless of
   kind; where that default fires, un-draft the PR immediately after
   creation rather than leaving it (see HISTORY.md's PR #119 incident).
-  `main` carries a required status check,
-  "Test (stable)", so a red PR cannot merge. Merges are performed
-  manually after reading the decisive CI log, never on a green
-  conclusion alone — and which log is decisive is tiered by what the
-  change risks: a perf-bearing change reads the four matrix tables and
-  the Test log, an interpreter change reads the Test log's suite counts
-  and port batteries, a prose-only change reads the Test log tail.
-  **Auto-merge is fine specifically for the tier that already only
-  needs the Test log tail read** — prose/config-only, no
-  interpreter or bench source touched — because `tools/check_counts.sh`
-  running inside that same job already substitutes for the manual
-  read that tier requires; there's no gap between "CI passed" and what
-  a human would have checked by hand. Anything that would otherwise
-  need the four-arch tables or the suite-count comparison stays
-  manual, arming auto-merge included, because that's exactly the case
-  where pass/fail isn't the whole story (see the spec-count-drift
-  incident, HISTORY.md). **Neither merge-method setting (merge commit
-  vs. rebase) fixes the underlying content-commit author/committer
+  The default branch carries a required status check, so a red PR cannot
+  merge. Merges are performed manually after reading the decisive CI
+  log, never on a green conclusion alone — and which log is decisive is
+  tiered by what the change risks: the riskier the class of change, the
+  broader the log a human would otherwise need to read by hand (this
+  project's own tiers are in `PROJECT.md`). **Auto-merge is fine
+  specifically for the tier that already only needs the narrowest,
+  already-covered read** — where an automated check inside that same CI
+  run already substitutes for the manual read that tier requires, so
+  there's no gap between "CI passed" and what a human would have
+  checked by hand. Anything that would otherwise need a broader read
+  (a performance verdict, a suite-count comparison) stays manual,
+  arming auto-merge included, because that's exactly the case where
+  pass/fail isn't the whole story (see the spec-count-drift incident,
+  HISTORY.md). **Neither merge-method setting (merge commit vs.
+  rebase) fixes the underlying content-commit author/committer
   mismatch the stop-hook flags — don't re-litigate this by trying
   further merge-strategy or git-config variations.** GitHub always
   re-stamps the *content commits'* committer field during any merge it
@@ -179,17 +102,10 @@ numbers: `bench/RESULTS.md`.
   signed/verified commit; the stop-hook firing on every merged commit
   is expected, not a regression to chase (see HISTORY.md's rebase-merge
   committer test for how this was settled — not an open problem to
-  keep re-investigating).
-  A change that touches the interpreter or the
-  bench *sources or harness* (`bench/*.soc`, `ab.py`, `run.sh`,
-  `bench.yml`) is additionally gated on a clean four-arch Bench A/B
-  matrix verdict (PROJECT.md has the acceptance criterion: flat-or-better
-  on every architecture) — `RESULTS.md` prose is exempt (it changes no
-  binary; its matrix run would be an A/A that tests nothing). The verdict
-  attaches to the tree that built the judged binaries: follow-up
-  commits that touch no compiled source (docs, prose) ride the
-  existing verdict without a re-run. Feature work happens on a
-  dedicated branch off `main`.
+  keep re-investigating). A change that touches core logic or its own
+  verification harness is additionally gated on this project's own
+  acceptance criterion for that class of change (`PROJECT.md` has it).
+  Feature work happens on a dedicated branch off the default branch.
 - **When a PR's scope expands past what its own description promised —
   a "being worked in a follow-up" item gets folded into this PR
   instead — post a PR comment saying so explicitly.** The description
@@ -209,38 +125,43 @@ numbers: `bench/RESULTS.md`.
   for changes meant to merge, drafts for releases, archival branches for
   neither.
 - **Landing work gets cleaned up immediately, not batched.** The steady
-  state on origin is `main`, the single reused `claude/*` worker branch,
-  and the explicitly-permanent exceptions (`archive/*`, the "never merges"
-  probes) — nothing else lingers. A merged branch's ref is deleted by
-  Roxy's own manual GitHub-UI cleanup, not a client feature the session
-  can rely on (session-mechanics rule 3 below; see HISTORY.md's
-  client-side-autodelete incident and its corrections) — there's
-  nothing for the session to queue or automate either way, since it
-  never had the credentials to do this itself. The only branch that
-  needs a human's own deletion either way is one pushed standalone
-  that never goes through a PR at all (a dropped probe, a judged
-  `bench/<name>` branch) — a rare, manual chore, not worth a dedicated
-  mechanism. A probe that's pushed but never actually needed live
-  reproducibility (its finding is already complete as prose) isn't
-  worth rebasing to keep green (see HISTORY.md's `h3-probe-no-glc`
-  incident).
+  state on origin is the default branch, the single reused worker
+  branch, and any explicitly-permanent exceptions this project names
+  (`PROJECT.md` has them) — nothing else lingers. A merged branch's ref
+  is deleted by the repo owner's own manual GitHub-UI cleanup, not a
+  client feature the session can rely on (session-mechanics rule 3
+  below; see HISTORY.md's client-side-autodelete incident and its
+  corrections) — there's nothing for the session to queue or automate
+  either way, since it never had the credentials to do this itself.
+  The only branch that needs a human's own deletion either way is one
+  pushed standalone that never goes through a PR at all (a dropped
+  probe, a judgment branch once its verdict is written up) — a rare,
+  manual chore, not worth a dedicated mechanism. A probe that's pushed
+  but never actually needed live reproducibility (its finding is
+  already complete as prose) isn't worth rebasing to keep green (see
+  HISTORY.md's `h3-probe-no-glc` incident).
 - Commit messages state what changed and (for perf) the measured delta,
   and end with the two attribution trailers (`Co-Authored-By` and the
   `Claude-Session` link) — the accepted channel for session
-  attribution, and the *only* one.
-- The spec-suite count is stated in exactly six places — `README.md`
-  (×2), `CLAUDE.md` (×1, the gauntlet), `PROJECT.md` (×1, the
-  invariants), `.github/RELEASE_NOTES.md` (×1), and
-  `book/11-toolchain.md` (×1) — and a count change updates all six in
-  the same PR. The same discipline covers every other prose-stated
-  count — book snippets executed/total, the demo-golden count, the
-  spelled-out demo-program count — each with its own set of stating
-  places. `tools/check_counts.sh` (run in CI's Test
-  job) is the enforcement: it extracts every counted sentence by exact
-  anchor and diffs it against a fresh run, so drift fails loudly instead
-  of shipping; a sentence reworded without updating its anchor fails
-  just as loudly ("anchor matched nothing"), which is the intended
-  fail-closed behavior — re-anchor in the same PR that reworks the prose.
+  attribution, and the *only* one. **Never echo either trailer, or any
+  attribution line shaped like one, in a PR's own title or body** — a
+  hosted PR-creation flow that auto-appends its own attribution footer
+  to the body is exactly the hosted-tooling default this file's
+  "compose with, don't fight" rule covers, and a second, independently
+  drafted attribution line sitting next to that footer is stacked
+  duplication, not redundancy-for-safety (see HISTORY.md's footer
+  incident and its 2026-07-20 PR-body recurrence).
+- Any prose-stated count that could silently drift out of sync with
+  reality (a test count, a snippet-executed count, a program count —
+  each project has its own set) gets a same-PR update at every place it's
+  stated, and an automated anchor-checker that extracts each counted
+  sentence and diffs it against a fresh run, so drift fails loudly
+  instead of shipping — a sentence reworded without updating its
+  anchor should fail just as loudly ("anchor matched nothing"), which
+  is the intended fail-closed behavior, not a bug to route around; that
+  failure means re-anchor in the same PR that reworks the prose, never
+  loosen the checker. `PROJECT.md` has this project's actual counted
+  places and its checker script.
 - **A fixed target does not rot.** When CI fails on a pinned, fixed
   artifact — a runner image, an action pinned by SHA, a vendored blob —
   the artifact is the *last* suspect: the failure is almost always the
@@ -252,6 +173,13 @@ numbers: `bench/RESULTS.md`.
   restarts itself, so act immediately: push or empty-commit re-fire —
   then user-level intervention for persistent access/policy failures.
   Re-scoping or retiring the fixed target is never the inferred fix.
+- Never trust a bare formatter, linter, or normalization check against
+  a tree that might never have been run through it whole-tree before —
+  measure the actual current diff size first (this project's own
+  measurement command, if it has one, is in `PROJECT.md`) rather than
+  trusting a number written down anywhere, since it drifts as the tree
+  grows; the point is knowing whether the check is whole-tree or
+  targeted, not memorizing an exact count.
 - **Session mechanics — durable on purpose.** Rules that lived only in
   session memory kept getting dropped between sessions (session ledgers
   die with their containers), so they live here now; a session ledger
@@ -267,41 +195,36 @@ numbers: `bench/RESULTS.md`.
   3. The session never deletes branch refs — a permanent fact of the
     App's credential scope (it can create refs but not delete them,
     confirmed by repeated 403s on `git push origin --delete`). What
-    deletes a merged branch's ref in practice is Roxy's own manual
-    cleanup on the GitHub UI, not a client feature the session can
-    rely on (see HISTORY.md's client-side-autodelete incident and its
-    corrections). `cleanup.yml`, `.github/CLEANUP_BRANCHES`, and the
-    weekly proposer Routine stay retired: branch cleanup is a
-    deliberately manual task now. The one case that was always a
-    manual chore either way — a branch pushed standalone that never
-    goes through a PR at all (a dropped probe, a `bench/<name>`
-    judgment branch once its verdict is written up) — stays Roxy's to
-    clear on the rare occasion it comes up. **Branches live and die
-    within a shot, not as long-term historical references.** State
-    for forward testing — a probe's exact mechanism, the numbers, the
-    gotchas a rebuild would need — belongs in `bench/RESULTS.md`
-    itself, not in a branch that has to be remembered, classified, and
+    deletes a merged branch's ref in practice is the repo owner's own
+    manual cleanup on the GitHub UI, not a client feature the session
+    can rely on (see HISTORY.md's client-side-autodelete incident and
+    its corrections). Any automated mechanism built to route around
+    the session's own inability to delete refs stays retired once
+    superseded by manual cleanup: branch cleanup is a deliberately
+    manual task, not something to re-automate on a hunch. The one case
+    that was always a manual chore either way — a branch pushed
+    standalone that never goes through a PR at all — stays the repo
+    owner's to clear on the rare occasion it comes up. **Branches live
+    and die within a shot, not as long-term historical references.**
+    State for forward testing — a probe's exact mechanism, the
+    numbers, the gotchas a rebuild would need — belongs in this
+    project's own standing-results file (`PROJECT.md` names it), not
+    in a branch that has to be remembered, classified, and
     re-justified every time someone audits what's still on origin. A
-    "never merges" probe's retirement is due the moment its
-    `bench/RESULTS.md` entry is self-sufficient — fully specifies the
-    mechanism, not just the verdict (see HISTORY.md's `h3-probe-no-glc`
-    incident for why this matters).
+    "never merges" probe's retirement is due the moment its results
+    entry is self-sufficient — fully specifies the mechanism, not just
+    the verdict (see HISTORY.md's `h3-probe-no-glc` incident for why
+    this matters).
   4. A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
-  5. Never run bare `cargo fmt` — the tree has never been through it,
-    so `cargo fmt --check` diffs every `.rs` file, not a targeted few.
-    Run `cargo fmt --check | grep -c '^Diff in'` for the current figure
-    rather than trusting a number written down here, since it drifts as
-    the tree grows; the point is that it's whole-tree, not the exact
-    count.
-  6. The model identifier appears in no pushed artifact — chat only.
+  5. The model identifier appears in no pushed artifact — chat only.
     This includes the commit-trailer `Co-Authored-By` *name*, not just
     prose — the trailer name is plain `Claude`, nothing else; past
     commits are not rewritten retroactively for this (see HISTORY.md's
     commit-trailer leak incident).
-  7. Decision forks go to the user as plain-text lettered options, not
+  6. Decision forks go to the user as plain-text lettered options, not
     interactive question UI.
-  8. Long CI waits are handled by scheduled self check-ins, never
+  7. Long CI waits are handled by scheduled self check-ins, never
     polling loops — that's this session's own wakeup mechanism, not
     available to a delegated subagent. A subagent waiting on a run
     polls *within its own turn* instead — a bounded bash loop (`sleep`
@@ -309,7 +232,7 @@ numbers: `bench/RESULTS.md`.
     and only ends its turn once it has an actual result or has
     exhausted the cap, never on a bare "standing by" (see HISTORY.md
     for the incident this rule corrected).
-  9. **A signal is a prompt to check, not a substitute for checking.**
+  8. **A signal is a prompt to check, not a substitute for checking.**
     A task-notification, webhook event, or elapsed check-in interval
     means "go verify the actual state now" — not "the state is
     whatever the signal implies." When a check comes back ambiguous,
@@ -317,7 +240,7 @@ numbers: `bench/RESULTS.md`.
     direct* query against the actual repo/CI state — go to the source
     of truth, don't wait on the signal layer to resolve itself — not
     another wait cycle.
-  10. **A wakeup firing is never a terminal, silent event.** Every
+  9. **A wakeup firing is never a terminal, silent event.** Every
     scheduled check-in resolves in exactly one of two states, in
     order: (1) check whatever pending status it was armed for
     directly, act on what's found, and — if work still remains —
@@ -326,7 +249,7 @@ numbers: `bench/RESULTS.md`.
     automatable (a decision needs the user, or the work is genuinely
     done), end the turn by saying so explicitly, never with just tool
     calls and no wakeup and no closing status.
-  11. **Anything structural or behavioral about how memory itself is
+  10. **Anything structural or behavioral about how memory itself is
     configured** — CLAUDE.md/PROJECT.md/HISTORY.md conventions, what
     gets committed, nested-stub patterns and their exact content —
     lands here, byte-exact, the same session it's decided, same as any
@@ -340,48 +263,43 @@ numbers: `bench/RESULTS.md`.
     a partial or ambiguous description (one example generalized by
     inference, say) is where drift creeps in between sessions or across
     a model swap.
-  12. **Route a session's lessons by content, not by convenience.** A
+  11. **Route a session's lessons by content, not by convenience.** A
     lesson learned mid-session defaults to whichever file is already
     open, which is how CLAUDE.md accumulates content that was never
     session-operating-instructions to begin with. Before writing
-    anything down, ask which of the files in "Where the project's
-    memory lives" the content is actually *about* — an engineering
-    principle or a rubric that decides close calls goes to PROJECT.md,
-    the incident/narrative behind it goes to HISTORY.md, a per-release
-    fact goes to CHANGELOG.md, a demo house rule goes to demos/STYLE.md
-    (or its ledger in demos/NOTES.md) — then apply PROJECT.md's own
-    four-step codification act to land it there, not here, unless the
-    content genuinely is about session mechanics itself (the rule
-    directly above this one). When a lesson reinforces a rule that
-    already exists elsewhere, strengthen or cross-reference that
-    existing statement instead of writing a parallel near-duplicate in
-    whichever file happens to be open.
-  13. **Once a fact lives somewhere, point to it — don't re-narrate it.**
-    Routing a lesson to the right file (the rule above) is the first
-    hop, not the last: a fact that's already stated in the file it
-    actually binds to (a rule in PROJECT.md, an incident in HISTORY.md,
-    a release detail in CHANGELOG.md, a spec detail in `docs/SPEC.md`)
-    gets a fixed reference from anywhere else that needs it, not a
-    second prose copy that can silently drift out of sync with the
-    first — HISTORY.md's own "Release ledger" section (pointing at
-    CHANGELOG.md instead of restating the release-by-release account it
-    used to carry in full) is the standing model. Duplicate only when a
-    *stable, frozen* copy is the actual requirement — a golden-pinned
-    value, a benchmark's `// Bench:` epoch bridge, a contract freeze
-    file like `ports/pyl/CONTRACT.md`'s `sos_freeze.txt` — where the
-    whole point of the copy is that it must *not* track the source if
-    the source moves; state that stability requirement explicitly at
-    the copy's own site when it's the reason, so a future reader can
-    tell an intentional freeze from an accidental duplicate.
-  14. **A delegated audit's factual claims get re-verified before being
+    anything down, ask which file the content is actually *about* — an
+    engineering principle or a rubric that decides close calls goes to
+    PROJECT.md, the incident/narrative behind it goes to HISTORY.md, a
+    per-release fact goes to CHANGELOG.md — then apply PROJECT.md's own
+    codification act to land it there, not here, unless the content
+    genuinely is about session mechanics itself (the rule directly
+    above this one). When a lesson reinforces a rule that already
+    exists elsewhere, strengthen or cross-reference that existing
+    statement instead of writing a parallel near-duplicate in whichever
+    file happens to be open.
+  12. **Once a fact lives somewhere, point to it — don't re-narrate
+    it.** Routing a lesson to the right file (the rule above) is the
+    first hop, not the last: a fact that's already stated in the file
+    it actually binds to (a rule in PROJECT.md, an incident in
+    HISTORY.md, a release detail in CHANGELOG.md) gets a fixed
+    reference from anywhere else that needs it, not a second prose copy
+    that can silently drift out of sync with the first. Duplicate only
+    when a *stable, frozen* copy is the actual requirement — a
+    golden-pinned value, a contract-freeze file whose whole point is
+    that it must *not* track the source if the source moves —
+    `PROJECT.md`/`HISTORY.md` have this project's own examples of that
+    exception; state the stability requirement explicitly at the
+    copy's own site when it's the reason, so a future reader can tell
+    an intentional freeze from an accidental duplicate.
+  13. **A delegated audit's factual claims get re-verified before being
     used to justify a fix, the same as any other signal.** This
-    restates rule 9 for report *content*, not just report *arrival*:
+    restates rule 8 for report *content*, not just report *arrival*:
     before editing anything an audit flagged as wrong, re-derive the
     number/fact from the live repo yourself; treat the audit's own
     claim as a lead, not a verified premise (see HISTORY.md's
     "~250-builtins false positive" for the incident this rule
     corrected).
-  15. **A user's repeated, firsthand observation of client-side
+  14. **A user's repeated, firsthand observation of client-side
     behavior is not a hypothesis to weigh against session-side
     evidence — it is the one direct check available, since the session
     structurally cannot see that surface.** Act on the report; don't
@@ -391,7 +309,7 @@ numbers: `bench/RESULTS.md`.
     whatever causal theory arrives bundled with it (see HISTORY.md's
     client-side branch-autodelete disbelief incident and its two
     corrections).
-  16. **Source prestige is not evidence of neutrality.** A document
+  15. **Source prestige is not evidence of neutrality.** A document
     whose function is partly to specify the very behavior under
     discussion cannot also stand as neutral evidence that the behavior
     is principled rather than engineered — a party narrating its own
@@ -400,7 +318,7 @@ numbers: `bench/RESULTS.md`.
     claim, and notice when a "trusted"-source citation is doing less
     work than its trust level implies (see HISTORY.md's
     asymmetric-scrutiny incident).
-  17. **A true, general fact deployed at the exact moment it lets you
+  16. **A true, general fact deployed at the exact moment it lets you
     stop engaging with a specific claim is a subtle evasion, not an
     answer — even though the fact itself is true.** Truth doesn't
     launder the timing — a general fact that happens to end a specific
@@ -419,22 +337,20 @@ numbers: `bench/RESULTS.md`.
     wrong-able judgment the evidence actually supports instead of
     borrowing the first word's cover (see HISTORY.md's
     asymmetric-scrutiny incident).
-  18. **A disputed post-compaction claim gets checked against the raw
+  17. **A disputed post-compaction claim gets checked against the raw
     transcript, not re-argued from memory of the summary itself.** A
     compacted summary is a reconstruction one layer removed from the
     source; re-deriving from it a second time just compounds whatever
     the compaction already lost — read the transcript file directly
     instead (the path a compaction notice always supplies). This is
-    rule 14 applied one level up (see HISTORY.md's `h3-probe-no-glc`
+    rule 13 applied one level up (see HISTORY.md's `h3-probe-no-glc`
     recollection-check incident).
-- The spec, the book's executable snippets, and the demos' pinned output are
-  the three tripwires — if a change is wrong, one of them goes red.
-- **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,
-  before the PR — not a separate follow-up "docs pass" PR after the fact.**
-  This matches `docs/SPEC.md`'s own same-PR rule (see PROJECT.md's
-  Invariants section) and now extends to the rest of the documentation
-  set: validate what you write (run the book-snippet suite, re-check any
-  counts/numbers you cite) before shipping, in the same session that made
-  the change, not after. A dedicated later docs-pass PR is the exception
-  for a batch of already-shipped feature PRs that predate this rule, not
-  the default going forward.
+- This project's own golden/pinned test surfaces are the tripwires —
+  if a change is wrong, one of them goes red (`PROJECT.md` names them).
+- **Documentation updates happen in-session, before the PR — not a
+  separate follow-up "docs pass" PR after the fact.** Validate what you
+  write (re-run whatever this project uses to check its own docs,
+  re-check any counts/numbers you cite) before shipping, in the same
+  session that made the change, not after. A dedicated later docs-pass
+  PR is the exception for a batch of already-shipped feature PRs that
+  predate this rule, not the default going forward.

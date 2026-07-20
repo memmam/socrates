@@ -329,8 +329,9 @@ demos/            eighteen field-test programs (lisp, checkers, sudoku,
                   png, synthwave, reversi, swarm, ...) + STYLE.md, NOTES.md
 ports/            transpilation layers + ports (jsl: ICAA; pyl: claudewave)
 bench/            the benchmark harness and results
-CLAUDE.md         session-operating instructions: workflow, gauntlet, git/PR
-PROJECT.md        what Socrates is for, engineering principles, invariants
+CLAUDE.md         universal session-operating instructions: mechanics, git/PR
+PROJECT.md        what Socrates is for, engineering principles, invariants,
+                  file map, verification gauntlet, workflow specifics
 HISTORY.md        incident history behind CLAUDE.md/PROJECT.md's rules
 ```
 
