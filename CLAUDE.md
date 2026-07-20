@@ -41,7 +41,13 @@ mistake, from nothing (2026-07-20).
   written — the CHANGELOG entry is the unit of account now, not the PR
   count behind it. Check it for release-post material or the full
   story behind any rename or shipped feature a rule only mentions in
-  passing.
+  passing. **Once a release is git-tagged, its entry is historical
+  record, not a live draft: a factual error found later gets a dated,
+  explicit appended correction, never a silent in-place rewrite** —
+  the same discipline HISTORY.md already applies to its own incident
+  narratives, extended here because a shipped CHANGELOG entry is
+  exactly that kind of record. Only the current untagged section (the
+  one still being written toward the next tag) is freely editable.
 - `docs/SPEC.md` — the normative language reference (`(vN)` tags mark when a
   feature landed).
 - `docs/ARCHITECTURE.md` — implementation internals, module by module.
