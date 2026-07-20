@@ -142,8 +142,32 @@ numbers: `bench/RESULTS.md`.
   conclusion alone — and which log is decisive is tiered by what the
   change risks: a perf-bearing change reads the four matrix tables and
   the Test log, an interpreter change reads the Test log's suite counts
-  and port batteries, a prose-only change reads the Test log tail. Not
-  by arming auto-merge. A change that touches the interpreter or the
+  and port batteries, a prose-only change reads the Test log tail.
+  **Auto-merge is fine specifically for the tier that already only
+  needs the Test log tail read (2026-07-20)** — prose/config-only, no
+  interpreter or bench source touched — because `tools/check_counts.sh`
+  running inside that same job already substitutes for the manual
+  read that tier requires; there's no gap between "CI passed" and what
+  a human would have checked by hand. Anything that would otherwise
+  need the four-arch tables or the suite-count comparison stays
+  manual, arming auto-merge included, because that's exactly the case
+  where pass/fail isn't the whole story (see the spec-count-drift
+  incident, HISTORY.md). **The merge-method setting (merge commit vs.
+  rebase) does not affect verified-commit status either way — don't
+  re-litigate this.** GitHub always re-stamps the committer field
+  during any merge it performs: its own bot identity for a merge
+  commit (`noreply@github.com`), or the triggering account's own
+  identity for a rebase — never the original author's `git config`
+  identity, which is what the stop-hook actually wants
+  (`noreply@anthropic.com`). Confirmed live 2026-07-20 on PR #125: a
+  rebase-merged commit kept `Claude <noreply@anthropic.com>` as
+  *author* but showed Roxy's real account as *committer*, no Verified
+  badge — worse on both counts than a merge commit's Roxy-as-author/
+  GitHub-as-committer/Verified shape. Merge commits are the better
+  default on cosmetics alone, since neither strategy fixes the
+  underlying mismatch; picking one is not a bug fix, and the stop-hook
+  firing on every merged commit is expected, not a regression to chase.
+  A change that touches the interpreter or the
   bench *sources or harness* (`bench/*.soc`, `ab.py`, `run.sh`,
   `bench.yml`) is additionally gated on a clean four-arch Bench A/B
   matrix verdict (PROJECT.md has the acceptance criterion: flat-or-better
