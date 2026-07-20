@@ -35,7 +35,7 @@ despite true parallelism — determinism by protocol, not by luck.
 
 From the repository root:
 
-```
+```sh
 ./target/release/socrates demos/swarm/main.soc   # run the scheduler
 ./target/release/socrates test demos/swarm         # golden tests
 ```

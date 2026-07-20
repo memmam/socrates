@@ -43,7 +43,7 @@ all (pure geometry and matrix math) and pass on every build.
 
 From the repository root:
 
-```
+```sh
 cargo build --release --features gl
 Xvfb :98 -screen 0 1024x768x24 &
 DISPLAY=:98 ./target/release/socrates demos/glcube/main.soc   # render

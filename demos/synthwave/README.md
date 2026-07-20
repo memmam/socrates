@@ -30,7 +30,7 @@ the WAV is byte-identical on every machine and safe to pin.
 
 From the repository root:
 
-```
+```sh
 ./target/release/socrates demos/synthwave/main.soc   # prints the track sheet, rebuilds track.wav
 ./target/release/socrates test demos/synthwave         # golden tests
 ```

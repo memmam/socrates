@@ -24,7 +24,7 @@ interleave, and that is a property of the **protocol**, not luck:
 
 From the repository root:
 
-```
+```sh
 ./target/release/socrates demos/parmandel/main.soc   # render
 ./target/release/socrates test demos/parmandel         # golden tests
 ```

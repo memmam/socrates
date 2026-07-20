@@ -39,7 +39,7 @@ real `//? panic:` that ends the program.
 
 From the repository root:
 
-```
+```sh
 ./target/release/socrates demos/spectra/main.soc   # the full analysis
 ./target/release/socrates test demos/spectra         # golden tests
 ```

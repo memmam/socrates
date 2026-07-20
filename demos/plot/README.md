@@ -15,7 +15,7 @@ sparklines, so the demo has output even without a browser.
 
 From the repository root:
 
-```
+```sh
 ./target/release/socrates demos/plot/main.soc            # writes into demos/plot/
 ./target/release/socrates demos/plot/main.soc some/dir   # writes into some/dir
 ./target/release/socrates test demos/plot                  # golden tests

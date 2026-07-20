@@ -47,7 +47,7 @@ about 2x faster (no per-cell candidate lists to allocate).
 From the repository root:
 
 ```sh
-./target/release/socrates demos/sudoku/main.soc          # solve the three puzzles (~0.3 s)
+./target/release/socrates demos/sudoku/main.soc          # solve the three puzzles (~0.15 s)
 ./target/release/socrates demos/sudoku/main.soc --time   # same, plus wall-clock times
 ./target/release/socrates test demos/sudoku                # golden tests (all four files)
 ```

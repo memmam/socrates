@@ -193,9 +193,9 @@ every such divergence.
 
 - CI runs everything under `SOCRATES_GC_STRESS=1`. Pure-integer,
   low-allocation demos are essentially free (`png`: 26 ms); transient
-  allocation is what hurts (an allocation-heavy demo: 11 s). Budget
-  pinned heavyweight loops accordingly and measure per-file
-  (`lisp`'s 100k-iteration pin dominates its 68 s stress run).
+  allocation is what hurts (`checkers`, the heaviest demo in the suite:
+  ~50 s). Budget pinned heavyweight loops accordingly and measure
+  per-file (`lisp`'s 100k-iteration pin dominates its ~29 s stress run).
 - Set-probe dispatch beat chained string compares under stress
   (`lisp`, −15%): fewer transient Options per call. Amortized lookups
   are a safe default even in hot paths.

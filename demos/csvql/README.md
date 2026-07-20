@@ -28,7 +28,7 @@ country's alphabetically first city.
 
 From the repository root:
 
-```
+```sh
 ./target/release/socrates demos/csvql/main.soc           # 12 showcase queries
 ./target/release/socrates demos/csvql/main.soc \
     "select city, pop where continent == Asia order by pop desc limit 3"

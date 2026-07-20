@@ -28,7 +28,7 @@ propagate through every formula that reads them.
 
 From the repository root:
 
-```
+```sh
 ./target/release/socrates demos/spreadsheet/main.soc                # both demo sheets
 ./target/release/socrates demos/spreadsheet/main.soc my.sheet       # your own file
 ./target/release/socrates demos/spreadsheet/aggregates.soc          # aggregate edge cases
