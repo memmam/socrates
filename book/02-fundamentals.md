@@ -185,7 +185,7 @@ comparison operators cannot be chained; use parentheses`) — write
 a type error (`Bool` vs `Int`) rather than the chain error you might
 expect.
 
-`+` also concatenates strings (`"fab" + "le"` is `"fable"`), and the
+`+` also concatenates strings (`"soc" + "rates"` is `"socrates"`), and the
 ordering operators compare strings lexicographically (`"apple" < "banana"`
 is `true`).
 

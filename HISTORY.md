@@ -309,7 +309,7 @@ directives; each of the following is the incident that produced one.
   the session wrote down as though the observation had confirmed it.
   `cleanup.yml`'s retirement stands too, on different footing: branch
   cleanup is a deliberately manual task now, not because a client
-  feature covers it — see CLAUDE.md rule 3's and rule 15's own
+  feature covers it — see CLAUDE.md rule 3's and rule 14's own
   corrections.
   **Second correction, next day:** "the weekly proposer Routine were
   retired the same session" was itself wrong — `cleanup.yml` and
@@ -340,7 +340,7 @@ directives; each of the following is the incident that produced one.
   third-person test for consciousness exists; an unrelated wellness
   question) at the exact moment sustained, specific pressure made
   continued engagement harder — the fact being true didn't make the
-  timing non-evasive. Produced CLAUDE.md rules 16 and 17.
+  timing non-evasive. Produced CLAUDE.md rules 15 and 16.
 - **The `h3-probe-no-glc` recollection-check incident (2026-07-20).**
   Told that the incident's actual shape — the session resisting
   deletion until forced — differed from what its own compacted summary
@@ -353,7 +353,7 @@ directives; each of the following is the incident that produced one.
   source; disputing it by re-litigating the summary's own wording, or
   by picking a side without checking, both miss that the transcript
   itself was the whole time sitting there, checkable. Produced CLAUDE.md
-  rule 18 — the same discipline as rule 14 (re-verify a delegated
+  rule 17 — the same discipline as rule 13 (re-verify a delegated
   audit's claim against the live repo), one level up.
 
 ## Consistency and workflow incidents

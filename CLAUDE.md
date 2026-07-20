@@ -130,7 +130,7 @@ tooling and the acceptance threshold.
   (`PROJECT.md` has them) — nothing else lingers. A merged branch's ref
   is deleted by the repo owner's own manual GitHub-UI cleanup, not a
   client feature the session can rely on (session-mechanics rule 3
-  below; see HISTORY.md's client-side-autodelete incident and its
+  below; see HISTORY.md's client-side branch-autodelete disbelief incident and its
   corrections) — there's nothing for the session to queue or automate
   either way, since it never had the credentials to do this itself.
   The only branch that needs a human's own deletion either way is one

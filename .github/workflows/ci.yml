@@ -77,7 +77,7 @@ jobs:
           shopt -s extglob
           ./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc > /dev/null
       - name: Prose counts match the live suite
-        # The five spec-count places, the book executed/total pair, the
+        # The six spec-count places, the book executed/total pair, the
         # demo-suite count, and the spelled-out demo-program count —
         # extracted from prose by exact anchor and diffed against a
         # fresh run, so a stale number (the 311-vs-313 release-notes

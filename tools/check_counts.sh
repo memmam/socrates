@@ -46,7 +46,7 @@ live_demo_dirs=$(ls -d demos/*/ | wc -l | tr -d ' ')
 [ -n "$live_spec" ] || { echo "FAIL: no live spec count (suite red or binary missing?)"; exit 1; }
 [ -n "$live_demo" ] || { echo "FAIL: no live demo count (suite red or binary missing?)"; exit 1; }
 
-# --- spec-suite count: the five places -------------------------------
+# --- spec-suite count: the six places ---------------------------------
 check "README 'N golden spec tests'" "$live_spec" \
   "$(sed -n 's/^\([0-9]\{1,\}\) golden spec tests.*/\1/p' README.md)"
 check "README 'own N-test suite'" "$live_spec" \
