@@ -798,8 +798,10 @@ CLAUDE.md session mechanics).
   implementation type shows churn-bound list behavior — allocation
   cost that a small-list representation would erase, the shape
   bench_list_churn rewards — append the sighting here, dated, with
-  the row that showed it. Enough accumulated sightings across
-  *different* cases pushes H2 back over the edge for a fresh look;
+  the row that showed it. Three sightings across *different* cases
+  (matching probe-cmp-branch's own numeric threshold above, scaled up
+  since H2's original DROP rested on more evidence than that probe's
+  did) push H2 back over the edge for a fresh look;
   the full implementation detail needed to rebuild it is above, not on
   a branch — `archive/h2-small-list` is retired per the
   branches-live-and-die-within-a-shot policy (2026-07-20, CLAUDE.md

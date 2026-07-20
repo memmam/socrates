@@ -31,8 +31,8 @@ if worker.is_worker() {
 Guarding on `worker.is_worker()` means the file does nothing when run
 directly — only when spawned does it enter the loop. `while let` is exactly
 `while true { match worker.recv() { Some(msg) -> { .. }, None -> break } }`
-(chapter 4) — the recv-loop is the idiom that motivated adding it. The
-parent spawns the worker, sends work, and reads results off the handle:
+(chapter 4). The parent spawns the worker, sends work, and reads results
+off the handle:
 
 ```soc
 let w = worker.spawn("square_worker.soc", []).unwrap();

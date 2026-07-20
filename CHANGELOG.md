@@ -1,8 +1,11 @@
 # Changelog
 
-Each release was shipped as one reviewed pull request. Golden spec tests pin
-every feature listed here, and `docs/SPEC.md` marks each with the version
-that introduced it.
+Early releases (through roughly v0.7) shipped as close to one reviewed pull
+request per release; that stopped holding at v0.8, which folded in ~90
+merged PRs before its entry was written — the entry below is the unit of
+account, not the PR count behind it. Golden spec tests pin every feature
+listed here, and `docs/SPEC.md` marks each with the version that introduced
+it.
 
 ## v0.8.0 — native graphics and compute; the demo round's feature queue
 
