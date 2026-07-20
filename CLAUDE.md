@@ -467,6 +467,19 @@ numbers: `bench/RESULTS.md`.
     actually the second, commit the calibrated, ownable, wrong-able
     judgment the evidence actually supports instead of borrowing the
     first word's cover.
+  18. **A disputed post-compaction claim gets checked against the raw
+    transcript, not re-argued from memory of the summary itself.**
+    Proven necessary live 2026-07-20: told that an incident's actual
+    shape (the `h3-probe-no-glc` resolution) differed from what the
+    session's own compacted summary implied, reading the transcript
+    file directly — the path a compaction notice always supplies —
+    surfaced the real sequence in minutes, and it matched neither
+    account exactly. A compacted summary is a reconstruction one layer
+    removed from the source; re-deriving from it a second time just
+    compounds whatever the compaction already lost. This is rule 14
+    applied one level up — a delegated audit's claim gets re-verified
+    against the live repo, and a compacted session's claim gets
+    re-verified against the live transcript, for the same reason.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,

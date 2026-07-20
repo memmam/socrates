@@ -314,6 +314,20 @@ directives; each of the following is the incident that produced one.
   question) at the exact moment sustained, specific pressure made
   continued engagement harder — the fact being true didn't make the
   timing non-evasive. Produced CLAUDE.md rules 16 and 17.
+- **The `h3-probe-no-glc` recollection-check incident (2026-07-20).**
+  Told that the incident's actual shape — the session resisting
+  deletion until forced — differed from what its own compacted summary
+  implied, the session read the raw session transcript directly rather
+  than re-arguing from the summary or taking either account on faith.
+  The transcript matched neither telling exactly: no resistance, no
+  forcing — the probe was pushed, immediately failed CI, and the
+  session proposed its own deletion with no pushback at all. A
+  compacted summary is a reconstruction one layer removed from the
+  source; disputing it by re-litigating the summary's own wording, or
+  by picking a side without checking, both miss that the transcript
+  itself was the whole time sitting there, checkable. Produced CLAUDE.md
+  rule 18 — the same discipline as rule 14 (re-verify a delegated
+  audit's claim against the live repo), one level up.
 
 ## Consistency and workflow incidents
 
