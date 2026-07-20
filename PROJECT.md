@@ -11,9 +11,9 @@ concrete fill-in — this project's file map, its nested-stub table, its
 verification gauntlet, its counted places and checker script, its
 workflow specifics, and its tripwires. `CLAUDE.md` holds only the
 universal, project-agnostic rules (session mechanics, git/PR/workflow
-conventions) that hold regardless of what project they're checked into.
-`HISTORY.md` holds the incident narratives behind the rules in both
-files; `CHANGELOG.md` holds the per-release account.
+conventions) that hold regardless of what project they're checked into,
+and its own opening paragraph says where `HISTORY.md` and
+`CHANGELOG.md` fit.
 
 ## What Socrates is for
 

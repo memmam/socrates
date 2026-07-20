@@ -233,15 +233,19 @@ measures flat, and large deltas reproduce within ±1% across runs — yet
 small (≲6%) layout-dependent deltas flip sign between jobs on the same
 binary pair. **Judge macOS marked rows by majority across ≥5 runs,
 never fewer — no exception.** (Raised from ≥3, 2026-07-18: the ≥3
-floor with a same-decision escape hatch down to two samples is what let
-the W2 enum_match dismissal below adjudicate on 1-of-2; the escape
-hatch is removed along with the floor increase.) Case law from the
+floor's same-decision escape hatch — a valid dismissal on two samples
+that *agree* — did not actually cover the W2 enum_match dismissal
+below, which split 1-of-2 rather than agreeing; that dismissal was a
+mis-adjudication the errata there corrects, not a legitimate use of the
+hatch. The hatch is removed along with the floor increase regardless,
+since a gap that let a mis-adjudication go unnoticed is reason enough
+to close it.) Case law from the
 superinstruction wave: a mark that holds direction at consistent
 magnitude across all three samples it was actually convicted on is
 strong evidence (for_range +4.5/+4.5/+3.9 — beyond anything the
 modulation ever sustained; distinguish it from the modulation
 signature, the H1-era map_ops +6.2/+5.5 → −8.3 flip) but the floor at
-the time of that conviction was ≥3, one short of the current bar — see
+the time of that conviction was ≥3, two short of the current bar — see
 the revalidation note under H3, below. This whole characterization is a
 property of the macos-14 image bench.yml pins: re-run the A/A
 characterization whenever the macOS runner image changes. The
@@ -269,7 +273,7 @@ negative, result — see the revalidation note under H2, below.
 than macOS does — a leg being usually-clean is not a reason to demand
 less evidence of it when it does show a mark. This reopens H1's
 aarch64-linux `enum_match` cost, accepted as real on 3 reproductions
-across 2 layouts (H1 sample 1/2, the rejected H1b reorder) — one short
+across 2 layouts (H1 sample 1/2, the rejected H1b reorder) — two short
 of the current bar — and, more precisely, the `monolithic_dispatch`
 per-target binding built to erase it, which was verified clean on
 exactly *one* matrix sample. `bench/h1-binding-recheck` (never merges)

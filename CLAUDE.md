@@ -197,15 +197,16 @@ tooling and the acceptance threshold.
     confirmed by repeated 403s on `git push origin --delete`). What
     deletes a merged branch's ref in practice is the repo owner's own
     manual cleanup on the GitHub UI, not a client feature the session
-    can rely on (see HISTORY.md's client-side-autodelete incident and
-    its corrections). Any automated mechanism built to route around
-    the session's own inability to delete refs stays retired once
-    superseded by manual cleanup: branch cleanup is a deliberately
-    manual task, not something to re-automate on a hunch. The one case
-    that was always a manual chore either way — a branch pushed
-    standalone that never goes through a PR at all — stays the repo
-    owner's to clear on the rare occasion it comes up. **Branches live
-    and die within a shot, not as long-term historical references.**
+    can rely on (see HISTORY.md's client-side branch-autodelete
+    disbelief incident and its corrections). Any automated mechanism
+    built to route around the session's own inability to delete refs
+    stays retired once superseded by manual cleanup: branch cleanup
+    is a deliberately manual task, not something to re-automate on a
+    hunch. The one case that was always a manual chore either way — a
+    branch pushed standalone that never goes through a PR at all —
+    stays the repo owner's to clear on the rare occasion it comes up.
+    **Branches live and die within a shot, not as long-term historical
+    references.**
     State for forward testing — a probe's exact mechanism, the
     numbers, the gotchas a rebuild would need — belongs in this
     project's own standing-results file (`PROJECT.md` names it), not
@@ -231,7 +232,17 @@ tooling and the acceptance threshold.
     + a status check, capped at enough iterations to cover one run) —
     and only ends its turn once it has an actual result or has
     exhausted the cap, never on a bare "standing by" (see HISTORY.md
-    for the incident this rule corrected).
+    for the incident this rule corrected). **The check-in cadence is a
+    fixed ladder, not a per-instance duration estimate re-derived each
+    time.** A wait with no external dependency (purely local — a
+    build, a bounded subagent loop) checks every 5 minutes. A wait that
+    depends on an external API (GitHub's, most of what this session
+    checks — a CI run, a pending merge, a rate-limited call) starts at
+    a 15-minute baseline and, on continued failure or non-resolution,
+    escalates along one fixed ladder: 15 min ×2, 30 min ×1, 60 min ×2,
+    1 day ×1, 2 days ×2, 1 week ×1 — and if it's still unresolved after
+    that whole ladder, the next move is to stop retrying and flag the
+    user directly, not to keep silently waiting.
   8. **A signal is a prompt to check, not a substitute for checking.**
     A task-notification, webhook event, or elapsed check-in interval
     means "go verify the actual state now" — not "the state is

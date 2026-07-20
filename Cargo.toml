@@ -22,7 +22,7 @@ codegen-units = 1
 # CI asserts `cargo tree` is one line for the default and for every feature
 # set. (wgpu + pollster, once the sole quarantined exception behind a `gpu`
 # feature, were deleted when the native-backend coverage condition was met —
-# see CLAUDE.md's roadmap.) The features below add zero Cargo dependencies
+# see PROJECT.md's roadmap.) The features below add zero Cargo dependencies
 # (no `dep:` entries): they are raw FFI to system libraries. The `gl`
 # feature links X11 normally and `dlopen`s GL/GLX at runtime; see
 # src/window/ for the `window` namespace.
