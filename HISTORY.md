@@ -357,6 +357,43 @@ directives; each of the following is the incident that produced one.
   "non-landing work is pushed for durability without a PR": a dropped
   probe or a held wave lives on its own pushed branch rather than being
   discarded or forced into a PR that was never going to merge.
+- **The PR #119 draft-default incident (2026-07-19).** A feature PR
+  landed as a draft — several hosted environments default every PR to
+  draft regardless of kind — and stayed that way past when it should
+  have been un-drafted, even though feature PRs are supposed to be
+  real (non-draft), drafts reserved for releases. Caught live, then
+  un-drafted immediately; produced the standing rule that this
+  default gets corrected the moment it fires, not left standing.
+- **The rebase-merge committer test (PR #125, 2026-07-20).** Testing
+  whether switching the repo's merge method from merge-commit to
+  rebase would fix the stop-hook's "Unverified commit" complaint: a
+  rebase-merged commit kept `Claude <noreply@anthropic.com>` as
+  *author* but showed Roxy's real account as *committer*, with no
+  Verified badge — worse on both counts than a merge commit's
+  Roxy-as-author/GitHub-as-committer/Verified shape. Confirmed that
+  GitHub always re-stamps the *content commits'* committer field
+  during any merge it performs, regardless of method — never the
+  original author's `git config` identity, which is what the
+  stop-hook actually wants — so no merge-strategy or git-config
+  variation fixes the underlying mismatch. Settled the standing
+  choice: merge commits are the accepted default on the Verified-badge
+  difference alone, and the resulting shape (a Verified, human-authored
+  merge commit on top of untouched, individually-authored content
+  commits) is the accepted best state given the session has no
+  legitimate way to produce its own signed/verified commit — not an
+  open problem to keep re-investigating.
+- **The one-PR-per-release pattern breaking down, missed at first
+  (v0.8, caught 2026-07-20).** Early releases (through roughly v0.7)
+  shipped as close to one PR per release. That stopped holding at
+  v0.8, which folded in ~90 merged PRs before its entry was ever
+  written. CLAUDE.md's own description of `CHANGELOG.md` was corrected
+  to say so — but `CHANGELOG.md`'s own opening line ("each release was
+  shipped as one reviewed pull request") was missed in that same pass
+  and kept contradicting both the new CLAUDE.md rule and the v0.8.0
+  entry sitting directly beneath it, until a follow-up audit round
+  caught it. The lesson: when a fact gets corrected in the file that
+  *describes* another file, check the described file itself for the
+  same stale claim — not just the description of it.
 - **PR #115's silent scope creep (2026-07-19).** Its own description
   said "Tiers 2-4 from the audit are being worked in a follow-up," then
   Tier 2, Tier 3, and Tier 4 all landed as further commits on this same

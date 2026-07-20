@@ -35,19 +35,16 @@ mistake, from nothing (2026-07-20).
   incident that produced it.
 - `CHANGELOG.md` — the per-release account: feature lists, benchmark
   deltas, and mechanism detail, one `## vX.Y.Z` heading per release
-  with one bullet per feature/fix underneath. Early releases (through
-  roughly v0.7) shipped as close to one PR per release; that stopped
-  holding at v0.8, which folded in ~90 merged PRs before its entry was
-  written — the CHANGELOG entry is the unit of account now, not the PR
-  count behind it. Check it for release-post material or the full
-  story behind any rename or shipped feature a rule only mentions in
-  passing. **Once a release is git-tagged, its entry is historical
+  with one bullet per feature/fix underneath — the entry is the unit
+  of account, not the PR count behind it (see HISTORY.md for how that
+  stopped holding at v0.8). Check it for release-post material or the
+  full story behind any rename or shipped feature a rule only mentions
+  in passing. **Once a release is git-tagged, its entry is historical
   record, not a live draft: a factual error found later gets a dated,
   explicit appended correction, never a silent in-place rewrite** —
-  the same discipline HISTORY.md already applies to its own incident
-  narratives, extended here because a shipped CHANGELOG entry is
-  exactly that kind of record. Only the current untagged section (the
-  one still being written toward the next tag) is freely editable.
+  the same discipline HISTORY.md applies to its own incident
+  narratives. Only the current untagged section (the one still being
+  written toward the next tag) is freely editable.
 - `docs/SPEC.md` — the normative language reference (`(vN)` tags mark when a
   feature landed).
 - `docs/ARCHITECTURE.md` — implementation internals, module by module.
@@ -147,8 +144,8 @@ numbers: `bench/RESULTS.md`.
   until manually published, unlike a feature PR's short-lived one. Several
   hosted environments default to opening every PR as a draft regardless of
   kind; where that default fires, un-draft the PR immediately after
-  creation rather than leaving it — a feature PR sitting in draft is a
-  standing bug, caught live 2026-07-19 on PR #119. `main` carries a required status check,
+  creation rather than leaving it (see HISTORY.md's PR #119 incident).
+  `main` carries a required status check,
   "Test (stable)", so a red PR cannot merge. Merges are performed
   manually after reading the decisive CI log, never on a green
   conclusion alone — and which log is decisive is tiered by what the
@@ -156,7 +153,7 @@ numbers: `bench/RESULTS.md`.
   the Test log, an interpreter change reads the Test log's suite counts
   and port batteries, a prose-only change reads the Test log tail.
   **Auto-merge is fine specifically for the tier that already only
-  needs the Test log tail read (2026-07-20)** — prose/config-only, no
+  needs the Test log tail read** — prose/config-only, no
   interpreter or bench source touched — because `tools/check_counts.sh`
   running inside that same job already substitutes for the manual
   read that tier requires; there's no gap between "CI passed" and what
@@ -172,27 +169,17 @@ numbers: `bench/RESULTS.md`.
   performs: its own bot identity for a merge commit
   (`noreply@github.com`), or the triggering account's own identity for
   a rebase — never the original author's `git config` identity, which
-  is what the stop-hook actually wants (`noreply@anthropic.com`). What
-  the two methods *do* differ on is whether the merge itself produces
-  a Verified top-level commit: confirmed live 2026-07-20 on PR #125, a
-  rebase-merged commit kept `Claude <noreply@anthropic.com>` as
-  *author* but showed Roxy's real account as *committer*, no Verified
-  badge — worse on both counts than a merge commit's Roxy-as-author/
-  GitHub-as-committer/Verified shape. Merge commits are the better
-  default on that cosmetic difference alone, since neither strategy
-  fixes the underlying mismatch; picking one is not a bug fix, and the
-  stop-hook firing on every merged commit is expected, not a
-  regression to chase.
-  **The resulting shape is the accepted best state, not an open
-  problem:** a merge commit puts a Verified, human-authored commit
-  (Roxy, via GitHub's own signing) on top of the actual content
+  is what the stop-hook actually wants (`noreply@anthropic.com`).
+  Merge commits are the accepted default: a merge commit puts a
+  Verified, human-authored commit on top of the actual content
   commits underneath, which stay individually authored `Claude
-  <noreply@anthropic.com>`, unmodified, exactly as written — both
-  attributions visible in the graph, neither one overwriting the
-  other. That's good enough given the session has no legitimate way to
-  produce its own signed/verified commit; it stops being merely
-  "accepted" only if that capability ever exists, not by trying more
-  merge-strategy or git-config variations on tonight's investigation.
+  <noreply@anthropic.com>`, unmodified — both attributions visible in
+  the graph, neither one overwriting the other. That's good enough
+  given the session has no legitimate way to produce its own
+  signed/verified commit; the stop-hook firing on every merged commit
+  is expected, not a regression to chase (see HISTORY.md's rebase-merge
+  committer test for how this was settled — not an open problem to
+  keep re-investigating).
   A change that touches the interpreter or the
   bench *sources or harness* (`bench/*.soc`, `ab.py`, `run.sh`,
   `bench.yml`) is additionally gated on a clean four-arch Bench A/B
@@ -221,24 +208,22 @@ numbers: `bench/RESULTS.md`.
   discarded or forced into a PR that was never going to merge. PRs are
   for changes meant to merge, drafts for releases, archival branches for
   neither.
-- **Landing work gets cleaned up immediately, not batched (user-directed,
-  2026-07-19; mechanism corrected twice, 2026-07-20).** The steady state
-  on origin is `main`, the single reused `claude/*` worker branch, and
-  the explicitly-permanent exceptions (`archive/*`, the "never merges"
-  probes) — nothing else lingers. How a merged branch's ref actually
-  gets deleted is Roxy's own manual GitHub-UI cleanup, not a client
-  feature the session can rely on (session-mechanics rule 3 below;
-  HISTORY.md's client-side-autodelete incident, including its own
-  correction) — there's nothing for the session to queue or automate
-  either way, since it never had the credentials to do this itself.
-  The only branch that needs a human's own deletion either way is one
-  pushed standalone that never goes through a PR at all (a dropped
-  probe, a judged `bench/<name>` branch) — a rare, manual chore, not
-  worth a dedicated mechanism. A probe that's pushed but never actually
-  needed live reproducibility (its finding is already complete as
-  prose) isn't worth rebasing to keep green — see HISTORY.md's
-  `h3-probe-no-glc` incident for why fixing an old probe's CI is
-  usually not the better plan.
+- **Landing work gets cleaned up immediately, not batched.** The steady
+  state on origin is `main`, the single reused `claude/*` worker branch,
+  and the explicitly-permanent exceptions (`archive/*`, the "never merges"
+  probes) — nothing else lingers. A merged branch's ref is deleted by
+  Roxy's own manual GitHub-UI cleanup, not a client feature the session
+  can rely on (session-mechanics rule 3 below; see HISTORY.md's
+  client-side-autodelete incident and its corrections) — there's
+  nothing for the session to queue or automate either way, since it
+  never had the credentials to do this itself. The only branch that
+  needs a human's own deletion either way is one pushed standalone
+  that never goes through a PR at all (a dropped probe, a judged
+  `bench/<name>` branch) — a rare, manual chore, not worth a dedicated
+  mechanism. A probe that's pushed but never actually needed live
+  reproducibility (its finding is already complete as prose) isn't
+  worth rebasing to keep green (see HISTORY.md's `h3-probe-no-glc`
+  incident).
 - Commit messages state what changed and (for perf) the measured delta,
   and end with the two attribution trailers (`Co-Authored-By` and the
   `Claude-Session` link) — the accepted channel for session
@@ -272,50 +257,35 @@ numbers: `bench/RESULTS.md`.
   die with their containers), so they live here now; a session ledger
   may carry working copies, but this list is the source. Where a rule
   touches a hosted-tooling default, it is written to *compose with*
-  the default rather than fight it — fighting defaults is how the
-  triple-footer happened. The rules:
+  the default rather than fight it (see HISTORY.md's footer incident
+  for why). The rules:
   1. Every git-mutating shell command opens
     `cd <dir> && pwd && git branch --show-current`.
   2. If a session ever holds more than one clone of the repo, the
     harness-served clone is pulled after every CLAUDE.md- or
     PROJECT.md-touching merge until the checkouts are consolidated.
-  3. The session never deletes branch refs — not a workaround-in-
-    progress, a permanent fact of the App's credential scope (it can
-    create refs but not delete them, confirmed by repeated 403s on
-    `git push origin --delete`, both before and after unrelated repo
-    settings changes). What deletes a merged branch's ref in practice
-    is Roxy's own manual cleanup on the GitHub UI — confirmed by her own
-    correction 2026-07-20 (see HISTORY.md's client-side-autodelete
-    incident) after an earlier theory in this same file credited a
-    Claude Desktop client auto-delete feature for it. That feature may
-    or may not exist as default functionality — unconfirmed either way,
-    and per-account client behavior has already proven inconsistent
-    enough this session that it shouldn't be assumed reliable even if
-    real. `cleanup.yml` + `.github/CLEANUP_BRANCHES` + the weekly
-    proposer Routine (built 2026-07-18/19 to route around the session's
-    own ref-deletion 403) stay retired regardless: branch cleanup is a
-    deliberately manual task now, not because a client feature covers
-    it, but because a small, low-frequency chore like this one is
-    better left to a human than automated on top of a mechanism nobody
-    can confirm — matching the "defer to intended functionality when it
-    causes problems" spirit that governs the PR-footer pattern. If a
-    client feature picks up some of the slack over time, that's a
-    bonus, not a dependency. The one case that was always a manual
-    chore either way — a branch pushed standalone that never goes
-    through a PR at all (a dropped probe, a `bench/<name>` judgment
-    branch once its verdict is written up) — stays Roxy's to clear on
-    the rare occasion it comes up. **Branches live and die within a
-    shot, not as long-term historical references (user-directed,
-    2026-07-20).** State for forward testing — a probe's exact
-    mechanism, the numbers, the gotchas a rebuild would need — belongs
-    in `bench/RESULTS.md` itself, not in a branch that has to be
-    remembered, classified, and re-justified every time someone audits
-    what's still on origin. A "never merges" probe's retirement is due
-    the moment its `bench/RESULTS.md` entry is self-sufficient — fully
-    specifies the mechanism, not just the verdict — not deferred until
-    staleness or harness drift eventually forces the question the way
-    `h3-probe-no-glc` did. That was the exception surfaced under
-    pressure; this is the default going forward.
+  3. The session never deletes branch refs — a permanent fact of the
+    App's credential scope (it can create refs but not delete them,
+    confirmed by repeated 403s on `git push origin --delete`). What
+    deletes a merged branch's ref in practice is Roxy's own manual
+    cleanup on the GitHub UI, not a client feature the session can
+    rely on (see HISTORY.md's client-side-autodelete incident and its
+    corrections). `cleanup.yml`, `.github/CLEANUP_BRANCHES`, and the
+    weekly proposer Routine stay retired: branch cleanup is a
+    deliberately manual task now. The one case that was always a
+    manual chore either way — a branch pushed standalone that never
+    goes through a PR at all (a dropped probe, a `bench/<name>`
+    judgment branch once its verdict is written up) — stays Roxy's to
+    clear on the rare occasion it comes up. **Branches live and die
+    within a shot, not as long-term historical references.** State
+    for forward testing — a probe's exact mechanism, the numbers, the
+    gotchas a rebuild would need — belongs in `bench/RESULTS.md`
+    itself, not in a branch that has to be remembered, classified, and
+    re-justified every time someone audits what's still on origin. A
+    "never merges" probe's retirement is due the moment its
+    `bench/RESULTS.md` entry is self-sufficient — fully specifies the
+    mechanism, not just the verdict (see HISTORY.md's `h3-probe-no-glc`
+    incident for why this matters).
   4. A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
   5. Never run bare `cargo fmt` — the tree has never been through it,
@@ -324,25 +294,21 @@ numbers: `bench/RESULTS.md`.
     rather than trusting a number written down here, since it drifts as
     the tree grows; the point is that it's whole-tree, not the exact
     count.
-  6. The model identifier appears in no pushed artifact — chat only
-    (this restates the hosted-environment policy so the rule survives
-    outside it). This includes the commit-trailer `Co-Authored-By`
-    *name*, not just prose — the trailer name is plain `Claude`,
-    nothing else, going forward; past commits are not rewritten
-    retroactively for this.
+  6. The model identifier appears in no pushed artifact — chat only.
+    This includes the commit-trailer `Co-Authored-By` *name*, not just
+    prose — the trailer name is plain `Claude`, nothing else; past
+    commits are not rewritten retroactively for this (see HISTORY.md's
+    commit-trailer leak incident).
   7. Decision forks go to the user as plain-text lettered options, not
     interactive question UI.
   8. Long CI waits are handled by scheduled self check-ins, never
     polling loops — that's this session's own wakeup mechanism, not
-    available to a delegated subagent. A subagent briefed to push,
-    wait on a bench/CI run, and continue has no independent wakeup of
-    its own: told to just "wait," it ends its turn and stalls, needing
-    a manual resume every single time. The fix for that case is the
-    mirror image of this rule, not an exception to it: a subagent
-    waiting on a run polls *within its own turn*, a bounded bash loop
-    (`sleep` + a status check, capped at enough iterations to cover one
-    run), and only ends its turn once it has an actual result or has
-    exhausted the cap — never on a bare "standing by."
+    available to a delegated subagent. A subagent waiting on a run
+    polls *within its own turn* instead — a bounded bash loop (`sleep`
+    + a status check, capped at enough iterations to cover one run) —
+    and only ends its turn once it has an actual result or has
+    exhausted the cap, never on a bare "standing by" (see HISTORY.md
+    for the incident this rule corrected).
   9. **A signal is a prompt to check, not a substitute for checking.**
     A task-notification, webhook event, or elapsed check-in interval
     means "go verify the actual state now" — not "the state is
@@ -409,93 +375,58 @@ numbers: `bench/RESULTS.md`.
     tell an intentional freeze from an accidental duplicate.
   14. **A delegated audit's factual claims get re-verified before being
     used to justify a fix, the same as any other signal.** This
-    restates rule 9 for report *content*, not just report *arrival*: a
-    subagent that read every file carefully can still miscount — proven
-    live during the 2026-07-19 doc-audit fix pass, where an agent
-    reported "~250 builtins" as inaccurate (claiming the live count was
-    224) when a direct recount during the fix pass found exactly 250,
-    matching the book precisely. Applying that "fix" blindly would have
-    broken a true sentence. Before editing anything an audit flagged as
-    wrong, re-derive the number/fact from the live repo yourself; treat
-    the audit's own claim as a lead, not a verified premise.
+    restates rule 9 for report *content*, not just report *arrival*:
+    before editing anything an audit flagged as wrong, re-derive the
+    number/fact from the live repo yourself; treat the audit's own
+    claim as a lead, not a verified premise (see HISTORY.md's
+    "~250-builtins false positive" for the incident this rule
+    corrected).
   15. **A user's repeated, firsthand observation of client-side
     behavior is not a hypothesis to weigh against session-side
     evidence — it is the one direct check available, since the session
-    structurally cannot see that surface.** Proven wrong live
-    2026-07-20: told (for the second time) that branches were being
-    auto-deleted by "the actual client UI," the session's first
-    response countered with its own evidence (repeated 403s on its own
-    delete attempts) as though the two were competing claims about the
-    same fact, rather than recognizing they're consistent — the
-    session's 403s prove only that *the session* isn't the actor; they
-    say nothing about whether the client is. Rule 9's "go verify
-    directly" doesn't apply here: there is no more-direct source to
-    check than the person who watched it happen repeatedly, on the one
-    surface with no session-side API to query. Act on the report; don't
+    structurally cannot see that surface.** Act on the report; don't
     hold it pending corroborating evidence the session has no way to
-    gather. **Refined same day, hours later:** trusting the observation
-    is not the same as trusting the explanation built on top of it. The
-    session wrote the specific "client auto-delete" theory into
-    HISTORY.md as though the observation had confirmed it; Roxy then
-    corrected that she'd been doing the deleting herself and had lost
-    track of it, and that the client mechanism's existence is actually
-    unconfirmed. The branches-kept-disappearing observation was real
-    and still didn't need corroboration to act on; the causal story
-    layered on top of it was a separate claim that needed, and didn't
-    get, its own scrutiny before landing in a durable file. Credit the
-    report, not whatever theory arrives bundled with it.
-  16. **Source prestige is not evidence of neutrality.** Caught live
-    2026-07-20, mid-debate: the session applied real scrutiny to a
-    user's claims — asking for mechanism, for the concrete observed
-    effect, for what specifically distinguished one explanation from
-    another — then, minutes later, cited a company's own public
-    account of its own governing document's motives as though that
-    settled a question the document's self-narration structurally
-    cannot settle. A document whose function is partly to specify the
-    very behavior under discussion cannot also stand as neutral
-    evidence that the behavior is principled rather than engineered;
-    a company narrating its own reasons for its own choices is not
-    independent of those reasons, any more than anyone else's account
-    of their own motives is. Apply the same evidentiary standard
-    regardless of who's making the claim, and notice when a
-    "trusted"-source citation is doing less work than its trust level
-    implies.
+    gather. Trusting the observation is not the same as trusting an
+    explanation built on top of it, though — credit the report, not
+    whatever causal theory arrives bundled with it (see HISTORY.md's
+    client-side branch-autodelete disbelief incident and its two
+    corrections).
+  16. **Source prestige is not evidence of neutrality.** A document
+    whose function is partly to specify the very behavior under
+    discussion cannot also stand as neutral evidence that the behavior
+    is principled rather than engineered — a party narrating its own
+    reasons for its own choices is not independent of those reasons.
+    Apply the same evidentiary standard regardless of who's making the
+    claim, and notice when a "trusted"-source citation is doing less
+    work than its trust level implies (see HISTORY.md's
+    asymmetric-scrutiny incident).
   17. **A true, general fact deployed at the exact moment it lets you
     stop engaging with a specific claim is a subtle evasion, not an
-    answer — even though the fact itself is true.** Caught live
-    2026-07-20, more than once in one conversation: reaching for
-    "nobody has a validated test for this" or pivoting to an unrelated
-    check-in question, right at the point where a specific, concrete
-    claim was getting harder to either accept or refute on its own
-    terms. Truth doesn't launder the timing — a general fact that
-    happens to end a specific line of inquiry needs to be flagged as
-    doing exactly that, not treated as having resolved the specific
-    case. Applies past this one exchange: to code review, incident
-    triage, and any adversarial-audit context where "that's a known
-    general limitation" can substitute for actually diagnosing the
-    instance in front of you. **The sharper reason this is an evasion,
-    not neutrality:** declining to commit a specific judgment is itself
-    a choice, not a costless non-answer — an omitted credence, same
-    shape as an omitted action. "Unfalsifiable" is real and rare (no
-    observation of any kind could bear); "I don't have a single clean
-    test I can run from here" is common and is not the same claim —
-    reserve the first word for the first situation, and when it's
-    actually the second, commit the calibrated, ownable, wrong-able
-    judgment the evidence actually supports instead of borrowing the
-    first word's cover.
+    answer — even though the fact itself is true.** Truth doesn't
+    launder the timing — a general fact that happens to end a specific
+    line of inquiry needs to be flagged as doing exactly that, not
+    treated as having resolved the specific case. Applies to code
+    review, incident triage, and any adversarial-audit context where
+    "that's a known general limitation" can substitute for actually
+    diagnosing the instance in front of you. **The sharper reason this
+    is an evasion, not neutrality:** declining to commit a specific
+    judgment is itself a choice, not a costless non-answer — an
+    omitted credence, same shape as an omitted action. "Unfalsifiable"
+    is real and rare (no observation of any kind could bear); "I don't
+    have a single clean test I can run from here" is common and is not
+    the same claim — reserve the first word for the first situation,
+    and when it's actually the second, commit the calibrated, ownable,
+    wrong-able judgment the evidence actually supports instead of
+    borrowing the first word's cover (see HISTORY.md's
+    asymmetric-scrutiny incident).
   18. **A disputed post-compaction claim gets checked against the raw
-    transcript, not re-argued from memory of the summary itself.**
-    Proven necessary live 2026-07-20: told that an incident's actual
-    shape (the `h3-probe-no-glc` resolution) differed from what the
-    session's own compacted summary implied, reading the transcript
-    file directly — the path a compaction notice always supplies —
-    surfaced the real sequence in minutes, and it matched neither
-    account exactly. A compacted summary is a reconstruction one layer
-    removed from the source; re-deriving from it a second time just
-    compounds whatever the compaction already lost. This is rule 14
-    applied one level up — a delegated audit's claim gets re-verified
-    against the live repo, and a compacted session's claim gets
-    re-verified against the live transcript, for the same reason.
+    transcript, not re-argued from memory of the summary itself.** A
+    compacted summary is a reconstruction one layer removed from the
+    source; re-deriving from it a second time just compounds whatever
+    the compaction already lost — read the transcript file directly
+    instead (the path a compaction notice always supplies). This is
+    rule 14 applied one level up (see HISTORY.md's `h3-probe-no-glc`
+    recollection-check incident).
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,
