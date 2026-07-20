@@ -193,9 +193,13 @@ every such divergence.
 
 - CI runs everything under `SOCRATES_GC_STRESS=1`. Pure-integer,
   low-allocation demos are essentially free (`png`: 26 ms); transient
-  allocation is what hurts (`checkers`, the heaviest demo in the suite:
-  ~50 s). Budget pinned heavyweight loops accordingly and measure
-  per-file (`lisp`'s 100k-iteration pin dominates its ~29 s stress run).
+  allocation is what hurts (`checkers`, the heaviest demo in the suite
+  by a wide margin: tens of seconds). Budget pinned heavyweight loops
+  accordingly and measure per-file (`lisp`'s 100k-iteration pin
+  dominates its own stress run, a distant second to `checkers` at a
+  small fraction of its time). Absolute seconds move with the runner —
+  re-measure rather than trust a number here; the *ranking* is the
+  stable part.
 - Set-probe dispatch beat chained string compares under stress
   (`lisp`, −15%): fewer transient Options per call. Amortized lookups
   are a safe default even in hot paths.
@@ -222,8 +226,9 @@ These rules are numbered because divergence comments cite them by name.
   `.all()`/`.any()` over the manual loop/match/gate spellings. This
   applies to ports' INTERNALS too; a port's API *surface* that mirrors
   its upstream is exempt — there the upstream's names and shapes win
-  (`ports/*/CONTRACT.md`), because upstream fidelity is the port's
-  whole verification story.
+  (each port's own contract file, where one exists — so far only
+  `ports/pyl/CONTRACT.md`; `icaa` has no contract file of its own),
+  because upstream fidelity is the port's whole verification story.
 - **R4 — deliberate divergence.** Any exemption from a rule in this
   file carries a one-line comment at the site naming the rule it
   diverges from and why, and `NOTES.md` keeps the ledger. An

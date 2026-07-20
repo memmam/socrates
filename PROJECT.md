@@ -112,25 +112,13 @@ their place fastest.
   diary; process/history belongs in `CLAUDE.md`, `PROJECT.md`,
   `HISTORY.md`, or `CHANGELOG.md`, never in the book).
 
-Each of the four directories above (`docs/`, `bench/`, `demos/`,
-`ports/`) also gets a nested per-directory `CLAUDE.md` stub (bare
-filename — nested `.claude/CLAUDE.md` is not a real discovery path;
-that's reserved for settings/skills/rules) that does nothing but
-`@`-import the file(s) already listed for it above, so Claude Desktop's
-context-tracker "Memory files" panel lists `docs/SPEC.md` and friends as
-their own entries. The `@`-import is not lazy about *content* — the stub
-force-loads the entire imported file(s) the moment it fires, a real,
-compounding cost paid by every clone and contributor. The four stubs are
-committed, tracked files; the load-bearing part — the `@`-import lines —
-is byte-exact with the table below, in that order. Each stub also opens
-with a fixed HTML-comment header (not shown in the table, since it
-carries no `@`-import semantics of its own) explaining the mechanism in
-the same words every time, substituting only the directory name and the
-cited file(s) — see any of the four files for the exact template.
-Reconstructing the `@`-import lines from a one-example-plus-inference
-description is exactly the kind of drift this file exists to prevent.
-(`HISTORY.md` has the story of how this mechanism evolved — it started
-gitignored and opt-in before being proven and committed.)
+CLAUDE.md describes the nested-stub mechanism generically; this is the
+concrete table for the four directories it applies to (`docs/`,
+`bench/`, `demos/`, `ports/`) — which one imports which file(s), in
+which order. The four stubs are committed, tracked files; the
+load-bearing part is byte-exact with this table. (`HISTORY.md` has the
+story of how this mechanism evolved — it started gitignored and opt-in
+before being proven and committed.)
 
 | File | Content |
 | --- | --- |
@@ -176,12 +164,12 @@ single-binary sequential profiling convenience (where does one binary
 spend its time?), not the gate. Method and standing numbers:
 `bench/RESULTS.md`.
 
-This project's own golden/pinned test surfaces are its tripwires — if a
-change is wrong, one of them goes red: the spec suite (`tests/spec/`,
-313 tests, run through the same `socrates test` path users get), the
-book's executable snippets (every ```soc block in `book/` runs in CI
-except the rare fragment fence-tagged `skip`), and the demos' pinned
-output (every demo's full stdout is golden-tested, `demos/`).
+CLAUDE.md names golden/pinned test surfaces as this project's
+tripwires; the three are the spec suite (313 golden tests under
+`tests/spec/`, run through the same `socrates test` path users get), the book's
+executable snippets (every ```soc block in `book/` runs in CI except
+the rare fragment fence-tagged `skip`), and the demos' pinned output
+(every demo's full stdout is golden-tested, `demos/`).
 
 Any prose-stated count that could silently drift out of sync with
 reality is stated in a fixed set of places, all updated in the same PR,
@@ -226,12 +214,18 @@ verdict attaches to the tree that built the judged binaries: follow-up
 commits touching no compiled source ride the existing verdict without a
 re-run.
 
-The steady state on origin is `main`, the single reused `claude/*`
-worker branch, and two explicitly-permanent exceptions: `archive/*`
-(retired mechanisms kept for the record, never revived) and a
-`bench/<name>` "never merges" probe branch while its finding is still
-being written up (retired once `bench/RESULTS.md`'s entry is
-self-sufficient — see HISTORY.md's `h3-probe-no-glc` incident).
+This project currently names no standing permanent exceptions: the
+steady state on origin really is just `main` and the single reused
+`claude/*` worker branch (verified live via `git ls-remote --heads
+origin` — nothing else exists there right now). `archive/*` and a
+`bench/<name>` "never merges" probe branch look like exceptions while
+they're active, but neither is actually permanent — both are temporary
+holding categories, retired the moment their content becomes
+self-sufficient in a standing-results file (`bench/RESULTS.md`,
+`HISTORY.md`) rather than kept around as the record itself. The one
+`archive/*` instance to date, `archive/h2-small-list`, was deleted the
+same day its finding was written up; see HISTORY.md's `h3-probe-no-glc`
+incident for the same logic applied to a probe branch.
 
 Frozen-copy examples (the stability-required exception to "point to a
 fact, don't duplicate it"): `ports/claudewave/reference/sos_freeze.txt`

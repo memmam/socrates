@@ -153,12 +153,17 @@ killed the effect. The exception is aarch64-linux, where the compact
 loop measured a reproducible enum_match cost: there a `build.rs`-emitted
 `monolithic_dispatch` cfg flips the same bodies to `#[inline(always)]`,
 folding the monolith back together — the op bodies live once in vm.rs,
-and each target binds its measured-fastest form. (`build.rs`'s only
-other output is macOS-specific: a `-Wl,-stack_size,0x20000000` link arg
-sizing the main thread's stack, since AppKit forces the interpreter onto
-the real main thread there; it is emitted as `cargo:rustc-link-arg-bins`
-so it composes with the `RUSTFLAGS` CI sets on macOS instead of being
-replaced by them.)
+and each target binds its measured-fastest form. `build.rs` emits one
+more per-target cfg the same way: `upvals_vec_handle` on x86_64-linux
+and aarch64-linux, binding `Obj::Closure`'s upvalue storage to plain
+`Vec<Handle>` on those two targets instead of the `InlineUpvals`
+inline-slots-or-spill form everywhere else (`bench/RESULTS.md`'s
+"Inline upvalues" section has the per-target measurements). `build.rs`'s
+one remaining output is macOS-specific: a `-Wl,-stack_size,0x20000000`
+link arg sizing the main thread's stack, since AppKit forces the
+interpreter onto the real main thread there; it is emitted as
+`cargo:rustc-link-arg-bins` so it composes with the `RUSTFLAGS` CI sets
+on macOS instead of being replaced by them.
 
 Values are 16-byte tagged immediates
 (`Unit`/`Bool`/`Int`/`Float`/`Native`/`Obj(handle)`);

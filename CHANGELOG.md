@@ -11,7 +11,7 @@ it.
 
 One release, four workstreams (the third and fourth folded in before the
 release was ever published). First, the standing directive from
-`CLAUDE.md`'s roadmap: replace the one quarantined dependency (wgpu) with
+`PROJECT.md`'s roadmap: replace the one quarantined dependency (wgpu) with
 native raw-FFI backends for every graphics and compute API worth having,
 built over a maximally-performant, minimal-duplication shared core —
 three native windowing/draw-call backends, five native compute backends,
@@ -266,7 +266,7 @@ actually enforces — and, landing with them, the rename:
   stay A/B-comparable against pre-rename ones.
 - **The four-arch Bench A/B gate** (`bench/ab.py` + the Bench A/B
   workflow): every interpreter/idiom change is judged by interleaved A/B
-  on one runner per tier-1 architecture; CLAUDE.md's universality
+  on one runner per tier-1 architecture; PROJECT.md's universality
   principle is the acceptance rule. macOS is judged by multi-sample
   majority (`bench/RESULTS.md` documents the per-job modulation that
   makes single macOS runs unreliable below ~6%).
@@ -276,7 +276,7 @@ actually enforces — and, landing with them, the rename:
   ±5–14% phantom swings out of unrelated edits — except on
   aarch64-linux, where a `build.rs`-emitted `monolithic_dispatch` cfg
   folds them back in (the compact loop measured a reproducible
-  enum_match cost there; per CLAUDE.md, an irreconcilable per-target
+  enum_match cost there; per PROJECT.md, an irreconcilable per-target
   disagreement binds each target to its measured-fastest form instead
   of accepting a tradeoff). Broad wins elsewhere: up to −27% on
   Apple-Silicon micro benches, −3..−8% across x86_64 Linux/Windows.
@@ -356,8 +356,9 @@ actually enforces — and, landing with them, the rename:
   described a 256-object threshold retired in v0.4; the transcripts
   are regenerated from real runs against an example that actually
   collects); ARCHITECTURE gains the compact-dispatch description,
-  build.rs coverage, and a minification-pass section; CLAUDE.md's roadmap,
-  gauntlet, and merge-process wording reconciled to reality (the
+  build.rs coverage, and a minification-pass section; PROJECT.md's
+  roadmap and gauntlet, and CLAUDE.md's merge-process wording,
+  reconciled to reality (the
   shipped v0.8 backends are no longer "still to build", ab.py + the
   four-arch workflow is the perf gate, `main` carries the required
   "Test (stable)" check), plus a new engineering principle: every
