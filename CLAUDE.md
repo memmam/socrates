@@ -167,6 +167,16 @@ numbers: `bench/RESULTS.md`.
   default on cosmetics alone, since neither strategy fixes the
   underlying mismatch; picking one is not a bug fix, and the stop-hook
   firing on every merged commit is expected, not a regression to chase.
+  **The resulting shape is the accepted best state, not an open
+  problem:** a merge commit puts a Verified, human-authored commit
+  (Roxy, via GitHub's own signing) on top of the actual content
+  commits underneath, which stay individually authored `Claude
+  <noreply@anthropic.com>`, unmodified, exactly as written — both
+  attributions visible in the graph, neither one overwriting the
+  other. That's good enough given the session has no legitimate way to
+  produce its own signed/verified commit; it stops being merely
+  "accepted" only if that capability ever exists, not by trying more
+  merge-strategy or git-config variations on tonight's investigation.
   A change that touches the interpreter or the
   bench *sources or harness* (`bench/*.soc`, `ab.py`, `run.sh`,
   `bench.yml`) is additionally gated on a clean four-arch Bench A/B
