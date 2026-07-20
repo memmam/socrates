@@ -153,7 +153,7 @@ output is golden-tested. This image is Socrates output too:
 - **A real GC, stress-tested.** Tracing mark-and-sweep with checkpoint
   rooting. Run anything with `SOCRATES_GC_STRESS=1` to collect before *every*
   allocation — the entire test suite passes under it.
-- **An executable book.** 135 of the 136 ```` ```soc ```` snippets in
+- **An executable book.** 135 of the 136 `soc` snippets in
   [`book/`](book/) execute in CI — including the deliberate-error demos,
   verified to fail the way the prose says they do (the one exception is a
   fragment fence-tagged `skip`).
