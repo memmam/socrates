@@ -1,7 +1,7 @@
 //! GPU compute for the `gpu` builtin namespace.
 //!
 //! This module is **always compiled**; the backends behind it are the five
-//! **native, zero-dependency** paths of CLAUDE.md's roadmap — Metal (MSL
+//! **native, zero-dependency** paths of PROJECT.md's roadmap — Metal (MSL
 //! source via [`run`]; `--features metal`, Apple Silicon macOS), Vulkan and
 //! OpenCL (SPIR-V binaries via [`run_spirv`], each in its own profile;
 //! `--features vulkan` / `opencl`, Linux/Windows), CUDA (PTX source via
@@ -178,7 +178,7 @@ pub fn run(
 // ---------------------------------------------------------------------------
 // Native Metal backend (macOS/Apple Silicon with --features metal): raw FFI
 // over crate::mtl/crate::objc — the roadmap's first native compute backend
-// (CLAUDE.md).
+// (PROJECT.md).
 //
 // # The MSL `gpu.run` ABI (the module-docs contract, in MSL)
 //

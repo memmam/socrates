@@ -87,9 +87,9 @@ A few commitments shape the whole project, and they are worth knowing
 because they explain the choices above. The interpreter has **zero
 dependencies** by default — a feature you can only lose once, so it is
 guarded. `docs/SPEC.md` is the **source of truth**: the implementation, the
-tests, and this book all answer to it. Features are **pulled in by use, not
-pushed by a roadmap** — the bitwise operators, `Bytes`, and workers all
-arrived because real programs needed them. And Socrates is built to be written
+tests, and this book all answer to it. `std` grows by pull, not by
+roadmap: a module earns its place by a real program needing it, never
+speculatively. And Socrates is built to be written
 *by* automated tooling as much as by hand, which is why so much of it —
 golden tests, deterministic output, a spec that rules — is about making a
 program's behavior legible and checkable. Write Socrates so a machine could

@@ -13,7 +13,7 @@ sparklines, so the demo has output even without a browser.
 
 ## Run it
 
-From the repo root:
+From the repository root:
 
 ```
 ./target/release/socrates demos/plot/main.soc            # writes into demos/plot/

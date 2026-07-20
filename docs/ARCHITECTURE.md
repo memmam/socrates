@@ -354,7 +354,10 @@ they already handle (fmt canonicalizes the sugar to the block form).
 **RNG**: `math.seed` collapsed adjacent seeds — state was `seed | 1`, so
 2k and 2k+1 were identical streams (found by the dungeon demo's
 different-seeds test). Seeds now pass through SplitMix64; `rand_int` uses
-the widening-multiply reduction over a raw `u64` draw.
+Lemire's widening-multiply method *with rejection*, so the distribution
+stays exactly uniform even for spans near 2^64 (an earlier version used
+the widening-multiply reduction without rejection, measurably
+non-uniform above 2^32 — `demos/NOTES.md` has the field report).
 
 **Directive scanner**: `//?` only counts when it begins the line's comment,
 with just enough string-awareness to skip `//` inside quotes; golden
@@ -622,7 +625,8 @@ guarantees nothing) so all backends agree on bytes the kernel never
 wrote; command-buffer `error` is checked after `waitUntilCompleted`.
 This backend's landing (with Vulkan and OpenCL after it) is what
 retired wgpu — PROJECT.md's native-backends-first rule, completed in
-v0.8. `gpu.backend()` (`"metal"`/`"vulkan"`/`"opencl"`/`"none"`) is the
+v0.8. `gpu.backend()`
+(`"metal"`/`"vulkan"`/`"d3d12"`/`"cuda"`/`"opencl"`/`"none"`) is the
 dialect escape hatch, the compute analog of `win.backend_name()`.
 
 **Native Vulkan compute (`src/vk.rs`).** The second native compute
@@ -770,7 +774,8 @@ creation, the event-pump `poll()` loop, key/mouse state), which `gl.rs`'s
 `create`, not a `backend` parameter on it — Socrates has neither default
 parameters nor overloading, so a mandatory extra argument would break
 every existing `window.create(title, w, h)` call site for no ergonomic
-gain. `Window.backend_name() -> String` (`"opengl"`/`"metal"`) is the one
+gain. `Window.backend_name() -> String`
+(`"opengl"`/`"metal"`/`"vulkan"`) is the one
 deliberate escape hatch this design needs: shader *source text* is
 inherently backend-specific (GLSL vs. MSL), so a Socrates program targeting
 both backends branches on this one string and nothing else — every other

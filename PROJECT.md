@@ -167,7 +167,8 @@ their place fastest.
   and new (the macos-14/macos-15 dual CI rows are the first instance;
   the 14 rows retire 2026-11-02 when GitHub actually removes the image),
   never cause to early-retire the older one.
-- **When artifacts are consolidated or split, record the intent.** Any
+- **The intent-tracking principle: when artifacts are consolidated or
+  split, record the intent.** Any
   time artifacts merge or one splits, write down what each resulting
   artifact is *for*, how the pieces compose, and why the split or merge
   happened — tracked intent is the drift-prevention mechanism: an

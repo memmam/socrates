@@ -8,9 +8,9 @@ trips Gatekeeper and needs it cleared once —
 
 To make downloads open with **no warning**, sign them with a Developer ID
 certificate and notarize them with Apple. The release workflow already has the
-step wired (`.github/workflows/release.yml` → "Developer ID sign + notarize");
-it stays dormant until the six repo secrets below exist. This is the one-time
-setup.
+step wired (`.github/workflows/release.yml` → "Developer ID sign + notarize
+(when configured)"); it stays dormant until the six repo secrets below exist.
+This is the one-time setup.
 
 ## Prerequisite
 

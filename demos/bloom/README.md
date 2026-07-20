@@ -8,6 +8,10 @@ false-positive count over 2000 disjoint probes (with `std.set` as the
 oracle), and the textbook estimate `(1 - e^(-kn/m))^k` alongside the
 observed rate.
 
+## Run it
+
+From the repository root:
+
 ```sh
 ./target/release/socrates demos/bloom/main.soc   # regenerate + verify filter.bin
 ./target/release/socrates test demos/bloom         # golden-run everything

@@ -1,6 +1,6 @@
 // gpu.run_spirv on the native Vulkan backend (SPEC § 7.2): double eight
 // u32 values with a hand-assembled SPIR-V compute kernel — the first
-// consumer of the SPIR-V lingua-franca decision (CLAUDE.md's roadmap):
+// consumer of the SPIR-V lingua-franca decision (PROJECT.md's roadmap):
 // the shader is a binary Bytes blob Vulkan ingests directly, no compiler
 // or translator anywhere in the chain.
 //

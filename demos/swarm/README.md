@@ -33,7 +33,7 @@ despite true parallelism — determinism by protocol, not by luck.
 
 ## Run it
 
-From the repo root:
+From the repository root:
 
 ```
 ./target/release/socrates demos/swarm/main.soc   # run the scheduler

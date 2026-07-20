@@ -1,3 +1,11 @@
+# FROZEN — do not hand-edit or casually regenerate. This file is the
+# binding artifact for ports/pyl/CONTRACT.md §6: the Socrates port must
+# reproduce every coefficient below to <=1e-12 relative, and CI checks
+# every coefficient against real scipy to <=1e-9 relative (via
+# check_sos_vs_scipy.py) so this dump cannot silently drift from the
+# real library. Regenerated only by run_upstream.py, from the shim's
+# own butter() implementation (CONTRACT.md steps 1-5) — one line per
+# SOS section, `<design-id> b0 b1 b2 1 a1 a2`.
 butter,2,bandpass,0.05,0.625 0.3654502711939664 0.7309005423879328 0.3654502711939664 1.0 0.4185232826407624 0.2305164075814236
 butter,2,bandpass,0.05,0.625 1.0 -2.0 1.0 1.0 -1.7786694712902813 0.8031379293131992
 butter,2,lowpass,0.2 0.0674552738890719 0.1349105477781438 0.0674552738890719 1.0 -1.1429805025399011 0.41280159809618877

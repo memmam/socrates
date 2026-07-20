@@ -1,5 +1,5 @@
 //! Metal backend for macOS, additive alongside `gl.rs` (OpenGL/CGL) — never
-//! a replacement (see `CLAUDE.md`'s standing Metal exception). Composes the
+//! a replacement (see `PROJECT.md`'s standing Metal exception). Composes the
 //! same [`CocoaWindowState`] as `gl.rs` and adds only the Metal-specific
 //! pieces around it: a device, a command queue, a `CAMetalLayer` hosted by
 //! the window's content view, an app-owned offscreen render target, and —
@@ -49,7 +49,7 @@
 //!   draws freely against a persistent framebuffer; the loss-free mapping
 //!   is a fresh `loadAction=Load` render pass per draw call into the
 //!   persistent offscreen target. Wasteful for huge draw counts, but
-//!   observably identical — and per CLAUDE.md's efficiency-pass rule, the
+//!   observably identical — and per PROJECT.md's efficiency-pass rule, the
 //!   faster batched-encoder idiom can later become the primitive underneath
 //!   this exact surface without changing a single pinned byte.
 //! - **Y origin**: GL is bottom-left, Metal top-left. `viewport` and

@@ -3,7 +3,7 @@
 //! SPIR-V lingua-franca decision: `gpu.run_spirv` takes a SPIR-V *binary*
 //! (`Bytes`), which Vulkan ingests directly — no shader compiler, no
 //! translator, no dependency. The same blob will later feed the OpenCL
-//! 2.1+ and GL 4.6 backends (CLAUDE.md's roadmap), which is why the entry
+//! 2.1+ and GL 4.6 backends (PROJECT.md's roadmap), which is why the entry
 //! point is named for the format, not the API.
 //!
 //! **Zero dependencies**: the Vulkan loader is resolved at runtime with
@@ -22,7 +22,7 @@
 //! caching (lavapipe instance creation is milliseconds) but leak-free by
 //! construction and thread-safe without any shared-handle reasoning —
 //! worker isolates can call it concurrently, each getting its own
-//! instance. Per CLAUDE.md's efficiency-pass rule, a cached-device idiom
+//! instance. Per PROJECT.md's efficiency-pass rule, a cached-device idiom
 //! can later become the primitive underneath this exact surface once
 //! measured, without changing observable behavior.
 //!

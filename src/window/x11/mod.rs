@@ -2,7 +2,7 @@
 //! two coexisting rendering backends, OpenGL/GLX ([`gl`]) and Vulkan
 //! ([`vulkan`]), never replacing one with the other. The exact structural
 //! twin of `macos/mod.rs`'s GL/Metal dispatch (see the standing native-
-//! backend roadmap in `CLAUDE.md`: one backend-neutral Socrates-facing
+//! backend roadmap in `PROJECT.md`: one backend-neutral Socrates-facing
 //! surface, thin per-API backends over raw FFI).
 //!
 //! **Why an enum, not a single struct**: [`super::WindowHandle`]'s one

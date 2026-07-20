@@ -409,6 +409,14 @@ def main():
     freeze_path = os.path.join(outdir, 'sos_freeze.txt')
     n_designs = 0
     with open(freeze_path, 'w') as f:
+        f.write('# FROZEN -- do not hand-edit or casually regenerate. This file is the\n'
+                '# binding artifact for ports/pyl/CONTRACT.md section 6: the Socrates port must\n'
+                '# reproduce every coefficient below to <=1e-12 relative, and CI checks\n'
+                '# every coefficient against real scipy to <=1e-9 relative (via\n'
+                '# check_sos_vs_scipy.py) so this dump cannot silently drift from the\n'
+                '# real library. Regenerated only by run_upstream.py, from the shim\'s\n'
+                '# own butter() implementation (CONTRACT.md steps 1-5) -- one line per\n'
+                '# SOS section, `<design-id> b0 b1 b2 1 a1 a2`.\n')
         for design_id, sos in pynp.BUTTER_REGISTRY.values():
             n_designs += 1
             for row in sos:

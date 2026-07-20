@@ -1,7 +1,7 @@
 //! Raw-FFI Metal primitives shared by the two Metal consumers — the
 //! `window/macos/metal.rs` graphics backend and `gpu.rs`'s native compute
 //! path — extracted (like `objc.rs`) when the second consumer arrived, per
-//! CLAUDE.md's shared-core rule. Everything specific to one consumer
+//! PROJECT.md's shared-core rule. Everything specific to one consumer
 //! (pixel formats, render-pass plumbing, `CAMetalLayer`) stays with that
 //! consumer; this file holds only what both genuinely share: the device
 //! constructor, buffer creation, and MSL library compilation.

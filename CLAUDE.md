@@ -107,7 +107,8 @@ cargo build --release
 # glcube's three mains need a live GL/Metal/Vulkan window (CI runs them in
 # the windowing jobs); everything else, cube.soc/spec.soc included:
 shopt -s extglob
-./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc  # 68, also with SOCRATES_GC_STRESS=1
+./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc  # 68
+SOCRATES_GC_STRESS=1 ./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc
 SOCRATES_PATH=ports ./target/release/socrates test ports/pyl/spec.soc
 SOCRATES_PATH=ports ./target/release/socrates test ports/icaa/spec.soc
 ./target/release/socrates build demos/csvql -o /tmp/csvql && (cd /tmp && ./csvql)  # `socrates build` smoke
@@ -152,21 +153,25 @@ numbers: `bench/RESULTS.md`.
   need the four-arch tables or the suite-count comparison stays
   manual, arming auto-merge included, because that's exactly the case
   where pass/fail isn't the whole story (see the spec-count-drift
-  incident, HISTORY.md). **The merge-method setting (merge commit vs.
-  rebase) does not affect verified-commit status either way — don't
-  re-litigate this.** GitHub always re-stamps the committer field
-  during any merge it performs: its own bot identity for a merge
-  commit (`noreply@github.com`), or the triggering account's own
-  identity for a rebase — never the original author's `git config`
-  identity, which is what the stop-hook actually wants
-  (`noreply@anthropic.com`). Confirmed live 2026-07-20 on PR #125: a
+  incident, HISTORY.md). **Neither merge-method setting (merge commit
+  vs. rebase) fixes the underlying content-commit author/committer
+  mismatch the stop-hook flags — don't re-litigate this by trying
+  further merge-strategy or git-config variations.** GitHub always
+  re-stamps the *content commits'* committer field during any merge it
+  performs: its own bot identity for a merge commit
+  (`noreply@github.com`), or the triggering account's own identity for
+  a rebase — never the original author's `git config` identity, which
+  is what the stop-hook actually wants (`noreply@anthropic.com`). What
+  the two methods *do* differ on is whether the merge itself produces
+  a Verified top-level commit: confirmed live 2026-07-20 on PR #125, a
   rebase-merged commit kept `Claude <noreply@anthropic.com>` as
   *author* but showed Roxy's real account as *committer*, no Verified
   badge — worse on both counts than a merge commit's Roxy-as-author/
   GitHub-as-committer/Verified shape. Merge commits are the better
-  default on cosmetics alone, since neither strategy fixes the
-  underlying mismatch; picking one is not a bug fix, and the stop-hook
-  firing on every merged commit is expected, not a regression to chase.
+  default on that cosmetic difference alone, since neither strategy
+  fixes the underlying mismatch; picking one is not a bug fix, and the
+  stop-hook firing on every merged commit is expected, not a
+  regression to chase.
   **The resulting shape is the accepted best state, not an open
   problem:** a merge commit puts a Verified, human-authored commit
   (Roxy, via GitHub's own signing) on top of the actual content

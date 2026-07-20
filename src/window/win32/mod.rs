@@ -2,7 +2,7 @@
 //! two coexisting rendering backends, OpenGL/WGL ([`gl`]) and Vulkan
 //! ([`vulkan`]), never replacing one with the other. The exact structural
 //! twin of `x11/mod.rs`'s GL/Vulkan dispatch and `macos/mod.rs`'s GL/Metal
-//! dispatch (see the standing native-backend roadmap in `CLAUDE.md`).
+//! dispatch (see the standing native-backend roadmap in `PROJECT.md`).
 //!
 //! **Why an enum, not a single struct**: [`super::WindowHandle`]'s one
 //! `inner: Option<PlatformInner>` field can only ever hold one concrete

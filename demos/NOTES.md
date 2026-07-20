@@ -72,16 +72,22 @@ strongest possible signal. Those walls became **v0.6**.
   half-designed.
 - **A line-width-aware formatter.** The single most-reported *tooling*
   issue: `socrates fmt` collapses deliberate multi-line literals (a 57-entry
-  test table became one 1,427-char line), hoists comments out of list
-  literals, and half-expands if/else-if chains. This is a genuine
+  test table became one 1,427-char line). This is a genuine
   limitation and staying on the list — but it's a formatter rewrite, not a
   papercut fix, and the formatter remains *correct* (idempotent,
   behavior-preserving). None of the demos are fmt-clean; that's honest.
+  (Two sibling complaints in this same original report — hoisting comments
+  out of list literals, and half-expanding if/else-if chains — are fixed;
+  see "Bugs — fixed in-round," below. This entry now covers only the
+  multi-line-literal-collapsing complaint, which is still open.)
 - **A `Set` type / `min_by`/`max_by` / `List.fill` / `sum`/`min`/`max` /
   a string builder / a deque.** Each was worked around in one line or two
   (`Map[K, Bool]`, a fold, `(0..n).map(|_| v)` — nicer now with `_`, a
-  list-plus-cursor queue). Builtin surface grows reluctantly; `std` is the
-  natural home for several of these when usage demands.
+  list-plus-cursor queue). (The pull arrived: `std.set`, `lists.fill`/
+  `sum`/`min`/`max`/`min_by`/`max_by`, `strings.Builder`, and `std.deque`
+  all shipped in v0.7 — see CHANGELOG.md's v0.7.0 entry and `docs/SPEC.md`
+  §7.1; this entry is kept as the historical record of why the v0.6
+  decision was "not yet," not as a currently-accurate status.)
 - **`socrates test` counts directive-less files as passing** (lisp's
   verifier). Kept: "a file with no directives must run silently" is
   documented semantics and useful for smoke-running libraries; a mistyped

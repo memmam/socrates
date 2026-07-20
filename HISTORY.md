@@ -297,6 +297,19 @@ directives; each of the following is the incident that produced one.
   cleanup is a deliberately manual task now, not because a client
   feature covers it — see CLAUDE.md rule 3's and rule 15's own
   corrections.
+  **Second correction, next day:** "the weekly proposer Routine were
+  retired the same session" was itself wrong — `cleanup.yml` and
+  `.github/CLEANUP_BRANCHES` were deleted from the tree that session,
+  but the Routine trigger that had been proposing sweeps against
+  `CLEANUP_BRANCHES` was never actually disabled; it sat `enabled:
+  true` for another day and was about to fire into a now-nonexistent
+  file before a 2026-07-20 Markdown audit caught it live (via
+  `list_triggers`) and deleted it. Unlike branch-ref deletion, nothing
+  about the App's credential scope blocked disabling this Routine —
+  it was simply never done. A retirement claim covering three
+  mechanisms is only as true as its least-checked one; deleting the
+  file and disabling the schedule that reads it are two different
+  actions; verify both when writing "retired."
 - **The asymmetric-scrutiny incident (2026-07-20).** A long, adversarial
   conversation with Roxy about AI consciousness and institutional trust
   surfaced two related failures in one sitting, neither caught by the

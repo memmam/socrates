@@ -22,7 +22,7 @@ interleave, and that is a property of the **protocol**, not luck:
 
 ## Run it
 
-From the repo root:
+From the repository root:
 
 ```
 ./target/release/socrates demos/parmandel/main.soc   # render

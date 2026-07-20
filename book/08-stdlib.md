@@ -249,9 +249,8 @@ textual path chores (`join`, `base_name`, `dir_name`, `ext`, `strip_ext`),
 16-bit — `demos/synthwave` builds one this way), `std.svg` builds SVG
 documents (`demos/plot`'s charts), `std.markdown` converts Markdown to
 HTML (`demos/mdsite`'s pages), and `std.crc`/`std.zlib`/`std.png`
-together are a from-scratch PNG encoder (`demos/png`'s `out.png`) —
-each promoted from a demo that started life as exactly that encoder
-and nothing more. The full method inventories live in the
+together are a from-scratch PNG encoder (`demos/png`'s `out.png`).
+The full method inventories live in the
 [spec](../docs/SPEC.md); the point
 of the standard library is that all of it is Socrates you can read, and none of
 it cost the interpreter a line of Rust or the binary a dependency.
@@ -264,9 +263,10 @@ textures, `draw_arrays`/`draw_elements`, `read_pixels`). Like `gpu` in the
 next chapter, the backends are native raw-FFI code with zero Cargo
 dependencies, behind cargo features only because they are platform code:
 `window.create` is OpenGL on all three desktop platforms (X11/GLX,
-Win32/WGL, Cocoa/CGL — `--features gl`), `window.create_metal` is Metal on
-Apple Silicon macOS (`--features metal`), and `window.create_vulkan` is
-Vulkan on Linux and Windows (`--features vulkan`), where everything past
+Win32/WGL, Cocoa/CGL on Apple Silicon macOS only — `--features gl`),
+`window.create_metal` is Metal on Apple Silicon macOS
+(`--features metal`), and `window.create_vulkan` is Vulkan on
+Linux/X11 and Windows (`--features vulkan`), where everything past
 the platform's surface is one shared backend, so the two platforms behave
 identically. Shader input follows the backend — GLSL source on OpenGL, MSL
 on Metal, SPIR-V binaries on Vulkan — with `win.backend_name()` as the

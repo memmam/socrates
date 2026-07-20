@@ -15,7 +15,7 @@
 //
 // Determinism: all draws come from a hand-rolled SplitMix64 stream with
 // the fixed seed below — never math.seed, whose streams are stable only
-// within a release (CLAUDE.md invariant). Byte-identical corpus, every
+// within a release (PROJECT.md invariant). Byte-identical corpus, every
 // run, every release.
 //
 // Rasterization follows scenes.soc's pixel-center rule: a pixel (x, y)

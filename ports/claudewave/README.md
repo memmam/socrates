@@ -67,7 +67,8 @@ real scipy in CI). Parity is judged numerically, per item:
 each item must stay within **its own row** (with a global 1e-9 outer
 bound on every item).
 
-Enforced by CI on every push — **32/32 items pass their rows**. 29 rows
+Enforced by CI on every push (the `Test (stable)` job's claudewave step) —
+**32/32 items pass their rows**. 29 rows
 are `0.0`: those items measured **bit-identical** in the reference
 environment (python 3.11 / numpy 2.4 / scipy 1.17). Enforcement is
 `max(row, 2e-15)` — the small floor exists because the *upstream

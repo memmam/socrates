@@ -26,7 +26,7 @@
 //! down the whole context→queue→program→kernel chain, exactly like the
 //! Vulkan compute path — leak-free by construction and thread-safe without
 //! shared-handle reasoning (worker isolates can call it concurrently). Per
-//! CLAUDE.md's efficiency-pass rule, a cached-context idiom can later
+//! PROJECT.md's efficiency-pass rule, a cached-context idiom can later
 //! become the primitive underneath this exact surface once measured.
 //!
 //! Cleanup is a `Drop` guard ([`Run`]) releasing in reverse creation

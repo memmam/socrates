@@ -222,7 +222,9 @@ new finding. Confirmed, unchanged: aarch64-linux still needs
 `monolithic_dispatch` on, exactly as built. This closes the reopening
 recorded under "The floor is uniform across every leg," below —
 `bench/h1-binding-recheck` never merges (probe only, no code change)
-and needs no further sampling.)
+and needs no further sampling; it is retired per the
+branches-live-and-die-within-a-shot policy (2026-07-20, CLAUDE.md
+session mechanics).)
 
 **macOS measurement protocol.** macos-14 runners are precise but
 per-job biased: an A/A run (identical trees both sides; a
@@ -692,8 +694,13 @@ confirmed at the current ≥5-sample floor, on both the probe that
 isolated the hypothesis and the fresh matrix that verified the
 formalized binding. First instance of the hypothesis-test ladder
 (PROJECT.md, under the ≥5-sample-floor bullet) reaching a CONFIRMED
-verdict end to end — see `bench/inline-upvals-x64-probe`'s commit
-history for the full slot-by-slot record.
+verdict end to end — the slot-by-slot record is the per-sample
+breakdown above; each resample commit on
+`bench/inline-upvals-x64-probe` was an empty-commit re-fire carrying no
+further numeric detail of its own, so the record above is already the
+full one, not a pointer to more. `bench/inline-upvals-x64-probe` is
+retired per the branches-live-and-die-within-a-shot policy (2026-07-20,
+CLAUDE.md session mechanics).
 
 ## Negative results (measured, rejected — do not re-attempt without new evidence)
 
@@ -751,10 +758,14 @@ history for the full slot-by-slot record.
   *differently* per architecture, so x86_64-linux's result doesn't
   predict the others', and the per-target-binding remedy this file
   reaches for elsewhere (`monolithic_dispatch`, `upvals_vec_handle`)
-  was neither tried nor ruled out here. Standing watch: a four-arch
-  matrix run would either confirm the drop everywhere or surface a
-  per-target split like inline-upvalues'; not re-fired proactively
-  since no code has changed in `run()`'s arm layout since.
+  was neither tried nor ruled out here. **Standing watch:** append a
+  dated sighting here whenever `run()`'s arm count changes again (a new
+  fusion, a new op) or another architecture's matrix run shows a
+  zero-fusable-pair control row regressing the same way arith_loop did
+  here — the signature that distinguished this finding from the old
+  dispatch-lottery premise. Two such sightings justify re-firing the
+  four-arch matrix; none have landed, so it stays unfired.
+  Sightings so far: none.
 - Hottest-first arm reordering inside the compact `run()` (H1b): did not
   fix aarch64-linux's systematic enum_match cost (still +4.6%, plus a
   new map_ops +4.4% there) and broke x86_64-linux (enum_match −3.1% →

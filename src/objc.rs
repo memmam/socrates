@@ -1,7 +1,7 @@
 //! The Objective-C runtime dispatch layer shared by every macOS raw-FFI
 //! backend — originally private to `window/macos/shared.rs`, promoted to a
 //! crate-level module when its second consumer arrived (the `gpu`
-//! namespace's native Metal compute path), per CLAUDE.md's shared-core
+//! namespace's native Metal compute path), per PROJECT.md's shared-core
 //! rule: abstractions are extracted when real duplication appears, not
 //! guessed up front. Consumers: `window/macos/{shared,gl,metal}.rs`
 //! (Cocoa windowing + both rendering backends) and `gpu.rs`'s Metal

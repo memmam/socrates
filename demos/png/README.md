@@ -6,6 +6,10 @@ from their definitions, and the deflate stream inside IDAT made of
 *stored* (uncompressed) blocks — the trapdoor in RFC 1951 that makes a
 fully spec-conformant PNG possible with nothing but framing.
 
+## Run it
+
+From the repository root:
+
 ```sh
 ./target/release/socrates demos/png/main.soc    # regenerate + verify out.png
 ./target/release/socrates test demos/png          # golden-run everything

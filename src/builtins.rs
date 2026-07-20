@@ -155,7 +155,7 @@ pub enum Native {
     WindowCreate,
     /// `window.create_metal(title, w, h)` (v0.8, macOS aarch64 only): a
     /// Metal-backed sibling of `window.create` — additive alongside the
-    /// OpenGL/CGL path, never a replacement (see CLAUDE.md's standing
+    /// OpenGL/CGL path, never a replacement (see PROJECT.md's standing
     /// exception). Without the `metal` cargo feature it degrades
     /// gracefully, same as `WindowCreate` without `gl`.
     WindowCreateMetal,

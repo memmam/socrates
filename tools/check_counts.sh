@@ -60,8 +60,8 @@ check "book/11-toolchain.md spec suite (N tests)" "$live_spec" \
   "$(sed -n "s/.*own spec suite (\([0-9]\{1,\}\) tests).*/\1/p" book/11-toolchain.md)"
 
 # --- demo-suite count ------------------------------------------------
-check "CLAUDE gauntlet demos '# N, also with'" "$live_demo" \
-  "$(sed -n 's/.*spec\.soc *# \([0-9]\{1,\}\), also with SOCRATES_GC_STRESS=1$/\1/p' CLAUDE.md)"
+check "CLAUDE gauntlet demos '# N'" "$live_demo" \
+  "$(sed -n 's/.*spec\.soc *# \([0-9]\{1,\}\)$/\1/p' CLAUDE.md)"
 check "RELEASE_NOTES 'N demo golden tests'" "$live_demo" \
   "$(sed -n 's/.*and \([0-9]\{1,\}\) demo golden tests.*/\1/p' .github/RELEASE_NOTES.md)"
 

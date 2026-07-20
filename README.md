@@ -106,7 +106,9 @@ output is golden-tested. This image is Socrates output too:
 - **Batteries.** 150+ built-in methods across `List`, `Map`, `String`,
   `Bytes`, `Option`, `Result`, `Range` (short-circuiting `any`/`all`),
   `Int`, `Float`; `math`/`fs`/`os`/`fft` namespaces (Result-based and
-  `?`-friendly); and an embedded standard library — `import std.json;` —
+  `?`-friendly) — a slice of the ~250 total registered natives
+  (CHANGELOG.md's v0.8.0 entry has the full count, `window`/`gfx`/`gpu`/
+  workers and all); and an embedded standard library — `import std.json;` —
   written in Socrates itself: json (with ergonomic construction), flags, path,
   strings (with a `Builder`), lazy iterators, deferred/memoized `Lazy[T]`
   values, and the `set`/`deque`/`lists` collections (including key-based

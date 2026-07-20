@@ -41,7 +41,7 @@ all (pure geometry and matrix math) and pass on every build.
 
 ## Run it
 
-From the repo root:
+From the repository root:
 
 ```
 cargo build --release --features gl

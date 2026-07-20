@@ -246,9 +246,9 @@ actually enforces — and, landing with them, the rename:
   remaining field deliberately, not by elimination alone: it names the
   language's substrate role, and it doubles, on purpose, as a nod to
   the tortoise character named Socrates in the animated series *Common
-  Side Effects* — the Plato/*Common Side Effects* overlap was a real
-  factor in picking this name over the other legally-clear candidates,
-  not a coincidence noticed after the fact. "Timaeus" was considered
+  Side Effects* — the name carrying both references at once, philosopher
+  and tortoise, was a real factor in picking it over the other
+  legally-clear candidates, not a coincidence noticed after the fact. "Timaeus" was considered
   as a candidate too, itself an intentional reference — the Homestuck
   chat-handle convention (two-word camelCase handles, e.g.
   "timaeusTestified") is why the name was on the table at all — and

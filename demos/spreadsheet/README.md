@@ -26,7 +26,7 @@ propagate through every formula that reads them.
 
 ## Run it
 
-From the repo root:
+From the repository root:
 
 ```
 ./target/release/socrates demos/spreadsheet/main.soc                # both demo sheets

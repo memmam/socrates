@@ -28,7 +28,7 @@
 //! code in and hit that split at runtime). `win32` exposes exactly one
 //! `Inner` struct, aliased directly to `PlatformInner`; `macos` and `x11`
 //! each carry **two** independently-togglable backends (OpenGL plus,
-//! respectively, `metal` — additive per CLAUDE.md's standing Metal
+//! respectively, `metal` — additive per PROJECT.md's standing Metal
 //! exception, never a replacement — and `vulkan`), so their `Inner` (still
 //! aliased to `PlatformInner`) is a small enum over both, letting a single
 //! compiled binary open either kind of window at runtime via [`create`],
@@ -134,7 +134,7 @@ pub fn create(title: &str, w: i32, h: i32) -> Result<WindowHandle, String> {
 
 /// Create a Metal-backed window (macOS/Apple Silicon only) — additive
 /// alongside [`create`]'s OpenGL/CGL path, never a replacement (see
-/// `CLAUDE.md`'s standing Metal exception). A sibling function rather than a
+/// `PROJECT.md`'s standing Metal exception). A sibling function rather than a
 /// `backend` parameter on `create`: Socrates has neither default parameters nor
 /// overloading, so a mandatory extra argument would break every existing
 /// `window.create(title, w, h)` call site for no ergonomic gain. Always an

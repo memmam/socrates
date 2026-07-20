@@ -28,7 +28,7 @@ the WAV is byte-identical on every machine and safe to pin.
 
 ## Run it
 
-From the repo root:
+From the repository root:
 
 ```
 ./target/release/socrates demos/synthwave/main.soc   # prints the track sheet, rebuilds track.wav

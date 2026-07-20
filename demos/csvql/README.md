@@ -26,7 +26,7 @@ country's alphabetically first city.
 
 ## Run it
 
-From the repo root:
+From the repository root:
 
 ```
 ./target/release/socrates demos/csvql/main.soc           # 12 showcase queries

@@ -1,7 +1,7 @@
 //! macOS (Apple Silicon / `aarch64-apple-darwin` only) window backend for
 //! the `window` namespace — dispatches between two coexisting rendering
 //! backends, OpenGL/CGL ([`gl`]) and Metal ([`metal`]), never replacing one
-//! with the other (see `CLAUDE.md`'s standing Metal exception: it ships
+//! with the other (see `PROJECT.md`'s standing Metal exception: it ships
 //! additive alongside OpenGL/CGL until and unless Apple itself drops OpenGL
 //! on macOS).
 //!

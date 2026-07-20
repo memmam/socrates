@@ -37,7 +37,7 @@ real `//? panic:` that ends the program.
 
 ## Run it
 
-From the repo root:
+From the repository root:
 
 ```
 ./target/release/socrates demos/spectra/main.soc   # the full analysis
