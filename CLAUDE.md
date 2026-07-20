@@ -227,7 +227,7 @@ numbers: `bench/RESULTS.md`.
   the explicitly-permanent exceptions (`archive/*`, the "never merges"
   probes) — nothing else lingers. How a merged branch's ref actually
   gets deleted is Roxy's own manual GitHub-UI cleanup, not a client
-  feature the session can rely on (session-mechanics rule 3 above;
+  feature the session can rely on (session-mechanics rule 3 below;
   HISTORY.md's client-side-autodelete incident, including its own
   correction) — there's nothing for the session to queue or automate
   either way, since it never had the credentials to do this itself.

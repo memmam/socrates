@@ -105,9 +105,11 @@ their place fastest.
   scheduler jitter (instruction/cache counts), or escalation to an
   entity outside the automated loop (the user) — not the sample count.
   The full protocol, case law, and revalidation notes on verdicts that
-  predate this floor live in `bench/RESULTS.md` — this is the one
-  other file that states the number, per the intent-tracking
-  principle's scope-recording discipline.
+  predate this floor live in `bench/RESULTS.md`; HISTORY.md's own
+  incident entry for the floor's history also states it, as part of
+  that narrative rather than as a second normative restatement — both
+  are deliberate per the intent-tracking principle's scope-recording
+  discipline, not drift.
   **The deterministic-instrument branch is itself a ladder, not one
   shot:** hypothesis → a test built to confirm or refute it
   specifically → confirmed (commit, scope the idiom set up) or refuted
