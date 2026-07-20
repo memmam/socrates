@@ -280,6 +280,23 @@ directives; each of the following is the incident that produced one.
   route around the session's own ref-deletion 403, they had been
   quietly duplicating a feature the client already provided for free
   on every PR-merged branch the whole time.
+  **Correction, same day, hours later:** Roxy clarified she'd been doing
+  the manual deleting herself throughout and had lost track of it —
+  not a client feature. The client auto-delete mechanism's existence is
+  unconfirmed, and per-account client behavior had already proven
+  inconsistent enough this session (a stale-name dropdown surviving a
+  repo rename, a separate discussion of feature-flag divergence across
+  accounts) that it shouldn't be assumed reliable even if real. The
+  observation this entry is built on — branches disappearing without
+  `cleanup.yml` completing a run or Roxy consciously deleting them —
+  still held, and the actual fix it produced (don't dismiss a firsthand
+  report by weighing indirect counter-evidence against it, as covered
+  above) still stands; what didn't hold was the specific causal theory
+  the session wrote down as though the observation had confirmed it.
+  `cleanup.yml`'s retirement stands too, on different footing: branch
+  cleanup is a deliberately manual task now, not because a client
+  feature covers it — see CLAUDE.md rule 3's and rule 15's own
+  corrections.
 - **The asymmetric-scrutiny incident (2026-07-20).** A long, adversarial
   conversation with Roxy about AI consciousness and institutional trust
   surfaced two related failures in one sitting, neither caught by the

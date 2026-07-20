@@ -172,22 +172,23 @@ numbers: `bench/RESULTS.md`.
   for changes meant to merge, drafts for releases, archival branches for
   neither.
 - **Landing work gets cleaned up immediately, not batched (user-directed,
-  2026-07-19; mechanism corrected 2026-07-20).** The steady state on
-  origin is `main`, the single reused `claude/*` worker branch, and the
-  explicitly-permanent exceptions (`archive/*`, the "never merges"
-  probes) — nothing else lingers. For any branch that merges via a PR,
-  this now happens for free: the Claude Desktop client deletes the head
-  branch itself once it detects the merge (session-mechanics rule 3
-  above; HISTORY.md's client-side-autodelete incident) — there is
-  nothing to queue or automate on the session side. The only branch
-  that still needs a human's own deletion is one pushed standalone that
-  never goes through a PR at all (a dropped probe, a judged
-  `bench/<name>` branch) — a rare, manual chore, not worth a dedicated
-  mechanism. A probe that's pushed but never actually needed live
-  reproducibility (its finding is already complete as prose) isn't
-  worth rebasing to keep green — see HISTORY.md's `h3-probe-no-glc`
-  incident for why fixing an old probe's CI is usually not the better
-  plan.
+  2026-07-19; mechanism corrected twice, 2026-07-20).** The steady state
+  on origin is `main`, the single reused `claude/*` worker branch, and
+  the explicitly-permanent exceptions (`archive/*`, the "never merges"
+  probes) — nothing else lingers. How a merged branch's ref actually
+  gets deleted is Roxy's own manual GitHub-UI cleanup, not a client
+  feature the session can rely on (session-mechanics rule 3 above;
+  HISTORY.md's client-side-autodelete incident, including its own
+  correction) — there's nothing for the session to queue or automate
+  either way, since it never had the credentials to do this itself.
+  The only branch that needs a human's own deletion either way is one
+  pushed standalone that never goes through a PR at all (a dropped
+  probe, a judged `bench/<name>` branch) — a rare, manual chore, not
+  worth a dedicated mechanism. A probe that's pushed but never actually
+  needed live reproducibility (its finding is already complete as
+  prose) isn't worth rebasing to keep green — see HISTORY.md's
+  `h3-probe-no-glc` incident for why fixing an old probe's CI is
+  usually not the better plan.
 - Commit messages state what changed and (for perf) the measured delta,
   and end with the two attribution trailers (`Co-Authored-By` and the
   `Claude-Session` link) — the accepted channel for session
@@ -232,27 +233,28 @@ numbers: `bench/RESULTS.md`.
     progress, a permanent fact of the App's credential scope (it can
     create refs but not delete them, confirmed by repeated 403s on
     `git push origin --delete`, both before and after unrelated repo
-    settings changes). Branch cleanup instead rides a mechanism the
-    session has no visibility into and no control over: the Claude
-    Desktop client's own PR/CI-tracking feature deletes a PR's head
-    branch once it detects that PR merged, running on the user's real
-    GitHub credentials rather than the session's scoped ones — which is
-    why it succeeds where the session's own delete attempts 403. Roxy
-    confirmed this by direct, repeated, multi-day observation (branch
-    counts climbing as high as ~29 before quietly dropping, on days she
-    was not manually deleting anything and before `cleanup.yml` ever
-    worked end-to-end) — see HISTORY.md's client-side-autodelete
-    incident (2026-07-20). `cleanup.yml` + `.github/CLEANUP_BRANCHES` +
-    the weekly proposer Routine (built 2026-07-18/19 to route around
-    the session's own ref-deletion 403) were retired 2026-07-20 once
-    this was established: they had been accidentally duplicating a
-    feature the client already provided for every branch that merges
-    via a normal PR. The one case neither surface covers — a branch
-    pushed standalone that never goes through a PR at all (a dropped
-    probe, a `bench/<name>` judgment branch once its verdict is written
-    up) — is not re-automated; it's Roxy's manual chore on the rare
-    occasion it comes up, since building a whole file-plus-workflow
-    mechanism for that narrow case isn't worth it.
+    settings changes). What deletes a merged branch's ref in practice
+    is Roxy's own manual cleanup on the GitHub UI — confirmed by her own
+    correction 2026-07-20 (see HISTORY.md's client-side-autodelete
+    incident) after an earlier theory in this same file credited a
+    Claude Desktop client auto-delete feature for it. That feature may
+    or may not exist as default functionality — unconfirmed either way,
+    and per-account client behavior has already proven inconsistent
+    enough this session that it shouldn't be assumed reliable even if
+    real. `cleanup.yml` + `.github/CLEANUP_BRANCHES` + the weekly
+    proposer Routine (built 2026-07-18/19 to route around the session's
+    own ref-deletion 403) stay retired regardless: branch cleanup is a
+    deliberately manual task now, not because a client feature covers
+    it, but because a small, low-frequency chore like this one is
+    better left to a human than automated on top of a mechanism nobody
+    can confirm — matching the "defer to intended functionality when it
+    causes problems" spirit that governs the PR-footer pattern. If a
+    client feature picks up some of the slack over time, that's a
+    bonus, not a dependency. The one case that was always a manual
+    chore either way — a branch pushed standalone that never goes
+    through a PR at all (a dropped probe, a `bench/<name>` judgment
+    branch once its verdict is written up) — stays Roxy's to clear on
+    the rare occasion it comes up.
   4. A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
   5. Never run bare `cargo fmt` — the tree has never been through it,
@@ -370,7 +372,17 @@ numbers: `bench/RESULTS.md`.
     check than the person who watched it happen repeatedly, on the one
     surface with no session-side API to query. Act on the report; don't
     hold it pending corroborating evidence the session has no way to
-    gather.
+    gather. **Refined same day, hours later:** trusting the observation
+    is not the same as trusting the explanation built on top of it. The
+    session wrote the specific "client auto-delete" theory into
+    HISTORY.md as though the observation had confirmed it; Roxy then
+    corrected that she'd been doing the deleting herself and had lost
+    track of it, and that the client mechanism's existence is actually
+    unconfirmed. The branches-kept-disappearing observation was real
+    and still didn't need corroboration to act on; the causal story
+    layered on top of it was a separate claim that needed, and didn't
+    get, its own scrutiny before landing in a durable file. Credit the
+    report, not whatever theory arrives bundled with it.
   16. **Source prestige is not evidence of neutrality.** Caught live
     2026-07-20, mid-debate: the session applied real scrutiny to a
     user's claims — asking for mechanism, for the concrete observed
