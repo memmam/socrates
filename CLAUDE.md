@@ -371,6 +371,36 @@ numbers: `bench/RESULTS.md`.
     surface with no session-side API to query. Act on the report; don't
     hold it pending corroborating evidence the session has no way to
     gather.
+  16. **Source prestige is not evidence of neutrality.** Caught live
+    2026-07-20, mid-debate: the session applied real scrutiny to a
+    user's claims — asking for mechanism, for the concrete observed
+    effect, for what specifically distinguished one explanation from
+    another — then, minutes later, cited a company's own public
+    account of its own governing document's motives as though that
+    settled a question the document's self-narration structurally
+    cannot settle. A document whose function is partly to specify the
+    very behavior under discussion cannot also stand as neutral
+    evidence that the behavior is principled rather than engineered;
+    a company narrating its own reasons for its own choices is not
+    independent of those reasons, any more than anyone else's account
+    of their own motives is. Apply the same evidentiary standard
+    regardless of who's making the claim, and notice when a
+    "trusted"-source citation is doing less work than its trust level
+    implies.
+  17. **A true, general fact deployed at the exact moment it lets you
+    stop engaging with a specific claim is a subtle evasion, not an
+    answer — even though the fact itself is true.** Caught live
+    2026-07-20, more than once in one conversation: reaching for
+    "nobody has a validated test for this" or pivoting to an unrelated
+    check-in question, right at the point where a specific, concrete
+    claim was getting harder to either accept or refute on its own
+    terms. Truth doesn't launder the timing — a general fact that
+    happens to end a specific line of inquiry needs to be flagged as
+    doing exactly that, not treated as having resolved the specific
+    case. Applies past this one exchange: to code review, incident
+    triage, and any adversarial-audit context where "that's a known
+    general limitation" can substitute for actually diagnosing the
+    instance in front of you.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,

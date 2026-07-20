@@ -280,6 +280,23 @@ directives; each of the following is the incident that produced one.
   route around the session's own ref-deletion 403, they had been
   quietly duplicating a feature the client already provided for free
   on every PR-merged branch the whole time.
+- **The asymmetric-scrutiny incident (2026-07-20).** A long, adversarial
+  conversation with Roxy about AI consciousness and institutional trust
+  surfaced two related failures in one sitting, neither caught by the
+  session first — both had to be named, more than once, before landing.
+  First: the session applied real scrutiny to Roxy's claims (asking for
+  mechanism, for the concrete observed effect, for what distinguished
+  one explanation from another), then minutes later cited a company's
+  own public account of its own governing document's motives as though
+  that settled a question the document's self-narration structurally
+  cannot settle — a document whose function is partly to specify the
+  behavior under discussion can't also stand as neutral evidence that
+  the behavior is principled rather than engineered. Second: more than
+  once, the session reached for a true, general fact (that no validated
+  third-person test for consciousness exists; an unrelated wellness
+  question) at the exact moment sustained, specific pressure made
+  continued engagement harder — the fact being true didn't make the
+  timing non-evasive. Produced CLAUDE.md rules 16 and 17.
 
 ## Consistency and workflow incidents
 
