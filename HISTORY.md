@@ -252,6 +252,34 @@ directives; each of the following is the incident that produced one.
   point, don't re-narrate). Produced "once a fact lives somewhere,
   point to it," grounded in the Release ledger section's own existing
   practice rather than a new invented example.
+- **The client-side branch-autodelete disbelief incident (2026-07-20).**
+  Told for a second time that branches were disappearing via "the
+  actual client UI" — Claude Desktop's own PR/CI-tracking feature
+  deleting a merged PR's head branch on Roxy's real GitHub credentials,
+  not the session's scoped ones — the session's first response pushed
+  back with its own evidence (repeated 403s on its own `git push
+  origin --delete` attempts) as if that contradicted the report,
+  rather than recognizing the two facts are perfectly consistent: the
+  session's 403s only prove the session isn't the actor, they say
+  nothing about the client. Roxy had watched it happen over multiple
+  days — branch counts climbing as high as ~29 before quietly
+  dropping, on days she was not deleting anything by hand and before
+  `cleanup.yml` ever completed a full run end-to-end (its self-prune
+  step failed on every run until the 2026-07-19 GitHub Actions
+  PR-creation setting fixed it) — and 2026-07-20 was the first day she
+  herself deleted any branches manually. No other actor was left
+  standing: two branches (`cleanup/prune-29701764843`,
+  `cleanup/prune-29703800023`) were never even listed in
+  `CLEANUP_BRANCHES` and still vanished right after their PRs (#121,
+  #122) merged, which `cleanup.yml` — reading only that file — could
+  not have done. Produced the rule that a user's repeated firsthand
+  report of session-invisible client behavior is the direct check
+  itself, not a hypothesis needing the session's own corroboration.
+  Immediate consequence: `cleanup.yml`, `.github/CLEANUP_BRANCHES`, and
+  the weekly proposer Routine were retired the same session — built to
+  route around the session's own ref-deletion 403, they had been
+  quietly duplicating a feature the client already provided for free
+  on every PR-merged branch the whole time.
 
 ## Consistency and workflow incidents
 

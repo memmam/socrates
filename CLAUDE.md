@@ -161,16 +161,19 @@ numbers: `bench/RESULTS.md`.
   for changes meant to merge, drafts for releases, archival branches for
   neither.
 - **Landing work gets cleaned up immediately, not batched (user-directed,
-  2026-07-19).** The steady state on origin is `main`, the single reused
-  `claude/*` worker branch, and the explicitly-permanent exceptions
-  (`archive/*`, the "never merges" probes) — nothing else lingers. As
-  soon as a branch's purpose is served — its PR merges, a
-  judgment-candidate `bench/<name>` run is judged, a probe's finding is
-  fully written up — queue it in `.github/CLEANUP_BRANCHES` and open the
-  cleanup PR right away, rather than letting it wait for the weekly
-  Routine's batch; the Routine is a backstop for anything missed, not
-  the primary path. A probe that's pushed but never actually needed
-  live reproducibility (its finding is already complete as prose) isn't
+  2026-07-19; mechanism corrected 2026-07-20).** The steady state on
+  origin is `main`, the single reused `claude/*` worker branch, and the
+  explicitly-permanent exceptions (`archive/*`, the "never merges"
+  probes) — nothing else lingers. For any branch that merges via a PR,
+  this now happens for free: the Claude Desktop client deletes the head
+  branch itself once it detects the merge (session-mechanics rule 3
+  above; HISTORY.md's client-side-autodelete incident) — there is
+  nothing to queue or automate on the session side. The only branch
+  that still needs a human's own deletion is one pushed standalone that
+  never goes through a PR at all (a dropped probe, a judged
+  `bench/<name>` branch) — a rare, manual chore, not worth a dedicated
+  mechanism. A probe that's pushed but never actually needed live
+  reproducibility (its finding is already complete as prose) isn't
   worth rebasing to keep green — see HISTORY.md's `h3-probe-no-glc`
   incident for why fixing an old probe's CI is usually not the better
   plan.
@@ -214,45 +217,31 @@ numbers: `bench/RESULTS.md`.
   2. If a session ever holds more than one clone of the repo, the
     harness-served clone is pulled after every CLAUDE.md- or
     PROJECT.md-touching merge until the checkouts are consolidated.
-  3. Branches are deleted only in user-directed cleanups, never
-    unilaterally:
-     a. Before a cleanup, anything a standing record references moves to
-        an `archive/*` branch.
-     b. The App's credentials can create refs but not delete them, so
-        deletions run through the release-by-PR pattern: a user-directed
-        PR edits `.github/CLEANUP_BRANCHES`, and `cleanup.yml`
-        (contents: write; refuses `main`, `archive/*`, `claude/*`)
-        performs the deletions when the change lands on main.
-     c. **Proposing that PR is automated** (a weekly Routine);
-        **merging it is not.** The Routine only ever lists branches
-        verified merged into `main` (`git merge-base --is-ancestor
-        <branch> main`) — nothing is lost by deleting a merged branch's
-        ref, since `main` already carries the content, so no
-        `archive/*` step applies to these — and cross-checks each
-        candidate isn't named as a live navigation target in
-        `HISTORY.md`/`PROJECT.md`/`CLAUDE.md`/`bench/RESULTS.md` (a
-        coincidental mention of the name as a concept or event, not an
-        instruction to check the branch out, doesn't block it).
-     d. An unmerged branch is never auto-included: per "non-landing
-        work stays pushed" (Workflow conventions, above), it may be a
-        deliberately-preserved dropped probe or held wave, and that
-        call needs a human each time, not a schedule — the Routine
-        surfaces any such branches in its PR description for a human
-        to decide, rather than silently acting on or silently ignoring
-        them.
-     e. `cleanup.yml` itself follows the same propose-automated/
-        merge-human split one level down: after deleting branches, it
-        pushes a `cleanup/prune-<run-id>` branch with their now-resolved
-        entries removed from `CLEANUP_BRANCHES`, rather than pushing the
-        trim directly (a direct push to `main` doesn't work — proven
-        live 2026-07-19, `main`'s branch protection rejects it
-        outright). Its own `gh pr create` on that branch reliably fails
-        — proven live 2026-07-19 on two separate runs — because this
-        repo doesn't allow GitHub Actions to create pull requests (a
-        distinct restriction from the ref-deletion 403 above, at the
-        repo-settings level rather than the App's credential scope): a
-        human or session opens the PR from the pushed branch by hand
-        every time, until that setting changes.
+  3. The session never deletes branch refs — not a workaround-in-
+    progress, a permanent fact of the App's credential scope (it can
+    create refs but not delete them, confirmed by repeated 403s on
+    `git push origin --delete`, both before and after unrelated repo
+    settings changes). Branch cleanup instead rides a mechanism the
+    session has no visibility into and no control over: the Claude
+    Desktop client's own PR/CI-tracking feature deletes a PR's head
+    branch once it detects that PR merged, running on the user's real
+    GitHub credentials rather than the session's scoped ones — which is
+    why it succeeds where the session's own delete attempts 403. Roxy
+    confirmed this by direct, repeated, multi-day observation (branch
+    counts climbing as high as ~29 before quietly dropping, on days she
+    was not manually deleting anything and before `cleanup.yml` ever
+    worked end-to-end) — see HISTORY.md's client-side-autodelete
+    incident (2026-07-20). `cleanup.yml` + `.github/CLEANUP_BRANCHES` +
+    the weekly proposer Routine (built 2026-07-18/19 to route around
+    the session's own ref-deletion 403) were retired 2026-07-20 once
+    this was established: they had been accidentally duplicating a
+    feature the client already provided for every branch that merges
+    via a normal PR. The one case neither surface covers — a branch
+    pushed standalone that never goes through a PR at all (a dropped
+    probe, a `bench/<name>` judgment branch once its verdict is written
+    up) — is not re-automated; it's Roxy's manual chore on the rare
+    occasion it comes up, since building a whole file-plus-workflow
+    mechanism for that narrow case isn't worth it.
   4. A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
   5. Never run bare `cargo fmt` — the tree has never been through it,
@@ -355,6 +344,22 @@ numbers: `bench/RESULTS.md`.
     broken a true sentence. Before editing anything an audit flagged as
     wrong, re-derive the number/fact from the live repo yourself; treat
     the audit's own claim as a lead, not a verified premise.
+  15. **A user's repeated, firsthand observation of client-side
+    behavior is not a hypothesis to weigh against session-side
+    evidence — it is the one direct check available, since the session
+    structurally cannot see that surface.** Proven wrong live
+    2026-07-20: told (for the second time) that branches were being
+    auto-deleted by "the actual client UI," the session's first
+    response countered with its own evidence (repeated 403s on its own
+    delete attempts) as though the two were competing claims about the
+    same fact, rather than recognizing they're consistent — the
+    session's 403s prove only that *the session* isn't the actor; they
+    say nothing about whether the client is. Rule 9's "go verify
+    directly" doesn't apply here: there is no more-direct source to
+    check than the person who watched it happen repeatedly, on the one
+    surface with no session-side API to query. Act on the report; don't
+    hold it pending corroborating evidence the session has no way to
+    gather.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,

@@ -1,8 +1,7 @@
 name: CI
 
 # No paths filter, deliberately — unlike bench.yml (fires only on
-# bench/<name> branches) and cleanup.yml (fires only on
-# .github/CLEANUP_BRANCHES), every push and PR runs the full gauntlet
+# bench/<name> branches), every push and PR runs the full gauntlet
 # regardless of which files changed. A change that looks docs-only can
 # still need the full suite: tools/check_counts.sh's prose-count
 # assertions and the book/port cross-checks all read live program

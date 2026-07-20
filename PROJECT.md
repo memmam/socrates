@@ -201,11 +201,8 @@ their place fastest.
   workaround states (i) the official mechanism it bypasses, (ii) the
   blocker that forced the bypass, and (iii) a dated condition under
   which the blocker gets re-checked — so the record can't silently
-  outlive its own premise. `cleanup.yml`'s release-by-PR pattern is
-  the model (bypasses `git push --delete`; blocked by the App's
-  branch-scoped credentials; re-check whenever the App's token scope
-  changes) and the empty-commit bench-resampling method is a second
-  instance (bypasses `workflow_dispatch`/rerun; blocked by both
+  outlive its own premise. The empty-commit bench-resampling method is
+  the model (bypasses `workflow_dispatch`/rerun; blocked by both
   returning 403 for the bot account; re-check on any App permission
   change). A workaround recorded without the triple is exactly the
   gap the reflexive codification audit exists to catch.

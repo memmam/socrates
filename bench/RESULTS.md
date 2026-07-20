@@ -9,7 +9,8 @@ workflow or re-running a job, but the bot account's API calls to
 workflow_dispatch and re-run both return 403, so extra samples are
 obtained by pushing empty commits to the bench branch instead; re-check
 this workaround whenever the App's permission scope changes (the same
-403 boundary `cleanup.yml`'s header comment records).
+403 boundary CLAUDE.md's session-mechanics rule 3 records, for ref
+deletion specifically).
 `bench/run.sh [N]` is a single-binary sequential profiling convenience
 — where does one binary spend its time? — not the gate.
 Micro-benchmarks (`bench/*.soc`) isolate one cost centre each,
