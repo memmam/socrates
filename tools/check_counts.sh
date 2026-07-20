@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Prose counts vs. the live suite.
 #
-# The count-bearing sentences — the six spec-count places CLAUDE.md's
-# workflow conventions enumerate (README ×2, CLAUDE.md ×1, PROJECT.md ×1,
-# RELEASE_NOTES.md ×1, book/11-toolchain.md ×1), the book
+# The count-bearing sentences — the six spec-count places PROJECT.md's
+# verification-gauntlet section enumerates (README ×2, PROJECT.md ×2 —
+# the gauntlet script and the invariants section — RELEASE_NOTES.md ×1,
+# book/11-toolchain.md ×1), the book
 # executed-of-total claim, the demo-suite count, and the spelled-out
 # demo-program count — are each extracted by an exact anchor below and
 # compared against the live totals. A release draft once shipped saying
@@ -52,16 +53,16 @@ check "README 'own N-test suite'" "$live_spec" \
   "$(sed -n 's/.*own \([0-9]\{1,\}\)-test suite.*/\1/p' README.md)"
 check "PROJECT 'tests/spec/, N tests'" "$live_spec" \
   "$(sed -n 's/.*`tests\/spec\/`, \([0-9]\{1,\}\) tests.*/\1/p' PROJECT.md)"
-check "CLAUDE gauntlet '# N'" "$live_spec" \
-  "$(sed -n 's/.*socrates test tests\/spec *# \([0-9]\{1,\}\)$/\1/p' CLAUDE.md)"
+check "PROJECT gauntlet '# N'" "$live_spec" \
+  "$(sed -n 's/.*socrates test tests\/spec *# \([0-9]\{1,\}\)$/\1/p' PROJECT.md)"
 check "RELEASE_NOTES 'pinned: N golden spec tests'" "$live_spec" \
   "$(sed -n 's/.*pinned: \([0-9]\{1,\}\) golden spec tests.*/\1/p' .github/RELEASE_NOTES.md)"
 check "book/11-toolchain.md spec suite (N tests)" "$live_spec" \
   "$(sed -n "s/.*own spec suite (\([0-9]\{1,\}\) tests).*/\1/p" book/11-toolchain.md)"
 
 # --- demo-suite count ------------------------------------------------
-check "CLAUDE gauntlet demos '# N'" "$live_demo" \
-  "$(sed -n 's/.*spec\.soc *# \([0-9]\{1,\}\)$/\1/p' CLAUDE.md)"
+check "PROJECT gauntlet demos '# N'" "$live_demo" \
+  "$(sed -n 's/.*spec\.soc *# \([0-9]\{1,\}\)$/\1/p' PROJECT.md)"
 check "RELEASE_NOTES 'N demo golden tests'" "$live_demo" \
   "$(sed -n 's/.*and \([0-9]\{1,\}\) demo golden tests.*/\1/p' .github/RELEASE_NOTES.md)"
 

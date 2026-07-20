@@ -3,14 +3,17 @@
 Socrates is a statically-typed, garbage-collected programming language with
 algebraic data types, exhaustive pattern matching, closures, and generics,
 implemented from scratch in Rust with **zero dependencies** — every build.
-This file holds everything Socrates-specific that isn't about how to
-operate a session: what the language is *for*, the engineering principles
-that decide close calls, the native graphics/compute roadmap, and the
-invariants that must never break. `CLAUDE.md` holds session-operating
-instructions only (the file map, the verification gauntlet, git/PR/session
-workflow) and explicitly says to check this file wherever an operating
-step needs it. `HISTORY.md` holds the incident narratives behind the
-rules in both files; `CHANGELOG.md` holds the per-release account.
+This file holds everything Socrates-specific: what the language is *for*,
+the engineering principles that decide close calls, the native
+graphics/compute roadmap, the invariants that must never break, and —
+since `CLAUDE.md` states its own rules generically and points here for the
+concrete fill-in — this project's file map, its nested-stub table, its
+verification gauntlet, its counted places and checker script, its
+workflow specifics, and its tripwires. `CLAUDE.md` holds only the
+universal, project-agnostic rules (session mechanics, git/PR/workflow
+conventions) that hold regardless of what project they're checked into.
+`HISTORY.md` holds the incident narratives behind the rules in both
+files; `CHANGELOG.md` holds the per-release account.
 
 ## What Socrates is for
 
@@ -49,6 +52,194 @@ rough order:
 Keep this arc in mind when weighing features: the ones that serve
 AI-authorship, bit-exact systems work, parallelism, and transpilation earn
 their place fastest.
+
+## Where this project's memory lives
+
+- `CLAUDE.md` — universal session-operating rules: session mechanics and
+  git/PR/workflow conventions that hold regardless of what project they're
+  checked into.
+- `PROJECT.md` (this file) — what Socrates is *for*, the engineering
+  principles that decide close calls, the native graphics/compute roadmap,
+  the invariants that must never break, and the concrete fill-in for every
+  generic rule CLAUDE.md states abstractly: the file map below, the
+  nested-stub table below, the verification gauntlet, the counted places
+  and checker script, the workflow specifics, and the tripwires.
+- `HISTORY.md` — the incident narratives and sagas behind the rules and
+  corrected decisions in this file and CLAUDE.md. Check it when a rule
+  points here, or when auditing whether a rule still matches the incident
+  that produced it.
+- `CHANGELOG.md` — the per-release account: feature lists, benchmark
+  deltas, and mechanism detail, one `## vX.Y.Z` heading per release with
+  one bullet per feature/fix underneath — the entry is the unit of
+  account, not the PR count behind it (see HISTORY.md for how that
+  stopped holding at v0.8). Check it for release-post material or the
+  full story behind any rename or shipped feature a rule only mentions
+  in passing. **Once a release is git-tagged, its entry is historical
+  record, not a live draft: a factual error found later gets a dated,
+  explicit appended correction, never a silent in-place rewrite** — the
+  same discipline HISTORY.md applies to its own incident narratives.
+  Only the current untagged section (the one still being written toward
+  the next tag) is freely editable.
+- `docs/SPEC.md` — the normative language reference (`(vN)` tags mark
+  when a feature landed).
+- `docs/ARCHITECTURE.md` — implementation internals, module by module.
+- `docs/RELEASING-macOS.md` — one-time setup to turn on Developer ID
+  signing + notarization for the macOS demo-zoo binaries (the six repo
+  secrets).
+- `bench/RESULTS.md` — the bench method and instrument facts, the
+  standing numbers, the negative-results ledger (measured and rejected —
+  do not re-attempt without new evidence; an entry may instead carry a
+  **standing watch**: dated sightings of its trigger signal accumulate in
+  the entry itself, and enough of them across genuinely different cases
+  re-opens the item — the inline-small-list entry is the first), the
+  known-headroom list, and the epoch bridge that keeps
+  pre-/post-re-specification numbers comparable. No other file holds any
+  of these.
+- `demos/NOTES.md` — the field-test triage ledgers: every papercut demo
+  authors hit, and whether it was fixed / documented / declined. The raw
+  material for "what usage pulled in" in a release post.
+- `demos/STYLE.md` — best-practice house rules distilled from the demo
+  rounds (golden discipline, determinism, bitwise, workers, std
+  collections).
+- `ports/README.md` (the programme and the `jsl` layer),
+  `ports/pyl/CONTRACT.md` (the `pyl` layer's contract), and the per-port
+  `ports/icaa/README.md` / `ports/claudewave/README.md` — the porting
+  programme (SkyeShark's ICAA in `jsl`; claudewave in `pyl`), each README
+  describing exactly what CI enforces when cross-validating that port
+  against its upstream. (`jsl` has no doc file of its own; it is
+  documented in `ports/README.md` and by its consumer, icaa.)
+- `book/` — the language book (a teaching resource, **not** a project
+  diary; process/history belongs in `CLAUDE.md`, `PROJECT.md`,
+  `HISTORY.md`, or `CHANGELOG.md`, never in the book).
+
+Each of the four directories above (`docs/`, `bench/`, `demos/`,
+`ports/`) also gets a nested per-directory `CLAUDE.md` stub (bare
+filename — nested `.claude/CLAUDE.md` is not a real discovery path;
+that's reserved for settings/skills/rules) that does nothing but
+`@`-import the file(s) already listed for it above, so Claude Desktop's
+context-tracker "Memory files" panel lists `docs/SPEC.md` and friends as
+their own entries. The `@`-import is not lazy about *content* — the stub
+force-loads the entire imported file(s) the moment it fires, a real,
+compounding cost paid by every clone and contributor. The four stubs are
+committed, tracked files; the load-bearing part — the `@`-import lines —
+is byte-exact with the table below, in that order. Each stub also opens
+with a fixed HTML-comment header (not shown in the table, since it
+carries no `@`-import semantics of its own) explaining the mechanism in
+the same words every time, substituting only the directory name and the
+cited file(s) — see any of the four files for the exact template.
+Reconstructing the `@`-import lines from a one-example-plus-inference
+description is exactly the kind of drift this file exists to prevent.
+(`HISTORY.md` has the story of how this mechanism evolved — it started
+gitignored and opt-in before being proven and committed.)
+
+| File | Content |
+| --- | --- |
+| `docs/CLAUDE.md` | `@SPEC.md` / `@ARCHITECTURE.md` / `@RELEASING-macOS.md` |
+| `bench/CLAUDE.md` | `@RESULTS.md` |
+| `demos/CLAUDE.md` | `@NOTES.md` / `@STYLE.md` |
+| `ports/CLAUDE.md` | `@README.md` / `@pyl/CONTRACT.md` / `@icaa/README.md` / `@claudewave/README.md` |
+
+(Each `/`-separated entry is its own line in the file, in that order.)
+
+## The verification gauntlet
+
+Run before shipping any change that touches the interpreter's core logic:
+
+```sh
+cargo test                                    # unit + golden spec suite
+SOCRATES_GC_STRESS=1 cargo test --test spec_runner
+cargo clippy --all-targets -- -D warnings
+cargo build --release
+./target/release/socrates test tests/spec        # 313
+# glcube's three mains need a live GL/Metal/Vulkan window (CI runs them in
+# the windowing jobs); everything else, cube.soc/spec.soc included:
+shopt -s extglob
+./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc  # 68
+SOCRATES_GC_STRESS=1 ./target/release/socrates test demos/!(glcube)/ demos/glcube/cube.soc demos/glcube/spec.soc
+SOCRATES_PATH=ports ./target/release/socrates test ports/pyl/spec.soc
+SOCRATES_PATH=ports ./target/release/socrates test ports/icaa/spec.soc
+./target/release/socrates build demos/csvql -o /tmp/csvql && (cd /tmp && ./csvql)  # `socrates build` smoke
+python3 bench/ab.py <base-tree> <head-tree>   # local interleaved perf A/B
+```
+
+Performance claims are only real if the interleaved cross-binary A/B
+reproduces them: `python3 bench/ab.py <base-tree> <head-tree>` locally
+(each side a full checkout with its own release binary; ab.py enforces
+per-rep and cross-side stdout checksums, so a wrong-answer "optimization"
+fails instead of winning — and warns if the two checkout paths are
+unequal length, since that alone shifts binary layout; use equal-length
+directory names, e.g. `base/` and `head/`), and the four-arch Bench A/B
+workflow — push the candidate as a `bench/<name>` branch — for the
+acceptance verdict, per this file's own universality principle (below):
+flat-or-better on every tier-1 architecture. `bench/run.sh [N]` is
+single-binary sequential profiling convenience (where does one binary
+spend its time?), not the gate. Method and standing numbers:
+`bench/RESULTS.md`.
+
+This project's own golden/pinned test surfaces are its tripwires — if a
+change is wrong, one of them goes red: the spec suite (`tests/spec/`,
+313 tests, run through the same `socrates test` path users get), the
+book's executable snippets (every ```soc block in `book/` runs in CI
+except the rare fragment fence-tagged `skip`), and the demos' pinned
+output (every demo's full stdout is golden-tested, `demos/`).
+
+Any prose-stated count that could silently drift out of sync with
+reality is stated in a fixed set of places, all updated in the same PR,
+and checked by `tools/check_counts.sh` (run in CI's Test job and by the
+gauntlet locally): the spec-suite count in exactly six places —
+`README.md` (×2), this file (×2: the gauntlet script above and the
+invariants section below), `.github/RELEASE_NOTES.md` (×1), and
+`book/11-toolchain.md` (×1). The same discipline covers every other
+prose-stated count — book snippets executed/total, the demo-golden
+count, the spelled-out demo-program count — each with its own set of
+stating places. The checker extracts every counted sentence by exact
+anchor and diffs it against a fresh run, so drift fails loudly instead
+of shipping; a sentence reworded without updating its anchor fails just
+as loudly ("anchor matched nothing") — re-anchor in the same PR that
+reworks the prose.
+
+Never trust a bare `cargo fmt --check` count without re-measuring: this
+tree has never been run through a bare `cargo fmt`, so
+`cargo fmt --check | grep -c '^Diff in'` diffs every `.rs` file, not a
+targeted few — run it fresh rather than trusting a number written down
+anywhere, since it drifts as the tree grows.
+
+## Workflow conventions (this project's specifics)
+
+The default branch (`main`) carries one required status check, "Test
+(stable)" — a red PR cannot merge. Reading tiers for the decisive CI log
+before a manual merge: a perf-bearing change reads the four-arch Bench
+A/B matrix tables plus the Test log; an interpreter change reads the
+Test log's suite counts and port batteries; a prose-only change reads
+the Test log tail. Auto-merge is fine specifically for the last tier —
+prose/config-only, no interpreter or bench source touched — because
+`tools/check_counts.sh`, running inside that same Test job, already
+substitutes for the manual read that tier requires.
+
+A change that touches `bench/*.soc`, `ab.py`, `run.sh`, or `bench.yml`
+(the bench sources or harness) is gated the same way a core-logic change
+is (see the universality principle, below): a clean four-arch Bench A/B
+matrix verdict, obtained by pushing the candidate as a `bench/<name>`
+branch. `bench/RESULTS.md` prose-only edits are exempt (they change no
+binary; a matrix run on them would be an A/A that tests nothing). The
+verdict attaches to the tree that built the judged binaries: follow-up
+commits touching no compiled source ride the existing verdict without a
+re-run.
+
+The steady state on origin is `main`, the single reused `claude/*`
+worker branch, and two explicitly-permanent exceptions: `archive/*`
+(retired mechanisms kept for the record, never revived) and a
+`bench/<name>` "never merges" probe branch while its finding is still
+being written up (retired once `bench/RESULTS.md`'s entry is
+self-sufficient — see HISTORY.md's `h3-probe-no-glc` incident).
+
+Frozen-copy examples (the stability-required exception to "point to a
+fact, don't duplicate it"): `ports/claudewave/reference/sos_freeze.txt`
+(`ports/pyl/CONTRACT.md`'s coefficient freeze — a golden-pinned value
+that must not silently track a scipy upstream that might reformulate
+its algorithm) and every `bench/*.soc` file's `// Bench:` measurand
+header (states what the row measures so re-specifying the workload is a
+deliberate, tracked act, per the intent-tracking principle below).
 
 ## Engineering principles (how to decide close calls)
 
