@@ -254,7 +254,18 @@ numbers: `bench/RESULTS.md`.
     chore either way — a branch pushed standalone that never goes
     through a PR at all (a dropped probe, a `bench/<name>` judgment
     branch once its verdict is written up) — stays Roxy's to clear on
-    the rare occasion it comes up.
+    the rare occasion it comes up. **Branches live and die within a
+    shot, not as long-term historical references (user-directed,
+    2026-07-20).** State for forward testing — a probe's exact
+    mechanism, the numbers, the gotchas a rebuild would need — belongs
+    in `bench/RESULTS.md` itself, not in a branch that has to be
+    remembered, classified, and re-justified every time someone audits
+    what's still on origin. A "never merges" probe's retirement is due
+    the moment its `bench/RESULTS.md` entry is self-sufficient — fully
+    specifies the mechanism, not just the verdict — not deferred until
+    staleness or harness drift eventually forces the question the way
+    `h3-probe-no-glc` did. That was the exception surfaced under
+    pressure; this is the default going forward.
   4. A merge the user performs in the GitHub UI is a final outcome,
     never something to re-adjudicate.
   5. Never run bare `cargo fmt` — the tree has never been through it,
