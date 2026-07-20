@@ -401,13 +401,15 @@ directives; each of the following is the incident that produced one.
   shipped as close to one PR per release. That stopped holding at
   v0.8, which folded in ~90 merged PRs before its entry was ever
   written. CLAUDE.md's own description of `CHANGELOG.md` was corrected
-  to say so — but `CHANGELOG.md`'s own opening line ("each release was
-  shipped as one reviewed pull request") was missed in that same pass
-  and kept contradicting both the new CLAUDE.md rule and the v0.8.0
-  entry sitting directly beneath it, until a follow-up audit round
-  caught it. The lesson: when a fact gets corrected in the file that
-  *describes* another file, check the described file itself for the
-  same stale claim — not just the description of it.
+  to say so (this description now lives in PROJECT.md, moved there by
+  the later CLAUDE.md/PROJECT.md split — PR #132) — but `CHANGELOG.md`'s
+  own opening line ("each release was shipped as one reviewed pull
+  request") was missed in that same pass and kept contradicting both
+  the corrected rule and the v0.8.0 entry sitting directly beneath it,
+  until a follow-up audit round caught it. The lesson: when a fact gets
+  corrected in the file that *describes* another file, check the
+  described file itself for the same stale claim — not just the
+  description of it.
 - **PR #115's silent scope creep (2026-07-19).** Its own description
   said "Tiers 2-4 from the audit are being worked in a follow-up," then
   Tier 2, Tier 3, and Tier 4 all landed as further commits on this same

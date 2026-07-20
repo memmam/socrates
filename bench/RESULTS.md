@@ -89,7 +89,7 @@ which the sheer size of these deltas satisfies regardless):
 | string building              |   0.49s  |  0.22s | **−55%**   |
 | map ops                      |   0.22s  |  0.14s | **−36.4%** |
 | arith loop (dispatch floor)  |   0.52s  |  0.44s | −15.4%     |
-| float loop                   |   0.42s  |  0.34s | −18.9%     |
+| float loop                   |   0.42s  |  0.34s | −19.0%     |
 | enum match                   |   0.29s  |  0.25s | −13.8%     |
 | sudoku (bit intrinsics)      |   0.33s  |  0.16s | **−51%**   |
 | GC-stress lisp (dev-facing)  |  ~47s    |  ~15s  | **−67%**   |
@@ -632,8 +632,9 @@ lottery") artifact class:
   above): x86_64-linux `for_range` **−5.8% / −5.8% / −1.0% / −5.7% /
   −6.0%**, direction 5/5 favorable (reverting to `Vec<Handle>` reverses
   the regression every time), marked 4/5 — the mirror image of the
-  original discovery's own noise profile (magnitude-for-magnitude,
-  down to which single sample landed sub-floor). **CONFIRMED**: the
+  original discovery's own noise profile in shape (one of five samples
+  sub-floor either way), though not the same sample position or
+  magnitude as the original's own sub-floor outlier. **CONFIRMED**: the
   representation choice itself is the cause on x86_64-linux too, not a
   layout-shift artifact.
 
@@ -804,8 +805,10 @@ CLAUDE.md session mechanics).
   bench_list_churn rewards — append the sighting here, dated, with
   the row that showed it. Three sightings across *different* cases
   (matching probe-cmp-branch's own numeric threshold above, scaled up
-  since H2's original DROP rested on more evidence than that probe's
-  did) push H2 back over the edge for a fresh look;
+  from H2's original DROP even though that DROP rested on less
+  evidence than this probe's — two local samples, below the current
+  floor, per the revalidation note below) push H2 back over the edge
+  for a fresh look;
   the full implementation detail needed to rebuild it is above, not on
   a branch — `archive/h2-small-list` is retired per the
   branches-live-and-die-within-a-shot policy (2026-07-20, CLAUDE.md

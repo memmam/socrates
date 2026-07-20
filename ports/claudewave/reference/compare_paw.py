@@ -48,7 +48,7 @@ EXPECTED_MAX = {
     'voice_fm_lead_220': 0.0,
     'voice_slap_bass_110': 2.8e-16,
     'voice_juno_pad_220': 0.0,
-    'voice_whistle_880': 2.3e-16,
+    'voice_whistle_880': 2.2e-16,
     'drum_kick': 0.0,
     'drum_brush_snare': 0.0,
     'drum_snap': 0.0,

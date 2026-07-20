@@ -83,7 +83,7 @@ five-plus orders of magnitude under the 1e-9 outer bound:
 | item | measured max abs diff | enforced row | source of the residue |
 |------|-----------------------|--------------|-----------------------|
 | `voice_slap_bass_110` | 1.39e-16 | 2.8e-16 | layer `tanh` (exp-based formula vs libm tanh) |
-| `voice_whistle_880` | 1.11e-16 | 2.3e-16 | order-3 bandpass SOS coefficients (≤ 1.78e-16 relative vs shim) |
+| `voice_whistle_880` | 1.11e-16 | 2.2e-16 | order-3 bandpass SOS coefficients (≤ 1.78e-16 relative vs shim) |
 | `amb_crickets` | 2.08e-17 | 4.2e-17 | order-3 bandpass SOS coefficients (same freeze residue) |
 
 `chords.txt` (the chord-helper ground truth: parse/root/voicing/pad plus
