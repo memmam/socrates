@@ -240,11 +240,24 @@ actually enforces — and, landing with them, the rename:
   (binary and Cargo package `socrates`, source extension `.soc`, env vars
   `SOCRATES_*`, Mach-O payload section `__DATA,__socrateszoo`). Why:
   trademark pre-emption and namespace collisions — an established
-  F#-to-JS compiler already holds "Fable". "Socrates" names the
-  language's substrate role; "Timaeus" was considered and reserved for
-  the eventual top-of-stack agent; "Quine" was considered and rejected
-  (an existing OSS graph database holds it); the `.soc` extension nods at
-  the system-on-a-chip trajectory of the HDL roadmap. Git history
+  F#-to-JS compiler already holds "Fable". Candidates were narrowed by
+  legal defensibility first — "Quine" was considered and rejected (an
+  existing OSS graph database holds it) — and "Socrates" won the
+  remaining field deliberately, not by elimination alone: it names the
+  language's substrate role, and it doubles, on purpose, as a nod to
+  the tortoise character named Socrates in the animated series *Common
+  Side Effects* — the Plato/*Common Side Effects* overlap was a real
+  factor in picking this name over the other legally-clear candidates,
+  not a coincidence noticed after the fact. "Timaeus" was considered
+  as a candidate too, itself an intentional reference — the Homestuck
+  chat-handle convention (two-word camelCase handles, e.g.
+  "timaeusTestified") is why the name was on the table at all — and
+  was provisionally set aside for the eventual top-of-stack agent: not
+  locked in, and that agent may end up named, and living, elsewhere
+  entirely; Socrates' own claim on the name is what's historical here,
+  not a commitment about what gets built later or where. The `.soc`
+  extension nods at the system-on-a-chip trajectory of the HDL roadmap.
+  Git history
   preserves the old name; `bench/ab.py` and the Bench A/B workflow keep a
   permanent per-side binary-name/extension fallback so post-rename refs
   stay A/B-comparable against pre-rename ones.
