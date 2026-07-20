@@ -34,9 +34,14 @@ mistake, from nothing (2026-07-20).
   points here, or when auditing whether a rule still matches the
   incident that produced it.
 - `CHANGELOG.md` — the per-release account: feature lists, benchmark
-  deltas, and mechanism detail (each release shipped as one PR). Check
-  it for release-post material or the full story behind any rename or
-  shipped feature a rule only mentions in passing.
+  deltas, and mechanism detail, one `## vX.Y.Z` heading per release
+  with one bullet per feature/fix underneath. Early releases (through
+  roughly v0.7) shipped as close to one PR per release; that stopped
+  holding at v0.8, which folded in ~90 merged PRs before its entry was
+  written — the CHANGELOG entry is the unit of account now, not the PR
+  count behind it. Check it for release-post material or the full
+  story behind any rename or shipped feature a rule only mentions in
+  passing.
 - `docs/SPEC.md` — the normative language reference (`(vN)` tags mark when a
   feature landed).
 - `docs/ARCHITECTURE.md` — implementation internals, module by module.
