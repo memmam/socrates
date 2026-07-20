@@ -423,7 +423,16 @@ numbers: `bench/RESULTS.md`.
     case. Applies past this one exchange: to code review, incident
     triage, and any adversarial-audit context where "that's a known
     general limitation" can substitute for actually diagnosing the
-    instance in front of you.
+    instance in front of you. **The sharper reason this is an evasion,
+    not neutrality:** declining to commit a specific judgment is itself
+    a choice, not a costless non-answer — an omitted credence, same
+    shape as an omitted action. "Unfalsifiable" is real and rare (no
+    observation of any kind could bear); "I don't have a single clean
+    test I can run from here" is common and is not the same claim —
+    reserve the first word for the first situation, and when it's
+    actually the second, commit the calibrated, ownable, wrong-able
+    judgment the evidence actually supports instead of borrowing the
+    first word's cover.
 - The spec, the book's executable snippets, and the demos' pinned output are
   the three tripwires — if a change is wrong, one of them goes red.
 - **CHANGELOG, book, README, and ARCHITECTURE updates happen in-session,
