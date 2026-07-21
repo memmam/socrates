@@ -87,13 +87,21 @@ tooling and the acceptance threshold.
   HISTORY.md). **Neither merge-method setting (merge commit vs.
   rebase) fixes the underlying content-commit author/committer
   mismatch the stop-hook flags — don't re-litigate this by trying
-  further merge-strategy or git-config variations.** GitHub always
-  re-stamps the *content commits'* committer field during any merge it
-  performs: its own bot identity for a merge commit
-  (`noreply@github.com`), or the triggering account's own identity for
-  a rebase — never the original author's `git config` identity, which
-  is what the stop-hook actually wants (`noreply@anthropic.com`).
-  Merge commits are the accepted default: a merge commit puts a
+  further merge-strategy or git-config variations.** The content
+  commits' own committer field is never what GitHub re-stamps — it
+  stays `Claude <noreply@anthropic.com>`, unmodified, through either
+  merge method (confirmed live on PR #136's merge: the merge commit
+  itself carries `GitHub <noreply@github.com>` as its committer, but
+  its content-commit parent still shows `Claude <noreply@anthropic.com>`
+  untouched). What actually differs by method is which commit *is* the
+  one carrying GitHub's identity: a merge commit synthesizes a brand
+  new commit for that (`noreply@github.com`), leaving every existing
+  content commit alone; a rebase instead rewrites each content commit
+  in place onto a new base, and it's *that* rewrite which re-stamps
+  their committer field with the triggering account's identity — never
+  the original author's `git config` identity, which is what the
+  stop-hook actually wants (`noreply@anthropic.com`). Merge commits are
+  the accepted default for exactly this reason: a merge commit puts a
   Verified, human-authored commit on top of the actual content
   commits underneath, which stay individually authored `Claude
   <noreply@anthropic.com>`, unmodified — both attributions visible in

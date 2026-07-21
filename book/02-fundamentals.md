@@ -192,8 +192,9 @@ is `true`).
 Float division by zero follows IEEE-754: `1.0 / 0.0` is `inf`. Integer
 division or modulo by zero is a *panic* — a runtime error that aborts the
 program with a message, a stack trace, and exit code 70 (`panic: division by
-zero`). Integer arithmetic that overflows 64 bits also panics (`panic:
-integer overflow`) rather than silently wrapping.
+zero`, or `panic: modulo by zero` for `%`). Integer arithmetic that overflows
+64 bits also panics (`panic: integer overflow`) rather than silently
+wrapping.
 
 ## Bitwise operators
 
@@ -452,9 +453,11 @@ println(total);
 16
 ```
 
-(That is 1 + 3 + 5 + 7.) Loops are expressions of type `Unit`, and `break`
-takes no value — to compute something in a loop, assign to a `mut` variable,
-as above. Ranges are also first-class values with methods like `.map` and
+(That is 1 + 3 + 5 + 7.) Unlike `if`/`match`, `while`/`for` loops are
+statements, not expressions — they can't appear where a value is expected
+(`let x = for i in 0..3 {};` is a parse error), and `break` takes no value.
+To compute something in a loop, assign to a `mut` variable, as above.
+Ranges are also first-class values with methods like `.map` and
 `.to_list`; the collections chapter covers them.
 
 ## Statements, expressions, and semicolons

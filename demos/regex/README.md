@@ -113,8 +113,8 @@ unbounded count would be an AST bomb) and `{2,1}` is a compile error.
 ## Limits
 
 Backtracking recurses once per matched character, and Socrates caps the call
-stack at 4096 frames — so a repetition run of roughly 1500+ characters on one
-line overflows. Grep mode wraps each line's match in `try()`, so such lines
+stack at 4096 frames — so a repetition run of roughly 1365+ characters on one
+line overflows (measured: 1364 matches, 1365 overflows). Grep mode wraps each line's match in `try()`, so such lines
 are reported as `(skipped: stack overflow)` instead of crashing the program.
 Since v0.6 you can also raise the cap for longer lines by setting the
 `SOCRATES_MAX_DEPTH` environment variable (e.g. `SOCRATES_MAX_DEPTH=100000`).

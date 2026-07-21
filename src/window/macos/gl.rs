@@ -11,8 +11,8 @@
 //! `x11/gl.rs` uses for `libGL.so.1` (Apple's `OpenGL.framework` has no stable
 //! dev-symlink story either).
 //!
-//! `GlFns` carries a GL 3.3 core-profile function table (shaders, programs,
-//! buffers, VAOs, textures, uniforms, draw calls) beyond the
+//! `GlFns` carries a GL 3.3-level core-profile function table (shaders,
+//! programs, buffers, VAOs, textures, uniforms, draw calls) beyond the
 //! `glClearColor`/`glClear` pair — mirrors `x11/gl.rs`'s `GlFns` exactly (same
 //! field names/signatures, cross-corroborated against Khronos's own
 //! `glcorearb.h` and the Linux OpenGL ABI spec), but simpler to resolve:
@@ -23,6 +23,19 @@
 //! 43 symbols resolve with the same plain `dlsym` the original two
 //! (`glClearColor`/`glClear`) already used — no proc-address mechanism
 //! exists on this platform at all.
+//!
+//! **The actual negotiated context is GL 4.1 core**, requested explicitly
+//! via `NSOpenGLPFAOpenGLProfile`/`NSOpenGLProfileVersion4_1Core` in
+//! `Inner::create`'s pixel-format attributes — 4.1 is Apple's own ceiling
+//! (frozen since OS X 10.9, unchanged on every macOS release since,
+//! Apple Silicon included), so "the most recent version this platform
+//! supports" and "the version this file requests" are the same number.
+//! Omitting that attribute (this file's previous state) makes
+//! `NSOpenGLPixelFormat` default to `NSOpenGLProfileVersionLegacy` (GL 2.1),
+//! which cannot compile the `#version 330`+ shaders `gfx` hands it at all —
+//! not a lower-but-working profile, an outright incompatible one. The
+//! function table above only calls entry points through the GL 3.3 level,
+//! so it works unchanged against the higher 4.1 floor.
 
 use super::shared::CocoaWindowState;
 use crate::objc::{class, objc_msgSend, sel, send0, send0_void, send1_obj, Object, SEL};
@@ -38,6 +51,16 @@ use std::sync::OnceLock;
 const NS_OPENGL_PFA_DOUBLE_BUFFER: u32 = 5;
 const NS_OPENGL_PFA_COLOR_SIZE: u32 = 8;
 const NS_OPENGL_PFA_DEPTH_SIZE: u32 = 12;
+// `NSOpenGLPFAOpenGLProfile` + its highest core-profile value: Apple's own
+// OpenGL implementation has never gone past GL 4.1 (frozen since macOS
+// 10.9, deprecated-but-present through every macOS release since,
+// including every Apple Silicon build) -- 4.1 Core is the actual ceiling on
+// every currently-supported macOS version, not a version this file chose.
+// Omitting this attribute (the previous state of this array) makes
+// `NSOpenGLPixelFormat` default to `NSOpenGLProfileVersionLegacy` (GL 2.1),
+// which cannot compile `gfx`'s `#version 330`+ shaders at all.
+const NS_OPENGL_PFA_OPENGL_PROFILE: u32 = 99;
+const NS_OPENGL_PROFILE_VERSION_4_1_CORE: u32 = 0x4100;
 
 const GL_COLOR_BUFFER_BIT: u32 = 0x0000_4000;
 
@@ -437,11 +460,14 @@ impl Inner {
         // `init...`) is checked and anything already created is released
         // before returning `Err`.
         unsafe {
-            // Pixel format attribute array: `{ ColorSize, 24, DepthSize, 24,
-            // DoubleBuffer, 0 }` — boolean flags (DoubleBuffer) take no
-            // following value, sized attributes do, `0` terminates. See the
-            // module doc comment / research brief for the token table.
-            let attrs: [u32; 6] = [
+            // Pixel format attribute array: `{ OpenGLProfile, 4.1Core,
+            // ColorSize, 24, DepthSize, 24, DoubleBuffer, 0 }` — boolean
+            // flags (DoubleBuffer) take no following value, sized/valued
+            // attributes do, `0` terminates. See the module doc comment /
+            // research brief for the token table.
+            let attrs: [u32; 8] = [
+                NS_OPENGL_PFA_OPENGL_PROFILE,
+                NS_OPENGL_PROFILE_VERSION_4_1_CORE,
                 NS_OPENGL_PFA_COLOR_SIZE,
                 24,
                 NS_OPENGL_PFA_DEPTH_SIZE,

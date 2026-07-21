@@ -40,7 +40,9 @@ of both runnable files is pinned with `expect` directives for
 as the v0.5 list-of-candidates version (same masks, same order), so the
 pinned solve narratives — down to `assignments=10939 guesses=1850
 backtracks=1837` on the Inkala — are unchanged, while the whole run got
-about 2x faster (no per-cell candidate lists to allocate).
+substantially faster (no per-cell candidate lists to allocate) — measured
+at roughly 5-7x on the Inkala solve itself and the full three-puzzle run
+alike, not the "about 2x" this originally reported.
 
 ## Run it
 

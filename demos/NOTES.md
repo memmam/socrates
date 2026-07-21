@@ -42,7 +42,12 @@ strongest possible signal. Those walls became **v0.6**.
 - `Some(v) -> i = v` now says assignment can't be an arm body and shows the
   block form (mdsite).
 - `x << 1` now gets "Socrates has no bitwise shift operators" from the lexer
-  instead of a bare "expected an expression" (sudoku).
+  instead of a bare "expected an expression" (sudoku). (Superseded: `<<`
+  became a real, working left-shift operator in v0.7 — see CHANGELOG.md's
+  v0.7.0 entry — so this diagnostic no longer exists anywhere in the
+  source; kept as the historical record of the v0.6-era message, not as a
+  currently-accurate status, the same treatment this file gives the
+  sibling "Heard, and declined" bitwise-operators entry below.)
 - `socrates test` golden comparison ignores trailing whitespace on both sides —
   trailing spaces in a directive are invisible in an editor and could never
   be pinned reliably (checkers).
@@ -71,11 +76,13 @@ strongest possible signal. Those walls became **v0.6**.
   design decision with interpolation interactions — deferred whole, not
   half-designed.
 - **A line-width-aware formatter.** The single most-reported *tooling*
-  issue: `socrates fmt` collapses deliberate multi-line literals (a 57-entry
-  test table became one 1,427-char line). This is a genuine
-  limitation and staying on the list — but it's a formatter rewrite, not a
-  papercut fix, and the formatter remains *correct* (idempotent,
-  behavior-preserving). None of the demos are fmt-clean; that's honest.
+  issue: `socrates fmt` collapses deliberate multi-line literals. This is a
+  genuine limitation and staying on the list — but it's a formatter
+  rewrite, not a papercut fix, and the formatter remains *correct*
+  (idempotent, behavior-preserving). Not every demo is fmt-clean, but most
+  now are: re-running `fmt` (no `-w`) against every `demos/*/*.soc` file and
+  diffing the output changes only 8 of 71 files, across 8 of the 18 demo
+  directories — the other 10 demos are already fully fmt-clean.
   (Two sibling complaints in this same original report — hoisting comments
   out of list literals, and half-expanding if/else-if chains — are fixed;
   see "Bugs — fixed in-round," below. This entry now covers only the

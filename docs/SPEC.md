@@ -107,10 +107,10 @@ There are **no implicit numeric conversions**. `1 + 2.0` is a type error; write
 struct Point { x: Float, y: Float }
 struct Pair[A, B] { first: A, second: B }
 
-let p = Point { x: 1.0, y: 2.0 }
-let q = Pair { first: 1, second: "one" }   // Pair[Int, String] inferred
-p.x                    // field access
-p.x = 3.0              // field assignment — struct instances are mutable heap objects
+let p = Point { x: 1.0, y: 2.0 };
+let q = Pair { first: 1, second: "one" };  // Pair[Int, String] inferred
+p.x;                   // field access
+p.x = 3.0;             // field assignment — struct instances are mutable heap objects
 ```
 
 Structs are **nominal** and have **reference semantics**: `let a = p; a.x = 9.0`
@@ -136,8 +136,11 @@ enum Result[T, E] { Ok(T), Err(E) }     // built into the prelude
 
 Variants are referenced as `Shape.Circle(1.0)`, `Shape.Empty`. The prelude variants
 `Some`, `None`, `Ok`, `Err` may be used **unqualified**; `Option.Some(x)` also works.
-Enum values are immutable. Nullary variants are written *without* parentheses:
-`Shape.Empty`, not `Shape.Empty()`.
+Enum values are immutable. In construction position, nullary variants are
+written *without* parentheses — `Shape.Empty`, not `Shape.Empty()`, which
+is a checker error (`variant takes no arguments`); a `match` **pattern** is
+more lenient and currently accepts `Shape.Empty()` too, matching the same
+value `Shape.Empty` would.
 
 ### 2.5 Generics
 
@@ -165,7 +168,7 @@ instantiations).
 - Inference is local unification (no let-generalization for lambdas; polymorphism
   comes only from explicit `[T]` parameter lists).
 - An unresolved type variable at the end of checking (e.g. `let x = [];` never used)
-  is a compile error: "cannot infer type".
+  is a compile error: `cannot infer the type of` *name* (E0302).
 
 ---
 
@@ -758,8 +761,11 @@ device advertises SPIR-V ingestion (`CL_DEVICE_IL_VERSION`); errors name
 what is missing, and shader build failures carry the runtime's build log.
 The worked example is `docs/assets/opencl_compute.soc` — the
 OpenCL-profile twin of `vulkan_compute.soc`, hard-asserting the same
-doubled bytes (a CPU implementation like pocl counts; no GPU hardware
-needed).
+doubled bytes; no GPU hardware is needed, but the CPU runtime specifically
+needs SPIR-V IL support (`CL_DEVICE_IL_VERSION`) to count — CI's own pocl
+build ships without the IL translator (`clCreateProgramWithIL` fails
+`CL_INVALID_VALUE` on it) and installs the Intel oneAPI CPU runtime
+alongside it purely to supply the IL-capable device.
 
 **The PTX ABI (the native CUDA backend, v0.8)** expresses the contract in
 NVIDIA's textual virtual ISA, which the driver JITs for the resident GPU
@@ -833,11 +839,15 @@ success.
 
 The Windows/WGL backend (`src/window/win32/{mod,gl,shared,vulkan}.rs`) has
 the same zero-Cargo-dependency shape as Linux/X11/GLX, but a simpler
-linking story: `user32`,
+linking story for the DLLs themselves: `user32`,
 `gdi32`, and `opengl32` ship on every Windows install, so they're linked
-normally, with no `dlopen`/`LoadLibrary` dance needed for GL entry points
+normally, with no `dlopen`/`LoadLibrary` dance needed to find *them*
 (unlike Linux, where GL dev packages vary enough to make dynamic resolution
-the safer default). Event handling is callback-driven (`WNDPROC` +
+of `libGL.so` the safer default). Most individual GL entry points still
+need a runtime resolution step either way — `opengl32.dll` only statically
+exports GL 1.0-1.2 (~14 calls); everything `gfx` needs beyond that resolves
+via `wglGetProcAddress`, this platform's analog of Linux's
+`glXGetProcAddress`. Event handling is callback-driven (`WNDPROC` +
 `GWLP_USERDATA`) rather than poll-based like Xlib, but this is purely an
 internal implementation detail — `poll()`, `key_down()`, `mouse_pos()`,
 `width()`/`height()`, and `should_close()` behave identically to the Linux
@@ -1031,9 +1041,19 @@ Xvfb + lavapipe (no GPU needed).
 
 ### 7.4 The gfx namespace (v0.8, feature-gated)
 
-`gfx` is a backend-neutral OpenGL 3.3 core-profile draw-call layer on top of
+`gfx` is a backend-neutral OpenGL core-profile draw-call layer on top of
 `window`'s per-platform GL function-pointer table (§ 7.3): shaders,
-programs, buffers, vertex arrays, textures, uniforms, and draw calls.
+programs, buffers, vertex arrays, textures, uniforms, and draw calls. The
+function table itself only calls entry points through the GL 3.3 level, but
+the *negotiated context* is higher and platform-specific: Linux requests a
+floor of GL 4.3 core (the first version with compute shaders promoted to
+core, so a `gpu.*` compute side-channel alongside `gfx` is guaranteed
+available rather than incidental) and takes whatever the driver's actual
+maximum core profile is above that floor; macOS requests exactly GL 4.1
+core, Apple's own ceiling on every currently-supported release (frozen
+since OS X 10.9, unchanged on Apple Silicon). Neither backend ever
+negotiated a real profile before this was fixed — both used to accept
+whatever compatibility-profile default the driver handed back.
 Rather than taking a `Window` receiver per call, every `gfx.*` member
 operates against "whichever window is currently current" — the same
 single-current-context model `glfwMakeContextCurrent` uses. `Window` gained
@@ -1277,11 +1297,16 @@ actually reclaims them as it goes.
 `key_down(String) -> Bool` (is the named key currently held down; the common
 single-character and named-key spellings — lowercase letters like `"w"`,
 `"a"`, plus names like `"space"`/`"escape"`/arrow keys — work the same on
-every backend, but the underlying name space is backend-specific: X11 keysym
-names on Linux, a small hand-written table on Windows, and
-`NSEvent.charactersIgnoringModifiers` text on macOS — see the per-backend
-notes above (§ 7.3); an unrecognized name returns `false` rather than
-erroring), `mouse_pos() -> (Float, Float)` (last
+every backend, but the underlying name space is backend-specific: on Linux,
+a small table translates these convenience names to their actual X11 keysym
+spelling (`"escape"` → `"Escape"`, `"left"` → `"Left"`, etc. — X11's own
+names are mostly capitalized, unlike Socrates' lowercase convention; single
+ASCII letters/digits and `"space"` need no translation, since those keysyms
+already match), falling through to a raw X11 keysym-name lookup for
+anything not in the table, so real keysym names still work too; a small
+hand-written table on Windows; and `NSEvent.charactersIgnoringModifiers`
+text on macOS — see the per-backend notes above (§ 7.3); an unrecognized
+name returns `false` rather than erroring), `mouse_pos() -> (Float, Float)` (last
 known pointer position within the window, updated by `poll()`; `(0.0, 0.0)`
 before the first pointer motion), `width() -> Int` / `height() -> Int`
 (current window size in pixels, updated by `poll()` on a resize),
@@ -1371,7 +1396,7 @@ impl_decl   = "impl" IDENT [ generics ] "{" { method_decl } "}" ;
 method_decl = [ "pub" ] "fn" IDENT [ generics ] "(" "self" [ "," params ] ")" [ "->" type ] block ;
 import_stmt = "import" IDENT { "." IDENT } [ "as" IDENT ] ";" ;
 fn_decl     = "fn" IDENT [ generics ] "(" [ params ] ")" [ "->" type ] block ;
-generics    = "[" IDENT { "," IDENT } "]" ;
+generics    = "[" IDENT { "," IDENT } [ "," ] "]" ;
 params      = param { "," param } [ "," ] ;
 param       = IDENT ":" type ;
 struct_decl = "struct" IDENT [ generics ] "{" [ fields ] "}" ;
@@ -1402,7 +1427,10 @@ continue_stmt = "continue" ";" ;
 
 type        = "Int" | "Float" | "Bool" | "String" | "Unit"
             | IDENT [ "." IDENT ] [ "[" type { "," type } "]" ]  (* named / generic / module-qualified *)
-            | "(" type "," type { "," type } ")"          (* tuple *)
+            | "(" type [ "," ] ")"                         (* parenthesized grouping, one type,
+                                                               trailing comma optional and ignored --
+                                                               NOT a 1-tuple; Socrates has no 1-tuples *)
+            | "(" type "," type { "," type } [ "," ] ")"   (* tuple, 2+ types *)
             | "fn" "(" [ type { "," type } ] ")" [ "->" type ]
             | "List" "[" type "]" | "Map" "[" type "," type "]" | "Range" ;
 
@@ -1513,7 +1541,10 @@ error[E0301]: type mismatch
 ```
 
 Error code ranges: E01xx lexing, E02xx parsing, E03xx types, E04xx name resolution,
-E05xx pattern matching, E06xx other semantic errors. Warnings: W01xx.
+E05xx pattern matching, E06xx other semantic errors. Warnings: W01xx. (E0335-E0338,
+module-loading/resolution failures, are the one exception living in the E03xx
+range rather than E04xx — a categorization artifact of when they were added,
+not a types error in the usual sense.)
 
 ## 11. Implementation limits
 

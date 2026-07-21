@@ -7,7 +7,7 @@ from their spectra. Two framing tricks make every pinned line exact:
    (`n = 1024`, and `n = 600` for the Bluestein case), so rfft bin `k` is
    exactly `k` Hz and an integer-frequency tone has **zero spectral
    leakage** — the whole magnitude `n/2` lands on one bin, the rest of the
-   floor sits ~13 orders of magnitude down.
+   floor sits ~14 orders of magnitude down.
 2. **5-limit just intonation on C4 = 240 Hz.** Just triads are exact
    integer frequency ratios, so gcd-reducing the peak bins gives the
    chord's shape as small integers: `4:5:6` major, `10:12:15` minor,
@@ -57,7 +57,7 @@ From the repository root:
 
 Raw libm output is never pinned. `math.sin` feeds the signal, but every
 golden line is either a derived integer (bin indices, gcd ratios, bar
-heights — all separated from rounding boundaries by ~13 orders of
+heights — all separated from rounding boundaries by ~14 orders of
 magnitude) or a `to_fixed` string of a value within ~1e-10 of an exact
 decimal; every tolerance check prints a Bool at 1e-9. Bar heights and row
 labels were chosen so no value sits near a `round()`/`to_fixed`

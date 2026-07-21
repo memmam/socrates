@@ -192,12 +192,18 @@ directives; each of the following is the incident that produced one.
   been through a bare `cargo fmt` — the number drifts as the tree
   grows, which is why the rule says to re-measure rather than trust a
   fixed figure.
-- **The "Claude Fable 5" commit-trailer leak.** A model-identifier
-  variant leaked into every commit trailer for a full session before
-  being caught (2026-07-18) — the existing "no model identifier in any
-  pushed artifact" wording didn't name the commit-trailer channel
-  explicitly, so it wasn't checked against a rule that already covered
-  it in principle. Fixed prospectively; past commits were not rewritten.
+- **The commit-trailer model-identifier leak.** Not one incident but
+  three overlapping ones: `git log --grep` against the live history
+  shows three distinct trailer variants, not the single "Claude Fable 5"
+  one this entry originally named — "Claude Fable 5" (153 commits,
+  2026-07-13 22:24 through 2026-07-18 21:20, nearly five days, not "a
+  full session"), "Claude Opus 4.8" (5 commits, 2026-07-15, same day),
+  and "Claude Sonnet 5" (5 commits, 2026-07-15 23:13 through 2026-07-16
+  06:10) — the latter two both landing inside the first one's date
+  range. The existing "no model identifier in any pushed artifact"
+  wording didn't name the commit-trailer channel explicitly, so none of
+  the three were checked against a rule that already covered them in
+  principle. Fixed prospectively; past commits were not rewritten.
 - **The PR #103 x86_64-linux investigation's agent stalling twice in a
   row** — reporting "standing by" and ending its turn instead of
   actually waiting on a CI run — is what produced the "a delegated

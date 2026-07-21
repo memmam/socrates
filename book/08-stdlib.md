@@ -107,8 +107,11 @@ false
 
 `std.deque` is a double-ended queue with `push_front`/`push_back` and
 `pop_front`/`pop_back` (each an `Option`), and `std.lists` adds the
-aggregates `List` leaves out — `sum`, `min`/`max` (returning `Option`),
-`min_by`/`max_by`, `min_by_key`/`max_by_key`, and `fill`:
+aggregates `List` leaves out — `min`/`max` (returning `Option`),
+`min_by`/`max_by`, `min_by_key`/`max_by_key`, and `fill` (`sum` used to be
+one of these too, before it was promoted to a native `List.sum()` method;
+`lists.sum` is now a thin wrapper over it, kept for callers already using
+the module path):
 
 ```soc
 import std.lists;
