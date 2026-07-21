@@ -405,8 +405,11 @@ Some context for those numbers:
 - The slowest rows are honest about the costliest habits: `bench_json`
   round-trips a ~27 KB document through parse and stringify 40 times, and
   `bench_list_churn` runs 300,000 rounds of short-lived list and struct
-  allocation — allocation-heavy work tops the table, arithmetic sits at
-  the bottom.
+  allocation — allocation-heavy work tops the table. `arith_loop` is the
+  exception to "arithmetic is cheap": it's the second-slowest row above,
+  not the fastest — the printed number is timing its deliberately
+  hand-counted `while` loop shape (kept as the dispatch-floor comparison
+  point for `for_range`, above), not the cost of the arithmetic itself.
 
 For calibration rather than bragging: this is the performance class of
 non-JIT scripting-language interpreters — a couple of orders of magnitude

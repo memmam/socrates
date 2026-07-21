@@ -101,4 +101,6 @@ Notes on the algorithm:
 - The v0.7 rewrite (map-as-set → bitmasks, entropy cache, `std.deque`
   queue, `strings.Builder` rendering) kept the RNG call order — and
   therefore every pinned texture — byte-identical, while making the
-  main generation about 5x faster and an 80x40 island about 6.7x faster.
+  main generation about 5x faster and a larger 80x40 island roughly
+  9x faster — re-measured; the "6.7x" this originally reported for the
+  80x40 case was off.

@@ -425,14 +425,58 @@ impl X11WindowState {
     }
 
     pub(super) fn key_down(&self, name: &str) -> bool {
-        let Ok(cname) = CString::new(name) else {
-            return false;
+        // Socrates' convenience names (identical spellings to
+        // `win32/shared.rs`'s `vk_from_name` table, so the SPEC's "the
+        // common ... spellings work the same on every backend" promise
+        // actually holds) map to the ACTUAL X11 keysym string spelling(s) --
+        // which mostly differ from Socrates' own lowercase convention
+        // (`XK_Escape` is spelled `"Escape"`, not `"escape"`; a raw
+        // `XStringToKeysym` call on the lowercase name returns `NoSymbol` for
+        // every one of these except `"space"`, which happens to already be
+        // lowercase in X11's own keysymdef.h -- single ASCII letters/digits
+        // are unaffected, since X11 keysyms for those *are* the ASCII
+        // codepoint). Anything not in this table falls through to a raw
+        // `XStringToKeysym` lookup on the name as given, so a caller using a
+        // real X11 keysym name directly (any of the thousands
+        // `keysymdef.h` defines) still works -- unlike Windows' table, this
+        // stays exhaustive. `shift`/`control`/`alt` check both the left and
+        // right keysym, matching Windows' single side-agnostic VK code.
+        let candidates: &[&str] = match name {
+            "escape" => &["Escape"],
+            "return" | "enter" => &["Return"],
+            "tab" => &["Tab"],
+            "backspace" => &["BackSpace"],
+            "shift" => &["Shift_L", "Shift_R"],
+            "control" | "ctrl" => &["Control_L", "Control_R"],
+            "alt" => &["Alt_L", "Alt_R"],
+            "left" => &["Left"],
+            "up" => &["Up"],
+            "right" => &["Right"],
+            "down" => &["Down"],
+            "f1" => &["F1"],
+            "f2" => &["F2"],
+            "f3" => &["F3"],
+            "f4" => &["F4"],
+            "f5" => &["F5"],
+            "f6" => &["F6"],
+            "f7" => &["F7"],
+            "f8" => &["F8"],
+            "f9" => &["F9"],
+            "f10" => &["F10"],
+            "f11" => &["F11"],
+            "f12" => &["F12"],
+            _ => std::slice::from_ref(&name),
         };
-        // Safety: `XStringToKeysym` takes a `const char*` and returns a
-        // plain integer (`NoSymbol` = 0 for an unrecognized name); no
-        // pointer is retained.
-        let keysym = unsafe { XStringToKeysym(cname.as_ptr()) };
-        keysym != 0 && self.pressed.contains(&keysym)
+        candidates.iter().any(|cand| {
+            let Ok(cname) = CString::new(*cand) else {
+                return false;
+            };
+            // Safety: `XStringToKeysym` takes a `const char*` and returns a
+            // plain integer (`NoSymbol` = 0 for an unrecognized name); no
+            // pointer is retained.
+            let keysym = unsafe { XStringToKeysym(cname.as_ptr()) };
+            keysym != 0 && self.pressed.contains(&keysym)
+        })
     }
 
     /// Destroys the X window, frees the colormap, and closes the display

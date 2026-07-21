@@ -177,7 +177,14 @@ jobs:
       #   MACOS_SIGN_IDENTITY     e.g. "Developer ID Application: Name (TEAMID)"
       #   MACOS_NOTARY_KEY_P8_BASE64 / _KEY_ID / _ISSUER_ID  App Store Connect API key
       - name: Developer ID sign + notarize (when configured)
-        if: matrix.macos_section && env.MACOS_CERT_P12_BASE64 != ''
+        if: >-
+          matrix.macos_section &&
+          env.MACOS_CERT_P12_BASE64 != '' &&
+          env.MACOS_CERT_PASSWORD != '' &&
+          env.MACOS_SIGN_IDENTITY != '' &&
+          env.MACOS_NOTARY_KEY_P8_BASE64 != '' &&
+          env.MACOS_NOTARY_KEY_ID != '' &&
+          env.MACOS_NOTARY_ISSUER_ID != ''
         env:
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}

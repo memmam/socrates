@@ -16,7 +16,7 @@
 //! Mesa, Khronos refpages, X.org man pages) rather than a single raw fetch
 //! of `glx.h` (this session's egress policy blocked a direct fetch of it).
 //!
-//! `GlFns` also carries a GL 3.3 core-profile function table (shaders,
+//! `GlFns` also carries a GL 3.3-level core-profile function table (shaders,
 //! programs, buffers, VAOs, textures, uniforms, draw calls) beyond the
 //! GLX/GL-1.0 handful above, for the backend-neutral `gfx` draw-call
 //! namespace. Signatures and token values are cross-corroborated against
@@ -25,6 +25,15 @@
 //! 1.2 — everything newer is resolved dynamically via `glXGetProcAddress`,
 //! *including* GL-1.3-vintage `glActiveTexture`, which is one release past
 //! that static-export floor).
+//!
+//! **The actual negotiated context is GL 4.3+ core, not 3.3**: `Inner::create`
+//! requests a floor of `GFX_GL_MAJOR.GFX_GL_MINOR` (4.3, the first version
+//! with compute shaders promoted to core) via
+//! `GLX_ARB_create_context`/`GLX_ARB_create_context_profile`, so a
+//! compute-shader side-channel alongside `gfx` is guaranteed available, not
+//! incidental to whatever a driver happened to default to. The function
+//! table above only ever calls entry points through the GL 3.3 level, so it
+//! works unchanged against the higher floor — 4.3 core is a strict superset.
 
 use std::ffi::{c_char, c_int, c_uint, c_void, CString};
 use std::ptr;
@@ -37,9 +46,42 @@ use super::shared::{
 };
 
 // GLX_* visual attribute tokens (glx.h, stable since GLX 1.0).
-const GLX_RGBA: c_int = 4;
 const GLX_DOUBLEBUFFER: c_int = 5;
 const GLX_DEPTH_SIZE: c_int = 12;
+
+// FBConfig attribute tokens (GLX 1.3+, universally supported for 20+
+// years) -- needed because `GLX_ARB_create_context` takes a `GLXFBConfig`,
+// not the `XVisualInfo` the older `glXChooseVisual` returns.
+const GLX_X_RENDERABLE: c_int = 0x8012;
+const GLX_DRAWABLE_TYPE: c_int = 0x8010;
+const GLX_RENDER_TYPE: c_int = 0x8011;
+const GLX_RED_SIZE: c_int = 8;
+const GLX_GREEN_SIZE: c_int = 9;
+const GLX_BLUE_SIZE: c_int = 10;
+const GLX_WINDOW_BIT: c_int = 0x0000_0001;
+const GLX_RGBA_BIT: c_int = 0x0000_0001;
+
+// `GLX_ARB_create_context` / `GLX_ARB_create_context_profile` tokens (both
+// universally supported extensions) -- these are what actually let this
+// file ask for a specific GL version/profile. The legacy `glXCreateContext`
+// this file used to call takes no version/profile at all, so drivers were
+// free to (and did) hand back whatever compatibility-profile context they
+// defaulted to, contradicting `gfx`'s own "GL 3.3 core profile" contract.
+const GLX_CONTEXT_MAJOR_VERSION_ARB: c_int = 0x2091;
+const GLX_CONTEXT_MINOR_VERSION_ARB: c_int = 0x2092;
+const GLX_CONTEXT_PROFILE_MASK_ARB: c_int = 0x9126;
+const GLX_CONTEXT_CORE_PROFILE_BIT_ARB: c_int = 0x0000_0001;
+
+// The actual floor: GL 4.3 core is the first version with compute shaders
+// promoted to core (`ARB_compute_shader`), which is what `gpu.*`-alongside-
+// `gfx` interop needs to be guaranteed available rather than incidental.
+// Requesting exactly this via `GLX_ARB_create_context` -- rather than no
+// version/profile at all -- gets whatever *at least* this capable the
+// system actually has (in practice, Mesa/NVIDIA both hand back their max
+// core profile once any core profile is requested), instead of clamping
+// down to the driver's legacy compatibility default.
+const GFX_GL_MAJOR: c_int = 4;
+const GFX_GL_MINOR: c_int = 3;
 
 const GL_COLOR_BUFFER_BIT: c_uint = 0x0000_4000;
 
@@ -103,9 +145,15 @@ const RTLD_NOW: c_int = 2;
 // GLX/GL function pointer types, resolved at runtime via dlsym.
 type GlxContext = *mut c_void;
 type GlxDrawable = XID;
-type FnChooseVisual = unsafe extern "C" fn(*mut Display, c_int, *mut c_int) -> *mut XVisualInfo;
-type FnCreateContext =
-    unsafe extern "C" fn(*mut Display, *mut XVisualInfo, GlxContext, XBool) -> GlxContext;
+type GlxFbConfig = *mut c_void;
+type FnChooseFbConfig =
+    unsafe extern "C" fn(*mut Display, c_int, *const c_int, *mut c_int) -> *mut GlxFbConfig;
+type FnGetVisualFromFbConfig =
+    unsafe extern "C" fn(*mut Display, GlxFbConfig) -> *mut XVisualInfo;
+// ARB extension, not part of the static-export ABI floor -- resolved via
+// `glXGetProcAddress` like the GL 3.3-core table below, not `dlsym`.
+type FnCreateContextAttribsArb =
+    unsafe extern "C" fn(*mut Display, GlxFbConfig, GlxContext, XBool, *const c_int) -> GlxContext;
 type FnDestroyContext = unsafe extern "C" fn(*mut Display, GlxContext);
 type FnMakeCurrent = unsafe extern "C" fn(*mut Display, GlxDrawable, GlxContext) -> XBool;
 type FnSwapBuffers = unsafe extern "C" fn(*mut Display, GlxDrawable);
@@ -189,8 +237,9 @@ type FnReadPixels = unsafe extern "C" fn(i32, i32, i32, i32, u32, u32, *mut c_vo
 /// so there is nothing here for a `Drop` to release.
 #[derive(Clone, Copy)]
 struct GlFns {
-    choose_visual: FnChooseVisual,
-    create_context: FnCreateContext,
+    choose_fb_config: FnChooseFbConfig,
+    get_visual_from_fb_config: FnGetVisualFromFbConfig,
+    create_context_attribs_arb: FnCreateContextAttribsArb,
     destroy_context: FnDestroyContext,
     make_current: FnMakeCurrent,
     swap_buffers: FnSwapBuffers,
@@ -331,8 +380,8 @@ impl GlFns {
                     if p.is_null() {
                         return Err(format!(
                             "window.create: glXGetProcAddress could not resolve `{}` — GL \
-                             driver too old? (gfx needs GL 3.3 core profile)",
-                            $name
+                             driver too old? (gfx needs at least GL {}.{} core profile)",
+                            $name, GFX_GL_MAJOR, GFX_GL_MINOR
                         ));
                     }
                     std::mem::transmute::<*mut c_void, $ty>(p)
@@ -340,8 +389,18 @@ impl GlFns {
             }
 
             Ok(GlFns {
-                choose_visual: sym!("glXChooseVisual", FnChooseVisual),
-                create_context: sym!("glXCreateContext", FnCreateContext),
+                // FBConfig lookup is core GLX 1.3 ABI (statically exported,
+                // like `glXChooseVisual` was); only `...CreateContextAttribsARB`
+                // itself is the ARB extension needing proc-address resolution.
+                choose_fb_config: sym!("glXChooseFBConfig", FnChooseFbConfig),
+                get_visual_from_fb_config: sym!(
+                    "glXGetVisualFromFBConfig",
+                    FnGetVisualFromFbConfig
+                ),
+                create_context_attribs_arb: proc_addr!(
+                    "glXCreateContextAttribsARB",
+                    FnCreateContextAttribsArb
+                ),
                 destroy_context: sym!("glXDestroyContext", FnDestroyContext),
                 make_current: sym!("glXMakeCurrent", FnMakeCurrent),
                 swap_buffers: sym!("glXSwapBuffers", FnSwapBuffers),
@@ -497,13 +556,54 @@ impl Inner {
 
             let screen = XDefaultScreen(display);
 
-            let mut attrib_list =
-                [GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, 0 /* None */];
-            let vi = (gl.choose_visual)(display, screen, attrib_list.as_mut_ptr());
+            // FBConfig attribute lists are `{name, value}` pairs throughout
+            // (unlike `glXChooseVisual`'s older list, which mixed valueless
+            // flags like `GLX_RGBA` with `{name, value}` pairs) -- so
+            // `GLX_DOUBLEBUFFER` needs an explicit `X_TRUE` here where the
+            // old list needed none, and `GLX_RGBA_BIT`/`GLX_WINDOW_BIT`
+            // replace the old bare `GLX_RGBA` flag.
+            let fb_attribs = [
+                GLX_X_RENDERABLE,
+                X_TRUE,
+                GLX_DRAWABLE_TYPE,
+                GLX_WINDOW_BIT,
+                GLX_RENDER_TYPE,
+                GLX_RGBA_BIT,
+                GLX_RED_SIZE,
+                8,
+                GLX_GREEN_SIZE,
+                8,
+                GLX_BLUE_SIZE,
+                8,
+                GLX_DEPTH_SIZE,
+                24,
+                GLX_DOUBLEBUFFER,
+                X_TRUE,
+                0, // None
+            ];
+            let mut n_configs: c_int = 0;
+            let configs =
+                (gl.choose_fb_config)(display, screen, fb_attribs.as_ptr(), &mut n_configs);
+            if configs.is_null() || n_configs == 0 {
+                XCloseDisplay(display);
+                return Err(
+                    "window.create: glXChooseFBConfig found no matching GL framebuffer config"
+                        .to_string(),
+                );
+            }
+            // First match is fine -- the same "just pick one" policy
+            // `glXChooseVisual` had; the attrib list above is the actual
+            // filter, not this selection.
+            let fb_config = *configs;
+            XFree(configs as *mut c_void);
+
+            let vi = (gl.get_visual_from_fb_config)(display, fb_config);
             if vi.is_null() {
                 XCloseDisplay(display);
                 return Err(
-                    "window.create: glXChooseVisual found no matching GL visual".to_string()
+                    "window.create: glXGetVisualFromFBConfig returned no visual for the chosen \
+                     config"
+                        .to_string(),
                 );
             }
 
@@ -530,12 +630,31 @@ impl Inner {
                 h,
             );
 
-            let ctx = (gl.create_context)(display, vi, ptr::null_mut(), X_TRUE);
+            let ctx_attribs = [
+                GLX_CONTEXT_MAJOR_VERSION_ARB,
+                GFX_GL_MAJOR,
+                GLX_CONTEXT_MINOR_VERSION_ARB,
+                GFX_GL_MINOR,
+                GLX_CONTEXT_PROFILE_MASK_ARB,
+                GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+                0, // None
+            ];
+            let ctx = (gl.create_context_attribs_arb)(
+                display,
+                fb_config,
+                ptr::null_mut(),
+                X_TRUE,
+                ctx_attribs.as_ptr(),
+            );
             if ctx.is_null() {
                 XFree(vi as *mut c_void);
                 x11.teardown();
                 XSetErrorHandler(prev_handler);
-                return Err("window.create: glXCreateContext failed".to_string());
+                return Err(format!(
+                    "window.create: glXCreateContextAttribsARB failed -- driver doesn't support \
+                     GL {}.{} core profile (gfx needs at least this for compute-shader interop)",
+                    GFX_GL_MAJOR, GFX_GL_MINOR
+                ));
             }
 
             if (gl.make_current)(display, x11.window as GlxDrawable, ctx) == X_FALSE {

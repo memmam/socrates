@@ -196,8 +196,16 @@ chunks.
 Maps (`FMap`) are insertion-ordered vectors of `(hash, key, value)` with a
 hash → indices index; structural hashing normalizes `-0.0`, is
 order-insensitive for map-valued keys (matching set-like map equality), and
-refuses functions. Deep equality has a nesting-depth limit so cyclic
-structures (buildable via struct field mutation) error instead of hanging.
+refuses functions. Deep equality (`value_eq_impl`) is an iterative worklist,
+not Rust recursion, over everything except map keys (map nesting alone still
+recurses per level, capped at 64 to bound *that* stack); a cyclic structure
+(buildable via struct field mutation) can't overflow it either way. Cycle
+safety comes from a `HashSet<(Handle, Handle)>` of in-progress pairs: a
+List/Tuple/Struct/Variant/Map pair only pushes its children onto the
+worklist the first time that pair is seen, so a cycle's second visit is a
+no-op rather than a re-descent — treating an already-in-progress pair as
+equal-so-far, the standard co-inductive reading of equality on cyclic data,
+not an error and not a hang.
 
 ## Tooling
 
@@ -539,11 +547,21 @@ with the *n*-th actual output line in file order, and writes the file back
 untouched, leaving the original mismatch as a normal failure. `error:`/
 `panic:` directives are never rewritten.
 
-**`gfx`** is a backend-neutral OpenGL 3.3 core-profile draw-call namespace
+**`gfx`** is a backend-neutral OpenGL core-profile draw-call namespace
 built on top of `window`'s per-platform `GlFns` function-pointer table
 (each of `x11/gl.rs`/`win32/gl.rs`/`macos/gl.rs` already carries the full shader/
 program/buffer/VAO/texture/uniform/draw-call table, resolved at `Window`
-creation time). Two design choices make this a thin layer rather than a
+creation time, and only ever calls entry points through the GL 3.3 level).
+The context each platform actually negotiates for that table to run
+against is higher, and platform-specific: `x11/gl.rs` requests a GL 4.3
+core floor via `GLX_ARB_create_context`/`GLX_ARB_create_context_profile`
+(4.3 is the first version with core compute shaders, so `gpu.*` interop is
+guaranteed rather than incidental) and gets whatever the driver's actual
+core-profile maximum is above that; `macos/gl.rs` requests exactly GL 4.1
+core via `NSOpenGLPFAOpenGLProfile`/`NSOpenGLProfileVersion4_1Core` — 4.1
+has been Apple's own ceiling on every currently-supported macOS release
+since OS X 10.9, Apple Silicon included, so there is no higher profile to
+ask for. Two design choices make this a thin layer rather than a
 new subsystem:
 
 - **Single current context, VM-level.** `gfx.*` calls take no `Window`
@@ -767,7 +785,10 @@ platform backends are now the same two-variant enum shape.) Every
 `Inner` method becomes a two-armed `match` forwarding to whichever variant
 is live; `#[allow(clippy::large_enum_variant)]` on the enum itself
 (`gl::Inner` carries the ~45-function-pointer `GlFns` table, ~456 bytes,
-against `metal::Inner`'s current 0) is deliberate — boxing would add an
+against `metal::Inner`'s own device/queue/layer/target/depth pointers plus
+its `gfx` program/buffer/VAO handle tables, ~424 bytes — both variants are
+substantial, not one padded against an empty one) is deliberate — boxing
+would add an
 indirection to every hot-path `gfx.*` call for no real benefit, since at
 most one `Inner` is ever live per window. `src/window/macos.rs` was split
 into `macos/{mod,shared,gl,metal}.rs` to carry this: `shared.rs` holds
