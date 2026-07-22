@@ -15,6 +15,16 @@ use crate::value::{FMap, Handle, Heap, Obj, Upval, UpvalStorage, Value};
 
 const DEFAULT_MAX_FRAMES: usize = 4096;
 
+// The Rust-recursion cap shared by `value_eq_impl` (map keys only; map values
+// are a worklist) and `hash_value_impl` (both keys and values genuinely
+// recurse, since each entry's combined hash needs both sub-hashes back before
+// it can fold into the order-insensitive sum). 10,000 matches this codebase's
+// existing deep-nesting convention (`display_value`'s cycle/depth guard) and
+// is far inside the 512 MiB stack every platform gets (main.rs / build.rs):
+// at that depth a native frame could be ~50 KiB before this became the
+// binding constraint, and `hash_value_impl`'s frames run a few hundred bytes.
+const MAP_NESTING_CAP: u32 = 10_000;
+
 // FNV-1a, the structural-hash primitive (`Vm::hash_value`).
 const FNV_OFFSET: u64 = 0xcbf29ce484222325;
 const FNV_PRIME: u64 = 0x100000001b3;
@@ -1529,8 +1539,8 @@ impl Vm {
     fn value_eq_impl(&self, a: Value, b: Value, map_depth: u32) -> Result<bool, String> {
         // Rust recursion happens only per *map* nesting level (map keys need
         // an immediate equality decision); everything else is a worklist.
-        if map_depth > 64 {
-            return Err("map nesting exceeds 64 levels in comparison".into());
+        if map_depth > MAP_NESTING_CAP {
+            return Err(format!("map nesting exceeds {MAP_NESTING_CAP} levels in comparison"));
         }
         let mut in_progress: std::collections::HashSet<(Handle, Handle)> =
             std::collections::HashSet::new();
@@ -1681,8 +1691,8 @@ impl Vm {
         map_depth: u32,
         budget: &mut u32,
     ) -> Result<u64, String> {
-        if map_depth > 64 {
-            return Err("map nesting exceeds 64 levels in key".into());
+        if map_depth > MAP_NESTING_CAP {
+            return Err(format!("map nesting exceeds {MAP_NESTING_CAP} levels in key"));
         }
         let mut acc = FNV_OFFSET;
         let mut work: Vec<Value> = vec![v];

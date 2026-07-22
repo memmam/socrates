@@ -27,7 +27,7 @@ with *no output at all* — any `print`/`println` without a matching
 directive is a failure — so a directory of silent library modules can be a
 test suite for free, but a directory of ordinary example programs usually
 can't without directives added. The exit code is 1 on any
-failure, so it drops into CI unchanged — Socrates's own spec suite (313 tests)
+failure, so it drops into CI unchanged — Socrates's own spec suite (314 tests)
 and this book's snippets both run through this exact path.
 
 When a value changes but the print statements around it don't — after a

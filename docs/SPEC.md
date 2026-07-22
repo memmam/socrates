@@ -1561,8 +1561,14 @@ recursion that passes *through native callbacks* (`map`/`sort_by`
 comparators, `try`) also consumes the interpreter's own native stack, so a
 very large cap can turn the graceful, catchable panic into a hard process
 abort in such programs — raise it generously but not astronomically.
-Display nesting deeper than 10,000 levels renders as `...`,
-and equality on values whose *map* nesting exceeds 64 levels panics.
+Display nesting deeper than 10,000 levels renders as `...`. Comparing
+(`==`) or hashing (inserting as a map key) a value whose *map* nesting
+exceeds 10,000 levels panics — but the two count nesting differently:
+equality only recurses through map **keys** (map values compare fine at
+any depth), while hashing recurses through both keys and values (an
+entry's order-insensitive combined hash needs both sub-hashes back before
+it can fold them), so a value nested only through map values can hash
+right up to the cap even though equality on it never would.
 
 One behavioral caveat: map keys are hashed at insertion. **Mutating a list,
 map, or struct after using it as a key strands the entry** — it still counts

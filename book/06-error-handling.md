@@ -116,7 +116,9 @@ for first:
 - a shift count outside `0..=63`;
 - `Float.to_int()` on NaN or a value outside `Int`'s range;
 - a negative exponent to `Int.pow()`;
-- comparing (`==`) values whose map nesting exceeds 64 levels.
+- comparing (`==`) or hashing (inserting as a map key) a value whose map
+  nesting exceeds 10,000 levels — equality counts nesting through map
+  keys only, hashing through keys and values alike (SPEC § 11).
 
 One is a resource limit instead of a checkable condition: non-tail
 recursion deep enough to exhaust the stack (the caught-stack-overflow

@@ -198,8 +198,17 @@ hash → indices index; structural hashing normalizes `-0.0`, is
 order-insensitive for map-valued keys (matching set-like map equality), and
 refuses functions. Deep equality (`value_eq_impl`) is an iterative worklist,
 not Rust recursion, over everything except map keys (map nesting alone still
-recurses per level, capped at 64 to bound *that* stack); a cyclic structure
-(buildable via struct field mutation) can't overflow it either way. Cycle
+recurses per level, capped at `MAP_NESTING_CAP` = 10,000 to bound *that*
+stack); a cyclic structure (buildable via struct field mutation) can't
+overflow it either way. Structural hashing (`hash_value_impl`) shares the
+same cap and constant but applies it more broadly: an entry's
+order-insensitive combined hash needs both the key's and the value's
+sub-hash back before it can fold them, so unlike equality it genuinely
+Rust-recurses (and counts against the cap) through map *values* too, not
+just keys — a value nested only through map values can therefore hash
+right up to the cap even though equality on it never would hit it at all.
+Both sit comfortably inside the 512 MiB stack every platform gets
+(`main.rs`/`build.rs`). Cycle
 safety comes from a `HashSet<(Handle, Handle)>` of in-progress pairs: a
 List/Tuple/Struct/Variant/Map pair only pushes its children onto the
 worklist the first time that pair is seen, so a cycle's second visit is a

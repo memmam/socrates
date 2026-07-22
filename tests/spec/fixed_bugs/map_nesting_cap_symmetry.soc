@@ -1,0 +1,54 @@
+// BUG: `hash_value_impl` genuinely recurses (Rust call stack) into a Map's
+// VALUES as well as its keys, so it shared `value_eq_impl`'s 64-level map-
+// nesting cap even though equality only ever recurses through map KEYS (map
+// values are an iterative worklist there — see ARCHITECTURE.md). A value
+// built by nesting through map VALUES compared fine with `==` at any depth,
+// but hashing that same value (e.g. to use it as a map key) panicked
+// "map nesting exceeds 64 levels in key" past depth 64 — the message even
+// named "key" while the nesting lived entirely in values.
+//
+// Fix: raised the shared cap (`MAP_NESTING_CAP`, src/vm.rs) from 64 to
+// 10,000 — comfortably inside the 512 MiB stack every platform gets, and
+// matching this codebase's existing deep-nesting convention
+// (`display_value`'s cycle/depth guard). Both value_eq_impl (keys only)
+// and hash_value_impl (keys and values) now share the same generous cap,
+// so a value's equality and its usability as a map key no longer diverge
+// at a depth anyone would plausibly hit by accident.
+struct MNode { m: Map[Int, MNode] }
+
+fn build(n: Int) -> MNode {
+    let mut cur = MNode { m: {:} };
+    let mut i = 0;
+    while i < n {
+        let outer: Map[Int, MNode] = {:};
+        outer.insert(0, cur);
+        cur = MNode { m: outer };
+        i += 1;
+    }
+    cur
+}
+
+// Depth 200 is well past the old 64-level cap but nests entirely through
+// Map VALUES (build's loop wraps `cur` as a value under key 0 each time),
+// never through a map used as a key of another map.
+let a = build(200);
+let b = build(200);
+println(a == b);   //? expect: true
+
+let keyed: Map[MNode, Int] = {:};
+keyed.insert(a, 1);
+println(keyed.contains_key(a));    //? expect: true
+println(keyed.get(a));             //? expect: Some(1)
+
+// Pin the new boundary exactly: depth 10,000 still hashes cleanly; one level
+// further hits MAP_NESTING_CAP and panics catchably (never a raw crash).
+fn hash_as_key_ok(depth: Int) -> Bool {
+    let v = build(depth);
+    let m: Map[MNode, Int] = {:};
+    match try(|| { m.insert(v, 1); true }) {
+        Ok(ok) -> ok,
+        Err(_) -> false,
+    }
+}
+println(hash_as_key_ok(10000));    //? expect: true
+println(hash_as_key_ok(10001));    //? expect: false

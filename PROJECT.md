@@ -138,7 +138,7 @@ cargo test                                    # unit + golden spec suite
 SOCRATES_GC_STRESS=1 cargo test --test spec_runner
 cargo clippy --all-targets -- -D warnings
 cargo build --release
-./target/release/socrates test tests/spec        # 313
+./target/release/socrates test tests/spec        # 314
 # glcube's three mains need a live GL/Metal/Vulkan window (CI runs them in
 # the windowing jobs); everything else, cube.soc/spec.soc included:
 shopt -s extglob
@@ -165,7 +165,7 @@ spend its time?), not the gate. Method and standing numbers:
 `bench/RESULTS.md`.
 
 CLAUDE.md names golden/pinned test surfaces as this project's
-tripwires; the three are the spec suite (313 golden tests under
+tripwires; the three are the spec suite (314 golden tests under
 `tests/spec/`, run through the same `socrates test` path users get), the book's
 executable snippets (every ```soc block in `book/` runs in CI except
 the rare fragment fence-tagged `skip`), and the demos' pinned output
@@ -484,7 +484,7 @@ Settled decisions:
 - **Everything observable is golden-tested and byte-identical.** Every
   demo's full stdout is pinned (`demos/`), every ```soc block in `book/`
   executes in CI except the rare fragment fence-tagged `skip` (one today —
-  135 of 136 execute), and the spec suite (`tests/spec/`, 313 tests) runs
+  135 of 136 execute), and the spec suite (`tests/spec/`, 314 tests) runs
   through the same `socrates test` path users get. A refactor that changes any
   pinned output is wrong unless the output change is the point.
 - **GC-stress must stay green.** `SOCRATES_GC_STRESS=1` collects before every

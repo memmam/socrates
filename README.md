@@ -28,7 +28,7 @@ Everything here — lexer, parser, unification-based type inference, Maranget
 exhaustiveness checking, bytecode compiler, stack VM, mark-and-sweep garbage
 collector, REPL, formatter, language server, and disassembler — lives in
 about 41,000 lines of dependency-free Rust in `src/`. It is pinned down by
-313 golden spec tests (every one a runnable Socrates program), a book 135 of
+314 golden spec tests (every one a runnable Socrates program), a book 135 of
 whose snippets execute in CI, and eighteen demo programs whose complete
 output is golden-tested. This image is Socrates output too:
 
@@ -119,7 +119,7 @@ output is golden-tested. This image is Socrates output too:
 
 - **A test runner.** `socrates test dir/` — any `.soc` file with
   `//? expect/error/panic` directives is a golden test; the interpreter's
-  own 313-test suite runs through the same command's code. `--bless`
+  own 314-test suite runs through the same command's code. `--bless`
   rewrites a mismatched `//? expect:` line in place when the value changed
   but the print statements around it didn't, instead of making you retype it.
 - **A language server.** `socrates lsp` — diagnostics as you type, hover
