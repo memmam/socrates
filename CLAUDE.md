@@ -364,6 +364,18 @@ tooling and the acceptance threshold.
     instead (the path a compaction notice always supplies). This is
     rule 13 applied one level up (see HISTORY.md's `h3-probe-no-glc`
     recollection-check incident).
+  18. **A status report never uses completion language for a process
+    that is still verifying.** Words like "shipped," "done," or "fixed"
+    describe a terminal state — merged, closed, CI read green — never a
+    PR just opened, a swarm just kicked off, or checks still
+    `in_progress`. Rule 9 covers a *scheduled wakeup's* own resolution;
+    this is the same discipline applied to any report given while the
+    thing it describes is still live: use progress-shaped language
+    ("pushed," "opened," "kicked off, verifying") instead, and don't let
+    an adjacent, accurate "still running" clause excuse a completion
+    word sitting right next to it in the same message — the disclaimer
+    reads as an afterthought, not a correction (see HISTORY.md's Phase
+    11 mid-swarm overclaim incident).
 - This project's own golden/pinned test surfaces are the tripwires —
   if a change is wrong, one of them goes red (`PROJECT.md` names them).
 - **Documentation updates happen in-session, before the PR — not a

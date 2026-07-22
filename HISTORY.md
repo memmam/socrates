@@ -361,6 +361,18 @@ directives; each of the following is the incident that produced one.
   itself was the whole time sitting there, checkable. Produced CLAUDE.md
   rule 17 — the same discipline as rule 13 (re-verify a delegated
   audit's claim against the live repo), one level up.
+- **The Phase 11 mid-swarm overclaim (2026-07-22).** Immediately after
+  opening PR #138 and arming its CI, the session's own status report
+  led with "Phase 11's fix is shipped," then in the same message
+  correctly noted all 16 checks were still `in_progress` — the accurate
+  clause sat right next to the overclaim instead of replacing it. Roxy
+  caught it in one line ("It's still running verifiers, though"). The
+  underlying work was fine: the fix was real, the PR genuinely open, CI
+  genuinely running — only the report's own header word claimed a
+  terminal state for a process still actively verifying. Produced
+  CLAUDE.md rule 18: completion language is reserved for an actual
+  terminal state, never paired with — or softened by — an adjacent
+  "still running" clause in the same report.
 
 ## Consistency and workflow incidents
 
